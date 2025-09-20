@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply min-h-screen text-slate-800 font-sans;
+}
+
+a {
+  @apply text-brand-600 hover:text-brand-700;
+}

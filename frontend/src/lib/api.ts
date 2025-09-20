@@ -1,0 +1,31 @@
+import axios from 'axios';
+
+import { useAuthStore } from '../store/auth';
+
+const api = axios.create({
+  baseURL: (globalThis as any).__API_BASE_URL__ ?? '/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const tokens = useAuthStore.getState().tokens;
+  if (tokens?.access) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${tokens.access}`;
+  }
+  return config;
+});
+
+export default api;
+
+export const extractResults = <T>(payload: any): T[] => {
+  if (Array.isArray(payload)) {
+    return payload as T[];
+  }
+  if (payload && Array.isArray(payload.results)) {
+    return payload.results as T[];
+  }
+  return [];
+};

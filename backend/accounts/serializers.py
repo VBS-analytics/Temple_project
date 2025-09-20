@@ -1,0 +1,215 @@
+"""Serializers for accounts authentication and donor profile handling."""
+
+from django.contrib.auth import authenticate
+from django.db import transaction
+from rest_framework import serializers
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from .models import DonorProfile, OtpPurpose, OtpToken, User
+
+
+class DonorProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DonorProfile
+        fields = (
+            "address_line1",
+            "address_line2",
+            "address_line3",
+            "city",
+            "state",
+            "postal_code",
+            "gothra",
+            "tamil_star",
+            "notes",
+        )
+
+
+class UserSerializer(serializers.ModelSerializer):
+    profile = DonorProfileSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "phone_number",
+            "name",
+            "email",
+            "role",
+            "profile",
+        )
+        read_only_fields = ("id", "role")
+
+
+class TokenSerializer(serializers.Serializer):
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+
+
+class LoginSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        phone_number = attrs.get("phone_number")
+        password = attrs.get("password")
+        user = authenticate(username=phone_number, password=password)
+        if not user:
+            raise serializers.ValidationError("Invalid phone number or password")
+        if not user.is_active:
+            raise serializers.ValidationError("Account is disabled")
+        attrs["user"] = user
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data["user"]
+        refresh = RefreshToken.for_user(user)
+        return {
+            "user": UserSerializer(user).data,
+            "tokens": {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+        }
+
+
+class OtpRequestSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=15)
+    purpose = serializers.ChoiceField(choices=OtpPurpose.choices)
+
+    def create(self, validated_data):
+        token = OtpToken.create_code(
+            phone_number=validated_data["phone_number"],
+            purpose=validated_data["purpose"],
+        )
+        return token
+
+
+class OtpVerifySerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=15)
+    purpose = serializers.ChoiceField(choices=OtpPurpose.choices)
+    code = serializers.CharField(max_length=6)
+
+    def validate(self, attrs):
+        phone = attrs["phone_number"]
+        purpose = attrs["purpose"]
+        code = attrs["code"]
+        token = (
+            OtpToken.objects.filter(phone_number=phone, purpose=purpose)
+            .order_by("-created_at")
+            .first()
+        )
+        if not token or not token.is_valid(code):
+            raise serializers.ValidationError("Invalid or expired OTP")
+        attrs["token"] = token
+        return attrs
+
+    def create(self, validated_data):
+        token: OtpToken = validated_data["token"]
+        token.mark_used()
+        return token
+
+
+class RegisterSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=15)
+    name = serializers.CharField(max_length=255)
+    password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+    otp_code = serializers.CharField(max_length=6)
+    email = serializers.EmailField(required=False, allow_blank=True)
+
+    # Donor profile fields
+    address_line1 = serializers.CharField(required=False, allow_blank=True)
+    address_line2 = serializers.CharField(required=False, allow_blank=True)
+    address_line3 = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(required=False, allow_blank=True)
+    state = serializers.CharField(required=False, allow_blank=True)
+    postal_code = serializers.CharField(required=False, allow_blank=True)
+    gothra = serializers.CharField(required=False, allow_blank=True)
+    tamil_star = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        if User.objects.filter(phone_number=attrs["phone_number"]).exists():
+            raise serializers.ValidationError({"phone_number": "Phone number already registered"})
+        token = (
+            OtpToken.objects.filter(phone_number=attrs["phone_number"], purpose=OtpPurpose.REGISTRATION)
+            .order_by("-created_at")
+            .first()
+        )
+        if not token or not token.is_valid(attrs["otp_code"]):
+            raise serializers.ValidationError({"otp_code": "Invalid or expired OTP"})
+        attrs["token"] = token
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        token: OtpToken = validated_data.pop("token")
+        validated_data.pop("confirm_password")
+        otp_code = validated_data.pop("otp_code")  # noqa: F841 - kept for audit/logging if needed
+
+        profile_fields = DonorProfileSerializer.Meta.fields
+        profile_data = {field: validated_data.pop(field, "") for field in profile_fields if field in validated_data}
+
+        user = User.objects.create_user(
+            phone_number=validated_data.pop("phone_number"),
+            name=validated_data.pop("name"),
+            password=validated_data.pop("password"),
+            email=validated_data.pop("email", ""),
+        )
+        DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
+        token.mark_used()
+        refresh = RefreshToken.for_user(user)
+        return {
+            "user": UserSerializer(user).data,
+            "tokens": {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+        }
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=15)
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+    otp_code = serializers.CharField(max_length=6)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        try:
+            user = User.objects.get(phone_number=attrs["phone_number"])
+        except User.DoesNotExist as exc:  # pragma: no cover - raised only when data bad
+            raise serializers.ValidationError({"phone_number": "Account not found"}) from exc
+        token = (
+            OtpToken.objects.filter(phone_number=attrs["phone_number"], purpose=OtpPurpose.RESET_PASSWORD)
+            .order_by("-created_at")
+            .first()
+        )
+        if not token or not token.is_valid(attrs["otp_code"]):
+            raise serializers.ValidationError({"otp_code": "Invalid or expired OTP"})
+        attrs["user"] = user
+        attrs["token"] = token
+        return attrs
+
+    def create(self, validated_data):
+        user: User = validated_data["user"]
+        token: OtpToken = validated_data["token"]
+        user.set_password(validated_data["new_password"])
+        user.save(update_fields=["password"])
+        token.mark_used()
+        return user
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DonorProfile
+        fields = DonorProfileSerializer.Meta.fields
+
+    def update(self, instance, validated_data):
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        return instance
