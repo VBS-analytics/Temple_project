@@ -122,6 +122,8 @@ class DonorProfile(models.Model):
     postal_code = models.CharField(max_length=12, blank=True)
     gothra = models.CharField(max_length=128, blank=True)
     tamil_star = models.CharField(max_length=128, blank=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    family_name = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -132,3 +134,25 @@ class DonorProfile(models.Model):
 
     def __str__(self) -> str:
         return f"Profile for {self.user}"
+
+
+class FamilyMember(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="family_members",
+    )
+    name = models.CharField(max_length=255)
+    gender = models.CharField(max_length=32, blank=True)
+    relationship = models.CharField(max_length=64, blank=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    tamil_star = models.CharField(max_length=128, blank=True)
+    gothra = models.CharField(max_length=128, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name", "id")
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.relationship or 'member'})"

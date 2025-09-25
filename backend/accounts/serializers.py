@@ -5,7 +5,7 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import DonorProfile, OtpPurpose, OtpToken, User
+from .models import DonorProfile, FamilyMember, OtpPurpose, OtpToken, User
 
 
 class DonorProfileSerializer(serializers.ModelSerializer):
@@ -20,8 +20,29 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "postal_code",
             "gothra",
             "tamil_star",
+            "date_of_birth",
+            "family_name",
             "notes",
         )
+
+
+class FamilyMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FamilyMember
+        fields = (
+            "id",
+            "name",
+            "gender",
+            "relationship",
+            "date_of_birth",
+            "tamil_star",
+            "gothra",
+        )
+        read_only_fields = ("id",)
+
+    def create(self, validated_data):
+        user = validated_data.pop("user")
+        return FamilyMember.objects.create(user=user, **validated_data)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -126,6 +147,8 @@ class RegisterSerializer(serializers.Serializer):
     postal_code = serializers.CharField(required=False, allow_blank=True)
     gothra = serializers.CharField(required=False, allow_blank=True)
     tamil_star = serializers.CharField(required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    family_name = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):

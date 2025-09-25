@@ -30,9 +30,14 @@ const AppLayout = () => {
               Daily Calendar
             </NavLink>
             {user && isAdmin(user.role) && (
-              <NavLink to="/admin/master" className={navLinkClass}>
-                Admin
-              </NavLink>
+              <>
+                <NavLink to="/admin/master" className={navLinkClass}>
+                  Admin
+                </NavLink>
+                <NavLink to="/admin/donors" className={navLinkClass}>
+                  Donor Details
+                </NavLink>
+              </>
             )}
           </nav>
           <div className="flex items-center gap-4">

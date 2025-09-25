@@ -3,6 +3,9 @@
 from django.urls import path
 
 from .views import (
+    DonorListView,
+    FamilyMemberDetailView,
+    FamilyMemberView,
     LoginView,
     PasswordResetView,
     ProfileView,
@@ -18,4 +21,7 @@ urlpatterns = [
     path('verify-otp/', VerifyOtpView.as_view(), name='verify-otp'),
     path('reset-password/', PasswordResetView.as_view(), name='reset-password'),
     path('profile/', ProfileView.as_view(), name='profile'),
+    path('family-members/', FamilyMemberView.as_view(), name='family-members'),
+    path('family-members/<int:pk>/', FamilyMemberDetailView.as_view(), name='family-member-detail'),
+    path('donors/', DonorListView.as_view(), name='donor-list'),
 ]

@@ -14,6 +14,11 @@ interface FormValues {
   city: string;
   state: string;
   postal_code: string;
+  date_of_birth: string;
+  tamil_star: string;
+  gothra: string;
+  family_name: string;
+  family_selection: string;
   password: string;
   confirm_password: string;
   otp_code: string;
@@ -40,11 +45,18 @@ const RegisterPage = () => {
       city: '',
       state: '',
       postal_code: '',
+      date_of_birth: '',
+      tamil_star: '',
+      gothra: '',
+      family_name: '',
+      family_selection: '',
       password: '',
       confirm_password: '',
       otp_code: '',
     },
   });
+
+  const familySelection = watch('family_selection');
 
   const requestOtp = async () => {
     const phone = watch('phone_number');
@@ -66,8 +78,22 @@ const RegisterPage = () => {
 
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
+    const { family_selection, family_name: familyNameInput, ...rest } = values;
+    const payload: Record<string, unknown> = {
+      ...rest,
+      family_name: family_selection === 'other' ? familyNameInput : family_selection,
+    };
+
+    if (!values.date_of_birth) {
+      delete payload.date_of_birth;
+    }
+
+    if (!payload.family_name) {
+      delete payload.family_name;
+    }
+
     try {
-      const { data } = await api.post('/auth/register/', values);
+      const { data } = await api.post('/auth/register/', payload);
       setAuth({ user: data.user, tokens: data.tokens });
       navigate('/dashboard');
     } catch (error: any) {
@@ -144,6 +170,40 @@ const RegisterPage = () => {
           <label className="mb-1 block text-sm font-medium text-slate-700">PIN Code</label>
           <input type="text" className="w-full rounded-md border border-slate-300 px-3 py-2" {...register('postal_code')} />
         </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Date of Birth</label>
+          <input type="date" className="w-full rounded-md border border-slate-300 px-3 py-2" {...register('date_of_birth')} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Star</label>
+          <input type="text" className="w-full rounded-md border border-slate-300 px-3 py-2" {...register('tamil_star')} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Gothram</label>
+          <input type="text" className="w-full rounded-md border border-slate-300 px-3 py-2" {...register('gothra')} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Family</label>
+          <select
+            className="w-full rounded-md border border-slate-300 px-3 py-2"
+            {...register('family_selection')}
+          >
+            <option value="">Select a family</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        {familySelection === 'other' && (
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Family Name</label>
+            <input
+              type="text"
+              className="w-full rounded-md border border-slate-300 px-3 py-2"
+              {...register('family_name')}
+            />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

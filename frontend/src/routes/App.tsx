@@ -11,6 +11,7 @@ import PaymentPage from '../pages/PaymentPage';
 import PoojaRegistrationPage from '../pages/PoojaRegistrationPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
+import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
 import { useAuthStore } from '../store/auth';
 
 const LandingRedirect = () => {
@@ -61,6 +62,7 @@ const App = () => (
     <Route element={<ProtectedRoute requireAdmin />}>
       <Route element={<AppLayout />}>
         <Route path="/admin/master" element={<AdminMasterPage />} />
+        <Route path="/admin/donors" element={<DonorDetailsPage />} />
       </Route>
     </Route>
 

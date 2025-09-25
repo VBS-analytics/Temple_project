@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import DonorProfile, OtpToken, User
+from .models import DonorProfile, FamilyMember, OtpToken, User
 
 
 @admin.register(User)
@@ -52,3 +52,9 @@ class OtpTokenAdmin(admin.ModelAdmin):
     list_display = ("phone_number", "purpose", "code", "is_used", "expires_at")
     list_filter = ("purpose", "is_used")
     search_fields = ("phone_number", "code")
+
+
+@admin.register(FamilyMember)
+class FamilyMemberAdmin(admin.ModelAdmin):
+    list_display = ("user", "name", "relationship", "gender")
+    search_fields = ("name", "relationship", "user__phone_number", "user__name")

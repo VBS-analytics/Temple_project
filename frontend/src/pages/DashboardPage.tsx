@@ -1,7 +1,17 @@
-import { useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
+
+interface FamilyMember {
+  id: number;
+  name: string;
+  gender?: string;
+  relationship?: string;
+  date_of_birth?: string | null;
+  tamil_star?: string;
+  gothra?: string;
+}
 
 interface ProfileResponse {
   user: {
@@ -17,7 +27,9 @@ interface ProfileResponse {
     postal_code?: string;
     tamil_star?: string;
     gothra?: string;
+    family_name?: string;
   };
+  members?: FamilyMember[];
 }
 
 interface RegistrationItem {
@@ -40,21 +52,50 @@ interface RegistrationSummary {
   results: RegistrationItem[];
 }
 
+const formatDate = (dateValue?: string | null) => {
+  if (!dateValue) {
+    return 'N/A';
+  }
+  const parts = dateValue.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    if (day && month && year) {
+      return `${day}-${month}-${year}`;
+    }
+  }
+  return dateValue;
+};
+
 const DashboardPage = () => {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [summary, setSummary] = useState<RegistrationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [memberFormVisible, setMemberFormVisible] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
+  const [memberError, setMemberError] = useState('');
+  const [memberSubmitting, setMemberSubmitting] = useState(false);
+  const [memberForm, setMemberForm] = useState({
+    name: '',
+    gender: '',
+    relationship: '',
+    date_of_birth: '',
+    tamil_star: '',
+    gothra: '',
+  });
   const user = useAuthStore((state) => state.user);
+  const isAdminUser = user?.role === 'admin';
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [profileRes, registrationsRes] = await Promise.all([
-          api.get('/auth/profile/'),
-          api.get('/pooja/registrations/summary/'),
+          api.get('auth/profile/'),
+          api.get('pooja/registrations/summary/'),
         ]);
         setProfile(profileRes.data);
+        setMembers(profileRes.data?.members ?? []);
         setSummary(registrationsRes.data);
       } catch (err: any) {
         const detail = err?.response?.data?.detail ?? 'Unable to load dashboard data';
@@ -76,6 +117,97 @@ const DashboardPage = () => {
   }
 
   const adminView = user?.role === 'admin';
+
+  const handleMemberChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    setMemberForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const resetMemberForm = () => {
+    setMemberForm({
+      name: '',
+      gender: '',
+      relationship: '',
+      date_of_birth: '',
+      tamil_star: '',
+      gothra: '',
+    });
+  };
+
+  const startCreateFlow = () => {
+    setMemberFormVisible(true);
+    setEditingMemberId(null);
+    resetMemberForm();
+    setMemberError('');
+  };
+
+  const handleEditMember = (member: FamilyMember) => {
+    setMemberFormVisible(true);
+    setEditingMemberId(member.id);
+    setMemberError('');
+    setMemberForm({
+      name: member.name ?? '',
+      gender: member.gender ?? '',
+      relationship: member.relationship ?? '',
+      date_of_birth: member.date_of_birth ?? '',
+      tamil_star: member.tamil_star ?? '',
+      gothra: member.gothra ?? '',
+    });
+  };
+
+  const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMemberError('');
+
+    if (!memberForm.name.trim()) {
+      setMemberError('Name is required.');
+      return;
+    }
+
+    if (!memberForm.relationship.trim()) {
+      setMemberError('Relationship is required.');
+      return;
+    }
+
+    const payload: Record<string, string> = {
+      name: memberForm.name.trim(),
+      relationship: memberForm.relationship.trim(),
+    };
+
+    if (memberForm.gender) {
+      payload.gender = memberForm.gender;
+    }
+    if (memberForm.tamil_star) {
+      payload.tamil_star = memberForm.tamil_star;
+    }
+    if (memberForm.gothra) {
+      payload.gothra = memberForm.gothra;
+    }
+    if (memberForm.date_of_birth) {
+      payload.date_of_birth = memberForm.date_of_birth;
+    }
+
+    try {
+      setMemberSubmitting(true);
+
+      if (editingMemberId !== null) {
+        const { data } = await api.put(`auth/family-members/${editingMemberId}/`, payload);
+        setMembers((prev) => prev.map((item) => (item.id === data.id ? data : item)));
+      } else {
+        const { data } = await api.post('auth/family-members/', payload);
+        setMembers((prev) => [...prev, data]);
+      }
+
+      resetMemberForm();
+      setMemberFormVisible(false);
+      setEditingMemberId(null);
+    } catch (err: any) {
+      const detail = err?.response?.data ?? err?.message ?? 'Unable to add member';
+      setMemberError(typeof detail === 'string' ? detail : 'Unable to add member');
+    } finally {
+      setMemberSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -99,8 +231,174 @@ const DashboardPage = () => {
             <h3 className="text-sm font-medium text-slate-700">Spiritual Profile</h3>
             <p className="text-sm text-slate-600">Tamil Star: {profile?.profile.tamil_star || 'N/A'}</p>
             <p className="text-sm text-slate-600">Gothra: {profile?.profile.gothra || 'N/A'}</p>
+            <p className="text-sm text-slate-600">Family: {profile?.profile.family_name || 'N/A'}</p>
           </div>
         </div>
+        {!isAdminUser && (
+          <div className="mt-6 rounded-md border border-slate-200 p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-700">Family Members</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  if (memberFormVisible && editingMemberId === null) {
+                    setMemberFormVisible(false);
+                    resetMemberForm();
+                    setMemberError('');
+                  } else {
+                    startCreateFlow();
+                  }
+                }}
+                className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                {memberFormVisible && editingMemberId === null ? 'Cancel' : 'Add member'}
+              </button>
+            </div>
+
+            {members.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">No members added yet.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {members.map((member) => (
+                  <li key={member.id} className="rounded-md border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500 md:text-sm">
+                        <span>
+                          Name: <span className="font-semibold text-slate-800">{member.name || 'N/A'}</span>
+                        </span>
+                        <span>Relationship: {member.relationship || 'N/A'}</span>
+                        <span>Gender: {member.gender || 'N/A'}</span>
+                        <span>Date of Birth: {formatDate(member.date_of_birth)}</span>
+                        <span>Star: {member.tamil_star || 'N/A'}</span>
+                        <span>Gothram: {member.gothra || 'N/A'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleEditMember(member)}
+                        className="rounded-md border border-brand-600 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {memberFormVisible && (
+              <form onSubmit={handleMemberSubmit} className="mt-4 space-y-3">
+                {memberError && <p className="rounded-md bg-red-100 p-2 text-sm text-red-700">{memberError}</p>}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-name">
+                      Name
+                    </label>
+                    <input
+                      id="member-name"
+                      name="name"
+                      type="text"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      value={memberForm.name}
+                      onChange={handleMemberChange}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gender">
+                      Gender
+                    </label>
+                    <select
+                      id="member-gender"
+                      name="gender"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      value={memberForm.gender}
+                      onChange={handleMemberChange}
+                    >
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-relationship">
+                      Relationship
+                    </label>
+                    <input
+                      id="member-relationship"
+                      name="relationship"
+                      type="text"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      value={memberForm.relationship}
+                      onChange={handleMemberChange}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-dob">
+                      Date of Birth
+                    </label>
+                    <input
+                      id="member-dob"
+                      name="date_of_birth"
+                      type="date"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      value={memberForm.date_of_birth}
+                      onChange={handleMemberChange}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-star">
+                      Star
+                    </label>
+                    <input
+                      id="member-star"
+                      name="tamil_star"
+                      type="text"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      value={memberForm.tamil_star}
+                      onChange={handleMemberChange}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gothra">
+                      Gothram
+                    </label>
+                    <input
+                      id="member-gothra"
+                      name="gothra"
+                      type="text"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      value={memberForm.gothra}
+                      onChange={handleMemberChange}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMemberFormVisible(false);
+                      setEditingMemberId(null);
+                      resetMemberForm();
+                      setMemberError('');
+                    }}
+                    className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={memberSubmitting}
+                    className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    {memberSubmitting ? 'Saving…' : editingMemberId !== null ? 'Update member' : 'Save member'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg bg-white p-6 shadow-sm">
@@ -112,7 +410,6 @@ const DashboardPage = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-4 py-2">Registration ID</th>
                 {adminView && <th className="px-4 py-2">Donor</th>}
                 <th className="px-4 py-2">Pooja</th>
                 <th className="px-4 py-2">Start Date</th>
@@ -124,7 +421,6 @@ const DashboardPage = () => {
             <tbody>
               {summary?.results.map((item) => (
                 <tr key={item.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2">{item.id}</td>
                   {adminView && (
                     <td className="px-4 py-2">
                       <div className="flex flex-col">

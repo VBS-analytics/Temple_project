@@ -1,12 +1,14 @@
 """API views for user authentication and profile management."""
 
 from rest_framework import permissions, status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import DonorProfile
+from .models import DonorProfile, FamilyMember, User, UserRole
 from .serializers import (
     DonorProfileSerializer,
+    FamilyMemberSerializer,
     LoginSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
@@ -90,11 +92,84 @@ class ProfileView(APIView):
         user_serializer = UserSerializer(request.user)
         profile, _ = DonorProfile.objects.get_or_create(user=request.user)
         profile_serializer = DonorProfileSerializer(profile)
-        return Response({"user": user_serializer.data, "profile": profile_serializer.data})
+        members = FamilyMember.objects.filter(user=request.user)
+        member_serializer = FamilyMemberSerializer(members, many=True)
+        return Response(
+            {
+                "user": user_serializer.data,
+                "profile": profile_serializer.data,
+                "members": member_serializer.data,
+            }
+        )
 
     def put(self, request):
         profile, _ = DonorProfile.objects.get_or_create(user=request.user)
         serializer = ProfileUpdateSerializer(instance=profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class FamilyMemberView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        members = FamilyMember.objects.filter(user=request.user)
+        serializer = FamilyMemberSerializer(members, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = FamilyMemberSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        member = serializer.save(user=request.user)
+        output = FamilyMemberSerializer(member)
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+
+class FamilyMemberDetailView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_object(self, request, pk: int) -> FamilyMember:
+        try:
+            return FamilyMember.objects.get(pk=pk, user=request.user)
+        except FamilyMember.DoesNotExist as exc:  # pragma: no cover - user mis-id
+            raise NotFound("Family member not found") from exc
+
+    def put(self, request, pk: int):
+        member = self.get_object(request, pk)
+        serializer = FamilyMemberSerializer(instance=member, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class DonorListView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        if request.user.role != UserRole.ADMIN:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        donors = (
+            User.objects.filter(role=UserRole.DONOR)
+            .select_related('profile')
+            .prefetch_related('family_members')
+        )
+        payload = []
+        for donor in donors:
+            profile, _ = DonorProfile.objects.get_or_create(user=donor)
+            members = donor.family_members.all()
+            payload.append(
+                {
+                    'user': UserSerializer(donor).data,
+                    'profile': DonorProfileSerializer(profile).data,
+                    'members': FamilyMemberSerializer(members, many=True).data,
+                }
+            )
+        return Response(payload)
+
+    def patch(self, request, pk: int):
+        member = self.get_object(request, pk)
+        serializer = FamilyMemberSerializer(instance=member, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
