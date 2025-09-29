@@ -12,23 +12,24 @@ import PoojaRegistrationPage from '../pages/PoojaRegistrationPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
+import LandingPage from '../pages/LandingPage';
 import { useAuthStore } from '../store/auth';
 
-const LandingRedirect = () => {
+const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
     return <Navigate to="/dashboard" replace />;
   }
-  return <Navigate to="/login" replace />;
+  return <LandingPage />;
 };
 
 const App = () => (
   <Routes>
-    <Route path="/" element={<LandingRedirect />} />
+    <Route path="/" element={<HomeRoute />} />
     <Route
       path="/login"
       element={
-        <AuthLayout title="Welcome back">
+        <AuthLayout title="Welcome back" variant="immersive">
           <LoginPage />
         </AuthLayout>
       }
@@ -36,7 +37,7 @@ const App = () => (
     <Route
       path="/register"
       element={
-        <AuthLayout title="Create your donor account">
+        <AuthLayout title="Create your donor account" variant="immersive">
           <RegisterPage />
         </AuthLayout>
       }

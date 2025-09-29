@@ -421,7 +421,7 @@ const PoojaRegistrationPage = () => {
               activeTab === 'summary' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Old / New Registrations Details
+            Current Registrations Details
           </button>
           <button
             type="button"
@@ -430,7 +430,7 @@ const PoojaRegistrationPage = () => {
               activeTab === 'new' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            New Registration
+            New Registration Details
           </button>
         </div>
 

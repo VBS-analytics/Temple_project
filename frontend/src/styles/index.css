@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide default Google Translate UI artifacts */
+.goog-te-banner-frame.skiptranslate,
+#goog-gt-tt,
+.goog-te-menu-frame {
+  display: none !important;
+}
+
+body {
+  top: 0 !important;
+}
+
 body {
   @apply min-h-screen text-slate-800 font-sans;
 }

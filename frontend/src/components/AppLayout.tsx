@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
+import LanguageToggle from './LanguageToggle';
 import { isAdmin, useAuthStore } from '../store/auth';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -41,6 +42,7 @@ const AppLayout = () => {
             )}
           </nav>
           <div className="flex items-center gap-4">
+            <LanguageToggle theme="light" />
             <span className="text-sm text-slate-600">{user?.name}</span>
             <button
               type="button"
