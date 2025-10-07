@@ -5,6 +5,7 @@ from django.contrib import admin
 from .models import (
     DailyMessage,
     DonorMessageTemplate,
+    FeaturedPooja,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -14,7 +15,8 @@ from .models import (
 
 @admin.register(PoojaOption)
 class PoojaOptionAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "min_amount", "max_amount", "is_active")
+    list_display = ("code", "name", "parent", "is_group_header", "is_active")
+    list_filter = ("is_group_header", "is_active")
     search_fields = ("code", "name")
 
 
@@ -48,3 +50,10 @@ class PoojaRegistrationAdmin(admin.ModelAdmin):
 class DonorMessageTemplateAdmin(admin.ModelAdmin):
     list_display = ("donor", "preferred_date", "day_option")
     search_fields = ("donor__name", "donor__phone_number")
+
+
+@admin.register(FeaturedPooja)
+class FeaturedPoojaAdmin(admin.ModelAdmin):
+    list_display = ("name", "amount", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name",)

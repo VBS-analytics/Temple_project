@@ -6,6 +6,7 @@ from rest_framework import serializers
 from .models import (
     DailyMessage,
     DonorMessageTemplate,
+    FeaturedPooja,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -14,6 +15,13 @@ from .models import (
 
 
 class PoojaOptionSerializer(serializers.ModelSerializer):
+    parent_id = serializers.PrimaryKeyRelatedField(
+        source="parent",
+        queryset=PoojaOption.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+
     class Meta:
         model = PoojaOption
         fields = (
@@ -25,7 +33,35 @@ class PoojaOptionSerializer(serializers.ModelSerializer):
             "max_amount",
             "default_amount",
             "is_active",
+            "is_group_header",
+            "parent_id",
         )
+
+
+class FeaturedPoojaSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeaturedPooja
+        fields = (
+            "id",
+            "name",
+            "image",
+            "image_url",
+            "amount",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def get_image_url(self, obj):  # pragma: no cover - used in API responses
+        if not obj.image:
+            return ""
+        request = self.context.get("request")
+        if request is not None:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
 
 
 class PoojaDayOptionSerializer(serializers.ModelSerializer):
@@ -36,7 +72,9 @@ class PoojaDayOptionSerializer(serializers.ModelSerializer):
             "code",
             "description",
             "category",
+            "display_order",
         )
+        read_only_fields = ("id", "display_order")
 
 
 class DailyMessageSerializer(serializers.ModelSerializer):

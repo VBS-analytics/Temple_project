@@ -1,7 +1,9 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
+import { useRegistrationStore } from '../store/registrations';
+import type { RegistrationEntry } from '../store/registrations';
 
 interface FamilyMember {
   id: number;
@@ -52,6 +54,40 @@ interface RegistrationSummary {
   results: RegistrationItem[];
 }
 
+const formatCurrency = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+  const amountNumber = Number(value);
+  if (Number.isNaN(amountNumber)) {
+    return value ?? '';
+  }
+  return amountNumber.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) {
+    return 'N/A';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const DAY_CATEGORY_LABELS: Record<string, string> = {
+  weekday: 'English Day',
+  tamil_star: 'Tamil Star',
+  code: 'Template Code',
+};
+
 const formatDate = (dateValue?: string | null) => {
   if (!dateValue) {
     return 'N/A';
@@ -85,7 +121,75 @@ const DashboardPage = () => {
     gothra: '',
   });
   const user = useAuthStore((state) => state.user);
+  const cartKey = user ? String(user.id) : 'guest';
+  const registrations = useRegistrationStore((state) => state.registrationsByUser[cartKey] ?? []);
+  const clearAllRegistrations = useRegistrationStore((state) => state.clearAllRegistrations);
   const isAdminUser = user?.role === 'admin';
+
+  const orderedRegistrations = useMemo(() => {
+    return [...registrations].sort((a, b) => {
+      const first = new Date(a.completedAt).getTime();
+      const second = new Date(b.completedAt).getTime();
+      return second - first;
+    });
+  }, [registrations]);
+
+  const groupedRegistrations = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        orderId: string;
+        completedAt: string;
+        items: RegistrationEntry[];
+      }
+    >();
+
+    orderedRegistrations.forEach((entry) => {
+      const key = entry.orderId || entry.completedAt || entry.registrationId;
+      if (!key) {
+        return;
+      }
+
+      if (!map.has(key)) {
+        map.set(key, {
+          orderId: key,
+          completedAt: entry.completedAt,
+          items: [],
+        });
+      }
+
+      const group = map.get(key);
+      if (!group) {
+        return;
+      }
+
+      group.items.push(entry);
+
+      const entryTime = new Date(entry.completedAt).getTime();
+      const groupTime = new Date(group.completedAt).getTime();
+      if (entryTime > groupTime) {
+        group.completedAt = entry.completedAt;
+      }
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
+    );
+  }, [orderedRegistrations]);
+
+  const totalLocalRegistrations = useMemo(
+    () => groupedRegistrations.reduce((count, group) => count + group.items.length, 0),
+    [groupedRegistrations],
+  );
+  useEffect(() => {
+    if (!summary) {
+      return;
+    }
+
+    if (summary.count === 0 && totalLocalRegistrations > 0) {
+      clearAllRegistrations();
+    }
+  }, [summary, totalLocalRegistrations, clearAllRegistrations]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -405,23 +509,113 @@ const DashboardPage = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-800">Pooja Registrations</h2>
         </div>
-        <p className="mt-1 text-sm text-slate-600">You have {summary?.count ?? 0} active registrations.</p>
-        <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-              <tr>
-                {adminView && <th className="px-4 py-2">Donor</th>}
-                <th className="px-4 py-2">Pooja</th>
-                <th className="px-4 py-2">Start Date</th>
-                <th className="px-4 py-2">Group</th>
-                <th className="px-4 py-2">Amount</th>
-                {adminView && <th className="px-4 py-2">Notes</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {summary?.results.map((item) => (
-                <tr key={item.id} className="border-t border-slate-100">
-                  {adminView && (
+
+        {groupedRegistrations.length > 0 && (
+          <div className="mt-4 space-y-4">
+            <h3 className="text-sm font-medium text-slate-700">Recent Registrations</h3>
+            <ul className="space-y-4">
+              {groupedRegistrations.map((group) => {
+                const totalAmountValue = group.items.reduce((sum, entry) => {
+                  const amountNumber = Number(entry.amount ?? 0);
+                  return Number.isNaN(amountNumber) ? sum : sum + amountNumber;
+                }, 0);
+                const totalAmountLabel = totalAmountValue > 0 ? `₹ ${formatCurrency(totalAmountValue.toString())}` : '--';
+
+                return (
+                  <li key={group.orderId} className="rounded-lg border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {group.items.length} booking{group.items.length > 1 ? 's' : ''}
+                        </p>
+                        <p className="text-xs text-slate-500">Completed on {formatDateTime(group.completedAt)}</p>
+                      </div>
+                      <div className="text-right text-sm font-semibold text-slate-900">{totalAmountLabel}</div>
+                    </div>
+                    <ul className="mt-3 space-y-3">
+                      {group.items.map((registration) => {
+                        const amountLabel = registration.amount ? `₹ ${formatCurrency(registration.amount)}` : '--';
+                        const dayOptionLabel = registration.dayOptionDescription
+                          ? `${registration.dayOptionDescription}${registration.dayOptionCategory ? ` (${DAY_CATEGORY_LABELS[registration.dayOptionCategory] ?? registration.dayOptionCategory})` : ''}`
+                          : '--';
+                        const memberSummary = registration.members && registration.members.length > 0
+                          ? registration.members
+                              .map((member) => {
+                                const name = member.name || 'Member';
+                                const relationship = member.relationship ? ` (${member.relationship})` : '';
+                                return `${name}${relationship}`;
+                              })
+                              .join(', ')
+                          : registration.memberRelationship
+                            ? `${registration.fullName || 'Member'} (${registration.memberRelationship})`
+                            : registration.fullName || '--';
+
+                        return (
+                          <li
+                            key={registration.registrationId}
+                            className="rounded-md border border-slate-200 p-3"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{registration.poojaName}</p>
+                                {registration.poojaCode && (
+                                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                                    Code: {registration.poojaCode}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right text-sm font-semibold text-slate-900">{amountLabel}</div>
+                            </div>
+                            <dl className="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                              <div>
+                                <dt className="font-medium text-slate-700">Day Option</dt>
+                                <dd>{dayOptionLabel}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-medium text-slate-700">Devotee</dt>
+                                <dd>{registration.fullName || '--'}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-medium text-slate-700">Members</dt>
+                                <dd>{memberSummary}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-medium text-slate-700">Notes</dt>
+                                <dd>{registration.customDayNote || 'None'}</dd>
+                              </div>
+                            </dl>
+                            {registration.postPrasadam && (
+                              <p className="mt-3 text-xs font-medium text-emerald-600">
+                                Post prasadam requested
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {adminView && (
+          <div className="mt-6 overflow-hidden rounded-md border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+                <tr>
+                  <th className="px-4 py-2">Donor</th>
+                  <th className="px-4 py-2">Pooja</th>
+                  <th className="px-4 py-2">Start Date</th>
+                  <th className="px-4 py-2">Group</th>
+                  <th className="px-4 py-2">Amount</th>
+                  <th className="px-4 py-2">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary?.results.map((item) => (
+                  <tr key={item.id} className="border-t border-slate-100">
                     <td className="px-4 py-2">
                       <div className="flex flex-col">
                         <span className="font-medium text-slate-700">
@@ -432,19 +626,17 @@ const DashboardPage = () => {
                         )}
                       </div>
                     </td>
-                  )}
-                  <td className="px-4 py-2">
-                    <div className="flex flex-col">
-                      <span>{item.pooja_option_name ?? `#${item.pooja_option}`}</span>
-                      {item.day_option_description && (
-                        <span className="text-xs text-slate-500">{item.day_option_description}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2">{item.start_date ?? 'TBD'}</td>
-                  <td className="px-4 py-2">{item.is_group_registration ? 'Yes' : 'No'}</td>
-                  <td className="px-4 py-2">{item.total_amount ?? '--'}</td>
-                  {adminView && (
+                    <td className="px-4 py-2">
+                      <div className="flex flex-col">
+                        <span>{item.pooja_option_name ?? `#${item.pooja_option}`}</span>
+                        {item.day_option_description && (
+                          <span className="text-xs text-slate-500">{item.day_option_description}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2">{item.start_date ?? 'TBD'}</td>
+                    <td className="px-4 py-2">{item.is_group_registration ? 'Yes' : 'No'}</td>
+                    <td className="px-4 py-2">{item.total_amount ?? '--'}</td>
                     <td className="px-4 py-2">
                       {item.additional_notes ? (
                         <span className="whitespace-pre-line text-sm text-slate-600">{item.additional_notes}</span>
@@ -452,13 +644,15 @@ const DashboardPage = () => {
                         <span className="text-xs text-slate-400">No notes</span>
                       )}
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
+                  </tr>
+                ))}
+              </tbody>
             </table>
-          {(!summary || summary.results.length === 0) && <p className="p-4 text-sm text-slate-500">No registrations yet.</p>}
-        </div>
+            {(!summary || summary.results.length === 0) && (
+              <p className="p-4 text-sm text-slate-500">No registrations yet.</p>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

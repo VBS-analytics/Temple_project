@@ -7,9 +7,6 @@ const normalizedBaseUrl = rawBaseUrl.endsWith('/') ? rawBaseUrl : `${rawBaseUrl}
 
 const api = axios.create({
   baseURL: normalizedBaseUrl,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 api.interceptors.request.use((config) => {
@@ -20,6 +17,12 @@ api.interceptors.request.use((config) => {
   if (tokens?.access) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${tokens.access}`;
+  }
+  if (config.data && !(config.data instanceof FormData)) {
+    config.headers = config.headers ?? {};
+    if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
   }
   return config;
 });

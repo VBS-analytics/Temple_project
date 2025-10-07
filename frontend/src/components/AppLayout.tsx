@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import LanguageToggle from './LanguageToggle';
 import { isAdmin, useAuthStore } from '../store/auth';
+import { useCartStore } from '../store/cart';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-brand-50'}`;
@@ -9,6 +10,8 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 const AppLayout = () => {
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
+  const cartKey = user ? String(user.id) : 'guest';
+  const cartCount = useCartStore((state) => state.itemsByUser[cartKey]?.length ?? 0);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -21,15 +24,6 @@ const AppLayout = () => {
             <NavLink to="/dashboard" className={navLinkClass} end>
               Dashboard
             </NavLink>
-            <NavLink to="/pooja/register" className={navLinkClass}>
-              Pooja Registration
-            </NavLink>
-            <NavLink to="/payments" className={navLinkClass}>
-              Payments
-            </NavLink>
-            <NavLink to="/calendar" className={navLinkClass}>
-              Daily Calendar
-            </NavLink>
             {user && isAdmin(user.role) && (
               <>
                 <NavLink to="/admin/master" className={navLinkClass}>
@@ -38,8 +32,19 @@ const AppLayout = () => {
                 <NavLink to="/admin/donors" className={navLinkClass}>
                   Donor Details
                 </NavLink>
+                <NavLink to="/admin/donor-pooja-registrations" className={navLinkClass}>
+                  Donor Pooja Registrations
+                </NavLink>
               </>
             )}
+            
+            <NavLink to="/pooja/register" className={navLinkClass}>
+              Pooja Registration
+            </NavLink>
+
+            <NavLink to="/pooja/cart" className={navLinkClass}>
+              Cart{cartCount > 0 ? ` (${cartCount})` : ''}
+            </NavLink>
           </nav>
           <div className="flex items-center gap-4">
             <LanguageToggle theme="light" />

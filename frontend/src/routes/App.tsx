@@ -7,11 +7,12 @@ import CalendarPage from '../pages/CalendarPage';
 import DashboardPage from '../pages/DashboardPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import LoginPage from '../pages/LoginPage';
-import PaymentPage from '../pages/PaymentPage';
 import PoojaRegistrationPage from '../pages/PoojaRegistrationPage';
+import PoojaCartPage from '../pages/PoojaCartPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
+import DonorPoojaRegistrationsPage from '../pages/admin/DonorPoojaRegistrationsPage';
 import LandingPage from '../pages/LandingPage';
 import { useAuthStore } from '../store/auth';
 
@@ -55,7 +56,7 @@ const App = () => (
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
-        <Route path="/payments" element={<PaymentPage />} />
+        <Route path="/pooja/cart" element={<PoojaCartPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>
@@ -64,6 +65,7 @@ const App = () => (
       <Route element={<AppLayout />}>
         <Route path="/admin/master" element={<AdminMasterPage />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
+        <Route path="/admin/donor-pooja-registrations" element={<DonorPoojaRegistrationsPage />} />
       </Route>
     </Route>
 

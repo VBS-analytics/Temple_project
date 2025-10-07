@@ -12,9 +12,17 @@ class PoojaOption(models.Model):
     max_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     default_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="children",
+        null=True,
+        blank=True,
+    )
+    is_group_header = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ("code",)
+        ordering = ("parent_id", "code")
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -30,9 +38,10 @@ class PoojaDayOption(models.Model):
     code = models.CharField(max_length=16, unique=True)
     description = models.CharField(max_length=255)
     category = models.CharField(max_length=32, choices=DayOptionCategory.choices, default=DayOptionCategory.CODE)
+    display_order = models.PositiveIntegerField(default=0, db_index=True)
 
     class Meta:
-        ordering = ("code",)
+        ordering = ("display_order", "id")
 
     def __str__(self):
         return f"{self.code} - {self.description}"
@@ -96,3 +105,20 @@ class PoojaRegistrationMember(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.registration_id})"
+
+
+class FeaturedPooja(models.Model):
+    """Lightweight content blocks for the landing page pooja section."""
+
+    name = models.CharField(max_length=255)
+    image = models.ImageField(upload_to="featured-poojas/")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+
+    def __str__(self):  # pragma: no cover - human readable repr
+        return self.name

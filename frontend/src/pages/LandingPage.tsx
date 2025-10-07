@@ -2,6 +2,23 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import LanguageToggle from "../components/LanguageToggle";
+import api, { extractResults } from "../lib/api";
+import { resolveMediaUrl } from "../lib/media";
+
+const formatCurrency = (value?: string | null) => {
+  if (!value) return "";
+  const amountNumber = Number(value);
+  if (Number.isNaN(amountNumber)) return value ?? "";
+  return amountNumber.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+interface FeaturedPoojaCard {
+  id: number;
+  name: string;
+  image: string;
+  image_url?: string;
+  amount: string | null;
+}
 
 const navLinks = [
   { label: "Home", href: "#top" },
@@ -237,6 +254,8 @@ const LandingPage = () => {
   /* ---------- HOOKS (inside LandingPage component, above return) ---------- */
   const [poojaIdx, setPoojaIdx] = useState(0);
   const [poojaPaused, setPoojaPaused] = useState(false);
+  const [featuredPoojas, setFeaturedPoojas] = useState<FeaturedPoojaCard[]>([]);
+  const [featuredError, setFeaturedError] = useState('');
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -245,13 +264,36 @@ const LandingPage = () => {
     return () => clearInterval(id);
   }, [poojaPaused]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFeatured = async () => {
+      try {
+        const { data } = await api.get('/pooja/featured-poojas/');
+        if (!isMounted) return;
+        const cards = extractResults<FeaturedPoojaCard>(data)
+          .filter((item) => Boolean(item.image))
+          .slice(0, 4);
+        setFeaturedPoojas(cards);
+      } catch (error) {
+        if (isMounted) {
+          setFeaturedError('Unable to load featured poojas right now.');
+        }
+      }
+    };
+    fetchFeatured();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
 
   return (
     <div id="top" className="bg-slate-50 text-slate-800">
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
-        <div className="bg-transparent text-white">
+        <div className="bg-transparent text-white relative">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+            {/* Left side (Logo/Title) */}
             <a
               href="#top"
               className="flex flex-col gap-1 text-left md:flex-shrink-0"
@@ -263,6 +305,8 @@ const LandingPage = () => {
                 The Architectural Marvel of Agraharam
               </p>
             </a>
+
+            {/* Center Nav Links */}
             <div className="hidden items-center gap-6 text-sm font-semibold text-white md:flex">
               {navLinks.map((item) => (
                 <a
@@ -273,7 +317,6 @@ const LandingPage = () => {
                   {item.label}
                 </a>
               ))}
-              <LanguageToggle />
               <Link
                 to="/login"
                 target="_blank"
@@ -292,8 +335,14 @@ const LandingPage = () => {
               </Link>
             </div>
           </div>
+
+          {/* Tamil Button on Top-Right */}
+          <div className="absolute top-4 right-6">
+            <LanguageToggle />
+          </div>
         </div>
       </header>
+
 
       <main>
         {/* HERO */}
@@ -383,6 +432,63 @@ const LandingPage = () => {
             </div>
           </div>
         </section>
+
+
+
+        {/* ARCHITECTURE (swapped + dynamic + click-outside reset) */}
+        <section id="architecture" className="bg-[#f8f4f4] py-16">
+          <div
+            ref={archRef}
+            className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-[5fr_6fr] md:items-center"
+          >
+            {/* Images on the left */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {architectureHighlights.map((item) => (
+                <div
+                  key={item.displayTitle}
+                  className="h-36 overflow-hidden rounded-3xl shadow-lg sm:h-48 cursor-pointer"
+                  onClick={() => setSelected({ title: item.displayTitle, description: item.displayDescription })}
+                  title={`View ${item.displayTitle}`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      setSelected({ title: item.displayTitle, description: item.displayDescription });
+                    }
+                  }}
+                >
+                  <img
+                    src={item.image}
+                    alt={item.alt}
+                    className="h-full w-full object-cover transition duration-500 hover:scale-105"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Text on the right */}
+            <div className="space-y-6">
+              <span className="inline-flex items-center rounded-full bg-[#b10026]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-[#b10026]">
+                Architecture & Heritage
+              </span>
+              <h2 className="text-3xl font-bold text-[#7a0e24] md:text-4xl">
+                {selected ? selected.title : "Extraordinary Dravidian Architecture"}
+              </h2>
+              <p className="text-base text-slate-700 md:text-lg">
+                {selected
+                  ? selected.description
+                  : "The Meenakshi Amman Temple complex spans 14 acres and celebrates Dravidian architecture through towering gopurams, intricately carved mandapams, and sacred tanks that mirror centuries of devotion."}
+              </p>
+              <Link
+                to="/architecture"
+                className="mt-6 inline-flex w-fit items-center justify-center rounded-full bg-[#7a0e24] px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-lg transition hover:bg-[#8e1a34]"
+              >
+                Explore Architecture
+              </Link>
+            </div>
+          </div>
+        </section>
+
 
 
         {/* VISIT (Three Column Layout - Swapped Daily Pooja & Plan Your Visit) */}
@@ -541,68 +647,15 @@ const LandingPage = () => {
       
 
 
-        {/* ARCHITECTURE (swapped + dynamic + click-outside reset) */}
-        <section id="architecture" className="bg-[#f8f4f4] py-16">
-          <div
-            ref={archRef}
-            className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-[5fr_6fr] md:items-center"
-          >
-            {/* Images on the left */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              {architectureHighlights.map((item) => (
-                <div
-                  key={item.displayTitle}
-                  className="h-36 overflow-hidden rounded-3xl shadow-lg sm:h-48 cursor-pointer"
-                  onClick={() => setSelected({ title: item.displayTitle, description: item.displayDescription })}
-                  title={`View ${item.displayTitle}`}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      setSelected({ title: item.displayTitle, description: item.displayDescription });
-                    }
-                  }}
-                >
-                  <img
-                    src={item.image}
-                    alt={item.alt}
-                    className="h-full w-full object-cover transition duration-500 hover:scale-105"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Text on the right */}
-            <div className="space-y-6">
-              <span className="inline-flex items-center rounded-full bg-[#b10026]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-[#b10026]">
-                Architecture & Heritage
-              </span>
-              <h2 className="text-3xl font-bold text-[#7a0e24] md:text-4xl">
-                {selected ? selected.title : "Extraordinary Dravidian Architecture"}
-              </h2>
-              <p className="text-base text-slate-700 md:text-lg">
-                {selected
-                  ? selected.description
-                  : "The Meenakshi Amman Temple complex spans 14 acres and celebrates Dravidian architecture through towering gopurams, intricately carved mandapams, and sacred tanks that mirror centuries of devotion."}
-              </p>
-              <Link
-                to="/architecture"
-                className="mt-6 inline-flex w-fit items-center justify-center rounded-full bg-[#7a0e24] px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-lg transition hover:bg-[#8e1a34]"
-              >
-                Explore Architecture
-              </Link>
-            </div>
-          </div>
-        </section>
-
 
         {/* DARSHAN & POOJA */}
         <section id="darshan" className="py-16">
           <div className="mx-auto max-w-6xl px-6">
             <div className="space-y-4 text-center md:text-left">
-              <h2 className="text-3xl font-bold text-slate-900 md:text-4xl">Darshan & Pooja Schedule</h2>
+              <h2 className="text-3xl font-bold text-slate-900 md:text-4xl">Pooja Schedule</h2>
               <p className="text-base text-slate-600 md:text-lg">
-                Daily rituals follow ancient Agamic traditions. Arrive 15 minutes early for sponsored sevas and archanas.
+                Daily rituals follow ancient Agamic traditions. Arrive 15 minutes early for sponsored sevas and archanas.<br></br>
+                Plan your seva with our curated list of daily poojas. Select a pooja to know more or proceed to online booking.
               </p>
             </div>
             <div className="mt-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg">
@@ -629,28 +682,6 @@ const LandingPage = () => {
         </section>
 
 
-
-        {/* GALLERY */}
-        <section id="gallery" className="bg-slate-900 py-16 text-white">
-          <div className="mx-auto max-w-6xl space-y-8 px-6">
-            <div className="space-y-3 text-center md:text-left">
-              <h2 className="text-3xl font-bold md:text-4xl">Gallery</h2>
-              <p className="text-base text-slate-200 md:text-lg">
-                A glimpse into the vibrant festivals, intricate carvings, and serene moments across the temple complex.
-              </p>
-            </div>
-            <div className="grid gap-6 md:grid-cols-4">
-              {galleryImages.map((src, index) => (
-                <div
-                  key={src}
-                  className={`overflow-hidden rounded-3xl border border-white/10 bg-white/5 ${index === 0 ? "md:col-span-2 md:row-span-2" : ""}`}
-                >
-                  <img src={src} alt="Temple" className="h-full w-full object-cover transition duration-700 hover:scale-105" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
 
         {/**
