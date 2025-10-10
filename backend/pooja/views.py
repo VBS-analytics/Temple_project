@@ -6,6 +6,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from accounts.models import UserRole
 
@@ -24,6 +25,7 @@ from .serializers import (
     PoojaDayOptionSerializer,
     PoojaOptionSerializer,
     PoojaRegistrationSerializer,
+    LandingPoojaRegistrationSerializer,
 )
 
 
@@ -129,8 +131,11 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
-        qs = self.get_queryset().prefetch_related(Prefetch("members"))
-        data = PoojaRegistrationSerializer(qs, many=True, context={"request": request}).data
+        queryset = self.get_queryset()
+        if request.user.role == UserRole.ADMIN:
+            queryset = queryset.filter(donor=request.user)
+        queryset = queryset.prefetch_related(Prefetch("members"))
+        data = PoojaRegistrationSerializer(queryset, many=True, context={"request": request}).data
         return Response({"count": len(data), "results": data})
 
     @action(detail=False, methods=["get"], url_path="admin-overview")
@@ -179,3 +184,16 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
         results.sort(key=lambda item: (item["donor_name"] or "").lower())
         return Response({"count": len(results), "results": results})
+
+
+class RecentPoojaRegistrationsView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def get(self, request):
+        queryset = (
+            PoojaRegistration.objects.select_related("pooja_option", "day_option", "donor")
+            .filter(status__in=("confirmed", "completed"))
+            .order_by("-created_at")[:5]
+        )
+        serializer = LandingPoojaRegistrationSerializer(queryset, many=True)
+        return Response({"count": len(serializer.data), "results": serializer.data})

@@ -1,5 +1,6 @@
 """Routes for pooja domain."""
 
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -9,6 +10,7 @@ from .views import (
     PoojaDayOptionViewSet,
     PoojaOptionViewSet,
     PoojaRegistrationViewSet,
+    RecentPoojaRegistrationsView,
 )
 
 router = DefaultRouter()
@@ -19,4 +21,7 @@ router.register('donor-messages', DonorMessageTemplateViewSet, basename='pooja-d
 router.register('registrations', PoojaRegistrationViewSet, basename='pooja-registrations')
 router.register('featured-poojas', FeaturedPoojaViewSet, basename='featured-poojas')
 
-urlpatterns = router.urls
+urlpatterns = [
+    path('registrations/recent-public/', RecentPoojaRegistrationsView.as_view(), name='pooja-registrations-recent-public'),
+    *router.urls,
+]

@@ -74,6 +74,12 @@ class DonorMessageTemplate(models.Model):
         return f"Daily text for {self.donor}"
 
 
+class PoojaStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    CONFIRMED = "confirmed", "Pooja Confirmed"
+    COMPLETED = "completed", "Pooja Completed"
+
+
 class PoojaRegistration(models.Model):
     donor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pooja_registrations")
     pooja_option = models.ForeignKey(PoojaOption, on_delete=models.CASCADE, related_name="registrations")
@@ -84,6 +90,11 @@ class PoojaRegistration(models.Model):
     post_prasadam = models.BooleanField(default=False)
     additional_notes = models.TextField(blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=PoojaStatus.choices,
+        default=PoojaStatus.PENDING,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

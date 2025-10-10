@@ -14,6 +14,10 @@ import AdminMasterPage from '../pages/admin/AdminMasterPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
 import DonorPoojaRegistrationsPage from '../pages/admin/DonorPoojaRegistrationsPage';
 import LandingPage from '../pages/LandingPage';
+import Gallery from '../pages/Gallery';
+import Events from '../pages/Events';
+import Projects from '../pages/Projects';
+import About from '../pages/About';
 import { useAuthStore } from '../store/auth';
 
 const HomeRoute = () => {
@@ -68,6 +72,11 @@ const App = () => (
         <Route path="/admin/donor-pooja-registrations" element={<DonorPoojaRegistrationsPage />} />
       </Route>
     </Route>
+
+    <Route path="/gallery" element={<Gallery />} />
+    <Route path="/events" element={<Events />} />
+    <Route path="/projects" element={<Projects />} />
+    <Route path="/about" element={<About />} />
 
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

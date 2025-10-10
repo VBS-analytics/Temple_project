@@ -18,6 +18,8 @@ export interface CartItem {
   dayOptionCode?: string | null;
   dayOptionDescription?: string | null;
   dayOptionCategory?: string | null;
+  selectedTamilStarId?: string | null;
+  selectedTamilStarLabel?: string | null;
   customDayDate?: string | null;
   customDayNote?: string | null;
   postPrasadam?: boolean;

@@ -12,6 +12,7 @@ from .models import (
     PoojaRegistration,
     PoojaRegistrationMember,
 )
+from accounts.models import UserRole
 
 
 class PoojaOptionSerializer(serializers.ModelSerializer):
@@ -129,7 +130,9 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
     donor_name = serializers.SerializerMethodField()
     donor_phone = serializers.SerializerMethodField()
     pooja_option_name = serializers.SerializerMethodField()
+    pooja_option_code = serializers.SerializerMethodField()
     day_option_description = serializers.SerializerMethodField()
+    day_option_category = serializers.SerializerMethodField()
 
     class Meta:
         model = PoojaRegistration
@@ -140,14 +143,17 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "donor_phone",
             "pooja_option",
             "pooja_option_name",
+            "pooja_option_code",
             "day_option",
             "day_option_description",
+            "day_option_category",
             "start_date",
             "quantity",
             "is_group_registration",
             "post_prasadam",
             "additional_notes",
             "total_amount",
+            "status",
             "created_at",
             "updated_at",
             "members",
@@ -158,7 +164,9 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "donor_name",
             "donor_phone",
             "pooja_option_name",
+            "pooja_option_code",
             "day_option_description",
+            "day_option_category",
             "created_at",
             "updated_at",
         )
@@ -194,5 +202,44 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
     def get_pooja_option_name(self, obj):  # pragma: no cover
         return getattr(obj.pooja_option, "name", None)
 
+    def get_pooja_option_code(self, obj):  # pragma: no cover
+        return getattr(obj.pooja_option, "code", None)
+
     def get_day_option_description(self, obj):  # pragma: no cover
         return getattr(obj.day_option, "description", None)
+
+    def get_day_option_category(self, obj):  # pragma: no cover
+        return getattr(obj.day_option, "category", None)
+
+
+class LandingPoojaRegistrationSerializer(serializers.ModelSerializer):
+    pooja_name = serializers.CharField(source="pooja_option.name", default="")
+    day_option = serializers.CharField(source="day_option.description", default="")
+    donor_name = serializers.SerializerMethodField()
+    status = serializers.CharField()
+
+    class Meta:
+        model = PoojaRegistration
+        fields = (
+            "id",
+            "pooja_name",
+            "day_option",
+            "donor_name",
+            "status",
+            "created_at",
+        )
+
+    def get_donor_name(self, obj):
+        donor = getattr(obj, "donor", None)
+        if donor is None:
+            return "Temple Admin"
+        name = getattr(donor, "name", "") or ""
+        if name.strip():
+            return name.strip()
+        username = getattr(donor, "username", "") or ""
+        if username.strip():
+            return username.strip()
+        email = getattr(donor, "email", "") or ""
+        if email.strip():
+            return email.strip()
+        return "Temple Admin"

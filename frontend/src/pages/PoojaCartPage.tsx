@@ -26,8 +26,8 @@ const formatDisplayDate = (value?: string | null) => {
 };
 
 const DAY_CATEGORY_LABELS: Record<string, string> = {
-  weekday: 'English Day',
-  tamil_star: 'Tamil Star',
+  weekday: '',
+  tamil_star: '',
   code: 'Template Code',
 };
 
@@ -169,6 +169,7 @@ const PoojaCartPage = () => {
               const combinedDayOption = item.dayOptionDescription
                 ? `${item.dayOptionDescription}${dayOptionCategoryLabel ? ` (${dayOptionCategoryLabel})` : ''}`
                 : '--';
+              const selectedTamilStarLabel = item.selectedTamilStarLabel ?? null;
               const memberSummary = item.members && item.members.length > 0
                 ? item.members
                     .map((member) => {
@@ -193,6 +194,11 @@ const PoojaCartPage = () => {
                       {item.customDayDate && (
                         <div className="text-xs text-slate-500">
                           Preferred date: {formatDisplayDate(item.customDayDate)}
+                        </div>
+                      )}
+                      {selectedTamilStarLabel && (
+                        <div className="text-xs text-slate-500">
+                          Star: {selectedTamilStarLabel}
                         </div>
                       )}
                       {item.customDayNote && (

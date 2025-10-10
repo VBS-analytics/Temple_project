@@ -2,8 +2,6 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
-import { useRegistrationStore } from '../store/registrations';
-import type { RegistrationEntry } from '../store/registrations';
 
 interface FamilyMember {
   id: number;
@@ -34,19 +32,34 @@ interface ProfileResponse {
   members?: FamilyMember[];
 }
 
+interface RegistrationMemberItem {
+  id: number;
+  name: string;
+  relationship?: string | null;
+  phone_number?: string | null;
+}
+
 interface RegistrationItem {
   id: number;
   pooja_option: number;
   pooja_option_name?: string;
+  pooja_option_code?: string | null;
   day_option?: number | null;
   day_option_description?: string | null;
+  day_option_category?: string | null;
   start_date: string | null;
   is_group_registration: boolean;
+  quantity?: number | null;
   total_amount: string | null;
   additional_notes?: string;
   donor?: number;
   donor_name?: string;
   donor_phone?: string;
+  post_prasadam?: boolean;
+  status?: 'pending' | 'confirmed' | 'completed';
+  members?: RegistrationMemberItem[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface RegistrationSummary {
@@ -88,6 +101,25 @@ const DAY_CATEGORY_LABELS: Record<string, string> = {
   code: 'Template Code',
 };
 
+const STATUS_LABELS: Record<'pending' | 'confirmed' | 'completed', string> = {
+  pending: 'Pending',
+  confirmed: 'Pooja Confirmed',
+  completed: 'Pooja Completed',
+};
+
+const STATUS_BADGE_CLASSES: Record<'pending' | 'confirmed' | 'completed', string> = {
+  pending: 'border-amber-200 bg-amber-50 text-amber-700',
+  confirmed: 'border-blue-200 bg-blue-50 text-blue-700',
+  completed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+};
+
+const resolveStatusKey = (status?: string | null): 'pending' | 'confirmed' | 'completed' => {
+  if (status === 'confirmed' || status === 'completed') {
+    return status;
+  }
+  return 'pending';
+};
+
 const formatDate = (dateValue?: string | null) => {
   if (!dateValue) {
     return 'N/A';
@@ -112,6 +144,7 @@ const DashboardPage = () => {
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
   const [memberError, setMemberError] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [memberForm, setMemberForm] = useState({
     name: '',
     gender: '',
@@ -120,86 +153,89 @@ const DashboardPage = () => {
     tamil_star: '',
     gothra: '',
   });
-  const user = useAuthStore((state) => state.user);
-  const cartKey = user ? String(user.id) : 'guest';
-  const registrations = useRegistrationStore((state) => state.registrationsByUser[cartKey] ?? []);
-  const clearAllRegistrations = useRegistrationStore((state) => state.clearAllRegistrations);
-  const isAdminUser = user?.role === 'admin';
 
-  const orderedRegistrations = useMemo(() => {
-    return [...registrations].sort((a, b) => {
-      const first = new Date(a.completedAt).getTime();
-      const second = new Date(b.completedAt).getTime();
-      return second - first;
-    });
-  }, [registrations]);
+  const user = useAuthStore((state) => state.user);
 
   const groupedRegistrations = useMemo(() => {
+    if (!summary?.results || summary.results.length === 0) {
+      return [];
+    }
+
     const map = new Map<
       string,
       {
-        orderId: string;
+        groupId: string;
         completedAt: string;
-        items: RegistrationEntry[];
+        items: RegistrationItem[];
       }
     >();
 
-    orderedRegistrations.forEach((entry) => {
-      const key = entry.orderId || entry.completedAt || entry.registrationId;
-      if (!key) {
-        return;
-      }
+    summary.results.forEach((registration) => {
+      const createdAt = registration.created_at ?? registration.updated_at ?? '';
+      const createdDate = createdAt ? new Date(createdAt) : null;
+      const minuteBucket =
+        createdDate && !Number.isNaN(createdDate.getTime())
+          ? Math.floor(createdDate.getTime() / 60000).toString()
+          : `registration-${registration.id}`;
+      const donorKey = registration.donor ?? 'self';
+      const groupKey = `${donorKey}-${minuteBucket}`;
 
-      if (!map.has(key)) {
-        map.set(key, {
-          orderId: key,
-          completedAt: entry.completedAt,
+      if (!map.has(groupKey)) {
+        map.set(groupKey, {
+          groupId: groupKey,
+          completedAt: createdAt || registration.updated_at || '',
           items: [],
         });
       }
 
-      const group = map.get(key);
+      const group = map.get(groupKey);
       if (!group) {
         return;
       }
 
-      group.items.push(entry);
+      group.items.push(registration);
 
-      const entryTime = new Date(entry.completedAt).getTime();
-      const groupTime = new Date(group.completedAt).getTime();
-      if (entryTime > groupTime) {
-        group.completedAt = entry.completedAt;
+      if (createdDate && !Number.isNaN(createdDate.getTime())) {
+        const groupDate = group.completedAt ? new Date(group.completedAt) : null;
+        if (!groupDate || Number.isNaN(groupDate.getTime()) || groupDate.getTime() < createdDate.getTime()) {
+          group.completedAt = createdAt;
+        }
       }
     });
 
-    return Array.from(map.values()).sort(
+    const groups = Array.from(map.values()).map((group) => {
+      const fallbackTimestamp =
+        group.completedAt || group.items[0]?.created_at || group.items[0]?.updated_at || new Date().toISOString();
+      const sortedItems = [...group.items].sort((a, b) => {
+        const first = new Date(a.created_at ?? a.updated_at ?? fallbackTimestamp).getTime();
+        const second = new Date(b.created_at ?? b.updated_at ?? fallbackTimestamp).getTime();
+        return second - first;
+      });
+      return {
+        groupId: group.groupId,
+        completedAt: fallbackTimestamp,
+        items: sortedItems,
+      };
+    });
+
+    return groups.sort(
       (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
     );
-  }, [orderedRegistrations]);
-
-  const totalLocalRegistrations = useMemo(
-    () => groupedRegistrations.reduce((count, group) => count + group.items.length, 0),
-    [groupedRegistrations],
-  );
-  useEffect(() => {
-    if (!summary) {
-      return;
-    }
-
-    if (summary.count === 0 && totalLocalRegistrations > 0) {
-      clearAllRegistrations();
-    }
-  }, [summary, totalLocalRegistrations, clearAllRegistrations]);
+  }, [summary]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profileRes, registrationsRes] = await Promise.all([
+        const [profileRes, memberRes, registrationsRes] = await Promise.all([
           api.get('auth/profile/'),
+          api.get('auth/family-members/'),
           api.get('pooja/registrations/summary/'),
         ]);
         setProfile(profileRes.data);
-        setMembers(profileRes.data?.members ?? []);
+        const memberList = Array.isArray(memberRes.data)
+          ? (memberRes.data as FamilyMember[])
+          : profileRes.data?.members ?? [];
+        setMembers(memberList);
         setSummary(registrationsRes.data);
       } catch (err: any) {
         const detail = err?.response?.data?.detail ?? 'Unable to load dashboard data';
@@ -257,6 +293,34 @@ const DashboardPage = () => {
       tamil_star: member.tamil_star ?? '',
       gothra: member.gothra ?? '',
     });
+  };
+
+  const handleDeleteMember = async (memberId: number, memberName?: string) => {
+    setMemberError('');
+    const sure = window.confirm(`Delete ${memberName || 'this family member'}?`);
+    if (!sure) return;
+
+    try {
+      setDeletingId(memberId);
+      await api.delete(`auth/family-members/${memberId}/`);
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+
+      // if the currently edited member is deleted, reset the form
+      if (editingMemberId === memberId) {
+        setEditingMemberId(null);
+        resetMemberForm();
+        setMemberFormVisible(false);
+      }
+    } catch (err: any) {
+      const detail =
+        err?.response?.data?.detail ??
+        err?.response?.data ??
+        err?.message ??
+        'Unable to delete member';
+      setMemberError(typeof detail === 'string' ? detail : 'Unable to delete member');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -338,44 +402,44 @@ const DashboardPage = () => {
             <p className="text-sm text-slate-600">Family: {profile?.profile.family_name || 'N/A'}</p>
           </div>
         </div>
-        {!isAdminUser && (
-          <div className="mt-6 rounded-md border border-slate-200 p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-slate-700">Family Members</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  if (memberFormVisible && editingMemberId === null) {
-                    setMemberFormVisible(false);
-                    resetMemberForm();
-                    setMemberError('');
-                  } else {
-                    startCreateFlow();
-                  }
-                }}
-                className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-700"
-              >
-                {memberFormVisible && editingMemberId === null ? 'Cancel' : 'Add member'}
-              </button>
-            </div>
+        <div className="mt-6 rounded-md border border-slate-200 p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-slate-700">Family Members</h3>
+            <button
+              type="button"
+              onClick={() => {
+                if (memberFormVisible && editingMemberId === null) {
+                  setMemberFormVisible(false);
+                  resetMemberForm();
+                  setMemberError('');
+                } else {
+                  startCreateFlow();
+                }
+              }}
+              className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              {memberFormVisible && editingMemberId === null ? 'Cancel' : 'Add member'}
+            </button>
+          </div>
 
-            {members.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">No members added yet.</p>
-            ) : (
-              <ul className="mt-4 space-y-3">
-                {members.map((member) => (
-                  <li key={member.id} className="rounded-md border border-slate-200 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500 md:text-sm">
-                        <span>
-                          Name: <span className="font-semibold text-slate-800">{member.name || 'N/A'}</span>
-                        </span>
-                        <span>Relationship: {member.relationship || 'N/A'}</span>
-                        <span>Gender: {member.gender || 'N/A'}</span>
-                        <span>Date of Birth: {formatDate(member.date_of_birth)}</span>
-                        <span>Star: {member.tamil_star || 'N/A'}</span>
-                        <span>Gothram: {member.gothra || 'N/A'}</span>
-                      </div>
+          {members.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">No members added yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {members.map((member) => (
+                <li key={member.id} className="rounded-md border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500 md:text-sm">
+                      <span>
+                        Name: <span className="font-semibold text-slate-800">{member.name || 'N/A'}</span>
+                      </span>
+                      <span>Relationship: {member.relationship || 'N/A'}</span>
+                      <span>Gender: {member.gender || 'N/A'}</span>
+                      <span>Date of Birth: {formatDate(member.date_of_birth)}</span>
+                      <span>Star: {member.tamil_star || 'N/A'}</span>
+                      <span>Gothram: {member.gothra || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleEditMember(member)}
@@ -383,126 +447,135 @@ const DashboardPage = () => {
                       >
                         Edit
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMember(member.id, member.name)}
+                        disabled={deletingId === member.id}
+                        className="rounded-md border border-red-600 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                        title="Delete this member"
+                      >
+                        {deletingId === member.id ? 'Deleting…' : 'Delete'}
+                      </button>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            {memberFormVisible && (
-              <form onSubmit={handleMemberSubmit} className="mt-4 space-y-3">
-                {memberError && <p className="rounded-md bg-red-100 p-2 text-sm text-red-700">{memberError}</p>}
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-name">
-                      Name
-                    </label>
-                    <input
-                      id="member-name"
-                      name="name"
-                      type="text"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      value={memberForm.name}
-                      onChange={handleMemberChange}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gender">
-                      Gender
-                    </label>
-                    <select
-                      id="member-gender"
-                      name="gender"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      value={memberForm.gender}
-                      onChange={handleMemberChange}
-                    >
-                      <option value="">Select gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-relationship">
-                      Relationship
-                    </label>
-                    <input
-                      id="member-relationship"
-                      name="relationship"
-                      type="text"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      value={memberForm.relationship}
-                      onChange={handleMemberChange}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-dob">
-                      Date of Birth
-                    </label>
-                    <input
-                      id="member-dob"
-                      name="date_of_birth"
-                      type="date"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      value={memberForm.date_of_birth}
-                      onChange={handleMemberChange}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-star">
-                      Star
-                    </label>
-                    <input
-                      id="member-star"
-                      name="tamil_star"
-                      type="text"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      value={memberForm.tamil_star}
-                      onChange={handleMemberChange}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gothra">
-                      Gothram
-                    </label>
-                    <input
-                      id="member-gothra"
-                      name="gothra"
-                      type="text"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      value={memberForm.gothra}
-                      onChange={handleMemberChange}
-                    />
-                  </div>
+          {memberFormVisible && (
+            <form onSubmit={handleMemberSubmit} className="mt-4 space-y-3">
+              {memberError && <p className="rounded-md bg-red-100 p-2 text-sm text-red-700">{memberError}</p>}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-name">
+                    Name
+                  </label>
+                  <input
+                    id="member-name"
+                    name="name"
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={memberForm.name}
+                    onChange={handleMemberChange}
+                    required
+                  />
                 </div>
-                <div className="flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMemberFormVisible(false);
-                      setEditingMemberId(null);
-                      resetMemberForm();
-                      setMemberError('');
-                    }}
-                    className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gender">
+                    Gender
+                  </label>
+                  <select
+                    id="member-gender"
+                    name="gender"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={memberForm.gender}
+                    onChange={handleMemberChange}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={memberSubmitting}
-                    className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-                  >
-                    {memberSubmitting ? 'Saving…' : editingMemberId !== null ? 'Update member' : 'Save member'}
-                  </button>
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
-              </form>
-            )}
-          </div>
-        )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-relationship">
+                    Relationship
+                  </label>
+                  <input
+                    id="member-relationship"
+                    name="relationship"
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={memberForm.relationship}
+                    onChange={handleMemberChange}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-dob">
+                    Date of Birth
+                  </label>
+                  <input
+                    id="member-dob"
+                    name="date_of_birth"
+                    type="date"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={memberForm.date_of_birth}
+                    onChange={handleMemberChange}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-star">
+                    Star
+                  </label>
+                  <input
+                    id="member-star"
+                    name="tamil_star"
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={memberForm.tamil_star}
+                    onChange={handleMemberChange}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gothra">
+                    Gothram
+                  </label>
+                  <input
+                    id="member-gothra"
+                    name="gothra"
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={memberForm.gothra}
+                    onChange={handleMemberChange}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMemberFormVisible(false);
+                    setEditingMemberId(null);
+                    resetMemberForm();
+                    setMemberError('');
+                  }}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={memberSubmitting}
+                  className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                >
+                  {memberSubmitting ? 'Saving…' : editingMemberId !== null ? 'Update member' : 'Save member'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </section>
 
       <section className="rounded-lg bg-white p-6 shadow-sm">
@@ -516,13 +589,13 @@ const DashboardPage = () => {
             <ul className="space-y-4">
               {groupedRegistrations.map((group) => {
                 const totalAmountValue = group.items.reduce((sum, entry) => {
-                  const amountNumber = Number(entry.amount ?? 0);
+                  const amountNumber = Number(entry.total_amount ?? 0);
                   return Number.isNaN(amountNumber) ? sum : sum + amountNumber;
                 }, 0);
                 const totalAmountLabel = totalAmountValue > 0 ? `₹ ${formatCurrency(totalAmountValue.toString())}` : '--';
 
                 return (
-                  <li key={group.orderId} className="rounded-lg border border-slate-200 p-4">
+                  <li key={group.groupId} className="rounded-lg border border-slate-200 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
@@ -534,46 +607,68 @@ const DashboardPage = () => {
                     </div>
                     <ul className="mt-3 space-y-3">
                       {group.items.map((registration) => {
-                        const amountLabel = registration.amount ? `₹ ${formatCurrency(registration.amount)}` : '--';
-                        const dayOptionLabel = registration.dayOptionDescription
-                          ? `${registration.dayOptionDescription}${registration.dayOptionCategory ? ` (${DAY_CATEGORY_LABELS[registration.dayOptionCategory] ?? registration.dayOptionCategory})` : ''}`
+                        const amountLabel = registration.total_amount
+                          ? `₹ ${formatCurrency(registration.total_amount)}`
                           : '--';
-                        const memberSummary = registration.members && registration.members.length > 0
-                          ? registration.members
-                              .map((member) => {
-                                const name = member.name || 'Member';
-                                const relationship = member.relationship ? ` (${member.relationship})` : '';
-                                return `${name}${relationship}`;
-                              })
-                              .join(', ')
-                          : registration.memberRelationship
-                            ? `${registration.fullName || 'Member'} (${registration.memberRelationship})`
-                            : registration.fullName || '--';
+                        const dayOptionCategoryLabel = registration.day_option_category
+                          ? DAY_CATEGORY_LABELS[registration.day_option_category] ?? registration.day_option_category
+                          : null;
+                        const combinedDayOption = registration.day_option_description
+                          ? `${registration.day_option_description}${
+                              dayOptionCategoryLabel ? ` (${dayOptionCategoryLabel})` : ''
+                            }`
+                          : '--';
+                        const memberSummary =
+                          registration.members && registration.members.length > 0
+                            ? registration.members
+                                .map((member) => {
+                                  const relationship = member.relationship ? ` (${member.relationship})` : '';
+                                  const name = member.name || 'Member';
+                                  return `${name}${relationship}`;
+                                })
+                                .join(', ')
+                            : '—';
+                        const statusKey = resolveStatusKey(registration.status);
+                        const statusLabel = STATUS_LABELS[statusKey];
+                        const statusClasses = STATUS_BADGE_CLASSES[statusKey];
 
                         return (
-                          <li
-                            key={registration.registrationId}
-                            className="rounded-md border border-slate-200 p-3"
-                          >
+                          <li key={registration.id} className="rounded-md border border-slate-200 p-3">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
-                                <p className="text-sm font-semibold text-slate-900">{registration.poojaName}</p>
-                                {registration.poojaCode && (
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {registration.pooja_option_name ?? 'Pooja'}
+                                </p>
+                                {registration.pooja_option_code && (
                                   <p className="text-xs uppercase tracking-wide text-slate-500">
-                                    Code: {registration.poojaCode}
+                                    Code: {registration.pooja_option_code}
                                   </p>
                                 )}
                               </div>
                               <div className="text-right text-sm font-semibold text-slate-900">{amountLabel}</div>
                             </div>
+
+                            <div className="mt-3">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Status
+                              </span>
+                              <div className="mt-1">
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${statusClasses}`}
+                                >
+                                  {statusLabel}
+                                </span>
+                              </div>
+                            </div>
+
                             <dl className="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
                               <div>
                                 <dt className="font-medium text-slate-700">Day Option</dt>
-                                <dd>{dayOptionLabel}</dd>
+                                <dd>{combinedDayOption}</dd>
                               </div>
                               <div>
                                 <dt className="font-medium text-slate-700">Devotee</dt>
-                                <dd>{registration.fullName || '--'}</dd>
+                                <dd>{registration.donor_name || user?.name || '--'}</dd>
                               </div>
                               <div>
                                 <dt className="font-medium text-slate-700">Members</dt>
@@ -581,13 +676,12 @@ const DashboardPage = () => {
                               </div>
                               <div>
                                 <dt className="font-medium text-slate-700">Notes</dt>
-                                <dd>{registration.customDayNote || 'None'}</dd>
+                                <dd>{registration.additional_notes?.trim() || 'None'}</dd>
                               </div>
                             </dl>
-                            {registration.postPrasadam && (
-                              <p className="mt-3 text-xs font-medium text-emerald-600">
-                                Post prasadam requested
-                              </p>
+
+                            {registration.post_prasadam && (
+                              <p className="mt-3 text-xs font-medium text-emerald-600">Post prasadam requested</p>
                             )}
                           </li>
                         );
@@ -600,59 +694,6 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {adminView && (
-          <div className="mt-6 overflow-hidden rounded-md border border-slate-200">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-                <tr>
-                  <th className="px-4 py-2">Donor</th>
-                  <th className="px-4 py-2">Pooja</th>
-                  <th className="px-4 py-2">Start Date</th>
-                  <th className="px-4 py-2">Group</th>
-                  <th className="px-4 py-2">Amount</th>
-                  <th className="px-4 py-2">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary?.results.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-700">
-                          {item.donor_name || (item.donor_phone ? item.donor_phone : 'Self (admin)')}
-                        </span>
-                        {item.donor_phone && item.donor_name !== item.donor_phone && (
-                          <span className="text-xs text-slate-500">{item.donor_phone}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex flex-col">
-                        <span>{item.pooja_option_name ?? `#${item.pooja_option}`}</span>
-                        {item.day_option_description && (
-                          <span className="text-xs text-slate-500">{item.day_option_description}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">{item.start_date ?? 'TBD'}</td>
-                    <td className="px-4 py-2">{item.is_group_registration ? 'Yes' : 'No'}</td>
-                    <td className="px-4 py-2">{item.total_amount ?? '--'}</td>
-                    <td className="px-4 py-2">
-                      {item.additional_notes ? (
-                        <span className="whitespace-pre-line text-sm text-slate-600">{item.additional_notes}</span>
-                      ) : (
-                        <span className="text-xs text-slate-400">No notes</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {(!summary || summary.results.length === 0) && (
-              <p className="p-4 text-sm text-slate-500">No registrations yet.</p>
-            )}
-          </div>
-        )}
       </section>
     </div>
   );

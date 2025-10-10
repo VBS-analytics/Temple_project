@@ -5,13 +5,6 @@ import LanguageToggle from "../components/LanguageToggle";
 import api, { extractResults } from "../lib/api";
 import { resolveMediaUrl } from "../lib/media";
 
-const formatCurrency = (value?: string | null) => {
-  if (!value) return "";
-  const amountNumber = Number(value);
-  if (Number.isNaN(amountNumber)) return value ?? "";
-  return amountNumber.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
 interface FeaturedPoojaCard {
   id: number;
   name: string;
@@ -20,15 +13,35 @@ interface FeaturedPoojaCard {
   amount: string | null;
 }
 
+type PoojaStatus = "pending" | "confirmed" | "completed";
+
+interface RecentPoojaRegistrationApiRecord {
+  id: number;
+  pooja_name?: string | null;
+  day_option?: string | null;
+  donor_name?: string | null;
+  status?: PoojaStatus | null;
+  created_at?: string | null;
+}
+
+interface LandingScheduleRow {
+  id: number;
+  poojaName: string;
+  dayOption: string;
+  donorName: string;
+  status: PoojaStatus;
+  createdAt: number;
+}
+
 const navLinks = [
-  { label: "Home", href: "#top" },
-  { label: "Darshan & Pooja", href: "#darshan" },
-  { label: "Architecture", href: "#architecture" },
-  { label: "Gallery", href: "#gallery" },
-  { label: "Visit", href: "#visit" },
-  { label: "Events", href: "#top" },
-  { label: "Projects", href: "#top" },
-  { label: "About", href: "#top" },
+  { label: "Home", href: "#top", type: "anchor" },
+  { label: "Darshan & Pooja", href: "#darshan", type: "anchor" },
+  { label: "Architecture", href: "#architecture", type: "anchor" },
+  { label: "Gallery", href: "/gallery", type: "route" },
+  { label: "Visit", href: "#visit", type: "anchor" },
+  { label: "Events", href: "/events", type: "route" },
+  { label: "Projects", href: "/projects", type: "route" },
+  { label: "About", href: "/about", type: "route" },
 ] as const;
 
 const heroHighlights = [
@@ -91,34 +104,34 @@ const visitHighlights = [
 const architectureHighlights = [
   {
     image:
-      "https://images.unsplash.com/photo-1507371341162-763b5e419408?auto=format&fit=crop&w=1200&q=80",
+      "images/vinayakar.jpg",
     displayTitle: "Pillayar Koil",
     displayDescription: "Pillayar Koil Details",
     alt: "Pillayar Koil",
   },
   {
     image:
-      "https://images.unsplash.com/photo-1507371341162-763b5e419408?auto=format&fit=crop&w=1200&q=80",
-    displayTitle: "Thousand Pillar Hall - Shivan Koil",
+      "images/shivan_koil.jpg",
+    displayTitle: "Shivan Koil",
     displayDescription:
       "A sculptural wonder dating back to the 16th century, featuring musical pillars and murals. - Shivan Koil Details",
-    alt: "Thousand Pillar Hall - Shivan Koil",
+    alt: "Shivan Koil",
   },
   {
     image:
-      "https://images.unsplash.com/photo-1507371341162-763b5e419408?auto=format&fit=crop&w=1200&q=80",
-    displayTitle: "Golden Lotus Tank - Ayyanar Koil",
+      "images/ayyanar_koil.jpg",
+    displayTitle: "Ayyanar Koil",
     displayDescription:
       "Sacred tank where poets presented their works; reflects the grandeur of the surrounding halls. - Ayyanar Koil Details",
-    alt: "Golden Lotus Tank - Ayyanar Koil",
+    alt: "Ayyanar Koil",
   },
   {
     image:
-      "https://images.unsplash.com/photo-1507371341162-763b5e419408?auto=format&fit=crop&w=1200&q=80",
-    displayTitle: "Sacred Mandapams - Perumal Koil",
+      "images/perumal_koil.jpg",
+    displayTitle: "Perumal Koil",
     displayDescription:
       "Intricately carved mandapams hosting nightly rituals, music, and cultural celebrations. - Perumal Koil Details",
-    alt: "Sacred Mandapams - Perumal Koil",
+    alt: "Perumal Koil",
   },
 ] as const;
 
@@ -129,38 +142,17 @@ const galleryImages = [
   "https://images.unsplash.com/photo-1518548865246-1e2922e03e94?auto=format&fit=crop&w=1100&q=80",
 ] as const;
 
-const poojaSchedule = [
-  {
-    name: "Tiruvananthal Pooja",
-    time: "5:00 AM",
-    details:
-      "Opening of the sanctum, recitation of sacred hymns, and first darshan of the day.",
-  },
-  {
-    name: "Thiruvembavai",
-    time: "7:00 AM",
-    details:
-      "Morning prayer with Vedic chanting and traditional music inside the main sannidhi.",
-  },
-  {
-    name: "Noon Pooja",
-    time: "12:15 PM",
-    details:
-      "Abhishekam and alankaram performed before the temple closes for the afternoon.",
-  },
-  {
-    name: "Evening Pooja",
-    time: "7:00 PM",
-    details:
-      "Sandhya deepa arati with cultural programs in the mandapams.",
-  },
-  {
-    name: "Ardhajama Pooja",
-    time: "9:30 PM",
-    details:
-      "Sacred procession of the deities followed by the resting ceremony for the night.",
-  },
-] as const;
+const STATUS_LABELS: Record<PoojaStatus, string> = {
+  pending: "Pending",
+  confirmed: "Pooja Confirmed",
+  completed: "Pooja Completed",
+};
+
+const STATUS_BADGE_CLASS: Record<PoojaStatus, string> = {
+  pending: "bg-amber-100 text-amber-700 border-amber-200",
+  confirmed: "bg-blue-100 text-blue-700 border-blue-200",
+  completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
+};
 
 const facilities = [
   "Temple canteen open 7:00 AM – 9:00 PM with prasadam and South Indian meals.",
@@ -256,6 +248,9 @@ const LandingPage = () => {
   const [poojaPaused, setPoojaPaused] = useState(false);
   const [featuredPoojas, setFeaturedPoojas] = useState<FeaturedPoojaCard[]>([]);
   const [featuredError, setFeaturedError] = useState('');
+  const [recentPoojas, setRecentPoojas] = useState<LandingScheduleRow[]>([]);
+  const [recentPoojasError, setRecentPoojasError] = useState('');
+  const [poojaScheduleLoading, setPoojaScheduleLoading] = useState(true);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -286,6 +281,53 @@ const LandingPage = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRecentPoojas = async () => {
+      setPoojaScheduleLoading(true);
+      setRecentPoojasError('');
+      try {
+        const { data } = await api.get('/pooja/registrations/recent-public/');
+        if (!isMounted) {
+          return;
+        }
+        const records = extractResults<RecentPoojaRegistrationApiRecord>(data);
+        const filtered = records
+          .filter((record): record is RecentPoojaRegistrationApiRecord => typeof record?.id === 'number')
+          .filter((registration) => registration.status === 'confirmed' || registration.status === 'completed')
+          .map((registration) => {
+            const createdAt = registration.created_at ? Date.parse(registration.created_at) : 0;
+            const row: LandingScheduleRow = {
+              id: registration.id,
+              poojaName: registration.pooja_name?.trim() || 'N/A',
+              dayOption: registration.day_option?.trim() || 'N/A',
+              donorName: registration.donor_name?.trim() || 'Temple Admin',
+              status: registration.status ?? 'pending',
+              createdAt: Number.isNaN(createdAt) ? 0 : createdAt,
+            };
+            return row;
+          })
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, 5);
+        setRecentPoojas(filtered);
+      } catch (error) {
+        if (isMounted) {
+          setRecentPoojasError('Unable to load the latest pooja registrations.');
+          setRecentPoojas([]);
+        }
+      } finally {
+        if (isMounted) {
+          setPoojaScheduleLoading(false);
+        }
+      }
+    };
+
+    fetchRecentPoojas();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
 
   return (
     <div id="top" className="bg-slate-50 text-slate-800">
@@ -308,15 +350,25 @@ const LandingPage = () => {
 
             {/* Center Nav Links */}
             <div className="hidden items-center gap-6 text-sm font-semibold text-white md:flex">
-              {navLinks.map((item) => (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  className="text-white transition hover:text-[#f4ba1a]"
-                >
-                  {item.label}
-                </a>
-              ))}
+              {navLinks.map((item) =>
+                item.type === "route" ? (
+                  <Link
+                    key={item.label}
+                    to={item.href}
+                    className="text-white transition hover:text-[#f4ba1a]"
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="text-white transition hover:text-[#f4ba1a]"
+                  >
+                    {item.label}
+                  </a>
+                )
+              )}
               <Link
                 to="/login"
                 target="_blank"
@@ -654,8 +706,7 @@ const LandingPage = () => {
             <div className="space-y-4 text-center md:text-left">
               <h2 className="text-3xl font-bold text-slate-900 md:text-4xl">Pooja Schedule</h2>
               <p className="text-base text-slate-600 md:text-lg">
-                Daily rituals follow ancient Agamic traditions. Arrive 15 minutes early for sponsored sevas and archanas.<br></br>
-                Plan your seva with our curated list of daily poojas. Select a pooja to know more or proceed to online booking.
+                List of Donor Pooja Schedules and Timings.                
               </p>
             </div>
             <div className="mt-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg">
@@ -663,18 +714,47 @@ const LandingPage = () => {
                 <thead className="bg-slate-100 text-xs uppercase tracking-[0.3em] text-slate-600">
                   <tr>
                     <th className="px-6 py-4">Pooja</th>
-                    <th className="px-6 py-4">Time</th>
-                    <th className="px-6 py-4">Details</th>
+                    <th className="px-6 py-4">Pooja Day </th>
+                    <th className="px-6 py-4">Donor / Admin</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                  {poojaSchedule.map((pooja) => (
-                    <tr key={pooja.name} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 font-semibold text-slate-900">{pooja.name}</td>
-                      <td className="px-6 py-4 text-red-700">{pooja.time}</td>
-                      <td className="px-6 py-4">{pooja.details}</td>
+                  {poojaScheduleLoading ? (
+                    <tr>
+                      <td className="px-6 py-5 text-sm text-slate-500" colSpan={3}>
+                        Loading recent pooja updates…
+                      </td>
                     </tr>
-                  ))}
+                  ) : recentPoojasError ? (
+                    <tr>
+                      <td className="px-6 py-5 text-sm text-red-600" colSpan={3}>
+                        {recentPoojasError}
+                      </td>
+                    </tr>
+                  ) : recentPoojas.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-5 text-sm text-slate-500" colSpan={3}>
+                        No confirmed or completed pooja registrations yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    recentPoojas.map((pooja) => (
+                      <tr key={pooja.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
+                            <span>{pooja.poojaName}</span>
+                            <span
+                              className={`rounded-full border px-2 py-1 text-xs font-medium ${STATUS_BADGE_CLASS[pooja.status]}`}
+                            >
+                              {STATUS_LABELS[pooja.status]}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-700">{pooja.dayOption}</td>
+                        <td className="px-6 py-4 text-slate-700">{pooja.donorName}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -767,7 +847,7 @@ const LandingPage = () => {
             <p className="text-lg font-semibold text-white">Meenakshi Amman Temple</p>
             <p className="text-sm text-slate-400">Madurai Main, Madurai, Tamil Nadu 625001</p>
             <p className="text-sm text-slate-400">Phone: +91 452 234 4360</p>
-            <p className="text-sm text-slate-400">Email: info@meenakshi.org</p>
+            <p className="text-sm text-slate-400">Email: agraharam_temple@gmail.com</p>
           </div>
           <div className="space-y-3 text-sm">
             <p className="font-semibold text-white">Temple Hours</p>
@@ -786,7 +866,7 @@ const LandingPage = () => {
             <p className="font-semibold text-white">Stay Connected</p>
             <p>Follow us on Facebook, Instagram, and YouTube for live updates and festival highlights.</p>
             <p className="text-xs text-slate-500">
-              © {new Date().getFullYear()} Meenakshi Temple, Madurai. All rights reserved.
+              © {new Date().getFullYear()} Agraharam Temple, Agraharam. All rights reserved.
             </p>
           </div>
         </div>

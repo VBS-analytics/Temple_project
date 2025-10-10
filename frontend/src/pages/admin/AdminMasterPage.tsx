@@ -42,6 +42,11 @@ type DayOptionFormValues = {
   category: string;
 };
 
+type TamilDayOptionFormValues = {
+  code: string;
+  description: string;
+};
+
 type PoojaOptionFormValues = {
   code: string;
   poojaDescription: string;
@@ -53,15 +58,9 @@ type HeaderFormValues = {
   headerName: string;
 };
 
-// ↓↓↓ UPDATED: Only two categories ↓↓↓
-const categories = [
-  { value: 'weekday', label: 'English Day' },
-  { value: 'tamil_star', label: 'Tamil Star' },
-];
-
 const categoryDisplayNames: Record<string, string> = {
-  weekday: 'English Day',
-  tamil_star: 'Tamil Star',
+  weekday: '',
+  tamil_star: '',
   code: 'Template Code',
 };
 
@@ -76,6 +75,7 @@ const AdminMasterPage = () => {
   const originalDayOrderRef = useRef<DayOption[]>([]);
 
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
+  const tamilDayForm = useForm<TamilDayOptionFormValues>({ defaultValues: { code: '', description: '' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
   const poojaForm = useForm<PoojaOptionFormValues>({ defaultValues: { code: '', poojaDescription: '', rate: '', headerId: '' } });
 
@@ -114,6 +114,13 @@ const AdminMasterPage = () => {
         .filter((pooja, index, arr) => index === arr.findIndex((candidate) => candidate.id === pooja.id)),
     [groupedPoojas],
   );
+  const englishDayOptions = useMemo(
+    () => dayOptions.filter((option) => option.category !== 'tamil_star'),
+    [dayOptions],
+  );
+  const tamilDayOptions = useMemo(() => dayOptions.filter((option) => option.category === 'tamil_star'), [dayOptions]);
+  const isEditingEnglishDay = Boolean(editingDay && editingDay.category !== 'tamil_star');
+  const isEditingTamilDay = editingDay?.category === 'tamil_star';
 
   const load = async () => {
     try {
@@ -137,31 +144,67 @@ const AdminMasterPage = () => {
     load();
   }, []);
 
-  const resetDayForm = () => {
-    setEditingDay(null);
+  const resetEnglishDayForm = () => {
     dayForm.reset({ code: '', description: '', category: 'weekday' });
   };
 
+  const resetTamilDayForm = () => {
+    tamilDayForm.reset({ code: '', description: '' });
+  };
+
+  const clearDayEditing = () => {
+    setEditingDay(null);
+    resetEnglishDayForm();
+    resetTamilDayForm();
+  };
+
   const onCreateDayOption = async (values: DayOptionFormValues) => {
+    const payload =
+      editingDay && editingDay.category !== 'tamil_star'
+        ? values
+        : { ...values, category: 'weekday' };
     try {
-      if (editingDay) {
-        await api.put(`/pooja/day-options/${editingDay.id}/`, values);
+      if (editingDay && editingDay.category !== 'tamil_star') {
+        await api.put(`/pooja/day-options/${editingDay.id}/`, payload);
         setNotice('Day option updated.');
       } else {
-        await api.post('/pooja/day-options/', values);
+        await api.post('/pooja/day-options/', payload);
         setNotice('Day option saved.');
       }
-      resetDayForm();
+      clearDayEditing();
       load();
     } catch (err: any) {
       const detail = err?.response?.data ?? 'Could not save day option';
       setNotice(typeof detail === 'string' ? detail : 'Error saving day option');
     }
   };
+  const onCreateTamilDayOption = async (values: TamilDayOptionFormValues) => {
+    const payload = { ...values, category: 'tamil_star' };
+    try {
+      if (editingDay && editingDay.category === 'tamil_star') {
+        await api.put(`/pooja/day-options/${editingDay.id}/`, payload);
+        setNotice('Tamil day option updated.');
+      } else {
+        await api.post('/pooja/day-options/', payload);
+        setNotice('Tamil day option saved.');
+      }
+      clearDayEditing();
+      load();
+    } catch (err: any) {
+      const detail = err?.response?.data ?? 'Could not save Tamil day option';
+      setNotice(typeof detail === 'string' ? detail : 'Error saving Tamil day option');
+    }
+  };
 
   const handleEditDay = (day: DayOption) => {
     setEditingDay(day);
-    dayForm.reset({ code: day.code, description: day.description, category: day.category });
+    if (day.category === 'tamil_star') {
+      tamilDayForm.reset({ code: day.code, description: day.description });
+      resetEnglishDayForm();
+    } else {
+      dayForm.reset({ code: day.code, description: day.description, category: day.category });
+      resetTamilDayForm();
+    }
   };
 
   const handleDeleteDay = async (day: DayOption) => {
@@ -170,7 +213,7 @@ const AdminMasterPage = () => {
       await api.delete(`/pooja/day-options/${day.id}/`);
       setNotice('Day option deleted.');
       if (editingDay?.id === day.id) {
-        resetDayForm();
+        clearDayEditing();
       }
       load();
     } catch (err: any) {
@@ -558,36 +601,38 @@ const AdminMasterPage = () => {
       </section>
 
       <section className="rounded-lg bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800">Day Options</h2>
-        <p className="mt-1 text-sm text-slate-600">Represents Form-6 (Tamil stars / day codes).</p>
+        <h2 className="text-lg font-semibold text-slate-800">Day Options - English Codes</h2>
 
-        <form onSubmit={dayForm.handleSubmit(onCreateDayOption)} className="mt-4 grid gap-4 md:grid-cols-4">
+        <form onSubmit={dayForm.handleSubmit(onCreateDayOption)} className="mt-4 grid gap-4 md:grid-cols-3">
+          <input type="hidden" {...dayForm.register('category')} />
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-700">Code</label>
-            <input className="w-full rounded-md border border-slate-300 px-3 py-2" {...dayForm.register('code', { required: true })} />
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2"
+              disabled={isEditingTamilDay}
+              {...dayForm.register('code', { required: true })}
+            />
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-700">Description</label>
-            <input className="w-full rounded-md border border-slate-300 px-3 py-2" {...dayForm.register('description', { required: true })} />
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2"
+              disabled={isEditingTamilDay}
+              {...dayForm.register('description', { required: true })}
+            />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">Category</label>
-            <select className="w-full rounded-md border border-slate-300 px-3 py-2" {...dayForm.register('category')}>
-              {categories.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="md:col-span-4 flex items-center gap-3">
-            <button type="submit" className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-              {editingDay ? 'Update Day Option' : 'Save Day Option'}
+          <div className="md:col-span-3 flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={isEditingTamilDay}
+              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isEditingEnglishDay ? 'Update Day Option' : 'Save Day Option'}
             </button>
-            {editingDay && (
+            {isEditingEnglishDay && (
               <button
                 type="button"
-                onClick={resetDayForm}
+                onClick={clearDayEditing}
                 className="rounded-md bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
               >
                 Cancel
@@ -597,7 +642,7 @@ const AdminMasterPage = () => {
         </form>
 
         <ul className="mt-4 divide-y divide-slate-200 text-sm">
-          {dayOptions.map((day) => (
+          {englishDayOptions.map((day) => (
             <li
               key={day.id}
               draggable
@@ -637,7 +682,92 @@ const AdminMasterPage = () => {
               </div>
             </li>
           ))}
-          {dayOptions.length === 0 && <li className="py-3 text-sm text-slate-500">No entries yet.</li>}
+          {englishDayOptions.length === 0 && <li className="py-3 text-sm text-slate-500">No entries yet.</li>}
+        </ul>
+      </section>
+
+      <section className="rounded-lg bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-800">Day Options - Tamil Codes</h2>
+
+        <form onSubmit={tamilDayForm.handleSubmit(onCreateTamilDayOption)} className="mt-4 grid gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-700">Code</label>
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2"
+              disabled={isEditingEnglishDay}
+              {...tamilDayForm.register('code', { required: true })}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-700">Description</label>
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2"
+              disabled={isEditingEnglishDay}
+              {...tamilDayForm.register('description', { required: true })}
+            />
+          </div>
+          <div className="md:col-span-3 flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={isEditingEnglishDay}
+              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isEditingTamilDay ? 'Update Tamil Day Option' : 'Save Tamil Day Option'}
+            </button>
+            {isEditingTamilDay && (
+              <button
+                type="button"
+                onClick={clearDayEditing}
+                className="rounded-md bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+
+        <ul className="mt-4 divide-y divide-slate-200 text-sm">
+          {tamilDayOptions.map((day) => (
+            <li
+              key={day.id}
+              draggable
+              onDragStart={(event) => handleDayDragStart(event, day.id)}
+              onDragOver={(event) => handleDayDragOver(event, day.id)}
+              onDragEnd={handleDayDragEnd}
+              onDrop={(event) => event.preventDefault()}
+              aria-grabbed={draggingDayId === day.id}
+              className={`flex flex-wrap items-center justify-between gap-3 py-2 transition ${
+                draggingDayId === day.id ? 'cursor-grabbing opacity-80' : 'cursor-grab'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500">::</span>
+                <span className="font-medium">
+                  {day.description} — {day.code}
+                </span>
+                <span className="ml-3 text-xs uppercase text-slate-500">
+                  {(categoryDisplayNames[day.category] ?? day.category).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleEditDay(day)}
+                  className="rounded-md bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-300"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteDay(day)}
+                  className="rounded-md bg-red-100 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-200"
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+          {tamilDayOptions.length === 0 && <li className="py-3 text-sm text-slate-500">No Tamil entries yet.</li>}
         </ul>
       </section>
 

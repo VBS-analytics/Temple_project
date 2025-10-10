@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import api from '../../lib/api';
 
@@ -24,6 +24,7 @@ interface RegistrationRecord {
   post_prasadam?: boolean;
   additional_notes?: string | null;
   total_amount?: string | null;
+  status?: 'pending' | 'confirmed' | 'completed';
   members?: RegistrationMember[];
 }
 
@@ -35,6 +36,12 @@ interface GroupedRegistrations {
   donorEmail?: string | null;
   registrations: RegistrationRecord[];
 }
+
+const STATUS_OPTIONS: Array<{ value: NonNullable<RegistrationRecord['status']>; label: string }> = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Pooja Confirmed' },
+  { value: 'completed', label: 'Pooja Completed' },
+];
 
 const extractRegistrationResults = (payload: any): RegistrationRecord[] => {
   if (Array.isArray(payload)) {
@@ -190,72 +197,128 @@ const DonorPoojaRegistrationsPage = () => {
   const [groups, setGroups] = useState<GroupedRegistrations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statusUpdatingMap, setStatusUpdatingMap] = useState<
+    Record<number, NonNullable<RegistrationRecord['status']> | undefined>
+  >({});
+  const [statusFeedback, setStatusFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const loadRegistrations = useCallback(
+    async ({ preserveLoading }: { preserveLoading?: boolean } = {}): Promise<GroupedRegistrations[]> => {
+    const shouldToggleLoading = !preserveLoading;
+    if (shouldToggleLoading) {
+      setLoading(true);
+    }
+    setError('');
+
+    let adminEndpointError = '';
+    try {
+      const response = await api.get('pooja/registrations/admin-overview/');
+      const overview = normalizeAdminOverview(response.data);
+      setGroups(overview);
+      if (shouldToggleLoading) {
+        setLoading(false);
+      }
+      return overview;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status !== 404 && status !== 405) {
+        const detail = err?.response?.data?.detail ?? err?.message;
+        if (typeof detail === 'string' && detail) {
+          adminEndpointError = detail;
+        }
+      }
+    }
+
+    try {
+      const [summaryResponse, firstPageResponse] = await Promise.all([
+        api.get('pooja/registrations/summary/'),
+        api.get('pooja/registrations/', { params: { page_size: 100 } }),
+      ]);
+
+      const dedupe = new Map<number, RegistrationRecord>();
+      extractRegistrationResults(summaryResponse.data).forEach((item) => {
+        if (typeof item?.id === 'number') {
+          dedupe.set(item.id, item);
+        }
+      });
+
+      const firstPageData = firstPageResponse.data;
+      extractRegistrationResults(firstPageData).forEach((item) => {
+        if (typeof item?.id === 'number') {
+          dedupe.set(item.id, item);
+        }
+      });
+
+      let nextUrl = normalizeNextUrl(firstPageData?.next);
+      while (nextUrl) {
+        const nextResponse = await api.get(nextUrl);
+        extractRegistrationResults(nextResponse.data).forEach((item) => {
+          if (typeof item?.id === 'number') {
+            dedupe.set(item.id, item);
+          }
+        });
+        nextUrl = normalizeNextUrl(nextResponse.data?.next);
+      }
+
+      const grouped = groupRegistrationsByDonor(Array.from(dedupe.values()));
+      setGroups(grouped);
+      return grouped;
+    } catch (err: any) {
+      const fallbackDetail = err?.response?.data?.detail ?? err?.message ?? adminEndpointError;
+      setError(
+        typeof fallbackDetail === 'string' && fallbackDetail
+          ? fallbackDetail
+          : adminEndpointError || 'Unable to load pooja registrations',
+      );
+    } finally {
+      if (shouldToggleLoading) {
+        setLoading(false);
+      }
+    }
+    return [];
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      let adminEndpointError = '';
-      try {
-        const response = await api.get('pooja/registrations/admin-overview/');
-        const overview = normalizeAdminOverview(response.data);
-        setGroups(overview);
-        setLoading(false);
-        return;
-      } catch (err: any) {
-        const status = err?.response?.status;
-        if (status !== 404 && status !== 405) {
-          const detail = err?.response?.data?.detail ?? err?.message;
-          if (typeof detail === 'string' && detail) {
-            adminEndpointError = detail;
-          }
-        }
-      }
+    loadRegistrations();
+  }, [loadRegistrations]);
 
-      try {
-        const [summaryResponse, firstPageResponse] = await Promise.all([
-          api.get('pooja/registrations/summary/'),
-          api.get('pooja/registrations/', { params: { page_size: 100 } }),
-        ]);
+  const handleStatusChange = async (
+    registrationId: number,
+    nextStatus: NonNullable<RegistrationRecord['status']>,
+  ) => {
+    setStatusFeedback(null);
+    setStatusUpdatingMap((prev) => ({ ...prev, [registrationId]: nextStatus }));
 
-        const dedupe = new Map<number, RegistrationRecord>();
-        extractRegistrationResults(summaryResponse.data).forEach((item) => {
-          if (typeof item?.id === 'number') {
-            dedupe.set(item.id, item);
-          }
+    try {
+      await api.patch(`pooja/registrations/${registrationId}/`, { status: nextStatus });
+      setGroups((prevGroups) =>
+        prevGroups.map((group) => ({
+          ...group,
+          registrations: group.registrations.map((registration) =>
+            registration.id === registrationId ? { ...registration, status: nextStatus } : registration,
+          ),
+        })),
+      );
+      const refreshedGroups = await loadRegistrations({ preserveLoading: true });
+      const refreshedRegistration = refreshedGroups
+        .flatMap((group) => group.registrations)
+        .find((registration) => registration.id === registrationId);
+      if (refreshedRegistration?.status === nextStatus) {
+        setStatusFeedback({ type: 'success', message: 'Pooja status updated.' });
+      } else {
+        setStatusFeedback({
+          type: 'error',
+          message: 'Status update may not have saved. Please refresh and try again.',
         });
-
-        const firstPageData = firstPageResponse.data;
-        extractRegistrationResults(firstPageData).forEach((item) => {
-          if (typeof item?.id === 'number') {
-            dedupe.set(item.id, item);
-          }
-        });
-
-        let nextUrl = normalizeNextUrl(firstPageData?.next);
-        while (nextUrl) {
-          const nextResponse = await api.get(nextUrl);
-          extractRegistrationResults(nextResponse.data).forEach((item) => {
-            if (typeof item?.id === 'number') {
-              dedupe.set(item.id, item);
-            }
-          });
-          nextUrl = normalizeNextUrl(nextResponse.data?.next);
-        }
-
-        setGroups(groupRegistrationsByDonor(Array.from(dedupe.values())));
-      } catch (err: any) {
-        const fallbackDetail = err?.response?.data?.detail ?? err?.message ?? adminEndpointError;
-        setError(
-          typeof fallbackDetail === 'string' && fallbackDetail
-            ? fallbackDetail
-            : adminEndpointError || 'Unable to load pooja registrations',
-        );
-      } finally {
-        setLoading(false);
       }
-    };
-
-    load();
-  }, []);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail ?? err?.message;
+      const message = typeof detail === 'string' && detail ? detail : 'Unable to update pooja status.';
+      setStatusFeedback({ type: 'error', message });
+    } finally {
+      setStatusUpdatingMap((prev) => ({ ...prev, [registrationId]: undefined }));
+    }
+  };
 
   if (loading) {
     return <p>Loading donor pooja registrations…</p>;
@@ -286,6 +349,18 @@ const DonorPoojaRegistrationsPage = () => {
         <p className="text-sm text-slate-600">Track all donor bookings and their associated members.</p>
       </header>
 
+      {statusFeedback && (
+        <p
+          className={`rounded-md border px-3 py-2 text-sm ${
+            statusFeedback.type === 'success'
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {statusFeedback.message}
+        </p>
+      )}
+
       <div className="space-y-4">
         {groups.map((donorGroup) => (
           <section key={donorGroup.groupKey} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -303,57 +378,88 @@ const DonorPoojaRegistrationsPage = () => {
             </header>
 
             <div className="mt-4 space-y-3">
-              {donorGroup.registrations.map((registration) => (
-                <article key={registration.id} className="rounded-md border border-slate-200 p-3">
-                  <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-                    <p>
-                      <span className="font-medium text-slate-700">Pooja:</span>{' '}
-                      {registration.pooja_option_name ?? 'N/A'}
-                    </p>
-                    <p>
-                      <span className="font-medium text-slate-700">Start Date:</span>{' '}
-                      {formatDate(registration.start_date)}
-                    </p>
-                    <p>
-                      <span className="font-medium text-slate-700">Quantity:</span>{' '}
-                      {registration.quantity ?? 1}
-                    </p>
-                    <p>
-                      <span className="font-medium text-slate-700">Amount:</span>{' '}
-                      {formatCurrency(registration.total_amount)}
-                    </p>
-                    <p>
-                      <span className="font-medium text-slate-700">Schedule:</span>{' '}
-                      {registration.day_option_description ?? 'N/A'}
-                    </p>
-                    <p>
-                      <span className="font-medium text-slate-700">Post Prasadam:</span>{' '}
-                      {registration.post_prasadam ? 'Yes' : 'No'}
-                    </p>
-                  </div>
+              {donorGroup.registrations.map((registration) => {
+                const activeStatus = registration.status ?? 'pending';
+                const updatingTarget = statusUpdatingMap[registration.id];
+                const isUpdating = Boolean(updatingTarget);
 
-                  {registration.additional_notes && (
-                    <p className="mt-2 rounded bg-slate-50 p-2 text-sm text-slate-600">
-                      <span className="font-medium text-slate-700">Notes:</span> {registration.additional_notes}
-                    </p>
-                  )}
-
-                  {registration.members && registration.members.length > 0 && (
-                    <div className="mt-3">
-                      <h3 className="text-sm font-semibold text-slate-700">Members</h3>
-                      <ul className="mt-2 flex flex-wrap gap-2">
-                        {registration.members.map((member) => (
-                          <li key={member.id} className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600">
-                            <span className="font-medium text-slate-700">{member.name}</span>
-                            {member.relationship ? ` · ${member.relationship}` : ''}
-                            {member.phone_number ? ` · ${member.phone_number}` : ''}
-                          </li>
-                        ))}
-                      </ul>
+                return (
+                  <article key={registration.id} className="rounded-md border border-slate-200 p-3">
+                    <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+                      <p>
+                        <span className="font-medium text-slate-700">Pooja:</span>{' '}
+                        {registration.pooja_option_name ?? 'N/A'}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-700">Pooja Date:</span>{' '}
+                        {formatDate(registration.start_date)}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-700">Quantity:</span>{' '}
+                        {registration.quantity ?? 1}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-700">Amount:</span>{' '}
+                        {formatCurrency(registration.total_amount)}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-700">Schedule:</span>{' '}
+                        {registration.day_option_description ?? 'N/A'}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-700">Post Prasadam:</span>{' '}
+                        {registration.post_prasadam ? 'Yes' : 'No'}
+                      </p>
                     </div>
-                  )}
-                </article>
-              ))}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</span>
+                      {STATUS_OPTIONS.map((option) => {
+                        const isActive = activeStatus === option.value;
+                        const baseClasses =
+                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
+                        const activeClasses =
+                          'border-brand-600 bg-brand-600 text-white focus:ring-brand-500 disabled:cursor-default disabled:opacity-100';
+                        const inactiveClasses =
+                          'border-slate-200 text-slate-600 hover:bg-slate-50 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60';
+
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
+                            disabled={isActive || isUpdating}
+                            onClick={() => handleStatusChange(registration.id, option.value)}
+                          >
+                            {updatingTarget === option.value ? 'Updating…' : option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {registration.additional_notes && (
+                      <p className="mt-2 rounded bg-slate-50 p-2 text-sm text-slate-600">
+                        <span className="font-medium text-slate-700">Notes:</span> {registration.additional_notes}
+                      </p>
+                    )}
+
+                    {registration.members && registration.members.length > 0 && (
+                      <div className="mt-3">
+                        <h3 className="text-sm font-semibold text-slate-700">Members</h3>
+                        <ul className="mt-2 flex flex-wrap gap-2">
+                          {registration.members.map((member) => (
+                            <li key={member.id} className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600">
+                              <span className="font-medium text-slate-700">{member.name}</span>
+                              {member.relationship ? ` · ${member.relationship}` : ''}
+                              {member.phone_number ? ` · ${member.phone_number}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           </section>
         ))}

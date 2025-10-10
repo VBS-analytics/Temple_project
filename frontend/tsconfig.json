@@ -3,7 +3,9 @@
   "extends": "./tsconfig.node.json",
   "compilerOptions": {
     "baseUrl": "./src",
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "target": "ES2016",
+    "lib": ["DOM", "DOM.Iterable", "ES2016"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

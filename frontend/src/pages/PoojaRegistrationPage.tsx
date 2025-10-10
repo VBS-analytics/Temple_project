@@ -374,6 +374,7 @@ const PoojaRegistrationPage = () => {
   const [error, setError] = useState('');
   const [selectedPooja, setSelectedPooja] = useState<BookingPooja | null>(null);
   const [selectedDayOptionId, setSelectedDayOptionId] = useState<number | null>(null);
+  const [selectedTamilStar, setSelectedTamilStar] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfilePayload | null>(null);
   const [dateValue, setDateValue] = useState('');
   const [formError, setFormError] = useState('');
@@ -476,7 +477,7 @@ const PoojaRegistrationPage = () => {
 
   const dayOptionChoices = useMemo(() => {
     return dayOptions
-      .slice()
+      .filter((option) => option.category !== 'tamil_star')
       .sort((a, b) => {
         const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
         if (orderDiff !== 0) {
@@ -484,6 +485,13 @@ const PoojaRegistrationPage = () => {
         }
         return a.description.localeCompare(b.description);
       });
+  }, [dayOptions]);
+
+  // Filter Tamil star options
+  const tamilStarOptions = useMemo(() => {
+    return dayOptions
+      .filter(option => option.category === 'tamil_star')
+      .sort((a, b) => a.description.localeCompare(b.description));
   }, [dayOptions]);
 
   const resolvePostPrasadam = (poojaId: number, matchingItem?: CartItem): boolean => {
@@ -691,12 +699,22 @@ const PoojaRegistrationPage = () => {
 
   const handleDaySelectionChange = (poojaId: number, value: string) => {
     const optionId = value ? Number(value) : null;
+    const selectedOption = optionId ? dayOptionMap.get(optionId) : undefined;
+    
+    // Reset Tamil star selection when changing day option
+    setSelectedTamilStar(null);
+
     setDaySelectionMap((prev) => ({
       ...prev,
       [poojaId]: optionId,
     }));
     ensureChartDetailState(poojaId, optionId);
     setTableMessage(null);
+  };
+
+  const handleTamilStarSelection = (poojaId: number, value: string) => {
+    setSelectedTamilStar(value);
+    // The selected Tamil star can be used when adding to cart or processing the form
   };
 
   const toggleMemberSelection = (value: string) => {
@@ -897,6 +915,10 @@ const PoojaRegistrationPage = () => {
     const chosenDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
     const requiresChartDetails = isChartDayOption(chosenDayOption);
     const chartDetails = chartDetailsMap[row.pooja.id];
+    const selectedTamilStarOption =
+      selectedTamilStar && chosenDayOption?.code === 'CS'
+        ? dayOptionMap.get(Number(selectedTamilStar))
+        : undefined;
     const postPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
 
     if (requiresChartDetails) {
@@ -963,6 +985,11 @@ const PoojaRegistrationPage = () => {
       dayOptionCode: chosenDayOption?.code ?? null,
       dayOptionDescription: chosenDayOption?.description ?? null,
       dayOptionCategory: chosenDayOption?.category ?? null,
+      selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedTamilStar : null,
+      selectedTamilStarLabel:
+        chosenDayOption?.code === 'CS' && selectedTamilStarOption
+          ? formatDayOptionLabel(selectedTamilStarOption)
+          : null,
       customDayDate: requiresChartDetails ? chartDetails?.date ?? null : null,
       customDayNote: requiresChartDetails ? chartDetails?.note?.trim() ?? null : null,
       postPrasadam,
@@ -1065,6 +1092,11 @@ const PoojaRegistrationPage = () => {
       };
     });
 
+    const selectedTamilStarOption =
+      selectedTamilStar && chosenDayOption?.code === 'CS'
+        ? dayOptionMap.get(Number(selectedTamilStar))
+        : undefined;
+
     const primaryEntry = membersPayload[0];
     const item = createCartItem({
       poojaId: selectedPooja.id,
@@ -1082,6 +1114,11 @@ const PoojaRegistrationPage = () => {
       dayOptionCode: chosenDayOption?.code ?? null,
       dayOptionDescription: chosenDayOption?.description ?? null,
       dayOptionCategory: chosenDayOption?.category ?? null,
+      selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedTamilStar : null,
+      selectedTamilStarLabel:
+        chosenDayOption?.code === 'CS' && selectedTamilStarOption
+          ? formatDayOptionLabel(selectedTamilStarOption)
+          : null,
       customDayDate: requiresChartDetails ? chartDetails?.date ?? null : null,
       customDayNote: requiresChartDetails ? chartDetails?.note?.trim() ?? null : null,
       postPrasadam,
@@ -1189,7 +1226,22 @@ const PoojaRegistrationPage = () => {
                               value={selectedDayId !== null ? String(selectedDayId) : ''}
                               onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
                               placeholder="Select day option"
+                              className="w-72"
                             />
+                            {selectedDayOption?.code === 'CS' && (
+                              <div className="mt-2">
+                                <SearchableSelect
+                                  options={tamilStarOptions.map((option) => ({
+                                    value: String(option.id),
+                                    label: formatDayOptionLabel(option),
+                                  }))}
+                                  value={selectedTamilStar || ''}
+                                  onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
+                                  placeholder="Select your star"
+                                  className="w-72"
+                                />
+                              </div>
+                            )}
                             {requiresChartDetails && (
                               <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
                                 <div className="space-y-1">
@@ -1405,6 +1457,7 @@ const PoojaRegistrationPage = () => {
                       setFormError('');
                     }}
                     placeholder="Select day option"
+                    className="w-72"
                   />
                   {modalRequiresChartDetails && (
                     <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">

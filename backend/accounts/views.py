@@ -142,6 +142,11 @@ class FamilyMemberDetailView(APIView):
         serializer.save()
         return Response(serializer.data)
 
+    def delete(self, request, pk: int):
+        member = self.get_object(request, pk)
+        member.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class DonorListView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
