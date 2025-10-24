@@ -121,8 +121,20 @@ class PoojaRegistrationMemberSerializer(serializers.ModelSerializer):
             "name",
             "phone_number",
             "relationship",
+            "date_of_birth",
+            "family_name",
+            "tamil_star",
+            "gothra",
         )
         read_only_fields = ("id",)
+        extra_kwargs = {
+            "date_of_birth": {"required": False, "allow_null": True},
+            "family_name": {"required": False, "allow_blank": True},
+            "tamil_star": {"required": False, "allow_blank": True},
+            "gothra": {"required": False, "allow_blank": True},
+            "phone_number": {"required": False, "allow_blank": True},
+            "relationship": {"required": False, "allow_blank": True},
+        }
 
 
 class PoojaRegistrationSerializer(serializers.ModelSerializer):
@@ -133,6 +145,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
     pooja_option_code = serializers.SerializerMethodField()
     day_option_description = serializers.SerializerMethodField()
     day_option_category = serializers.SerializerMethodField()
+    pooja_reg_id = serializers.SerializerMethodField()
 
     class Meta:
         model = PoojaRegistration
@@ -141,6 +154,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "donor",
             "donor_name",
             "donor_phone",
+            "pooja_reg_id",
             "pooja_option",
             "pooja_option_name",
             "pooja_option_code",
@@ -167,6 +181,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "pooja_option_code",
             "day_option_description",
             "day_option_category",
+            "pooja_reg_id",
             "created_at",
             "updated_at",
         )
@@ -210,6 +225,73 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
 
     def get_day_option_category(self, obj):  # pragma: no cover
         return getattr(obj.day_option, "category", None)
+
+    def get_pooja_reg_id(self, obj):
+        return obj.pooja_reg_id
+
+
+class PublicTodayRegistrationMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PoojaRegistrationMember
+        fields = (
+            "id",
+            "name",
+        )
+        read_only_fields = (
+            "id",
+            "name",
+        )
+
+
+class PublicTodayPoojaRegistrationSerializer(serializers.ModelSerializer):
+    pooja_reg_id = serializers.CharField(allow_null=True, read_only=True)
+    pooja_option_name = serializers.SerializerMethodField()
+    day_option_description = serializers.SerializerMethodField()
+    donor_name = serializers.SerializerMethodField()
+    members = PublicTodayRegistrationMemberSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PoojaRegistration
+        fields = (
+            "id",
+            "pooja_reg_id",
+            "start_date",
+            "pooja_option_name",
+            "day_option_description",
+            "donor_name",
+            "post_prasadam",
+            "created_at",
+            "members",
+        )
+
+    def get_pooja_option_name(self, obj):
+        option = getattr(obj, "pooja_option", None)
+        if option is None:
+            return ""
+        name = getattr(option, "name", "") or ""
+        return name.strip()
+
+    def get_day_option_description(self, obj):
+        option = getattr(obj, "day_option", None)
+        if option is None:
+            return ""
+        description = getattr(option, "description", "") or ""
+        return description.strip()
+
+    def get_donor_name(self, obj):
+        donor = getattr(obj, "donor", None)
+        if donor is None:
+            return "Temple Admin"
+        name = getattr(donor, "name", "") or ""
+        if name.strip():
+            return name.strip()
+        username = getattr(donor, "username", "") or ""
+        if username.strip():
+            return username.strip()
+        email = getattr(donor, "email", "") or ""
+        if email.strip():
+            return email.strip()
+        return "Temple Admin"
 
 
 class LandingPoojaRegistrationSerializer(serializers.ModelSerializer):

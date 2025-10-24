@@ -11,6 +11,7 @@ from .views import (
     PoojaOptionViewSet,
     PoojaRegistrationViewSet,
     RecentPoojaRegistrationsView,
+    TodayPoojaRegistrationsPublicView,
 )
 
 router = DefaultRouter()
@@ -23,5 +24,6 @@ router.register('featured-poojas', FeaturedPoojaViewSet, basename='featured-pooj
 
 urlpatterns = [
     path('registrations/recent-public/', RecentPoojaRegistrationsView.as_view(), name='pooja-registrations-recent-public'),
+    path('registrations/today-public/', TodayPoojaRegistrationsPublicView.as_view(), name='pooja-registrations-today-public'),
     *router.urls,
 ]

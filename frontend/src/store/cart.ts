@@ -29,6 +29,7 @@ export interface CartItem {
   memberTamilStar?: string;
   memberGothra?: string;
   memberDob?: string | null;
+  memberFamilyName?: string | null;
   members?: Array<{
     id: number | null;
     name: string | null;
@@ -37,6 +38,10 @@ export interface CartItem {
     tamilStar?: string | null;
     gothra?: string | null;
     dob?: string | null;
+    familyName?: string | null;
+    selectionKey?: string | null;
+    donorName?: string | null;
+    donorPhone?: string | null;
   }>;
 }
 

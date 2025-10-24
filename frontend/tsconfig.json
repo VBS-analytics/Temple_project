@@ -4,9 +4,8 @@
   "compilerOptions": {
     "baseUrl": "./src",
     "types": ["vite/client"],
-    "target": "ES2016",
-    "lib": ["DOM", "DOM.Iterable", "ES2016"]
+    "target": "ES2017",
+    "lib": ["DOM", "DOM.Iterable", "ES2017"]
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src"]
 }

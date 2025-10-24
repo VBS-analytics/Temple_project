@@ -9,9 +9,12 @@ from .models import DonorProfile, FamilyMember, OtpPurpose, OtpToken, User
 
 
 class DonorProfileSerializer(serializers.ModelSerializer):
+    donor_id = serializers.SerializerMethodField()
+
     class Meta:
         model = DonorProfile
         fields = (
+            "donor_id",
             "address_line1",
             "address_line2",
             "address_line3",
@@ -24,6 +27,10 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "family_name",
             "notes",
         )
+        read_only_fields = ("donor_id",)
+
+    def get_donor_id(self, obj):
+        return obj.donor_id
 
 
 class FamilyMemberSerializer(serializers.ModelSerializer):
@@ -37,6 +44,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "tamil_star",
             "gothra",
+            "family_name",
         )
         read_only_fields = ("id",)
 
@@ -172,7 +180,11 @@ class RegisterSerializer(serializers.Serializer):
         validated_data.pop("confirm_password")
         otp_code = validated_data.pop("otp_code")  # noqa: F841 - kept for audit/logging if needed
 
-        profile_fields = DonorProfileSerializer.Meta.fields
+        profile_fields = [
+            field
+            for field in DonorProfileSerializer.Meta.fields
+            if field not in {"donor_id"}
+        ]
         profile_data = {field: validated_data.pop(field, "") for field in profile_fields if field in validated_data}
 
         user = User.objects.create_user(

@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import LanguageToggle from './LanguageToggle';
 import { isAdmin, useAuthStore } from '../store/auth';
@@ -8,10 +8,15 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-brand-50'}`;
 
 const AppLayout = () => {
+  const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
   const cartKey = user ? String(user.id) : 'guest';
   const cartCount = useCartStore((state) => state.itemsByUser[cartKey]?.length ?? 0);
+  const isPoojaRegistrationPage = location.pathname.startsWith('/pooja/register');
+  const mainClassName = isPoojaRegistrationPage
+    ? 'w-full px-4 py-6'
+    : 'mx-auto w-full max-w-6xl px-4 py-6';
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -24,6 +29,11 @@ const AppLayout = () => {
             <NavLink to="/dashboard" className={navLinkClass} end>
               Dashboard
             </NavLink>
+            {user && !isAdmin(user.role) && (
+              <NavLink to="/profile" className={navLinkClass}>
+                Donor Profile 
+              </NavLink>
+            )}
             {user && isAdmin(user.role) && (
               <>
                 <NavLink to="/admin/master" className={navLinkClass}>
@@ -32,8 +42,8 @@ const AppLayout = () => {
                 <NavLink to="/admin/donors" className={navLinkClass}>
                   Donor Details
                 </NavLink>
-                <NavLink to="/admin/donor-pooja-registrations" className={navLinkClass}>
-                  Donor Pooja Registrations
+                <NavLink to="/admin/pooja-details" className={navLinkClass}>
+                  Pooja Details
                 </NavLink>
               </>
             )}
@@ -59,7 +69,7 @@ const AppLayout = () => {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className={mainClassName}>
         <Outlet />
       </main>
     </div>

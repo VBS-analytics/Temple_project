@@ -82,16 +82,37 @@ const PoojaCartPage = () => {
 
   const buildRegistrationPayload = (item: CartItem) => {
     const normalizedMembers = (item.members ?? [])
-      .map((member) => ({
-        name: (member?.name ?? '').trim(),
-        relationship: (member?.relationship ?? '').trim(),
-      }))
+      .map((member) => {
+        const name = (member?.name ?? '').toString().trim();
+        const relationship = (member?.relationship ?? '').toString().trim();
+        const tamilStar = (member?.tamilStar ?? (member as any)?.tamil_star ?? '').toString().trim();
+        const gothra = (member?.gothra ?? (member as any)?.gothram ?? '').toString().trim();
+        const familyName = (member?.familyName ?? (member as any)?.family_name ?? '').toString().trim();
+        const dobRaw = (member?.dob ?? (member as any)?.date_of_birth ?? '').toString().trim();
+
+        return {
+          name,
+          relationship,
+          tamil_star: tamilStar,
+          gothra,
+          family_name: familyName,
+          date_of_birth: dobRaw || null,
+        };
+      })
       .filter((member) => member.name.length > 0);
 
     if (normalizedMembers.length === 0) {
       const fallbackName = (item.fullName ?? '').trim();
       if (fallbackName) {
-        normalizedMembers.push({ name: fallbackName, relationship: (item.memberRelationship ?? 'Self').trim() });
+        normalizedMembers.push({
+          name: fallbackName,
+          relationship: (item.memberRelationship ?? 'Self').trim(),
+          tamil_star: (item.memberTamilStar ?? '').toString().trim(),
+          gothra: (item.memberGothra ?? '').toString().trim(),
+          family_name:
+            (item.memberFamilyName ?? item.members?.[0]?.familyName ?? '').toString().trim(),
+          date_of_birth: (item.memberDob ?? '').toString().trim() || null,
+        });
       }
     }
 
@@ -109,6 +130,10 @@ const PoojaCartPage = () => {
       members: normalizedMembers.map((member) => ({
         name: member.name,
         relationship: member.relationship || '',
+        tamil_star: member.tamil_star || '',
+        gothra: member.gothra || '',
+        family_name: member.family_name || '',
+        date_of_birth: member.date_of_birth,
       })),
     };
   };
@@ -154,8 +179,7 @@ const PoojaCartPage = () => {
             <tr>
               <th className="px-4 py-2 text-left">Pooja</th>
               <th className="px-4 py-2 text-left">Day Option</th>
-              <th className="px-4 py-2 text-left">Devotee</th>
-              <th className="px-4 py-2 text-left">Member</th>
+              <th className="px-4 py-2 text-left">Devotees</th>
               <th className="px-4 py-2 text-right">Amount</th>
               <th className="px-4 py-2 text-right">Actions</th>
             </tr>
@@ -170,17 +194,59 @@ const PoojaCartPage = () => {
                 ? `${item.dayOptionDescription}${dayOptionCategoryLabel ? ` (${dayOptionCategoryLabel})` : ''}`
                 : '--';
               const selectedTamilStarLabel = item.selectedTamilStarLabel ?? null;
-              const memberSummary = item.members && item.members.length > 0
-                ? item.members
-                    .map((member) => {
-                      const name = member.name || 'Member';
-                      const relationship = member.relationship ? ` (${member.relationship})` : '';
-                      return `${name}${relationship}`;
-                    })
-                    .join(', ')
-                : item.memberRelationship
-                  ? `${item.fullName || 'Member'} (${item.memberRelationship})`
-                  : '--';
+              const membersForDisplay = (() => {
+                const entries = Array.isArray(item.members) && item.members.length > 0 ? item.members : null;
+                if (entries && entries.length > 0) {
+                  return entries;
+                }
+                const fallbackName = item.fullName?.trim() || 'Member';
+                return [
+                  {
+                    id: null,
+                    name: fallbackName,
+                    relationship: item.memberRelationship ?? 'Self',
+                    gender: item.memberGender ?? undefined,
+                    tamilStar: item.memberTamilStar ?? undefined,
+                    gothra: item.memberGothra ?? undefined,
+                    dob: item.memberDob ?? undefined,
+                  },
+                ];
+              })().map((member) => {
+                const name = member?.name?.toString().trim();
+                const relationship =
+                  (member?.relationship as string | undefined)?.toString().trim() ||
+                  undefined;
+                const gender = (member?.gender as string | undefined)?.toString().trim() || undefined;
+                const tamilStar =
+                  (member?.tamilStar as string | undefined)?.toString().trim() ||
+                  (member && typeof (member as any).tamil_star === 'string'
+                    ? (member as any).tamil_star.trim()
+                    : undefined);
+                const gothra =
+                  (member?.gothra as string | undefined)?.toString().trim() ||
+                  (member && typeof (member as any).gothram === 'string'
+                    ? (member as any).gothram.trim()
+                    : undefined);
+                const familyName =
+                  (member?.familyName as string | undefined)?.toString().trim() ||
+                  (member && typeof (member as any).family_name === 'string'
+                    ? (member as any).family_name.trim()
+                    : undefined);
+                const dobRaw =
+                  (member?.dob as string | undefined)?.toString().trim() ||
+                  (member && typeof (member as any).date_of_birth === 'string'
+                    ? (member as any).date_of_birth.trim()
+                    : undefined);
+                return {
+                  name: name && name.length > 0 ? name : 'Member',
+                  relationship,
+                  gender,
+                  tamilStar,
+                  gothra,
+                  familyName,
+                  dob: dobRaw,
+                };
+              });
 
               return (
                 <tr key={item.cartId} className="hover:bg-slate-50">
@@ -211,8 +277,45 @@ const PoojaCartPage = () => {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top text-slate-700">{item.fullName || '--'}</td>
-                  <td className="px-4 py-3 align-top text-xs text-slate-600 whitespace-pre-wrap">{memberSummary}</td>
+                  <td className="px-4 py-3 align-top text-xs text-slate-600">
+                    <div className="space-y-2">
+                      {membersForDisplay.map((member, index) => (
+                        <div
+                          key={`${member.name}-${member.relationship ?? 'na'}-${index}`}
+                          className="rounded-lg border border-slate-200 bg-slate-50 p-2"
+                        >
+                          <div className="text-sm font-semibold text-slate-700">
+                            {member.name}
+                            {index === 0 && membersForDisplay.length > 1 && (
+                              <span className="ml-2 rounded bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          {member.relationship && (
+                            <div className="text-xs text-slate-500">Relationship: {member.relationship}</div>
+                          )}
+                          {member.gender && (
+                            <div className="text-xs text-slate-500">Gender: {member.gender}</div>
+                          )}
+                          {member.tamilStar && (
+                            <div className="text-xs text-slate-500">Tamil star: {member.tamilStar}</div>
+                          )}
+                          {member.gothra && (
+                            <div className="text-xs text-slate-500">Gothra: {member.gothra}</div>
+                          )}
+                          {member.familyName && (
+                            <div className="text-xs text-slate-500">Family name: {member.familyName}</div>
+                          )}
+                          {member.dob && (
+                            <div className="text-xs text-slate-500">
+                              Birth date: {formatDisplayDate(member.dob)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold text-slate-900">{amountLabel}</td>
                   <td className="px-4 py-3 text-right">
                     <button

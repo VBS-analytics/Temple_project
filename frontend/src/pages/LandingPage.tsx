@@ -5,6 +5,15 @@ import LanguageToggle from "../components/LanguageToggle";
 import api, { extractResults } from "../lib/api";
 import { resolveMediaUrl } from "../lib/media";
 
+type LinkType = "anchor" | "route";
+
+interface NavLinkItem {
+  label: string;
+  href: string;
+  type: LinkType;
+  children?: Array<{ label: string; href: string; type: LinkType }>;
+}
+
 interface FeaturedPoojaCard {
   id: number;
   name: string;
@@ -13,36 +22,41 @@ interface FeaturedPoojaCard {
   amount: string | null;
 }
 
-type PoojaStatus = "pending" | "confirmed" | "completed";
+interface TodayPoojaMemberRecord {
+  id?: number;
+  name?: string | null;
+}
 
-interface RecentPoojaRegistrationApiRecord {
+interface TodayPoojaLandingRecord {
   id: number;
-  pooja_name?: string | null;
-  day_option?: string | null;
+  pooja_reg_id?: string | null;
+  start_date?: string | null;
+  pooja_option_name?: string | null;
+  day_option_description?: string | null;
   donor_name?: string | null;
-  status?: PoojaStatus | null;
+  post_prasadam?: boolean | null;
   created_at?: string | null;
+  members?: TodayPoojaMemberRecord[];
 }
 
-interface LandingScheduleRow {
-  id: number;
-  poojaName: string;
-  dayOption: string;
-  donorName: string;
-  status: PoojaStatus;
-  createdAt: number;
-}
-
-const navLinks = [
+const navLinks: NavLinkItem[] = [
   { label: "Home", href: "#top", type: "anchor" },
+  {
+    label: "About",
+    href: "/about",
+    type: "route",
+    children: [
+      { label: "Founder Members", href: "/about#founder-members", type: "route" },
+      { label: "Committee Members", href: "/about#committee-members", type: "route" },
+      { label: "Family Tree", href: "/about#family-tree", type: "route" },
+    ],
+  },
   { label: "Darshan & Pooja", href: "#darshan", type: "anchor" },
-  { label: "Architecture", href: "#architecture", type: "anchor" },
   { label: "Gallery", href: "/gallery", type: "route" },
   { label: "Visit", href: "#visit", type: "anchor" },
   { label: "Events", href: "/events", type: "route" },
   { label: "Projects", href: "/projects", type: "route" },
-  { label: "About", href: "/about", type: "route" },
-] as const;
+];
 
 const heroHighlights = [
   {
@@ -142,16 +156,67 @@ const galleryImages = [
   "https://images.unsplash.com/photo-1518548865246-1e2922e03e94?auto=format&fit=crop&w=1100&q=80",
 ] as const;
 
-const STATUS_LABELS: Record<PoojaStatus, string> = {
-  pending: "Pending",
-  confirmed: "Pooja Confirmed",
-  completed: "Pooja Completed",
+const joinDevoteeNames = (members?: TodayPoojaMemberRecord[]) => {
+  if (!Array.isArray(members)) {
+    return "N/A";
+  }
+  const names = members
+    .map((member) => (member?.name ?? "").trim())
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? names.join(", ") : "N/A";
 };
 
-const STATUS_BADGE_CLASS: Record<PoojaStatus, string> = {
-  pending: "bg-amber-100 text-amber-700 border-amber-200",
-  confirmed: "bg-blue-100 text-blue-700 border-blue-200",
-  completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
+const resolvePoojaId = (pooja: TodayPoojaLandingRecord) => {
+  const trimmed = (pooja.pooja_reg_id ?? "").trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  return `#${pooja.id}`;
+};
+
+const formatBooleanLabel = (value?: boolean | null) => (value ? "Yes" : "No");
+
+const resolveDonorName = (value?: string | null) => {
+  const trimmed = (value ?? "").trim();
+  return trimmed || "Temple Admin";
+};
+
+const formatDateDisplay = (value?: string | null) => {
+  if (!value) {
+    return "N/A";
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    if (year && month && day) {
+      return `${day}-${month}-${year}`;
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatDateTimeDisplay = (value?: string | null) => {
+  if (!value) {
+    return "N/A";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDateDisplay(value);
+  }
+  return parsed.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const facilities = [
@@ -165,18 +230,21 @@ const facilities = [
 
 const newsUpdates = [
   {
+    date: "Apr 28, 2024",
     title: "Chithirai Festival At Madurai concludes with grandeur",
     excerpt:
       "A ten-day celebration featuring celestial wedding, therottam, and lakhs of devotees from across the world.",
     href: "#",
   },
   {
+    date: "Apr 10, 2024",
     title: "Renovation works begin at the sacred Golden Lotus Tank",
     excerpt:
       "Structural restoration and mural conservation initiated to preserve the heritage for future generations.",
     href: "#",
   },
   {
+    date: "Mar 30, 2024",
     title: "Temple introduces bilingual guided tours for visitors",
     excerpt:
       "Daily Tamil and English tours now available with pre-booking through the information center.",
@@ -248,9 +316,14 @@ const LandingPage = () => {
   const [poojaPaused, setPoojaPaused] = useState(false);
   const [featuredPoojas, setFeaturedPoojas] = useState<FeaturedPoojaCard[]>([]);
   const [featuredError, setFeaturedError] = useState('');
-  const [recentPoojas, setRecentPoojas] = useState<LandingScheduleRow[]>([]);
-  const [recentPoojasError, setRecentPoojasError] = useState('');
+  const [todayPoojas, setTodayPoojas] = useState<TodayPoojaLandingRecord[]>([]);
+  const [todayPoojasError, setTodayPoojasError] = useState('');
   const [poojaScheduleLoading, setPoojaScheduleLoading] = useState(true);
+  const todayReadableLabel = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -283,37 +356,37 @@ const LandingPage = () => {
 
   useEffect(() => {
     let isMounted = true;
-    const fetchRecentPoojas = async () => {
+    const fetchTodayPoojas = async () => {
       setPoojaScheduleLoading(true);
-      setRecentPoojasError('');
+      setTodayPoojasError('');
       try {
-        const { data } = await api.get('/pooja/registrations/recent-public/');
+        const { data } = await api.get('/pooja/registrations/today-public/');
         if (!isMounted) {
           return;
         }
-        const records = extractResults<RecentPoojaRegistrationApiRecord>(data);
-        const filtered = records
-          .filter((record): record is RecentPoojaRegistrationApiRecord => typeof record?.id === 'number')
-          .filter((registration) => registration.status === 'confirmed' || registration.status === 'completed')
-          .map((registration) => {
-            const createdAt = registration.created_at ? Date.parse(registration.created_at) : 0;
-            const row: LandingScheduleRow = {
-              id: registration.id,
-              poojaName: registration.pooja_name?.trim() || 'N/A',
-              dayOption: registration.day_option?.trim() || 'N/A',
-              donorName: registration.donor_name?.trim() || 'Temple Admin',
-              status: registration.status ?? 'pending',
-              createdAt: Number.isNaN(createdAt) ? 0 : createdAt,
-            };
-            return row;
-          })
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .slice(0, 5);
-        setRecentPoojas(filtered);
+        const records = extractResults<TodayPoojaLandingRecord>(data)
+          .filter((record): record is TodayPoojaLandingRecord => typeof record?.id === 'number');
+        const sorted = [...records].sort((a, b) => {
+          const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NaN;
+          const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NaN;
+          const aHasTime = !Number.isNaN(aTime);
+          const bHasTime = !Number.isNaN(bTime);
+          if (aHasTime && bHasTime) {
+            return bTime - aTime;
+          }
+          if (aHasTime) {
+            return -1;
+          }
+          if (bHasTime) {
+            return 1;
+          }
+          return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
+        });
+        setTodayPoojas(sorted);
       } catch (error) {
         if (isMounted) {
-          setRecentPoojasError('Unable to load the latest pooja registrations.');
-          setRecentPoojas([]);
+          setTodayPoojasError("Unable to load today's pooja details right now.");
+          setTodayPoojas([]);
         }
       } finally {
         if (isMounted) {
@@ -322,7 +395,7 @@ const LandingPage = () => {
       }
     };
 
-    fetchRecentPoojas();
+    fetchTodayPoojas();
     return () => {
       isMounted = false;
     };
@@ -341,7 +414,7 @@ const LandingPage = () => {
               className="flex flex-col gap-1 text-left md:flex-shrink-0"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200">
-                Agraharam Temple&apos;s
+                Kakkalani&apos;s Village
               </p>
               <p className="text-xs text-white/80">
                 The Architectural Marvel of Agraharam
@@ -350,8 +423,51 @@ const LandingPage = () => {
 
             {/* Center Nav Links */}
             <div className="hidden items-center gap-6 text-sm font-semibold text-white md:flex">
-              {navLinks.map((item) =>
-                item.type === "route" ? (
+              {navLinks.map((item) => {
+                if (item.children?.length) {
+                  return (
+                    <div key={item.label} className="relative group">
+                      <Link
+                        to={item.href}
+                        className="flex items-center gap-1 text-white transition hover:text-[#f4ba1a]"
+                        aria-haspopup="true"
+                      >
+                        {item.label}
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 12 12"
+                          className="h-3 w-3 transition-transform group-hover:translate-y-px"
+                          fill="currentColor"
+                        >
+                          <path d="M2.4 4.2a.6.6 0 0 1 .85-.1L6 6.3l2.75-2.2a.6.6 0 1 1 .75.95l-3.1 2.5a.6.6 0 0 1-.75 0l-3.1-2.5a.6.6 0 0 1-.15-.85Z" />
+                        </svg>
+                      </Link>
+                      <div className="invisible absolute left-0 top-full z-10 mt-3 w-56 translate-y-2 rounded-xl bg-white/95 p-2 text-sm text-slate-700 shadow-lg ring-1 ring-slate-900/5 opacity-0 transition-all duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                        {item.children.map((child) =>
+                          child.type === "route" ? (
+                            <Link
+                              key={child.label}
+                              to={child.href}
+                              className="block rounded-lg px-3 py-2 transition hover:bg-indigo-50 hover:text-indigo-900"
+                            >
+                              {child.label}
+                            </Link>
+                          ) : (
+                            <a
+                              key={child.label}
+                              href={child.href}
+                              className="block rounded-lg px-3 py-2 transition hover:bg-indigo-50 hover:text-indigo-900"
+                            >
+                              {child.label}
+                            </a>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return item.type === "route" ? (
                   <Link
                     key={item.label}
                     to={item.href}
@@ -367,8 +483,8 @@ const LandingPage = () => {
                   >
                     {item.label}
                   </a>
-                )
-              )}
+                );
+              })}
               <Link
                 to="/login"
                 target="_blank"
@@ -706,57 +822,67 @@ const LandingPage = () => {
             <div className="space-y-4 text-center md:text-left">
               <h2 className="text-3xl font-bold text-slate-900 md:text-4xl">Pooja Schedule</h2>
               <p className="text-base text-slate-600 md:text-lg">
-                List of Donor Pooja Schedules and Timings.                
+                List of Donor Pooja Schedules and Timings.
               </p>
             </div>
-            <div className="mt-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg">
-              <table className="min-w-full divide-y divide-slate-200 text-left">
-                <thead className="bg-slate-100 text-xs uppercase tracking-[0.3em] text-slate-600">
-                  <tr>
-                    <th className="px-6 py-4">Pooja</th>
-                    <th className="px-6 py-4">Pooja Day </th>
-                    <th className="px-6 py-4">Donor / Admin</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                  {poojaScheduleLoading ? (
-                    <tr>
-                      <td className="px-6 py-5 text-sm text-slate-500" colSpan={3}>
-                        Loading recent pooja updates…
-                      </td>
-                    </tr>
-                  ) : recentPoojasError ? (
-                    <tr>
-                      <td className="px-6 py-5 text-sm text-red-600" colSpan={3}>
-                        {recentPoojasError}
-                      </td>
-                    </tr>
-                  ) : recentPoojas.length === 0 ? (
-                    <tr>
-                      <td className="px-6 py-5 text-sm text-slate-500" colSpan={3}>
-                        No confirmed or completed pooja registrations yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    recentPoojas.map((pooja) => (
-                      <tr key={pooja.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
-                            <span>{pooja.poojaName}</span>
-                            <span
-                              className={`rounded-full border px-2 py-1 text-xs font-medium ${STATUS_BADGE_CLASS[pooja.status]}`}
-                            >
-                              {STATUS_LABELS[pooja.status]}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-slate-700">{pooja.dayOption}</td>
-                        <td className="px-6 py-4 text-slate-700">{pooja.donorName}</td>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              {poojaScheduleLoading ? (
+                <p className="px-6 py-10 text-center text-sm text-slate-500">Loading today&apos;s pooja details...</p>
+              ) : todayPoojasError ? (
+                <p className="px-6 py-10 text-center text-sm text-red-600">{todayPoojasError}</p>
+              ) : todayPoojas.length === 0 ? (
+                <p className="px-6 py-10 text-center text-sm text-slate-500">
+                  No pooja registrations are scheduled for today.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-left">
+                    <thead className="bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th scope="col" className="px-6 py-3">
+                          Pooja ID
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Pooja Date
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Pooja Name
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Day Option
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Devotee
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Post Prasadam
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Pooja Register by
+                        </th>
+                        <th scope="col" className="px-6 py-3">
+                          Registration Date
+                        </th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-sm">
+                      {todayPoojas.map((pooja) => (
+                        <tr key={pooja.id} className="bg-white transition hover:bg-slate-50">
+                          <td className="px-6 py-4 font-medium text-slate-900">{resolvePoojaId(pooja)}</td>
+                          <td className="px-6 py-4 text-slate-700">{formatDateDisplay(pooja.start_date)}</td>
+                          <td className="px-6 py-4 text-slate-700">{pooja.pooja_option_name?.trim() || "N/A"}</td>
+                          <td className="px-6 py-4 text-slate-700">{pooja.day_option_description?.trim() || "N/A"}</td>
+                          <td className="px-6 py-4 text-slate-700">{joinDevoteeNames(pooja.members)}</td>
+                          <td className="px-6 py-4 text-slate-700">{formatBooleanLabel(pooja.post_prasadam)}</td>
+                          <td className="px-6 py-4 text-slate-700">{resolveDonorName(pooja.donor_name)}</td>
+                          <td className="px-6 py-4 text-slate-700">{formatDateTimeDisplay(pooja.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </section>

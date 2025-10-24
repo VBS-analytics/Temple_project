@@ -1,90 +1,104 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import type { AxiosError } from 'axios';
+import { useEffect, useState } from 'react';
+import type { SVGProps } from 'react';
 
-import api from '../lib/api';
-import { useAuthStore } from '../store/auth';
+import api, { extractResults } from '../lib/api';
+import { isAdmin, useAuthStore } from '../store/auth';
 
-interface FamilyMember {
-  id: number;
-  name: string;
-  gender?: string;
-  relationship?: string;
+const TEMPLE_COUNT = 4;
+const MONTHLY_DONATION_AMOUNT = 20000;
+
+interface DonorRecord {
+  members?: unknown[];
+}
+
+interface RegistrationMember {
+  id?: number;
+  name?: string | null;
   date_of_birth?: string | null;
-  tamil_star?: string;
-  gothra?: string;
+  family_name?: string | null;
+  tamil_star?: string | null;
+  gothra?: string | null;
 }
 
-interface ProfileResponse {
-  user: {
-    name: string;
-    phone_number: string;
-    role: string;
-  };
-  profile: {
-    address_line1?: string;
-    address_line2?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-    tamil_star?: string;
-    gothra?: string;
-    family_name?: string;
-  };
-  members?: FamilyMember[];
+interface ProfilePayload {
+  members?: RegistrationMember[];
 }
 
-interface RegistrationMemberItem {
+interface TodayPoojaRecord {
   id: number;
-  name: string;
-  relationship?: string | null;
-  phone_number?: string | null;
-}
-
-interface RegistrationItem {
-  id: number;
-  pooja_option: number;
-  pooja_option_name?: string;
-  pooja_option_code?: string | null;
-  day_option?: number | null;
+  pooja_reg_id?: string | null;
+  start_date?: string | null;
+  pooja_option_name?: string | null;
   day_option_description?: string | null;
-  day_option_category?: string | null;
-  start_date: string | null;
-  is_group_registration: boolean;
-  quantity?: number | null;
-  total_amount: string | null;
-  additional_notes?: string;
-  donor?: number;
-  donor_name?: string;
-  donor_phone?: string;
-  post_prasadam?: boolean;
-  status?: 'pending' | 'confirmed' | 'completed';
-  members?: RegistrationMemberItem[];
-  created_at?: string;
-  updated_at?: string;
+  donor_name?: string | null;
+  post_prasadam?: boolean | null;
+  created_at?: string | null;
+  members?: RegistrationMember[];
 }
 
-interface RegistrationSummary {
-  count: number;
-  results: RegistrationItem[];
-}
-
-const formatCurrency = (value?: string | null) => {
-  if (!value) {
-    return '';
+const joinDevoteeNames = (members?: RegistrationMember[]) => {
+  if (!Array.isArray(members)) {
+    return 'N/A';
   }
-  const amountNumber = Number(value);
-  if (Number.isNaN(amountNumber)) {
-    return value ?? '';
-  }
-  return amountNumber.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const names = members
+    .map((member) => (member?.name ?? '').trim())
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? names.join(', ') : 'N/A';
 };
 
-const formatDateTime = (value?: string | null) => {
+const resolvePoojaId = (pooja: TodayPoojaRecord) => {
+  const trimmed = (pooja.pooja_reg_id ?? '').trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  return `#${pooja.id}`;
+};
+
+const formatBooleanLabel = (value?: boolean | null) => (value ? 'Yes' : 'No');
+
+const resolveDonorName = (value?: string | null) => {
+  const trimmed = (value ?? '').trim();
+  return trimmed || 'Temple Admin';
+};
+
+const formatNumber = (value: number) => value.toLocaleString('en-IN');
+
+const formatCurrency = (value: number) => `Rs. ${formatNumber(value)}`;
+
+const toLocalDateIso = (date: Date) => {
+  const offsetMillis = date.getTime() - date.getTimezoneOffset() * 60000;
+  return new Date(offsetMillis).toISOString().split('T')[0];
+};
+
+const formatDateDisplay = (value?: string | null) => {
+  if (!value) {
+    return 'N/A';
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-');
+    if (year && month && day) {
+      return `${day}-${month}-${year}`;
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatDateTimeDisplay = (value?: string | null) => {
   if (!value) {
     return 'N/A';
   }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return value;
+    return formatDateDisplay(value);
   }
   return parsed.toLocaleString('en-IN', {
     day: '2-digit',
@@ -95,606 +109,615 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
-const DAY_CATEGORY_LABELS: Record<string, string> = {
-  weekday: 'English Day',
-  tamil_star: 'Tamil Star',
-  code: 'Template Code',
-};
+const IconBase = ({ children, ...props }: SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    {children}
+  </svg>
+);
 
-const STATUS_LABELS: Record<'pending' | 'confirmed' | 'completed', string> = {
-  pending: 'Pending',
-  confirmed: 'Pooja Confirmed',
-  completed: 'Pooja Completed',
-};
+const TempleIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <path d="M3 21h18" />
+    <path d="M6 21V9l6-5 6 5v12" />
+    <path d="M9 21v-5h6v5" />
+  </IconBase>
+);
 
-const STATUS_BADGE_CLASSES: Record<'pending' | 'confirmed' | 'completed', string> = {
-  pending: 'border-amber-200 bg-amber-50 text-amber-700',
-  confirmed: 'border-blue-200 bg-blue-50 text-blue-700',
-  completed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-};
+const DonorIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <circle cx="9" cy="8" r="3" />
+    <path d="M2 20a7 7 0 0 1 14 0" />
+    <path d="M17 11a3 3 0 1 0-3-3" />
+    <path d="M22 20c0-2.761-2.239-5-5-5" />
+  </IconBase>
+);
 
-const resolveStatusKey = (status?: string | null): 'pending' | 'confirmed' | 'completed' => {
-  if (status === 'confirmed' || status === 'completed') {
-    return status;
+const FamilyIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <circle cx="8" cy="9" r="2.5" />
+    <circle cx="16" cy="8" r="3" />
+    <path d="M2.5 20c0-3 2.5-5.5 5.5-5.5" />
+    <path d="M13 20a7 7 0 0 1 7-7" />
+    <path d="M13 20h11" />
+  </IconBase>
+);
+
+const WalletIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <path d="M3 7h18v12H3z" />
+    <path d="M16 12h5" />
+    <path d="M6 3h12l3 4H3z" />
+  </IconBase>
+);
+
+const RefreshIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <path d="M1 4v6h6" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </IconBase>
+);
+
+const extractArray = (payload: unknown): unknown[] => {
+  if (Array.isArray(payload)) {
+    return payload;
   }
-  return 'pending';
-};
-
-const formatDate = (dateValue?: string | null) => {
-  if (!dateValue) {
-    return 'N/A';
-  }
-  const parts = dateValue.split('-');
-  if (parts.length === 3) {
-    const [year, month, day] = parts;
-    if (day && month && year) {
-      return `${day}-${month}-${year}`;
+  if (payload && typeof payload === 'object' && 'results' in payload) {
+    const results = (payload as { results?: unknown }).results;
+    if (Array.isArray(results)) {
+      return results;
     }
   }
-  return dateValue;
+  return [];
 };
 
 const DashboardPage = () => {
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
-  const [summary, setSummary] = useState<RegistrationSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [members, setMembers] = useState<FamilyMember[]>([]);
-  const [memberFormVisible, setMemberFormVisible] = useState(false);
-  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
-  const [memberError, setMemberError] = useState('');
-  const [memberSubmitting, setMemberSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [memberForm, setMemberForm] = useState({
-    name: '',
-    gender: '',
-    relationship: '',
-    date_of_birth: '',
-    tamil_star: '',
-    gothra: '',
-  });
-
   const user = useAuthStore((state) => state.user);
+  const isAdminUser = isAdmin(user?.role);
+  const displayName = (user?.name ?? '').trim() || (isAdminUser ? 'Temple Admin' : 'Devotee');
 
-  const groupedRegistrations = useMemo(() => {
-    if (!summary?.results || summary.results.length === 0) {
-      return [];
+  const [donorCount, setDonorCount] = useState<number | null>(null);
+  const [familyMemberCount, setFamilyMemberCount] = useState<number | null>(null);
+  const [donorLoading, setDonorLoading] = useState(true);
+  const [familyLoading, setFamilyLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [upcomingPoojaCount, setUpcomingPoojaCount] = useState<number | null>(null);
+  const [prasadamRequestCount, setPrasadamRequestCount] = useState<number | null>(null);
+  const [todayPoojas, setTodayPoojas] = useState<TodayPoojaRecord[]>([]);
+  const [todayPoojaLoading, setTodayPoojaLoading] = useState(true);
+  const [todayPoojaError, setTodayPoojaError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const selectTodayRegistrations = (registrations: TodayPoojaRecord[]) => {
+    const todayIso = toLocalDateIso(new Date());
+    const filtered = registrations.filter((item) => {
+      if (!item?.start_date) {
+        return false;
+      }
+      return item.start_date.slice(0, 10) === todayIso;
+    });
+    filtered.sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NaN;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NaN;
+      const aHasTime = !Number.isNaN(aTime);
+      const bHasTime = !Number.isNaN(bTime);
+      if (aHasTime && bHasTime) {
+        return bTime - aTime;
+      }
+      if (aHasTime) {
+        return -1;
+      }
+      if (bHasTime) {
+        return 1;
+      }
+      return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
+    });
+    return filtered;
+  };
+
+  const loadTodayPoojas = async () => {
+    try {
+      setTodayPoojaLoading(true);
+      setTodayPoojaError(null);
+      const response = await api.get('pooja/registrations/', { params: { page_size: 200 } });
+      const allRegistrations = extractResults<TodayPoojaRecord>(response.data);
+      const todayIso = toLocalDateIso(new Date());
+      const filtered = allRegistrations.filter((item) => {
+        if (!item?.start_date) {
+          return false;
+        }
+        return item.start_date.slice(0, 10) === todayIso;
+      });
+      filtered.sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NaN;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NaN;
+        const aHasTime = !Number.isNaN(aTime);
+        const bHasTime = !Number.isNaN(bTime);
+        if (aHasTime && bHasTime) {
+          return bTime - aTime;
+        }
+        if (aHasTime) {
+          return -1;
+        }
+        if (bHasTime) {
+          return 1;
+        }
+        return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
+      });
+      setTodayPoojas(filtered);
+    } catch (err) {
+      console.error("Failed to load today's pooja registrations", err);
+      const axiosError = err as AxiosError<{ detail?: string }>;
+      const detail = axiosError.response?.data?.detail;
+      setTodayPoojaError(
+        typeof detail === 'string' && detail.trim()
+          ? detail
+          : "Unable to load today's pooja details right now."
+      );
+      setTodayPoojas([]);
+    } finally {
+      setTodayPoojaLoading(false);
     }
+  };
 
-    const map = new Map<
-      string,
-      {
-        groupId: string;
-        completedAt: string;
-        items: RegistrationItem[];
-      }
-    >();
+  const loadAdminMetrics = async () => {
+    try {
+      setDonorLoading(true);
+      setFamilyLoading(true);
+      setError(null);
+      const metricsResponse = await api.get('auth/dashboard-metrics/');
+      const { donor_count: donorValue, family_member_count: familyValue } =
+        (metricsResponse.data ?? {}) as {
+          donor_count?: unknown;
+          family_member_count?: unknown;
+        };
+      setDonorCount(Number(donorValue) || 0);
+      setFamilyMemberCount(Number(familyValue) || 0);
+    } catch (err) {
+      const axiosError = err as AxiosError;
+      const statusCode = axiosError.response?.status;
 
-    summary.results.forEach((registration) => {
-      const createdAt = registration.created_at ?? registration.updated_at ?? '';
-      const createdDate = createdAt ? new Date(createdAt) : null;
-      const minuteBucket =
-        createdDate && !Number.isNaN(createdDate.getTime())
-          ? Math.floor(createdDate.getTime() / 60000).toString()
-          : `registration-${registration.id}`;
-      const donorKey = registration.donor ?? 'self';
-      const groupKey = `${donorKey}-${minuteBucket}`;
+      if (statusCode === 403) {
+        setError('You do not have permission to view metrics.');
+        setDonorCount(null);
+        setFamilyMemberCount(null);
+      } else {
+        console.warn('Dashboard metrics endpoint unavailable, falling back to donor list aggregation', err);
+        try {
+          const donorResponse = await api.get('auth/donors/');
+          const donorsData = donorResponse.data;
+          const donors = Array.isArray(donorsData)
+            ? (donorsData as DonorRecord[])
+            : extractResults<DonorRecord>(donorsData);
+          const donorTotal = donors.length;
+          const memberTotal = donors.reduce((sum, donor) => {
+            if (Array.isArray(donor.members)) {
+              return sum + donor.members.length;
+            }
+            return sum;
+          }, 0);
 
-      if (!map.has(groupKey)) {
-        map.set(groupKey, {
-          groupId: groupKey,
-          completedAt: createdAt || registration.updated_at || '',
-          items: [],
-        });
-      }
+          let combinedMembers = memberTotal;
+          try {
+            const adminMembersResponse = await api.get('auth/family-members/');
+            combinedMembers += extractArray(adminMembersResponse.data).length;
+          } catch (adminErr) {
+            console.warn('Failed to include admin member metrics', adminErr);
+          }
 
-      const group = map.get(groupKey);
-      if (!group) {
-        return;
-      }
-
-      group.items.push(registration);
-
-      if (createdDate && !Number.isNaN(createdDate.getTime())) {
-        const groupDate = group.completedAt ? new Date(group.completedAt) : null;
-        if (!groupDate || Number.isNaN(groupDate.getTime()) || groupDate.getTime() < createdDate.getTime()) {
-          group.completedAt = createdAt;
+          setDonorCount(donorTotal);
+          setFamilyMemberCount(combinedMembers);
+        } catch (fallbackErr) {
+          console.error('Failed to load donor metrics via fallback', fallbackErr);
+          setError('Unable to load donor metrics right now.');
+          setDonorCount(null);
+          setFamilyMemberCount(null);
         }
       }
-    });
+    } finally {
+      setDonorLoading(false);
+      setFamilyLoading(false);
+    }
+  };
 
-    const groups = Array.from(map.values()).map((group) => {
-      const fallbackTimestamp =
-        group.completedAt || group.items[0]?.created_at || group.items[0]?.updated_at || new Date().toISOString();
-      const sortedItems = [...group.items].sort((a, b) => {
-        const first = new Date(a.created_at ?? a.updated_at ?? fallbackTimestamp).getTime();
-        const second = new Date(b.created_at ?? b.updated_at ?? fallbackTimestamp).getTime();
-        return second - first;
+  const loadDonorMetrics = async () => {
+    try {
+      setDonorLoading(true);
+      setFamilyLoading(true);
+      setError(null);
+      setUpcomingPoojaCount(null);
+      setPrasadamRequestCount(null);
+
+      const [profileResponse, registrationsResponse] = await Promise.all([
+        api.get('auth/profile/'),
+        api.get('pooja/registrations/', { params: { page_size: 200 } }),
+      ]);
+
+      const profilePayload = (profileResponse.data ?? {}) as ProfilePayload;
+      const profileMembers = Array.isArray(profilePayload.members) ? profilePayload.members : [];
+      setFamilyMemberCount(profileMembers.length);
+
+      const registrations = extractResults<TodayPoojaRecord>(registrationsResponse.data);
+      setDonorCount(registrations.length);
+
+      const todayIso = toLocalDateIso(new Date());
+      let upcomingTotal = 0;
+      let prasadamTotal = 0;
+
+      registrations.forEach((registration) => {
+        const start = (registration.start_date ?? '').slice(0, 10);
+        if (start && start >= todayIso) {
+          upcomingTotal += 1;
+        }
+        if (registration.post_prasadam) {
+          prasadamTotal += 1;
+        }
       });
-      return {
-        groupId: group.groupId,
-        completedAt: fallbackTimestamp,
-        items: sortedItems,
-      };
-    });
 
-    return groups.sort(
-      (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
-    );
-  }, [summary]);
+      setUpcomingPoojaCount(upcomingTotal);
+      setPrasadamRequestCount(prasadamTotal);
+    } catch (err) {
+      console.error('Failed to load donor dashboard metrics', err);
+      setError('Unable to load your dashboard metrics right now.');
+      setDonorCount(null);
+      setFamilyMemberCount(null);
+      setUpcomingPoojaCount(null);
+      setPrasadamRequestCount(null);
+    } finally {
+      setDonorLoading(false);
+      setFamilyLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    
+    setRefreshing(true);
+    setError(null);
+    
+    try {
+      // Load metrics based on user role
+      if (isAdminUser) {
+        await loadAdminMetrics();
+      } else {
+        await loadDonorMetrics();
+      }
+      
+      // Load today's poojas
+      await loadTodayPoojas();
+    } catch (err) {
+      console.error('Failed to refresh dashboard', err);
+      setError('Unable to refresh dashboard data right now.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [profileRes, memberRes, registrationsRes] = await Promise.all([
-          api.get('auth/profile/'),
-          api.get('auth/family-members/'),
-          api.get('pooja/registrations/summary/'),
-        ]);
-        setProfile(profileRes.data);
-        const memberList = Array.isArray(memberRes.data)
-          ? (memberRes.data as FamilyMember[])
-          : profileRes.data?.members ?? [];
-        setMembers(memberList);
-        setSummary(registrationsRes.data);
-      } catch (err: any) {
-        const detail = err?.response?.data?.detail ?? 'Unable to load dashboard data';
-        setError(detail);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!user) return;
+    
+    // Initial load based on user role
+    if (isAdminUser) {
+      loadAdminMetrics();
+    } else {
+      loadDonorMetrics();
+    }
+  }, [isAdminUser, user?.id]);
 
-    fetchData();
-  }, []);
+  useEffect(() => {
+    if (!isAdminUser) return;
+    
+    // Load today's poojas for admin users
+    loadTodayPoojas();
+  }, [isAdminUser]);
 
-  if (loading) {
-    return <p>Loading dashboard…</p>;
-  }
-
-  if (error) {
-    return <p className="text-red-600">{error}</p>;
-  }
-
-  const adminView = user?.role === 'admin';
-
-  const handleMemberChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = event.target;
-    setMemberForm((prev) => ({ ...prev, [name]: value }));
+  const displayValue = (value: number | null, isLoading: boolean) => {
+    if (isLoading && value === null) {
+      return 'Loading...';
+    }
+    if (error) {
+      return 'N/A';
+    }
+    if (value === null) {
+      return 'N/A';
+    }
+    return formatNumber(value);
   };
 
-  const resetMemberForm = () => {
-    setMemberForm({
-      name: '',
-      gender: '',
-      relationship: '',
-      date_of_birth: '',
-      tamil_star: '',
-      gothra: '',
-    });
-  };
+  const loading = donorLoading || familyLoading;
 
-  const startCreateFlow = () => {
-    setMemberFormVisible(true);
-    setEditingMemberId(null);
-    resetMemberForm();
-    setMemberError('');
-  };
+  const adminMetrics: {
+    id: string;
+    label: string;
+    value: string;
+    description: string;
+    icon: (props: SVGProps<SVGSVGElement>) => JSX.Element;
+    accent: string;
+  }[] = [
+    {
+      id: 'temples',
+      label: 'No. of Temples',
+      value: formatNumber(TEMPLE_COUNT),
+      description: 'Temples currently managed on the portal.',
+      icon: TempleIcon,
+      accent: 'bg-indigo-100 text-indigo-700',
+    },
+    {
+      id: 'donors',
+      label: 'Registered Donors',
+      value: displayValue(donorCount, donorLoading),
+      description: 'Unique donors who have registered with the temple.',
+      icon: DonorIcon,
+      accent: 'bg-blue-100 text-blue-700',
+    },
+    {
+      id: 'family-members',
+      label: 'Donor Family Members',
+      value: displayValue(familyMemberCount, familyLoading),
+      description: 'Family members linked to donor accounts and admin additions.',
+      icon: FamilyIcon,
+      accent: 'bg-amber-100 text-amber-700',
+    },
+    {
+      id: 'monthly-donations',
+      label: 'Monthly Donation Amount',
+      value: formatCurrency(MONTHLY_DONATION_AMOUNT),
+      description: 'Approximate monthly inflow (static for now).',
+      icon: WalletIcon,
+      accent: 'bg-emerald-100 text-emerald-700',
+    },
+  ];
 
-  const handleEditMember = (member: FamilyMember) => {
-    setMemberFormVisible(true);
-    setEditingMemberId(member.id);
-    setMemberError('');
-    setMemberForm({
-      name: member.name ?? '',
-      gender: member.gender ?? '',
-      relationship: member.relationship ?? '',
-      date_of_birth: member.date_of_birth ?? '',
-      tamil_star: member.tamil_star ?? '',
-      gothra: member.gothra ?? '',
-    });
-  };
+  const donorMetrics: {
+    id: string;
+    label: string;
+    value: string;
+    description: string;
+    icon: (props: SVGProps<SVGSVGElement>) => JSX.Element;
+    accent: string;
+  }[] = [
+    {
+      id: 'pooja-total',
+      label: 'Poojas Booked',
+      value: displayValue(donorCount, donorLoading),
+      description: 'Total pooja registrations completed with your account.',
+      icon: TempleIcon,
+      accent: 'bg-indigo-100 text-indigo-700',
+    },
+    {
+      id: 'upcoming-poojas',
+      label: 'Upcoming Poojas',
+      value: displayValue(upcomingPoojaCount, donorLoading),
+      description: 'Scheduled poojas that are yet to be performed.',
+      icon: DonorIcon,
+      accent: 'bg-blue-100 text-blue-700',
+    },
+    {
+      id: 'family-members',
+      label: 'Family Members',
+      value: displayValue(familyMemberCount, familyLoading),
+      description: 'Family members saved for quick pooja registrations.',
+      icon: FamilyIcon,
+      accent: 'bg-amber-100 text-amber-700',
+    },
+    {
+      id: 'prasadam-requests',
+      label: 'Post Prasadam Requests',
+      value: displayValue(prasadamRequestCount, donorLoading),
+      description: 'Registrations where prasadam delivery was requested.',
+      icon: WalletIcon,
+      accent: 'bg-emerald-100 text-emerald-700',
+    },
+  ];
 
-  const handleDeleteMember = async (memberId: number, memberName?: string) => {
-    setMemberError('');
-    const sure = window.confirm(`Delete ${memberName || 'this family member'}?`);
-    if (!sure) return;
-
-    try {
-      setDeletingId(memberId);
-      await api.delete(`auth/family-members/${memberId}/`);
-      setMembers((prev) => prev.filter((m) => m.id !== memberId));
-
-      // if the currently edited member is deleted, reset the form
-      if (editingMemberId === memberId) {
-        setEditingMemberId(null);
-        resetMemberForm();
-        setMemberFormVisible(false);
-      }
-    } catch (err: any) {
-      const detail =
-        err?.response?.data?.detail ??
-        err?.response?.data ??
-        err?.message ??
-        'Unable to delete member';
-      setMemberError(typeof detail === 'string' ? detail : 'Unable to delete member');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setMemberError('');
-
-    if (!memberForm.name.trim()) {
-      setMemberError('Name is required.');
-      return;
-    }
-
-    if (!memberForm.relationship.trim()) {
-      setMemberError('Relationship is required.');
-      return;
-    }
-
-    const payload: Record<string, string> = {
-      name: memberForm.name.trim(),
-      relationship: memberForm.relationship.trim(),
-    };
-
-    if (memberForm.gender) {
-      payload.gender = memberForm.gender;
-    }
-    if (memberForm.tamil_star) {
-      payload.tamil_star = memberForm.tamil_star;
-    }
-    if (memberForm.gothra) {
-      payload.gothra = memberForm.gothra;
-    }
-    if (memberForm.date_of_birth) {
-      payload.date_of_birth = memberForm.date_of_birth;
-    }
-
-    try {
-      setMemberSubmitting(true);
-
-      if (editingMemberId !== null) {
-        const { data } = await api.put(`auth/family-members/${editingMemberId}/`, payload);
-        setMembers((prev) => prev.map((item) => (item.id === data.id ? data : item)));
-      } else {
-        const { data } = await api.post('auth/family-members/', payload);
-        setMembers((prev) => [...prev, data]);
-      }
-
-      resetMemberForm();
-      setMemberFormVisible(false);
-      setEditingMemberId(null);
-    } catch (err: any) {
-      const detail = err?.response?.data ?? err?.message ?? 'Unable to add member';
-      setMemberError(typeof detail === 'string' ? detail : 'Unable to add member');
-    } finally {
-      setMemberSubmitting(false);
-    }
-  };
+  const todayReadableLabel = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800">Welcome back, {user?.name}</h2>
-        <p className="mt-2 text-sm text-slate-600">Mobile: {profile?.user.phone_number}</p>
-        <p className="text-sm text-slate-600">Role: {profile?.user.role}</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <div>
-            <h3 className="text-sm font-medium text-slate-700">Address</h3>
-            <p className="text-sm text-slate-600">
-              {[profile?.profile.address_line1, profile?.profile.address_line2, profile?.profile.city]
-                .filter(Boolean)
-                .join(', ')}
-            </p>
-            <p className="text-sm text-slate-600">
-              {[profile?.profile.state, profile?.profile.postal_code].filter(Boolean).join(' ')}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-slate-700">Spiritual Profile</h3>
-            <p className="text-sm text-slate-600">Tamil Star: {profile?.profile.tamil_star || 'N/A'}</p>
-            <p className="text-sm text-slate-600">Gothra: {profile?.profile.gothra || 'N/A'}</p>
-            <p className="text-sm text-slate-600">Family: {profile?.profile.family_name || 'N/A'}</p>
-          </div>
-        </div>
-        <div className="mt-6 rounded-md border border-slate-200 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-slate-700">Family Members</h3>
-            <button
-              type="button"
-              onClick={() => {
-                if (memberFormVisible && editingMemberId === null) {
-                  setMemberFormVisible(false);
-                  resetMemberForm();
-                  setMemberError('');
-                } else {
-                  startCreateFlow();
-                }
-              }}
-              className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-700"
-            >
-              {memberFormVisible && editingMemberId === null ? 'Cancel' : 'Add member'}
-            </button>
-          </div>
-
-          {members.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">No members added yet.</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {members.map((member) => (
-                <li key={member.id} className="rounded-md border border-slate-200 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500 md:text-sm">
-                      <span>
-                        Name: <span className="font-semibold text-slate-800">{member.name || 'N/A'}</span>
-                      </span>
-                      <span>Relationship: {member.relationship || 'N/A'}</span>
-                      <span>Gender: {member.gender || 'N/A'}</span>
-                      <span>Date of Birth: {formatDate(member.date_of_birth)}</span>
-                      <span>Star: {member.tamil_star || 'N/A'}</span>
-                      <span>Gothram: {member.gothra || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEditMember(member)}
-                        className="rounded-md border border-brand-600 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMember(member.id, member.name)}
-                        disabled={deletingId === member.id}
-                        className="rounded-md border border-red-600 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-                        title="Delete this member"
-                      >
-                        {deletingId === member.id ? 'Deleting…' : 'Delete'}
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {memberFormVisible && (
-            <form onSubmit={handleMemberSubmit} className="mt-4 space-y-3">
-              {memberError && <p className="rounded-md bg-red-100 p-2 text-sm text-red-700">{memberError}</p>}
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-name">
-                    Name
-                  </label>
-                  <input
-                    id="member-name"
-                    name="name"
-                    type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={memberForm.name}
-                    onChange={handleMemberChange}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gender">
-                    Gender
-                  </label>
-                  <select
-                    id="member-gender"
-                    name="gender"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={memberForm.gender}
-                    onChange={handleMemberChange}
-                  >
-                    <option value="">Select gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-relationship">
-                    Relationship
-                  </label>
-                  <input
-                    id="member-relationship"
-                    name="relationship"
-                    type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={memberForm.relationship}
-                    onChange={handleMemberChange}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-dob">
-                    Date of Birth
-                  </label>
-                  <input
-                    id="member-dob"
-                    name="date_of_birth"
-                    type="date"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={memberForm.date_of_birth}
-                    onChange={handleMemberChange}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-star">
-                    Star
-                  </label>
-                  <input
-                    id="member-star"
-                    name="tamil_star"
-                    type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={memberForm.tamil_star}
-                    onChange={handleMemberChange}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="member-gothra">
-                    Gothram
-                  </label>
-                  <input
-                    id="member-gothra"
-                    name="gothra"
-                    type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={memberForm.gothra}
-                    onChange={handleMemberChange}
-                  />
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="mb-10">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Welcome back, <span className="text-indigo-700">{displayName}</span></h1>
+              <p className="mt-2 text-slate-600 max-w-2xl">
+                {isAdminUser
+                  ? 'Here is a quick overview of the key metrics across the donor portal.'
+                  : 'Here is a quick snapshot of your pooja bookings and saved devotees.'}
+              </p>
+            </div>
+            <div className="mt-4 md:mt-0 flex items-center space-x-3">
+              <div className="inline-flex items-center px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200">
+                <div className="h-3 w-3 rounded-full bg-emerald-500 mr-2"></div>
+                <span className="text-sm font-medium text-slate-700">Dashboard</span>
               </div>
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMemberFormVisible(false);
-                    setEditingMemberId(null);
-                    resetMemberForm();
-                    setMemberError('');
-                  }}
-                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={memberSubmitting}
-                  className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-                >
-                  {memberSubmitting ? 'Saving…' : editingMemberId !== null ? 'Update member' : 'Save member'}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Pooja Registrations</h2>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              >
+                {refreshing ? (
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <RefreshIcon className="h-4 w-4 mr-2 text-indigo-600" />
+                )}
+                <span className="text-sm font-medium text-slate-700">Refresh</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {groupedRegistrations.length > 0 && (
-          <div className="mt-4 space-y-4">
-            <h3 className="text-sm font-medium text-slate-700">Recent Registrations</h3>
-            <ul className="space-y-4">
-              {groupedRegistrations.map((group) => {
-                const totalAmountValue = group.items.reduce((sum, entry) => {
-                  const amountNumber = Number(entry.total_amount ?? 0);
-                  return Number.isNaN(amountNumber) ? sum : sum + amountNumber;
-                }, 0);
-                const totalAmountLabel = totalAmountValue > 0 ? `₹ ${formatCurrency(totalAmountValue.toString())}` : '--';
-
-                return (
-                  <li key={group.groupId} className="rounded-lg border border-slate-200 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {group.items.length} booking{group.items.length > 1 ? 's' : ''}
-                        </p>
-                        <p className="text-xs text-slate-500">Completed on {formatDateTime(group.completedAt)}</p>
-                      </div>
-                      <div className="text-right text-sm font-semibold text-slate-900">{totalAmountLabel}</div>
-                    </div>
-                    <ul className="mt-3 space-y-3">
-                      {group.items.map((registration) => {
-                        const amountLabel = registration.total_amount
-                          ? `₹ ${formatCurrency(registration.total_amount)}`
-                          : '--';
-                        const dayOptionCategoryLabel = registration.day_option_category
-                          ? DAY_CATEGORY_LABELS[registration.day_option_category] ?? registration.day_option_category
-                          : null;
-                        const combinedDayOption = registration.day_option_description
-                          ? `${registration.day_option_description}${
-                              dayOptionCategoryLabel ? ` (${dayOptionCategoryLabel})` : ''
-                            }`
-                          : '--';
-                        const memberSummary =
-                          registration.members && registration.members.length > 0
-                            ? registration.members
-                                .map((member) => {
-                                  const relationship = member.relationship ? ` (${member.relationship})` : '';
-                                  const name = member.name || 'Member';
-                                  return `${name}${relationship}`;
-                                })
-                                .join(', ')
-                            : '—';
-                        const statusKey = resolveStatusKey(registration.status);
-                        const statusLabel = STATUS_LABELS[statusKey];
-                        const statusClasses = STATUS_BADGE_CLASSES[statusKey];
-
-                        return (
-                          <li key={registration.id} className="rounded-md border border-slate-200 p-3">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {registration.pooja_option_name ?? 'Pooja'}
-                                </p>
-                                {registration.pooja_option_code && (
-                                  <p className="text-xs uppercase tracking-wide text-slate-500">
-                                    Code: {registration.pooja_option_code}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="text-right text-sm font-semibold text-slate-900">{amountLabel}</div>
-                            </div>
-
-                            <div className="mt-3">
-                              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Status
-                              </span>
-                              <div className="mt-1">
-                                <span
-                                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${statusClasses}`}
-                                >
-                                  {statusLabel}
-                                </span>
-                              </div>
-                            </div>
-
-                            <dl className="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
-                              <div>
-                                <dt className="font-medium text-slate-700">Day Option</dt>
-                                <dd>{combinedDayOption}</dd>
-                              </div>
-                              <div>
-                                <dt className="font-medium text-slate-700">Devotee</dt>
-                                <dd>{registration.donor_name || user?.name || '--'}</dd>
-                              </div>
-                              <div>
-                                <dt className="font-medium text-slate-700">Members</dt>
-                                <dd>{memberSummary}</dd>
-                              </div>
-                              <div>
-                                <dt className="font-medium text-slate-700">Notes</dt>
-                                <dd>{registration.additional_notes?.trim() || 'None'}</dd>
-                              </div>
-                            </dl>
-
-                            {registration.post_prasadam && (
-                              <p className="mt-3 text-xs font-medium text-emerald-600">Post prasadam requested</p>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </li>
-                );
-              })}
-            </ul>
+        {/* Error Alert */}
+        {error && !loading && (
+          <div className="mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-4 flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
           </div>
         )}
 
-      </section>
+        {/* Metrics Cards */}
+        <div className="mb-12">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {(isAdminUser ? adminMetrics : donorMetrics).map(({ id, label, value, description, icon: Icon, accent }) => (
+              <div
+                key={id}
+                className="group relative rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
+              >
+                {/* Decorative background element */}
+                <div className="absolute top-0 right-0 h-32 w-32 -mr-8 -mt-8 rounded-full bg-slate-50 opacity-50 group-hover:bg-slate-100 transition-colors duration-300"></div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-500">{label}</p>
+                      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+                    </div>
+                    <div className={`flex h-16 w-16 items-center justify-center rounded-xl ${accent} shadow-sm flex-shrink-0`}>
+                      <Icon className="h-8 w-8" />
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm text-slate-500">{description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Today's Pooja Section */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Today's Pooja Details</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  {isAdminUser
+                    ? `Pooja registrations scheduled for ${todayReadableLabel}.`
+                    : `Your pooja registrations scheduled for ${todayReadableLabel}.`}
+                </p>
+              </div>
+              <div className="mt-2 sm:mt-0">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                  {todayPoojas.length} {todayPoojas.length === 1 ? 'Pooja' : 'Poojas'} Today
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {todayPoojaLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+                <p className="text-slate-500">Loading today's pooja details...</p>
+              </div>
+            ) : todayPoojaError ? (
+              <div className="text-center py-12">
+                <svg className="mx-auto h-12 w-12 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 className="mt-4 text-lg font-medium text-slate-900">Unable to load pooja details</h3>
+                <p className="mt-2 text-sm text-slate-500">{todayPoojaError}</p>
+              </div>
+            ) : todayPoojas.length === 0 ? (
+              <div className="text-center py-12">
+                <svg className="mx-auto h-12 w-12 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="mt-4 text-lg font-medium text-slate-900">No poojas scheduled today</h3>
+                <p className="mt-2 text-sm text-slate-500">There are no pooja registrations scheduled for today.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="min-w-full inline-block align-middle">
+                  <div className="overflow-hidden border border-slate-200 rounded-lg">
+                    <table className="min-w-full divide-y divide-slate-200">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Pooja ID
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Pooja Date
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Pooja Name
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Day Option
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Devotee
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Post Prasadam
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Registered By
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            Registration Date
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-slate-200">
+                        {todayPoojas.map((pooja, index) => (
+                          <tr key={pooja.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50 transition-colors duration-150`}>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-indigo-700">
+                              {resolvePoojaId(pooja)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                              {formatDateDisplay(pooja.start_date)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate" title={pooja.pooja_option_name?.trim() || 'N/A'}>
+                              {pooja.pooja_option_name?.trim() || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate" title={pooja.day_option_description?.trim() || 'N/A'}>
+                              {pooja.day_option_description?.trim() || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate" title={joinDevoteeNames(pooja.members)}>
+                              {joinDevoteeNames(pooja.members)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${pooja.post_prasadam ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+                                {formatBooleanLabel(pooja.post_prasadam)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                              {resolveDonorName(pooja.donor_name)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                              {formatDateTimeDisplay(pooja.created_at)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
@@ -148,6 +148,90 @@ function SearchableSelect({
 }
 
 /* -------------------------------------------------------------------------- */
+/*                           Multi Select Dropdown                            */
+/* -------------------------------------------------------------------------- */
+
+interface MemberMultiSelectProps {
+  label: string;
+  options: SSOption[];
+  selectedValues: string[];
+  onToggleValue: (value: string) => void;
+  disabled?: boolean;
+}
+
+function MemberMultiSelect({
+  label,
+  options,
+  selectedValues,
+  onToggleValue,
+  disabled = false,
+}: MemberMultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative w-full min-w-[13rem] max-w-sm" ref={containerRef}>
+      <button
+        type="button"
+        className="flex w-full items-center justify-between rounded-md border border-slate-300 px-3 py-1.5 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-100"
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="truncate">{label}</span>
+        <span className="ml-2 text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+          <ul className="max-h-60 overflow-auto py-1 text-sm">
+            {options.map((option) => {
+              const checked = selectedValues.includes(option.value);
+              return (
+                <li key={option.value}>
+                  <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-slate-700 hover:bg-slate-50">
+                    <span>{option.label}</span>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={checked}
+                      onChange={() => onToggleValue(option.value)}
+                    />
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                   Types                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -193,21 +277,62 @@ interface ProfileMember {
   gothra?: string;
 }
 
+interface ProfileDetails {
+  address_line1?: string;
+  address_line2?: string;
+  address_line3?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  tamil_star?: string;
+  gothra?: string;
+  date_of_birth?: string | null;
+}
+
 interface ProfilePayload {
   user: {
     name?: string;
     email?: string;
     phone_number?: string;
+    role?: string;
+    id?: number;
   };
-  profile?: {
-    address_line1?: string;
-    address_line2?: string;
-    address_line3?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-  };
+  profile?: ProfileDetails;
   members?: ProfileMember[];
+}
+
+interface DonorListUser {
+  id: number;
+  name: string;
+  phone_number?: string;
+  email?: string | null;
+  role?: string;
+}
+
+type DonorProfile = ProfileDetails;
+
+interface DonorListEntry {
+  user: DonorListUser;
+  profile?: DonorProfile;
+  members?: ProfileMember[];
+}
+
+type MemberSource = 'self' | 'profile_member' | 'donor' | 'donor_member';
+
+interface MemberDirectoryEntry {
+  key: string;
+  id: number | null;
+  name: string;
+  relationship?: string;
+  gender?: string;
+  tamilStar?: string;
+  gothra?: string;
+  dob?: string | null;
+  familyName?: string | null;
+  source: MemberSource;
+  donorId?: number | null;
+  donorName?: string;
+  donorPhone?: string;
 }
 
 interface BookingPooja {
@@ -362,6 +487,19 @@ const parseAmountFromLabel = (label?: string | null): string | null => {
 
 type BookingMode = 'full' | 'memberOnly';
 
+type DayOccurrenceState =
+  | { status: 'loading'; key: string }
+  | { status: 'ready'; key: string; date: string; label: string; note?: string | null }
+  | { status: 'error'; key: string; message: string }
+  | { status: 'needsStar'; key: string; message: string }
+  | { status: 'manual'; key: string; message: string };
+
+const buildOccurrenceKey = (dayOptionId: number | null, tamilStarId: string | null | undefined) => {
+  if (!dayOptionId) return 'none';
+  const starPart = tamilStarId ? tamilStarId : 'na';
+  return `${dayOptionId}:${starPart}`;
+};
+
 /* -------------------------------------------------------------------------- */
 /*                            Main Page Component                             */
 /* -------------------------------------------------------------------------- */
@@ -375,7 +513,9 @@ const PoojaRegistrationPage = () => {
   const [selectedPooja, setSelectedPooja] = useState<BookingPooja | null>(null);
   const [selectedDayOptionId, setSelectedDayOptionId] = useState<number | null>(null);
   const [selectedTamilStar, setSelectedTamilStar] = useState<string | null>(null);
+  const [tamilStarSelectionMap, setTamilStarSelectionMap] = useState<Record<number, string | null>>({});
   const [profile, setProfile] = useState<ProfilePayload | null>(null);
+  const [donorRecords, setDonorRecords] = useState<DonorListEntry[]>([]);
   const [dateValue, setDateValue] = useState('');
   const [formError, setFormError] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(['self']);
@@ -384,6 +524,7 @@ const PoojaRegistrationPage = () => {
   const [memberSelectionMap, setMemberSelectionMap] = useState<Record<number, string[]>>({});
   const [prasadamSelectionMap, setPrasadamSelectionMap] = useState<Record<number, boolean>>({});
   const [chartDetailsMap, setChartDetailsMap] = useState<Record<number, { date: string; note: string }>>({});
+  const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
   const [bookingMode, setBookingMode] = useState<BookingMode>('full');
   const [tableMessage, setTableMessage] = useState<{ status: 'info' | 'error'; text: string } | null>(null);
   const user = useAuthStore((state) => state.user);
@@ -391,6 +532,11 @@ const PoojaRegistrationPage = () => {
   const addToCart = useCartStore((state) => state.addItem);
   const removeFromCart = useCartStore((state) => state.removeItem);
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const registrationDateLabel = useMemo(() => formatDisplayDate(new Date().toISOString()), []);
+  const todayIso = useMemo(() => {
+    const now = new Date();
+    return now.toISOString().split('T')[0];
+  }, []);
 
   useEffect(() => {
     setDaySelectionMap((prev) => {
@@ -441,31 +587,229 @@ const PoojaRegistrationPage = () => {
     });
   }, [cartItems]);
 
-  const memberOptions = useMemo(() => {
+  const memberDirectory = useMemo(() => {
     const options: Array<{ value: string; label: string }> = [];
-    const baseName = profile?.user?.name;
-    options.push({ value: 'self', label: baseName ? `${baseName} (Self)` : 'Self' });
-    profile?.members?.forEach((member) => {
-      const label = member.name ? `${member.name}${member.relationship ? ` (${member.relationship})` : ''}` : `Member #${member.id}`;
-      options.push({ value: String(member.id), label });
+    const lookup = new Map<string, MemberDirectoryEntry>();
+    const idLookup = new Map<number, string>();
+
+    const register = (entry: MemberDirectoryEntry, label: string) => {
+      if (lookup.has(entry.key)) {
+        return;
+      }
+      // Skip Temple Admin (Self) if the user is an admin
+      if (profile?.user?.role === 'admin' && entry.source === 'self') {
+        return;
+      }
+      options.push({ value: entry.key, label });
+      lookup.set(entry.key, entry);
+      if (typeof entry.id === 'number' && Number.isFinite(entry.id)) {
+        idLookup.set(entry.id, entry.key);
+      }
+    };
+
+    let fallbackKeyCounter = 0;
+
+    const baseName = (profile?.user?.name ?? '').trim();
+    const basePhone = (profile?.user?.phone_number ?? '').trim();
+    const baseUserId = typeof profile?.user?.id === 'number' ? profile.user.id : null;
+
+    const selfEntry: MemberDirectoryEntry = {
+      key: 'self',
+      id: baseUserId,
+      name: baseName || 'Self',
+      relationship: 'Self',
+      gender: undefined,
+      tamilStar: profile?.profile?.tamil_star,
+      gothra: profile?.profile?.gothra,
+      dob: profile?.profile?.date_of_birth ?? null,
+      familyName: profile?.profile?.family_name ?? null,
+      source: 'self',
+      donorId: baseUserId,
+      donorName: baseName || 'Self',
+      donorPhone: basePhone || undefined,
+    };
+    // Register self entry only if user is not an admin
+    if (profile?.user?.role !== 'admin') {
+      register(selfEntry, baseName ? `${baseName} (Self)` : 'Self');
+    }
+
+    (profile?.members ?? []).forEach((member) => {
+      const key =
+        typeof member.id === 'number'
+          ? `profile-${member.id}`
+          : `profile-fallback-${fallbackKeyCounter++}`;
+      const name = (member.name ?? '').trim() || (member.id ? `Member #${member.id}` : 'Member');
+      const relationship = (member.relationship ?? '').trim();
+      const label = relationship ? `${name} (${relationship})` : name;
+      const entry: MemberDirectoryEntry = {
+        key,
+        id: member.id ?? null,
+        name,
+        relationship: relationship || undefined,
+        gender: member.gender,
+        tamilStar: member.tamil_star,
+        gothra: member.gothra,
+        dob: member.date_of_birth ?? null,
+        familyName: member.family_name ?? null,
+        source: 'profile_member',
+        donorId: baseUserId,
+        donorName: baseName || 'Self',
+        donorPhone: basePhone || undefined,
+      };
+      register(entry, label);
     });
-    return options;
-  }, [profile]);
+
+    donorRecords.forEach((donor) => {
+      if (!donor?.user) {
+        return;
+      }
+      const donorId = typeof donor.user.id === 'number' ? donor.user.id : null;
+      if (baseUserId !== null && donorId === baseUserId) {
+        return;
+      }
+      const donorName = (donor.user.name ?? '').trim() || (donorId !== null ? `Donor #${donorId}` : 'Donor');
+      const donorPhone = (donor.user.phone_number ?? '').trim();
+      const donorKey =
+        donorId !== null
+          ? `donor-${donorId}`
+          : `donor-fallback-${fallbackKeyCounter++}`;
+      const donorLabel = donorPhone ? `${donorName} — ${donorPhone}` : donorName;
+      const donorEntry: MemberDirectoryEntry = {
+        key: donorKey,
+        id: donorId,
+        name: donorName,
+        relationship: 'Donor',
+        gender: undefined,
+        tamilStar: donor.profile?.tamil_star,
+        gothra: donor.profile?.gothra,
+        dob: donor.profile?.date_of_birth ?? null,
+        familyName: donor.profile?.family_name ?? null,
+        source: 'donor',
+        donorId,
+        donorName,
+        donorPhone: donorPhone || undefined,
+      };
+      register(donorEntry, donorLabel);
+
+      (donor.members ?? []).forEach((member) => {
+        const memberId = typeof member.id === 'number' ? member.id : null;
+        const memberName = (member.name ?? '').trim() || (memberId !== null ? `Member #${memberId}` : 'Member');
+        const relationship = (member.relationship ?? '').trim();
+        const baseLabel = relationship ? `${memberName} (${relationship})` : memberName;
+        const memberKey =
+          memberId !== null
+            ? `donor-member-${memberId}`
+            : `donor-member-fallback-${fallbackKeyCounter++}`;
+        const memberLabel = donorName ? `${baseLabel} — ${donorName}` : baseLabel;
+        const entry: MemberDirectoryEntry = {
+          key: memberKey,
+          id: memberId,
+          name: memberName,
+          relationship: relationship || undefined,
+          gender: member.gender,
+          tamilStar: member.tamil_star,
+          gothra: member.gothra,
+          dob: member.date_of_birth ?? null,
+          familyName: member.family_name ?? null,
+          source: 'donor_member',
+          donorId,
+          donorName,
+          donorPhone: donorPhone || undefined,
+        };
+        register(entry, memberLabel);
+      });
+    });
+
+    return { options, lookup, idLookup };
+  }, [profile, donorRecords]);
+
+  const memberOptions = memberDirectory.options;
+  const memberLookup = memberDirectory.lookup;
+  const memberIdLookup = memberDirectory.idLookup;
 
   const primaryMemberKey = selectedMemberIds[0] ?? 'self';
 
   const primaryMember = useMemo(() => {
-    if (!profile?.members || primaryMemberKey === 'self') return undefined;
-    return profile.members.find((member) => String(member.id) === primaryMemberKey);
-  }, [profile, primaryMemberKey]);
+    return memberLookup.get(primaryMemberKey);
+  }, [memberLookup, primaryMemberKey]);
 
-  const selectedMemberEntries = useMemo<ProfileMember[]>(() => {
-    if (!profile?.members) return [];
+  const selectedMemberEntries = useMemo<MemberDirectoryEntry[]>(() => {
     return selectedMemberIds
-      .filter((memberKey) => memberKey !== 'self')
-      .map((memberKey) => profile.members?.find((member) => String(member.id) === memberKey))
-      .filter((member): member is ProfileMember => Boolean(member));
-  }, [profile, selectedMemberIds]);
+      .map((memberKey) => memberLookup.get(memberKey))
+      .filter((entry): entry is MemberDirectoryEntry => Boolean(entry));
+  }, [memberLookup, selectedMemberIds]);
+
+  const formatDirectoryEntryForCart = (entry: MemberDirectoryEntry, fallbackName?: string) => ({
+    id: entry.id ?? null,
+    name: entry.name || fallbackName || 'Member',
+    relationship:
+      entry.relationship ??
+      (entry.source === 'self'
+        ? 'Self'
+        : entry.source === 'donor'
+          ? 'Donor'
+          : undefined),
+    gender: entry.gender,
+    tamilStar: entry.tamilStar,
+    gothra: entry.gothra,
+    dob: entry.dob ?? null,
+    familyName: entry.familyName ?? null,
+    selectionKey: entry.key,
+    donorName: entry.donorName ?? null,
+    donorPhone: entry.donorPhone ?? null,
+  });
+
+  const buildMemberPayloadFromKey = useCallback(
+    (memberKey: string, fallbackName?: string) => {
+      const directEntry = memberLookup.get(memberKey);
+      if (directEntry) {
+        return formatDirectoryEntryForCart(directEntry, fallbackName);
+      }
+      if (memberKey === 'self') {
+        const selfEntry = memberLookup.get('self');
+        if (selfEntry) {
+          return formatDirectoryEntryForCart(selfEntry, fallbackName);
+        }
+      }
+      const numericId = Number(memberKey);
+      if (!Number.isNaN(numericId)) {
+        const mappedKey = memberIdLookup.get(numericId);
+        if (mappedKey) {
+          const mappedEntry = memberLookup.get(mappedKey);
+          if (mappedEntry) {
+            return formatDirectoryEntryForCart(mappedEntry, fallbackName);
+          }
+        }
+        return {
+          id: numericId,
+          name: fallbackName || 'Member',
+          relationship: undefined,
+          gender: undefined,
+          tamilStar: undefined,
+          gothra: undefined,
+          dob: null,
+          familyName: null,
+          selectionKey: memberKey,
+          donorName: null,
+          donorPhone: null,
+        };
+      }
+      return {
+        id: null,
+        name: fallbackName || 'Member',
+        relationship: memberKey === 'self' ? 'Self' : undefined,
+        gender: undefined,
+        tamilStar: undefined,
+        gothra: undefined,
+        dob: null,
+        familyName: null,
+        selectionKey: memberKey,
+        donorName: null,
+        donorPhone: null,
+      };
+    },
+    [memberIdLookup, memberLookup],
+  );
 
   const dayOptionMap = useMemo(() => {
     const map = new Map<number, DayOption>();
@@ -633,10 +977,38 @@ const PoojaRegistrationPage = () => {
   }, []);
 
   useEffect(() => {
-    if (primaryMemberKey !== 'self' && !primaryMember) {
+    if (profile?.user?.role !== 'admin') {
+      setDonorRecords([]);
+      return;
+    }
+
+    let isActive = true;
+    const fetchDonors = async () => {
+      try {
+        const { data } = await api.get('auth/donors/');
+        if (!isActive) {
+          return;
+        }
+        const donors = Array.isArray(data) ? data : extractResults<DonorListEntry>(data);
+        setDonorRecords(donors);
+      } catch (err) {
+        if (isActive) {
+          setDonorRecords([]);
+        }
+      }
+    };
+
+    fetchDonors();
+    return () => {
+      isActive = false;
+    };
+  }, [profile?.user?.role]);
+
+  useEffect(() => {
+    if (!memberLookup.has(primaryMemberKey)) {
       setSelectedMemberIds(['self']);
     }
-  }, [primaryMemberKey, primaryMember]);
+  }, [memberLookup, primaryMemberKey]);
 
   useEffect(() => {
     if (!selectedPooja || bookingMode !== 'full') return;
@@ -689,20 +1061,180 @@ const PoojaRegistrationPage = () => {
     });
   }, []);
 
+  const fetchOccurrenceForRow = useCallback(
+    async (poojaId: number, option: DayOption | undefined, options: { tamilStarId?: string | null } = {}) => {
+      if (!option) {
+        setDayOccurrenceMap((prev) => {
+          if (!(poojaId in prev)) return prev;
+          const next = { ...prev };
+          delete next[poojaId];
+          return next;
+        });
+        return;
+      }
+
+      const code = (option.code || '').toUpperCase();
+      const requiresStar = code === 'CS';
+      const tamilStarId = requiresStar ? options.tamilStarId ?? null : null;
+      const stateKey = buildOccurrenceKey(option.id, tamilStarId);
+      const existing = dayOccurrenceMap[poojaId];
+
+      if (existing && existing.key === stateKey) {
+        if (existing.status === 'loading') {
+          return; // request already in flight
+        }
+        if (existing.status !== 'error') {
+          return; // result already available
+        }
+      }
+
+      if (code === 'CHRT') {
+        setDayOccurrenceMap((prev) => {
+          const current = prev[poojaId];
+          if (current && current.key === stateKey && current.status === 'manual') {
+            return prev;
+          }
+          return {
+            ...prev,
+            [poojaId]: { status: 'manual', key: stateKey, message: 'Donor will provide a preferred date for this option.' },
+          };
+        });
+        return;
+      }
+
+      if (requiresStar && !tamilStarId) {
+        setDayOccurrenceMap((prev) => {
+          const current = prev[poojaId];
+          if (current && current.key === stateKey && current.status === 'needsStar') {
+            return prev;
+          }
+          return {
+            ...prev,
+            [poojaId]: { status: 'needsStar', key: stateKey, message: 'Select your Tamil star to view the next occurrence.' },
+          };
+        });
+        return;
+      }
+
+      setDayOccurrenceMap((prev) => {
+        const current = prev[poojaId];
+        if (current && current.key === stateKey && current.status === 'loading') {
+          return prev;
+        }
+        return {
+          ...prev,
+          [poojaId]: { status: 'loading', key: stateKey },
+        };
+      });
+
+      try {
+        const params: Record<string, string> = { start_date: todayIso };
+        if (tamilStarId) {
+          params.tamil_star_id = tamilStarId;
+        }
+        const { data } = await api.get(`/pooja/day-options/${option.id}/next-occurrence/`, { params });
+        setDayOccurrenceMap((prev) => {
+          const nextState: DayOccurrenceState = {
+            status: 'ready',
+            key: stateKey,
+            date: data?.occurrence_date ?? '',
+            label: data?.occurrence_label ?? '',
+            note: data?.meta?.note ?? null,
+          };
+          const current = prev[poojaId];
+          if (current && current.key === stateKey && current.status === 'ready' && current.date === nextState.date && current.label === nextState.label && current.note === nextState.note) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [poojaId]: nextState,
+          };
+        });
+      } catch (error: any) {
+        const detail = error?.response?.data?.detail ?? 'Unable to fetch occurrence date.';
+        setDayOccurrenceMap((prev) => {
+          const current = prev[poojaId];
+          const message = typeof detail === 'string' ? detail : 'Unable to fetch occurrence date.';
+          if (current && current.key === stateKey && current.status === 'error' && current.message === message) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [poojaId]: { status: 'error', key: stateKey, message },
+          };
+        });
+      }
+    },
+    [todayIso, dayOccurrenceMap],
+  );
+
   useEffect(() => {
-    Object.entries(daySelectionMap).forEach(([poojaIdKey, optionIdValue]) => {
+    Object.keys(daySelectionMap).forEach((poojaIdKey) => {
       const poojaId = Number(poojaIdKey);
+      const optionIdValue = daySelectionMap[poojaId];
       const optionId = optionIdValue ?? null;
       ensureChartDetailState(poojaId, optionId);
     });
   }, [daySelectionMap, ensureChartDetailState]);
 
+  const resolveSelectedDayId = useCallback(
+    (poojaId: number): number | null => {
+      if (Object.prototype.hasOwnProperty.call(daySelectionMap, poojaId)) {
+        return daySelectionMap[poojaId] ?? null;
+      }
+      const existing = cartItems.find((item) => item.poojaId === poojaId);
+      return existing?.dayOptionId ?? null;
+    },
+    [daySelectionMap, cartItems],
+  );
+
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      return;
+    }
+    setTamilStarSelectionMap((prev) => {
+      const next = { ...prev };
+      cartItems.forEach((item) => {
+        if (item.selectedTamilStarId) {
+          next[item.poojaId] = item.selectedTamilStarId;
+        }
+      });
+      return next;
+    });
+  }, [cartItems]);
+
+  useEffect(() => {
+    masterRows.forEach((row) => {
+      const selectedDayId = resolveSelectedDayId(row.pooja.id);
+      if (!selectedDayId) {
+        return;
+      }
+      const option = dayOptionMap.get(selectedDayId);
+      if (!option) {
+        return;
+      }
+      const code = (option.code || '').toUpperCase();
+      const tamilStarId = code === 'CS' ? (tamilStarSelectionMap[row.pooja.id] ?? null) : undefined;
+      fetchOccurrenceForRow(row.pooja.id, option, { tamilStarId });
+    });
+  }, [masterRows, dayOptionMap, fetchOccurrenceForRow, tamilStarSelectionMap, resolveSelectedDayId]);
+
   const handleDaySelectionChange = (poojaId: number, value: string) => {
     const optionId = value ? Number(value) : null;
     const selectedOption = optionId ? dayOptionMap.get(optionId) : undefined;
-    
+    const normalizedCode = selectedOption?.code ? selectedOption.code.toUpperCase() : '';
+
     // Reset Tamil star selection when changing day option
     setSelectedTamilStar(null);
+    setTamilStarSelectionMap((prev) => {
+      const next = { ...prev };
+      if (normalizedCode === 'CS') {
+        next[poojaId] = next[poojaId] ?? null;
+      } else if (poojaId in next) {
+        delete next[poojaId];
+      }
+      return next;
+    });
 
     setDaySelectionMap((prev) => ({
       ...prev,
@@ -710,11 +1242,26 @@ const PoojaRegistrationPage = () => {
     }));
     ensureChartDetailState(poojaId, optionId);
     setTableMessage(null);
+
+    fetchOccurrenceForRow(poojaId, selectedOption, {
+      tamilStarId: normalizedCode === 'CS' ? null : undefined,
+    });
   };
 
   const handleTamilStarSelection = (poojaId: number, value: string) => {
     setSelectedTamilStar(value);
-    // The selected Tamil star can be used when adding to cart or processing the form
+    setTamilStarSelectionMap((prev) => ({
+      ...prev,
+      [poojaId]: value || null,
+    }));
+
+    const optionIdValue = daySelectionMap[poojaId] ?? null;
+    const option = optionIdValue ? dayOptionMap.get(optionIdValue) : undefined;
+    if (!option) {
+      return;
+    }
+
+    fetchOccurrenceForRow(poojaId, option, { tamilStarId: value || null });
   };
 
   const toggleMemberSelection = (value: string) => {
@@ -748,13 +1295,43 @@ const PoojaRegistrationPage = () => {
       return Array.from(new Set(next.length > 0 ? next : ['self']));
     });
   };
+  const toggleMemberSelectionForRow = (row: MasterRow, value: string) => {
+    setTableMessage(null);
+    const selectedDayId = resolveSelectedDayId(row.pooja.id);
+    const matchingItem = findMatchingCartItem(row, selectedDayId);
+    const currentKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+    let next = [...currentKeys];
+    const hasValue = next.includes(value);
 
-  const resolveSelectedDayId = (poojaId: number): number | null => {
-    if (Object.prototype.hasOwnProperty.call(daySelectionMap, poojaId)) {
-      return daySelectionMap[poojaId] ?? null;
+    if (value === 'self') {
+      if (hasValue) {
+        next = next.filter((id) => id !== 'self');
+        if (next.length === 0) {
+          next = ['self'];
+        }
+      } else {
+        next = ['self', ...next.filter((id) => id !== 'self')];
+      }
+    } else {
+      if (hasValue) {
+        next = next.filter((id) => id !== value);
+        if (next.length === 0) {
+          next = ['self'];
+        }
+      } else {
+        next = [...next.filter((id) => id !== value), value];
+        if (next.length > 1 && next.includes('self')) {
+          next = next.filter((id) => id !== 'self');
+        }
+      }
     }
-    const existing = cartItems.find((item) => item.poojaId === poojaId);
-    return existing?.dayOptionId ?? null;
+
+    const normalized = Array.from(new Set(next.length > 0 ? next : ['self']));
+
+    setMemberSelectionMap((prev) => ({
+      ...prev,
+      [row.pooja.id]: normalized,
+    }));
   };
 
   const convertFeaturedToBooking = (pooja: FeaturedPooja): BookingPooja => ({
@@ -806,7 +1383,14 @@ const PoojaRegistrationPage = () => {
       return Array.from(
         new Set(
           matchingItem.members.map((member) => {
+            if (member.selectionKey) {
+              return member.selectionKey;
+            }
             if (member.id !== undefined && member.id !== null) {
+              const mapped = memberIdLookup.get(member.id);
+              if (mapped) {
+                return mapped;
+              }
               return String(member.id);
             }
             return 'self';
@@ -817,6 +1401,10 @@ const PoojaRegistrationPage = () => {
 
     if (matchingItem) {
       if (matchingItem.memberId !== undefined && matchingItem.memberId !== null) {
+        const mapped = memberIdLookup.get(matchingItem.memberId);
+        if (mapped) {
+          return [mapped];
+        }
         return [String(matchingItem.memberId)];
       }
       if (matchingItem.fullName) {
@@ -828,22 +1416,47 @@ const PoojaRegistrationPage = () => {
   };
 
   const describeMemberKey = (memberKey: string, matchingItem?: CartItem): string => {
+    const entry = memberLookup.get(memberKey) ?? (memberKey === 'self' ? memberLookup.get('self') : undefined);
+    if (entry) {
+      const relationshipLabel =
+        entry.relationship ??
+        (entry.source === 'self'
+          ? 'Self'
+          : entry.source === 'donor'
+            ? 'Donor'
+            : undefined);
+      const relationshipText = relationshipLabel ? ` - ${relationshipLabel}` : '';
+      const donorSuffix =
+        entry.source === 'donor_member' && entry.donorName
+          ? ` — ${entry.donorName}`
+          : '';
+      return `${entry.name}${relationshipText}${donorSuffix}`;
+    }
+
+    if (matchingItem?.members) {
+      const fallback = matchingItem.members.find((member) => {
+        if (member.selectionKey === memberKey) {
+          return true;
+        }
+        if (member.id !== null && member.id !== undefined) {
+          const mappedKey = memberIdLookup.get(member.id);
+          return mappedKey === memberKey;
+        }
+        return false;
+      });
+      if (fallback) {
+        const relationship = fallback.relationship ? ` - ${fallback.relationship}` : '';
+        return `${fallback.name ?? 'Member'}${relationship}`;
+      }
+    }
+
     if (memberKey === 'self') {
-      const fallbackName = matchingItem?.members?.find((entry) => entry.id === null)?.name || matchingItem?.fullName;
+      const fallbackName =
+        matchingItem?.members?.find((entry) => entry.selectionKey === 'self')?.name || matchingItem?.fullName;
       const baseLabel = baseName || fallbackName || 'Self';
       return `${baseLabel} - Self`;
     }
-    const member = profile?.members?.find((candidate) => String(candidate.id) === memberKey);
-    if (member) {
-      const relationship = member.relationship ? ` - ${member.relationship}` : '';
-      const name = member.name || `Member #${member.id}`;
-      return `${name}${relationship}`;
-    }
-    const fallback = matchingItem?.members?.find((entry) => (entry.id !== null ? String(entry.id) === memberKey : false));
-    if (fallback) {
-      const relationship = fallback.relationship ? ` - ${fallback.relationship}` : '';
-      return `${fallback.name ?? 'Member'}${relationship}`;
-    }
+
     return 'Member';
   };
 
@@ -880,6 +1493,7 @@ const PoojaRegistrationPage = () => {
     setSelectedPooja(pooja);
     setBookingMode(mode);
     setDateValue('');
+    setSelectedTamilStar(tamilStarSelectionMap[pooja.id] ?? null);
     setSelectedDayOptionId(dayOptionId ?? null);
     ensureChartDetailState(pooja.id, dayOptionId ?? null);
   };
@@ -915,9 +1529,10 @@ const PoojaRegistrationPage = () => {
     const chosenDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
     const requiresChartDetails = isChartDayOption(chosenDayOption);
     const chartDetails = chartDetailsMap[row.pooja.id];
+    const selectedStarForRow = tamilStarSelectionMap[row.pooja.id] ?? selectedTamilStar;
     const selectedTamilStarOption =
-      selectedTamilStar && chosenDayOption?.code === 'CS'
-        ? dayOptionMap.get(Number(selectedTamilStar))
+      selectedStarForRow && chosenDayOption?.code === 'CS'
+        ? dayOptionMap.get(Number(selectedStarForRow))
         : undefined;
     const postPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
 
@@ -931,6 +1546,27 @@ const PoojaRegistrationPage = () => {
         return;
       }
     }
+
+    const occurrenceState = dayOccurrenceMap[row.pooja.id];
+    let resolvedBookingDate = '';
+    if (requiresChartDetails) {
+      resolvedBookingDate = chartDetails?.date ?? '';
+    } else if (occurrenceState?.status === 'ready' && occurrenceState.date) {
+      resolvedBookingDate = occurrenceState.date;
+    } else {
+      const fallbackMessage =
+        occurrenceState?.status === 'loading'
+          ? 'Fetching the next occurrence. Please try again in a moment.'
+          : occurrenceState?.message ||
+            'Select a day option and wait for the next occurrence before adding this pooja to the cart.';
+      setTableMessage({ status: 'error', text: fallbackMessage });
+      return;
+    }
+
+    if (!resolvedBookingDate) {
+      setTableMessage({ status: 'error', text: 'Choose or confirm a pooja date before adding this item to the cart.' });
+      return;
+    }
     const amountForCart = getRowAmount(row);
     const mapSelection = memberSelectionMap[row.pooja.id];
     const selectedMemberKeysRaw = mapSelection && mapSelection.length > 0
@@ -940,34 +1576,21 @@ const PoojaRegistrationPage = () => {
         : ['self'];
     const selectedMemberKeys = Array.from(new Set(selectedMemberKeysRaw));
 
-    const membersPayload = selectedMemberKeys.map((memberKey) => {
-      if (memberKey === 'self') {
-        return {
-          id: null,
-          name: baseName || matchingItem?.fullName || 'Self',
-          relationship: 'Self',
-          gender: undefined,
-          tamilStar: undefined,
-          gothra: undefined,
-          dob: undefined,
-        };
-      }
-      const member = profile?.members?.find((candidate) => String(candidate.id) === memberKey);
-      return {
-        id: member ? member.id : Number(memberKey) || null,
-        name: member?.name ?? matchingItem?.fullName ?? 'Member',
-        relationship: member?.relationship ?? matchingItem?.memberRelationship ?? undefined,
-        gender: member?.gender,
-        tamilStar: member?.tamil_star,
-        gothra: member?.gothra,
-        dob: member?.date_of_birth ?? undefined,
-      };
+    const membersPayload = selectedMemberKeys.map((memberKey, index) => {
+      const fallbackName =
+        matchingItem?.members?.[index]?.name ??
+        (memberKey === 'self' ? baseName || matchingItem?.fullName || 'Self' : undefined);
+      return buildMemberPayloadFromKey(memberKey, fallbackName);
     });
 
-    const primaryMemberEntry = membersPayload[0];
-    const primaryMember = primaryMemberEntry && primaryMemberEntry.id !== null
-      ? profile?.members?.find((member) => member.id === primaryMemberEntry.id)
-      : undefined;
+    const primarySelectionKey = selectedMemberKeys[0] ?? 'self';
+    const primaryPayload =
+      membersPayload[0] ??
+      buildMemberPayloadFromKey(primarySelectionKey, baseName || matchingItem?.fullName || 'Self');
+    const primaryDirectoryEntry =
+      memberLookup.get(primaryPayload.selectionKey ?? primarySelectionKey) ??
+      memberLookup.get(primarySelectionKey) ??
+      null;
 
     const item = createCartItem({
       poojaId: row.pooja.id,
@@ -976,8 +1599,8 @@ const PoojaRegistrationPage = () => {
       poojaImage: '',
       poojaImageUrl: null,
       amount: amountForCart,
-      bookingDate: '',
-      fullName: primaryMemberEntry?.name ?? baseName,
+      bookingDate: resolvedBookingDate,
+      fullName: primaryPayload?.name ?? baseName,
       email: baseEmail,
       phoneNumber: basePhone,
       address: baseAddress,
@@ -985,7 +1608,7 @@ const PoojaRegistrationPage = () => {
       dayOptionCode: chosenDayOption?.code ?? null,
       dayOptionDescription: chosenDayOption?.description ?? null,
       dayOptionCategory: chosenDayOption?.category ?? null,
-      selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedTamilStar : null,
+      selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedStarForRow ?? null : null,
       selectedTamilStarLabel:
         chosenDayOption?.code === 'CS' && selectedTamilStarOption
           ? formatDayOptionLabel(selectedTamilStarOption)
@@ -993,12 +1616,13 @@ const PoojaRegistrationPage = () => {
       customDayDate: requiresChartDetails ? chartDetails?.date ?? null : null,
       customDayNote: requiresChartDetails ? chartDetails?.note?.trim() ?? null : null,
       postPrasadam,
-      memberId: primaryMember ? primaryMember.id : null,
-      memberRelationship: primaryMemberEntry?.relationship ?? primaryMember?.relationship,
-      memberGender: primaryMember?.gender,
-      memberTamilStar: primaryMember?.tamil_star,
-      memberGothra: primaryMember?.gothra,
-      memberDob: primaryMember?.date_of_birth ?? null,
+      memberId: primaryDirectoryEntry?.id ?? null,
+      memberRelationship: primaryPayload.relationship ?? undefined,
+      memberGender: primaryPayload.gender,
+      memberTamilStar: primaryPayload.tamilStar,
+      memberGothra: primaryPayload.gothra,
+      memberDob: primaryPayload.dob ?? null,
+      memberFamilyName: primaryPayload.familyName ?? null,
       members: membersPayload,
     });
 
@@ -1068,36 +1692,19 @@ const PoojaRegistrationPage = () => {
 
     const memberKeysRaw = selectedMemberIds.length > 0 ? selectedMemberIds : ['self'];
     const memberKeys = Array.from(new Set(memberKeysRaw));
-    const membersPayload = memberKeys.map((key) => {
-      if (key === 'self') {
-        return {
-          id: null,
-          name: baseName || resolvedName || 'Self',
-          relationship: 'Self',
-          gender: undefined,
-          tamilStar: undefined,
-          gothra: undefined,
-          dob: undefined,
-        };
-      }
-      const member = profile?.members?.find((candidate) => String(candidate.id) === key);
-      return {
-        id: member ? member.id : Number(key) || null,
-        name: member?.name ?? 'Member',
-        relationship: member?.relationship ?? undefined,
-        gender: member?.gender,
-        tamilStar: member?.tamil_star,
-        gothra: member?.gothra,
-        dob: member?.date_of_birth ?? undefined,
-      };
-    });
+    const membersPayload = memberKeys.map((key, index) =>
+      buildMemberPayloadFromKey(key, index === 0 ? resolvedName : undefined),
+    );
 
+    const selectedStarForSelected =
+      selectedPooja ? tamilStarSelectionMap[selectedPooja.id] ?? selectedTamilStar : selectedTamilStar;
     const selectedTamilStarOption =
-      selectedTamilStar && chosenDayOption?.code === 'CS'
-        ? dayOptionMap.get(Number(selectedTamilStar))
+      selectedStarForSelected && chosenDayOption?.code === 'CS'
+        ? dayOptionMap.get(Number(selectedStarForSelected))
         : undefined;
 
-    const primaryEntry = membersPayload[0];
+    const primaryEntry =
+      membersPayload[0] ?? buildMemberPayloadFromKey(memberKeys[0] ?? 'self', resolvedName);
     const item = createCartItem({
       poojaId: selectedPooja.id,
       poojaName: selectedPooja.name,
@@ -1114,7 +1721,7 @@ const PoojaRegistrationPage = () => {
       dayOptionCode: chosenDayOption?.code ?? null,
       dayOptionDescription: chosenDayOption?.description ?? null,
       dayOptionCategory: chosenDayOption?.category ?? null,
-      selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedTamilStar : null,
+      selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedStarForSelected ?? null : null,
       selectedTamilStarLabel:
         chosenDayOption?.code === 'CS' && selectedTamilStarOption
           ? formatDayOptionLabel(selectedTamilStarOption)
@@ -1123,7 +1730,7 @@ const PoojaRegistrationPage = () => {
       customDayNote: requiresChartDetails ? chartDetails?.note?.trim() ?? null : null,
       postPrasadam,
       memberId: primaryEntry?.id ?? null,
-      memberRelationship: primaryEntry?.relationship ?? (primaryEntry?.id === null ? 'Self' : undefined),
+      memberRelationship: primaryEntry?.relationship ?? undefined,
       memberGender: primaryEntry?.gender,
       memberTamilStar: primaryEntry?.tamilStar,
       memberGothra: primaryEntry?.gothra,
@@ -1150,9 +1757,8 @@ const PoojaRegistrationPage = () => {
   const modalChartDetails = selectedPooja ? chartDetailsMap[selectedPooja.id] ?? { date: '', note: '' } : { date: '', note: '' };
 
   return (
-    <div className="space-y-12">
-
-      <section className="space-y-4 rounded-lg bg-white p-6 shadow-sm">
+    <div className="space-y-30">
+      <section className="mx-auto w-full max-w-[1680px] space-y-4 rounded-2xl border border-slate-200 bg-white px-10 py-6 shadow-sm">
         <header className="space-y-1">
           <h2 className="text-lg font-semibold text-slate-800">Pooja Registrations</h2>
           <p className="text-sm text-slate-600">
@@ -1179,17 +1785,21 @@ const PoojaRegistrationPage = () => {
         )}
 
         {!isLoading && masterRows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <div className="rounded-xl border border-slate-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-[1200px] w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <tr>
-                  <th scope="col" className="px-3 py-2 text-left">Code</th>
-                  <th scope="col" className="px-3 py-2 text-left">Pooja Name</th>
-                  <th scope="col" className="px-3 py-2 text-left">Day Option</th>
-                  <th scope="col" className="px-3 py-2 text-left">Add Member</th>
-                  <th scope="col" className="px-3 py-2 text-left">Pooja Rate</th>
-                  <th scope="col" className="px-3 py-2 text-center">Post Prasadam for this day</th>
-                  <th scope="col" className="px-3 py-2 text-center">Add to Cart</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Code</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Pooja Name</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Day Option</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Add Member - Devotee</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Next Occurrence</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Pooja Amount</th>
+                  <th scope="col" className="px-2 py-2 text-center sm:px-3">Post Prasadam for this day</th>
+                  <th scope="col" className="px-2 py-2 text-center sm:px-3">Add to Cart</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Pooja Register by</th>
+                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Registration Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -1200,6 +1810,7 @@ const PoojaRegistrationPage = () => {
                   const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
                   const requiresChartDetails = isChartDayOption(selectedDayOption);
                   const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
+                  const occurrenceState = dayOccurrenceMap[row.pooja.id];
                   const iconLabel = inCart
                     ? `Remove ${row.uiLabel} from cart`
                     : `Add ${row.uiLabel} to cart`;
@@ -1211,11 +1822,11 @@ const PoojaRegistrationPage = () => {
                   const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
                   return (
                     <tr key={row.pooja.id} className="hover:bg-slate-50">
-                      <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">{row.code}</td>
-                      <td className="px-3 py-2">
-                        <p className="font-medium text-slate-800">{row.uiLabel}</p>
+                      <td className="whitespace-nowrap px-2 py-2 font-medium text-slate-700 sm:px-3">{row.code}</td>
+                      <td className="px-2 py-2 sm:px-3">
+                        <p className="whitespace-nowrap font-medium text-slate-800">{row.uiLabel}</p>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2 sm:px-3">
                         {dayOptionChoices.length > 0 ? (
                           <div className="space-y-2">
                             <SearchableSelect
@@ -1226,7 +1837,7 @@ const PoojaRegistrationPage = () => {
                               value={selectedDayId !== null ? String(selectedDayId) : ''}
                               onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
                               placeholder="Select day option"
-                              className="w-72"
+                              className="w-full min-w-[15rem] max-w-lg"
                             />
                             {selectedDayOption?.code === 'CS' && (
                               <div className="mt-2">
@@ -1235,10 +1846,10 @@ const PoojaRegistrationPage = () => {
                                     value: String(option.id),
                                     label: formatDayOptionLabel(option),
                                   }))}
-                                  value={selectedTamilStar || ''}
+                                  value={tamilStarSelectionMap[row.pooja.id] || ''}
                                   onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
                                   placeholder="Select your star"
-                                  className="w-72"
+                                  className="w-full max-w-xs"
                                 />
                               </div>
                             )}
@@ -1275,17 +1886,46 @@ const PoojaRegistrationPage = () => {
                           <span className="text-xs uppercase text-slate-400">Not configured</span>
                         )}
                       </td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => handleMasterRowAction(row, 'memberOnly')}
-                          className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                        >
-                          {memberButtonLabel}
-                        </button>
+                      <td className="px-2 py-2 sm:px-3">
+                        <MemberMultiSelect
+                          label={memberButtonLabel}
+                          options={memberOptions}
+                          selectedValues={resolvedMemberKeys.length > 0 ? resolvedMemberKeys : ['self']}
+                          onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
+                          disabled={memberOptions.length === 0}
+                        />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.rateLabel}</td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-2 py-2 text-sm text-slate-700 sm:px-3">
+                        {selectedDayId === null ? (
+                          <span className="text-xs text-slate-400">Select a day option</span>
+                        ) : !occurrenceState ? (
+                          <span className="text-xs text-slate-400">Select a day option</span>
+                        ) : occurrenceState.status === 'loading' ? (
+                          <span className="text-xs text-slate-500">Fetching date…</span>
+                        ) : occurrenceState.status === 'ready' ? (
+                          <div className="space-y-0.5">
+                            <span className="font-medium text-slate-800">
+                              {formatDisplayDate(occurrenceState.date)}
+                            </span>
+                            {occurrenceState.label && (
+                              <span className="block text-xs text-slate-500">{occurrenceState.label}</span>
+                            )}
+                            {occurrenceState.note && (
+                              <span className="block text-xs text-slate-400">{occurrenceState.note}</span>
+                            )}
+                          </div>
+                        ) : occurrenceState.status === 'manual' ||
+                          occurrenceState.status === 'needsStar' ||
+                          occurrenceState.status === 'error' ? (
+                          <span className="text-xs text-slate-500">
+                            {occurrenceState.message}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Select a day option</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-slate-700 sm:px-3">{row.rateLabel}</td>
+                      <td className="px-2 py-2 text-center sm:px-3">
                         <div className="inline-flex items-center gap-4 text-xs text-slate-600">
                           <label className="inline-flex items-center gap-2">
                             <input
@@ -1323,7 +1963,7 @@ const PoojaRegistrationPage = () => {
                         </div>
                       </td>
 
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-2 py-2 text-center sm:px-3">
                         <button
                           type="button"
                           onClick={() => toggleCartItem(row)}
@@ -1333,11 +1973,18 @@ const PoojaRegistrationPage = () => {
                           {inCart ? <CartRemoveIcon className="h-4 w-4" /> : <CartAddIcon className="h-4 w-4" />}
                         </button>
                       </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-slate-700 sm:px-3">
+                        {user?.name?.trim() || user?.phone_number || '--'}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-slate-700 sm:px-3">
+                        {registrationDateLabel}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         )}
         {tableMessage && (
@@ -1400,41 +2047,57 @@ const PoojaRegistrationPage = () => {
                 </div>
               )}
 
-              {(selectedMemberIds.includes('self') || selectedMemberEntries.length > 0) && (
-                <div className="rounded-lg bg-slate-100 p-3 text-xs text-slate-600 space-y-1">
-                  {selectedMemberIds.includes('self') && (
-                    <p>
-                      <span className="font-semibold text-slate-700">Primary:</span> {baseName || 'Self'}
-                    </p>
-                  )}
-                  {selectedMemberEntries.map((member, index) => (
-                    <div key={`${member.id ?? member.name ?? 'member'}-${index}`} className="space-y-1 border-t border-slate-200 pt-2 first:border-t-0 first:pt-0">
-                      <p>
-                        <span className="font-semibold text-slate-700">Name:</span> {member.name || `Member #${member.id}`}
-                        {member.relationship && ` (${member.relationship})`}
-                      </p>
-                      {member.gender && (
+              {selectedMemberEntries.length > 0 && (
+                <div className="space-y-2 rounded-lg bg-slate-100 p-3 text-xs text-slate-600">
+                  {selectedMemberEntries.map((member, index) => {
+                    const roleLabel = index === 0 ? 'Primary' : 'Devotee';
+                    const relationshipLabel = member.relationship ? ` (${member.relationship})` : '';
+                    const donorSuffix =
+                      member.source === 'donor_member' && member.donorName
+                        ? ` — ${member.donorName}`
+                        : member.source === 'donor' && member.donorName
+                          ? ` — ${member.donorName}`
+                          : '';
+                    return (
+                      <div
+                        key={member.key}
+                        className="space-y-1 border-t border-slate-200 pt-2 first:border-t-0 first:pt-0"
+                      >
                         <p>
-                          <span className="font-semibold text-slate-700">Gender:</span> {member.gender}
+                          <span className="font-semibold text-slate-700">{roleLabel}:</span>{' '}
+                          {member.name}
+                          {relationshipLabel}
+                          {donorSuffix}
                         </p>
-                      )}
-                      {member.date_of_birth && (
-                        <p>
-                          <span className="font-semibold text-slate-700">Birth date:</span> {formatDisplayDate(member.date_of_birth)}
-                        </p>
-                      )}
-                      {member.tamil_star && (
-                        <p>
-                          <span className="font-semibold text-slate-700">Tamil star:</span> {member.tamil_star}
-                        </p>
-                      )}
-                      {member.gothra && (
-                        <p>
-                          <span className="font-semibold text-slate-700">Gothra:</span> {member.gothra}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                        {member.donorPhone && (
+                          <p>
+                            <span className="font-semibold text-slate-700">Contact:</span> {member.donorPhone}
+                          </p>
+                        )}
+                        {member.gender && (
+                          <p>
+                            <span className="font-semibold text-slate-700">Gender:</span> {member.gender}
+                          </p>
+                        )}
+                        {member.dob && (
+                          <p>
+                            <span className="font-semibold text-slate-700">Birth date:</span>{' '}
+                            {formatDisplayDate(member.dob)}
+                          </p>
+                        )}
+                        {member.tamilStar && (
+                          <p>
+                            <span className="font-semibold text-slate-700">Tamil star:</span> {member.tamilStar}
+                          </p>
+                        )}
+                        {member.gothra && (
+                          <p>
+                            <span className="font-semibold text-slate-700">Gothra:</span> {member.gothra}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1449,11 +2112,10 @@ const PoojaRegistrationPage = () => {
                     value={selectedDayOptionId ? String(selectedDayOptionId) : ''}
                     onChange={(val) => {
                       const valueNum = val ? Number(val) : null;
-                      setSelectedDayOptionId(valueNum);
-                      if (selectedPooja?.source === 'master') {
-                        setDaySelectionMap((prev) => ({ ...prev, [selectedPooja.id]: valueNum }));
+                      if (selectedPooja) {
+                        handleDaySelectionChange(selectedPooja.id, val);
                       }
-                      ensureChartDetailState(selectedPooja.id, valueNum);
+                      setSelectedDayOptionId(valueNum);
                       setFormError('');
                     }}
                     placeholder="Select day option"

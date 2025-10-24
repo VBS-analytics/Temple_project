@@ -18,6 +18,7 @@ interface FormValues {
   date_of_birth: string;
   tamil_star: string;
   gothra: string;
+  gender: string;
   family_name: string;
   family_selection: string;
   password: string;
@@ -99,6 +100,7 @@ const RegisterPage = () => {
       date_of_birth: '',
       tamil_star: '',
       gothra: '',
+      gender: '',
       family_name: '',
       family_selection: '',
       password: '',
@@ -129,7 +131,12 @@ const RegisterPage = () => {
 
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
-    const { family_selection, family_name: familyNameInput, ...rest } = values;
+    const {
+      family_selection,
+      family_name: familyNameInput,
+      gender,
+      ...rest
+    } = values;
     const payload: Record<string, unknown> = {
       ...rest,
       family_name:
@@ -138,6 +145,9 @@ const RegisterPage = () => {
 
     if (!values.date_of_birth) delete payload.date_of_birth;
     if (!payload.family_name) delete payload.family_name;
+    if (gender) {
+      payload.gender = gender;
+    }
 
     try {
       const { data } = await api.post('/auth/register/', payload);
@@ -480,6 +490,21 @@ const RegisterPage = () => {
                         placeholder="Gothram"
                         {...register('gothra')}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-600">
+                        Gender
+                      </label>
+                      <select
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-800 focus:border-amber-500 focus:outline-none"
+                        {...register('gender')}
+                      >
+                        <option value="">Select gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="non_binary">Non-binary</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                      </select>
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-600">

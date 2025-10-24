@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     DonorListView,
+    DashboardMetricsView,
     FamilyMemberDetailView,
     FamilyMemberView,
     LoginView,
@@ -24,4 +25,5 @@ urlpatterns = [
     path('family-members/', FamilyMemberView.as_view(), name='family-members'),
     path('family-members/<int:pk>/', FamilyMemberDetailView.as_view(), name='family-member-detail'),
     path('donors/', DonorListView.as_view(), name='donor-list'),
+    path('dashboard-metrics/', DashboardMetricsView.as_view(), name='dashboard-metrics'),
 ]

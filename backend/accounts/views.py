@@ -178,3 +178,22 @@ class DonorListView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class DashboardMetricsView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        if request.user.role != UserRole.ADMIN:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        donor_count = User.objects.filter(role=UserRole.DONOR).count()
+        family_member_count = FamilyMember.objects.count()
+
+        return Response(
+            {
+                "donor_count": donor_count,
+                "family_member_count": family_member_count,
+            },
+            status=status.HTTP_200_OK,
+        )

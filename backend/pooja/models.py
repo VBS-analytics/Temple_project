@@ -1,7 +1,7 @@
 """Core pooja domain models."""
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 
 
 class PoojaOption(models.Model):
@@ -95,6 +95,7 @@ class PoojaRegistration(models.Model):
         choices=PoojaStatus.choices,
         default=PoojaStatus.PENDING,
     )
+    registration_number = models.PositiveIntegerField(unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -104,12 +105,35 @@ class PoojaRegistration(models.Model):
     def __str__(self):
         return f"Registration #{self.pk} for {self.donor}"
 
+    @property
+    def pooja_reg_id(self) -> str | None:
+        if self.registration_number is None:
+            return None
+        return f"PR{self.registration_number}"
+
+    def save(self, *args, **kwargs):
+        if self.registration_number is None:
+            with transaction.atomic():
+                if self.registration_number is None:
+                    last_number = (
+                        self.__class__.objects.select_for_update()
+                        .order_by("-registration_number")
+                        .values_list("registration_number", flat=True)
+                        .first()
+                    )
+                    self.registration_number = (last_number or 0) + 1
+        super().save(*args, **kwargs)
+
 
 class PoojaRegistrationMember(models.Model):
     registration = models.ForeignKey(PoojaRegistration, on_delete=models.CASCADE, related_name="members")
     name = models.CharField(max_length=255)
     phone_number = models.CharField(max_length=15, blank=True)
     relationship = models.CharField(max_length=128, blank=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    family_name = models.CharField(max_length=255, blank=True, default="")
+    tamil_star = models.CharField(max_length=128, blank=True)
+    gothra = models.CharField(max_length=128, blank=True)
 
     class Meta:
         ordering = ("registration", "name")

@@ -1,7 +1,10 @@
 """ViewSets for pooja master data and registrations."""
 
+from datetime import datetime
+
 from django.db import transaction
 from django.db.models import Max, Prefetch
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -18,6 +21,7 @@ from .models import (
     PoojaOption,
     PoojaRegistration,
 )
+from .services.calendar import get_calendar_service
 from .serializers import (
     DailyMessageSerializer,
     DonorMessageTemplateSerializer,
@@ -26,6 +30,7 @@ from .serializers import (
     PoojaOptionSerializer,
     PoojaRegistrationSerializer,
     LandingPoojaRegistrationSerializer,
+    PublicTodayPoojaRegistrationSerializer,
 )
 
 
@@ -80,6 +85,46 @@ class PoojaDayOptionViewSet(viewsets.ModelViewSet):
                 PoojaDayOption.objects.filter(id=option_id).update(display_order=position)
 
         return Response({"detail": "Day options reordered."})
+
+    @action(detail=True, methods=["get"], url_path="next-occurrence")
+    def next_occurrence(self, request, pk=None):
+        day_option = self.get_object()
+        start_date_str = request.query_params.get("start_date")
+        if start_date_str:
+            try:
+                parsed = datetime.fromisoformat(start_date_str)
+                start_date = parsed.date()
+            except ValueError:
+                return Response({"detail": "start_date must be in ISO format (YYYY-MM-DD)."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            start_date = timezone.localdate()
+
+        tamil_star_labels = None
+        tamil_star_id = request.query_params.get("tamil_star_id")
+        if tamil_star_id is not None:
+            try:
+                star_option = PoojaDayOption.objects.get(id=int(tamil_star_id), category="tamil_star")
+                tamil_star_labels = [star_option.description, star_option.code]
+            except (ValueError, PoojaDayOption.DoesNotExist):
+                return Response({"detail": "Invalid tamil_star_id provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        service = get_calendar_service()
+        try:
+            occurrence = service.next_occurrence(day_option.code, start_date, tamil_star_labels=tamil_star_labels)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        payload = {
+            "day_option_id": day_option.id,
+            "day_option_code": day_option.code,
+            "start_date": start_date.isoformat(),
+            "occurrence_date": occurrence.date.isoformat(),
+            "occurrence_label": occurrence.description,
+            "meta": occurrence.meta,
+        }
+        return Response(payload)
 
 
 class FeaturedPoojaViewSet(viewsets.ModelViewSet):
@@ -196,4 +241,19 @@ class RecentPoojaRegistrationsView(APIView):
             .order_by("-created_at")[:5]
         )
         serializer = LandingPoojaRegistrationSerializer(queryset, many=True)
+        return Response({"count": len(serializer.data), "results": serializer.data})
+
+
+class TodayPoojaRegistrationsPublicView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def get(self, request):
+        today = timezone.localdate()
+        queryset = (
+            PoojaRegistration.objects.select_related("pooja_option", "day_option", "donor")
+            .prefetch_related("members")
+            .filter(start_date=today)
+            .order_by("-created_at")
+        )
+        serializer = PublicTodayPoojaRegistrationSerializer(queryset, many=True)
         return Response({"count": len(serializer.data), "results": serializer.data})

@@ -12,12 +12,13 @@ import PoojaCartPage from '../pages/PoojaCartPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
-import DonorPoojaRegistrationsPage from '../pages/admin/DonorPoojaRegistrationsPage';
+import PoojaDetailsPage from '../pages/admin/PoojaDetailsPage';
 import LandingPage from '../pages/LandingPage';
 import Gallery from '../pages/Gallery';
 import Events from '../pages/Events';
 import Projects from '../pages/Projects';
 import About from '../pages/About';
+import DonorProfile from '../pages/DonorProfile';
 import { useAuthStore } from '../store/auth';
 
 const HomeRoute = () => {
@@ -59,6 +60,7 @@ const App = () => (
     <Route element={<ProtectedRoute />}>
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/profile" element={<DonorProfile />} />
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
         <Route path="/pooja/cart" element={<PoojaCartPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
@@ -69,7 +71,8 @@ const App = () => (
       <Route element={<AppLayout />}>
         <Route path="/admin/master" element={<AdminMasterPage />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
-        <Route path="/admin/donor-pooja-registrations" element={<DonorPoojaRegistrationsPage />} />
+        <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
+        <Route path="/admin/donor-pooja-registrations" element={<Navigate to="/admin/donors" replace />} />
       </Route>
     </Route>
 

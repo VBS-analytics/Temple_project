@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -125,6 +125,7 @@ class DonorProfile(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     family_name = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True)
+    donor_number = models.PositiveIntegerField(unique=True, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -134,6 +135,25 @@ class DonorProfile(models.Model):
 
     def __str__(self) -> str:
         return f"Profile for {self.user}"
+
+    @property
+    def donor_id(self) -> str | None:
+        if self.donor_number is None:
+            return None
+        return f"D{self.donor_number}"
+
+    def save(self, *args, **kwargs):
+        if self.donor_number is None:
+            with transaction.atomic():
+                if self.donor_number is None:
+                    last_number = (
+                        self.__class__.objects.select_for_update()
+                        .order_by("-donor_number")
+                        .values_list("donor_number", flat=True)
+                        .first()
+                    )
+                    self.donor_number = (last_number or 0) + 1
+        super().save(*args, **kwargs)
 
 
 class FamilyMember(models.Model):
@@ -148,6 +168,7 @@ class FamilyMember(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     tamil_star = models.CharField(max_length=128, blank=True)
     gothra = models.CharField(max_length=128, blank=True)
+    family_name = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
