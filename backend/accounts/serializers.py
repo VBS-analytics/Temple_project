@@ -47,6 +47,14 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             "family_name",
         )
         read_only_fields = ("id",)
+        extra_kwargs = {
+            "gender": {"required": False, "allow_blank": True},
+            "relationship": {"required": False, "allow_blank": True},
+            "date_of_birth": {"required": False, "allow_null": True},
+            "tamil_star": {"required": False, "allow_blank": True},
+            "gothra": {"required": False, "allow_blank": True},
+            "family_name": {"required": False, "allow_blank": True},
+        }
 
     def create(self, validated_data):
         user = validated_data.pop("user")

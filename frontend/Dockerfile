@@ -1,17 +1,34 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json* pnpm-lock.yaml* bun.lockb* ./
 
-RUN if [ -f package-lock.json ]; then npm ci && npm install pdfmake@latest; \
-    elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install && pnpm add pdfmake@latest; \
-    elif [ -f bun.lockb ]; then npm install -g bun && bun install && bun add pdfmake@latest; \
-    else npm install && npm install pdfmake@latest; \
+RUN if [ -f package-lock.json ]; then npm ci; \
+    elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install; \
+    elif [ -f bun.lockb ]; then npm install -g bun && bun install; \
+    else npm install; \
     fi
 
 COPY . .
 
-EXPOSE 5173
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+RUN npm run build
+
+
+FROM nginx:1.25-alpine
+
+WORKDIR /usr/share/nginx/html
+
+RUN rm /etc/nginx/conf.d/default.conf
+
+COPY --from=builder /app/dist ./
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+RUN mkdir -p /var/www/static /var/www/media
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

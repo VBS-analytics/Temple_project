@@ -1,5 +1,4 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
 import { useAuthStore } from '../store/auth';
@@ -83,7 +82,7 @@ function SearchableSelect({
             }
           }}
           placeholder={placeholder}
-          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm transition-all"
           aria-autocomplete="list"
           aria-expanded={open}
           role="combobox"
@@ -91,7 +90,7 @@ function SearchableSelect({
         {value && (
           <button
             type="button"
-            className="text-slate-400 hover:text-slate-600 text-sm"
+            className="text-gray-400 hover:text-gray-600 text-sm transition-colors"
             onClick={() => {
               onChange('');
               setQuery('');
@@ -104,7 +103,7 @@ function SearchableSelect({
         )}
         <button
           type="button"
-          className="text-slate-400 hover:text-slate-600 text-xs"
+          className="text-gray-400 hover:text-gray-600 text-xs transition-colors"
           onClick={() => setOpen((o) => !o)}
           aria-label="Toggle options"
         >
@@ -114,12 +113,12 @@ function SearchableSelect({
 
       {open && (
         <div
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-lg"
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
           role="listbox"
           onMouseLeave={() => setActiveIndex(-1)}
         >
           {filtered.length === 0 && (
-            <div className="px-3 py-2 text-sm text-slate-500">No matches</div>
+            <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
           )}
           {filtered.map((opt, idx) => {
             const active = idx === activeIndex;
@@ -130,9 +129,9 @@ function SearchableSelect({
                 type="button"
                 role="option"
                 aria-selected={isSelected}
-                className={`block w-full px-3 py-2 text-left text-sm ${
-                  active ? 'bg-slate-100' : ''
-                } ${isSelected ? 'font-medium text-slate-900' : 'text-slate-700'}`}
+                className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
+                  active ? 'bg-blue-50' : ''
+                } ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`}
                 onMouseEnter={() => setActiveIndex(idx)}
                 onMouseDown={(e) => e.preventDefault()} // keep focus on input
                 onClick={() => commit(opt)}
@@ -196,27 +195,27 @@ function MemberMultiSelect({
     <div className="relative w-full min-w-[13rem] max-w-sm" ref={containerRef}>
       <button
         type="button"
-        className="flex w-full items-center justify-between rounded-md border border-slate-300 px-3 py-1.5 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-100"
+        className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50 shadow-sm"
         onClick={() => !disabled && setOpen((prev) => !prev)}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className="truncate">{label}</span>
-        <span className="ml-2 text-slate-400">▾</span>
+        <span className="ml-2 text-gray-400">▾</span>
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+        <div className="absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
           <ul className="max-h-60 overflow-auto py-1 text-sm">
             {options.map((option) => {
               const checked = selectedValues.includes(option.value);
               return (
                 <li key={option.value}>
-                  <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-slate-700 hover:bg-slate-50">
+                  <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors">
                     <span>{option.label}</span>
                     <input
                       type="checkbox"
-                      className="h-4 w-4"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 rounded"
                       checked={checked}
                       onChange={() => onToggleValue(option.value)}
                     />
@@ -275,6 +274,7 @@ interface ProfileMember {
   date_of_birth?: string | null;
   tamil_star?: string;
   gothra?: string;
+  family_name?: string | null;
 }
 
 interface ProfileDetails {
@@ -287,6 +287,7 @@ interface ProfileDetails {
   tamil_star?: string;
   gothra?: string;
   date_of_birth?: string | null;
+  family_name?: string | null;
 }
 
 interface ProfilePayload {
@@ -498,6 +499,18 @@ const buildOccurrenceKey = (dayOptionId: number | null, tamilStarId: string | nu
   if (!dayOptionId) return 'none';
   const starPart = tamilStarId ? tamilStarId : 'na';
   return `${dayOptionId}:${starPart}`;
+};
+
+const getOccurrenceMessage = (state?: DayOccurrenceState): string | undefined => {
+  if (!state) return undefined;
+  switch (state.status) {
+    case 'error':
+    case 'manual':
+    case 'needsStar':
+      return state.message;
+    default:
+      return undefined;
+  }
 };
 
 /* -------------------------------------------------------------------------- */
@@ -1557,8 +1570,8 @@ const PoojaRegistrationPage = () => {
       const fallbackMessage =
         occurrenceState?.status === 'loading'
           ? 'Fetching the next occurrence. Please try again in a moment.'
-          : occurrenceState?.message ||
-            'Select a day option and wait for the next occurrence before adding this pooja to the cart.';
+          : (getOccurrenceMessage(occurrenceState) ??
+            'Select a day option and wait for the next occurrence before adding this pooja to the cart.');
       setTableMessage({ status: 'error', text: fallbackMessage });
       return;
     }
@@ -1757,488 +1770,535 @@ const PoojaRegistrationPage = () => {
   const modalChartDetails = selectedPooja ? chartDetailsMap[selectedPooja.id] ?? { date: '', note: '' } : { date: '', note: '' };
 
   return (
-    <div className="space-y-30">
-      <section className="mx-auto w-full max-w-[1680px] space-y-4 rounded-2xl border border-slate-200 bg-white px-10 py-6 shadow-sm">
-        <header className="space-y-1">
-          <h2 className="text-lg font-semibold text-slate-800">Pooja Registrations</h2>
-          <p className="text-sm text-slate-600">
-            Browse the complete pooja catalogue and pick a suitable day option before adding it to your cart.
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Pooja Registration</h1>
+          <p className="text-lg text-gray-700 max-w-3xl mx-auto">
+            Browse our complete pooja catalogue and select your preferred options to book a pooja ceremony
           </p>
-          <p className="text-sm text-slate-600">
-            Day Option - You can choose your own date, based on your Stars <br></br>
-              <span className="inline-block mt-1 rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
-                நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
-              </span>
-          </p>
-        </header>
+        </div>
 
-        {isLoading && (
-          <div className="flex flex-col gap-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="h-12 animate-pulse rounded-lg bg-slate-100" />
-            ))}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8 border border-gray-200">
+          <div className="p-6 border-b border-gray-200 bg-gray-50">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Available Poojas</h2>
+                <p className="text-gray-700 mt-1">
+                  Select a pooja, choose your preferred day option, and add to cart
+                </p>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-blue-900 text-sm font-medium">
+                  நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
+                </p>
+              </div>
+            </div>
           </div>
-        )}
 
-        {!isLoading && masterRows.length === 0 && (
-          <p className="rounded-lg bg-slate-100 p-4 text-sm text-slate-600">No pooja master entries found.</p>
-        )}
+          <div className="p-6">
+            {isLoading && (
+              <div className="flex flex-col gap-4">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            )}
 
-        {!isLoading && masterRows.length > 0 && (
-          <div className="rounded-xl border border-slate-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-[1200px] w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <tr>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Code</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Pooja Name</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Day Option</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Add Member - Devotee</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Next Occurrence</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Pooja Amount</th>
-                  <th scope="col" className="px-2 py-2 text-center sm:px-3">Post Prasadam for this day</th>
-                  <th scope="col" className="px-2 py-2 text-center sm:px-3">Add to Cart</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Pooja Register by</th>
-                  <th scope="col" className="px-2 py-2 text-left sm:px-3">Registration Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {masterRows.map((row) => {
-                  const selectedDayId = resolveSelectedDayId(row.pooja.id);
-                  const matchingItem = findMatchingCartItem(row, selectedDayId);
-                  const inCart = Boolean(matchingItem);
-                  const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
-                  const requiresChartDetails = isChartDayOption(selectedDayOption);
-                  const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
-                  const occurrenceState = dayOccurrenceMap[row.pooja.id];
-                  const iconLabel = inCart
-                    ? `Remove ${row.uiLabel} from cart`
-                    : `Add ${row.uiLabel} to cart`;
-                  const iconClasses = inCart
-                    ? 'inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
-                    : 'inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300';
-                  const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
-                  const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
-                  const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
-                  return (
-                    <tr key={row.pooja.id} className="hover:bg-slate-50">
-                      <td className="whitespace-nowrap px-2 py-2 font-medium text-slate-700 sm:px-3">{row.code}</td>
-                      <td className="px-2 py-2 sm:px-3">
-                        <p className="whitespace-nowrap font-medium text-slate-800">{row.uiLabel}</p>
-                      </td>
-                      <td className="px-2 py-2 sm:px-3">
-                        {dayOptionChoices.length > 0 ? (
-                          <div className="space-y-2">
-                            <SearchableSelect
-                              options={dayOptionChoices.map((option) => ({
-                                value: String(option.id),
-                                label: formatDayOptionLabel(option),
-                              }))}
-                              value={selectedDayId !== null ? String(selectedDayId) : ''}
-                              onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
-                              placeholder="Select day option"
-                              className="w-full min-w-[15rem] max-w-lg"
-                            />
-                            {selectedDayOption?.code === 'CS' && (
-                              <div className="mt-2">
+            {!isLoading && error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                <p className="text-red-700">{error}</p>
+              </div>
+            )}
+
+            {!isLoading && !error && masterRows.length === 0 && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                <p className="text-gray-700">No pooja options available at the moment.</p>
+              </div>
+            )}
+
+            {!isLoading && !error && masterRows.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="min-w-[1800px] w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-32">
+                        Code
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-96">
+                        Pooja Name
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[500px]">
+                        Day Option
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-64">
+                        Devotees
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-48">
+                        Next Occurrence
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                        Amount
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                        Prasadam
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                        Add to Cart
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-48">
+                        Registered By
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                        Registration Date
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {masterRows.map((row) => {
+                      const selectedDayId = resolveSelectedDayId(row.pooja.id);
+                      const matchingItem = findMatchingCartItem(row, selectedDayId);
+                      const inCart = Boolean(matchingItem);
+                      const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
+                      const requiresChartDetails = isChartDayOption(selectedDayOption);
+                      const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
+                      const occurrenceState = dayOccurrenceMap[row.pooja.id];
+                      const iconLabel = inCart
+                        ? `Remove ${row.uiLabel} from cart`
+                        : `Add ${row.uiLabel} to cart`;
+                      const iconClasses = inCart
+                        ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
+                        : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-green-600 text-white shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300';
+                      const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+                      const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
+                      const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
+                      
+                      return (
+                        <tr key={row.pooja.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {row.code}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            {row.uiLabel}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {dayOptionChoices.length > 0 ? (
+                              <div className="space-y-3">
                                 <SearchableSelect
-                                  options={tamilStarOptions.map((option) => ({
+                                  options={dayOptionChoices.map((option) => ({
                                     value: String(option.id),
                                     label: formatDayOptionLabel(option),
                                   }))}
-                                  value={tamilStarSelectionMap[row.pooja.id] || ''}
-                                  onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
-                                  placeholder="Select your star"
-                                  className="w-full max-w-xs"
+                                  value={selectedDayId !== null ? String(selectedDayId) : ''}
+                                  onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
+                                  placeholder="Select day option"
+                                  className="w-full max-w-md"
                                 />
+                                {selectedDayOption?.code === 'CS' && (
+                                  <div className="mt-2">
+                                    <SearchableSelect
+                                      options={tamilStarOptions.map((option) => ({
+                                        value: String(option.id),
+                                        label: formatDayOptionLabel(option),
+                                      }))}
+                                      value={tamilStarSelectionMap[row.pooja.id] || ''}
+                                      onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
+                                      placeholder="Select your star"
+                                      className="w-full max-w-md"
+                                    />
+                                  </div>
+                                )}
+                                {requiresChartDetails && (
+                                  <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 mt-2">
+                                    <div className="space-y-1">
+                                      <label className="block text-xs font-medium text-gray-700">
+                                        Preferred Date
+                                      </label>
+                                      <input
+                                        type="date"
+                                        min={new Date().toISOString().split('T')[0]}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                        value={chartDetails.date}
+                                        onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="block text-xs font-medium text-gray-700">
+                                        Donor Instructions
+                                      </label>
+                                      <textarea
+                                        rows={2}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                        value={chartDetails.note}
+                                        onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
+                                        placeholder="Add donor instructions"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            ) : (
+                              <span className="text-xs text-gray-500">Not configured</span>
                             )}
-                            {requiresChartDetails && (
-                              <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                                <div className="space-y-1">
-                                  <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                                    Preferred Date
-                                  </label>
-                                  <input
-                                    type="date"
-                                    min={new Date().toISOString().split('T')[0]}
-                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                    value={chartDetails.date}
-                                    onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                                    Donor Instructions
-                                  </label>
-                                  <textarea
-                                    rows={2}
-                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                    value={chartDetails.note}
-                                    onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
-                                    placeholder="Add donor instructions"
-                                  />
-                                </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <MemberMultiSelect
+                              label={memberButtonLabel}
+                              options={memberOptions}
+                              selectedValues={resolvedMemberKeys.length > 0 ? resolvedMemberKeys : ['self']}
+                              onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
+                              disabled={memberOptions.length === 0}
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {selectedDayId === null ? (
+                              <span className="text-xs text-gray-500">Select a day option</span>
+                            ) : !occurrenceState ? (
+                              <span className="text-xs text-gray-500">Select a day option</span>
+                            ) : occurrenceState.status === 'loading' ? (
+                              <span className="text-xs text-gray-600">Fetching date…</span>
+                            ) : occurrenceState.status === 'ready' ? (
+                              <div className="space-y-1">
+                                <span className="font-medium text-gray-900">
+                                  {formatDisplayDate(occurrenceState.date)}
+                                </span>
+                                {occurrenceState.label && (
+                                  <span className="block text-xs text-gray-600">{occurrenceState.label}</span>
+                                )}
+                                {occurrenceState.note && (
+                                  <span className="block text-xs text-gray-500">{occurrenceState.note}</span>
+                                )}
                               </div>
+                            ) : occurrenceState.status === 'manual' ||
+                              occurrenceState.status === 'needsStar' ||
+                              occurrenceState.status === 'error' ? (
+                              <span className="text-xs text-gray-600">
+                                {occurrenceState.message}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-500">Select a day option</span>
                             )}
-                          </div>
-                        ) : (
-                          <span className="text-xs uppercase text-slate-400">Not configured</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-2 sm:px-3">
-                        <MemberMultiSelect
-                          label={memberButtonLabel}
-                          options={memberOptions}
-                          selectedValues={resolvedMemberKeys.length > 0 ? resolvedMemberKeys : ['self']}
-                          onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
-                          disabled={memberOptions.length === 0}
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-sm text-slate-700 sm:px-3">
-                        {selectedDayId === null ? (
-                          <span className="text-xs text-slate-400">Select a day option</span>
-                        ) : !occurrenceState ? (
-                          <span className="text-xs text-slate-400">Select a day option</span>
-                        ) : occurrenceState.status === 'loading' ? (
-                          <span className="text-xs text-slate-500">Fetching date…</span>
-                        ) : occurrenceState.status === 'ready' ? (
-                          <div className="space-y-0.5">
-                            <span className="font-medium text-slate-800">
-                              {formatDisplayDate(occurrenceState.date)}
-                            </span>
-                            {occurrenceState.label && (
-                              <span className="block text-xs text-slate-500">{occurrenceState.label}</span>
-                            )}
-                            {occurrenceState.note && (
-                              <span className="block text-xs text-slate-400">{occurrenceState.note}</span>
-                            )}
-                          </div>
-                        ) : occurrenceState.status === 'manual' ||
-                          occurrenceState.status === 'needsStar' ||
-                          occurrenceState.status === 'error' ? (
-                          <span className="text-xs text-slate-500">
-                            {occurrenceState.message}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">Select a day option</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-slate-700 sm:px-3">{row.rateLabel}</td>
-                      <td className="px-2 py-2 text-center sm:px-3">
-                        <div className="inline-flex items-center gap-4 text-xs text-slate-600">
-                          <label className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4"
-                              checked={postPrasadamSelected === true}
-                              onChange={() => {
-                                setPrasadamSelectionMap((prev) => ({
-                                  ...prev,
-                                  [row.pooja.id]: true,
-                                }));
-                                setTableMessage(null);
-                              }}
-                              aria-label={`Select Yes for post prasadam for ${row.uiLabel}`}
-                            />
-                            <span>Yes</span>
-                          </label>
-
-                          <label className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4"
-                              checked={postPrasadamSelected === false}
-                              onChange={() => {
-                                setPrasadamSelectionMap((prev) => ({
-                                  ...prev,
-                                  [row.pooja.id]: false,
-                                }));
-                                setTableMessage(null);
-                              }}
-                              aria-label={`Select No for post prasadam for ${row.uiLabel}`}
-                            />
-                            <span>No</span>
-                          </label>
-                        </div>
-                      </td>
-
-                      <td className="px-2 py-2 text-center sm:px-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleCartItem(row)}
-                          className={iconClasses}
-                          aria-label={iconLabel}
-                        >
-                          {inCart ? <CartRemoveIcon className="h-4 w-4" /> : <CartAddIcon className="h-4 w-4" />}
-                        </button>
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-slate-700 sm:px-3">
-                        {user?.name?.trim() || user?.phone_number || '--'}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-slate-700 sm:px-3">
-                        {registrationDateLabel}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-        {tableMessage && (
-          <p
-            className={`text-sm ${
-              tableMessage.status === 'error' ? 'text-red-600' : 'text-emerald-600'
-            }`}
-          >
-            {tableMessage.text}
-          </p>
-        )}
-      </section>
-
-      {selectedPooja && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 px-4 py-8">
-          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
-            <button
-              type="button"
-              onClick={handleCloseModal}
-              className="absolute right-4 top-4 text-slate-400 transition hover:text-slate-600"
-              aria-label="Close booking form"
-            >
-              ×
-            </button>
-            <header className="space-y-1 pb-4 text-center">
-              <h3 className="text-xl font-semibold text-slate-900">
-                Book {selectedPooja.displayName ?? selectedPooja.name}
-              </h3>
-              {selectedPooja.code && (
-                <p className="text-xs uppercase tracking-wide text-slate-500">Code: {selectedPooja.code}</p>
-              )}
-              {selectedPooja.amountLabel && (
-                <p className="text-sm font-medium text-emerald-700">Offering: {selectedPooja.amountLabel}</p>
-              )}
-            </header>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              {memberOptions.length > 0 && (
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Select Devotees</label>
-                  <div className="space-y-2">
-                    {memberOptions.map((option) => {
-                      const checked = selectedMemberIds.includes(option.value);
-                      return (
-                        <label
-                          key={option.value}
-                          className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${checked ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 bg-white text-slate-700 hover:border-brand-300'}`}
-                        >
-                          <span>{option.label}</span>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => toggleMemberSelection(option.value)}
-                          />
-                        </label>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {row.rateLabel}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            <div className="flex items-center justify-center space-x-4">
+                              <label className="inline-flex items-center">
+                                <input
+                                  type="radio"
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                  checked={postPrasadamSelected === true}
+                                  onChange={() => {
+                                    setPrasadamSelectionMap((prev) => ({
+                                      ...prev,
+                                      [row.pooja.id]: true,
+                                    }));
+                                    setTableMessage(null);
+                                  }}
+                                />
+                                <span className="ml-2 text-gray-700">Yes</span>
+                              </label>
+                              <label className="inline-flex items-center">
+                                <input
+                                  type="radio"
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                  checked={postPrasadamSelected === false}
+                                  onChange={() => {
+                                    setPrasadamSelectionMap((prev) => ({
+                                      ...prev,
+                                      [row.pooja.id]: false,
+                                    }));
+                                    setTableMessage(null);
+                                  }}
+                                />
+                                <span className="ml-2 text-gray-700">No</span>
+                              </label>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            <button
+                              type="button"
+                              onClick={() => toggleCartItem(row)}
+                              className={iconClasses}
+                              aria-label={iconLabel}
+                            >
+                              {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                            {user?.name?.trim() || user?.phone_number || '--'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                            {registrationDateLabel}
+                          </td>
+                        </tr>
                       );
                     })}
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">Tap to toggle devotees. At least one devotee must remain selected.</p>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-              {selectedMemberEntries.length > 0 && (
-                <div className="space-y-2 rounded-lg bg-slate-100 p-3 text-xs text-slate-600">
-                  {selectedMemberEntries.map((member, index) => {
-                    const roleLabel = index === 0 ? 'Primary' : 'Devotee';
-                    const relationshipLabel = member.relationship ? ` (${member.relationship})` : '';
-                    const donorSuffix =
-                      member.source === 'donor_member' && member.donorName
-                        ? ` — ${member.donorName}`
-                        : member.source === 'donor' && member.donorName
-                          ? ` — ${member.donorName}`
-                          : '';
-                    return (
-                      <div
-                        key={member.key}
-                        className="space-y-1 border-t border-slate-200 pt-2 first:border-t-0 first:pt-0"
-                      >
-                        <p>
-                          <span className="font-semibold text-slate-700">{roleLabel}:</span>{' '}
-                          {member.name}
-                          {relationshipLabel}
-                          {donorSuffix}
-                        </p>
-                        {member.donorPhone && (
-                          <p>
-                            <span className="font-semibold text-slate-700">Contact:</span> {member.donorPhone}
-                          </p>
-                        )}
-                        {member.gender && (
-                          <p>
-                            <span className="font-semibold text-slate-700">Gender:</span> {member.gender}
-                          </p>
-                        )}
-                        {member.dob && (
-                          <p>
-                            <span className="font-semibold text-slate-700">Birth date:</span>{' '}
-                            {formatDisplayDate(member.dob)}
-                          </p>
-                        )}
-                        {member.tamilStar && (
-                          <p>
-                            <span className="font-semibold text-slate-700">Tamil star:</span> {member.tamilStar}
-                          </p>
-                        )}
-                        {member.gothra && (
-                          <p>
-                            <span className="font-semibold text-slate-700">Gothra:</span> {member.gothra}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+            {tableMessage && (
+              <div className={`mt-4 p-3 rounded-lg text-center ${tableMessage.status === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                {tableMessage.text}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-              {bookingMode === 'full' && dayOptionChoices.length > 0 && (
+      {/* Booking Modal */}
+      {selectedPooja && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Day Option</label>
-                  <SearchableSelect
-                    options={dayOptionChoices.map((option) => ({
-                      value: String(option.id),
-                      label: formatDayOptionLabel(option),
-                    }))}
-                    value={selectedDayOptionId ? String(selectedDayOptionId) : ''}
-                    onChange={(val) => {
-                      const valueNum = val ? Number(val) : null;
-                      if (selectedPooja) {
-                        handleDaySelectionChange(selectedPooja.id, val);
-                      }
-                      setSelectedDayOptionId(valueNum);
-                      setFormError('');
-                    }}
-                    placeholder="Select day option"
-                    className="w-72"
-                  />
-                  {modalRequiresChartDetails && (
-                    <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Preferred Date
-                        </label>
-                        <input
-                          type="date"
-                          min={new Date().toISOString().split('T')[0]}
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                          value={modalChartDetails.date}
-                          onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Donor Instructions
-                        </label>
-                        <textarea
-                          rows={3}
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                          value={modalChartDetails.note}
-                          onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
-                          placeholder="Add donor instructions"
-                        />
-                      </div>
-                    </div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Book {selectedPooja.displayName ?? selectedPooja.name}
+                  </h3>
+                  {selectedPooja.code && (
+                    <p className="text-sm text-gray-600 mt-1">Code: {selectedPooja.code}</p>
+                  )}
+                  {selectedPooja.amountLabel && (
+                    <p className="text-gray-700 font-medium mt-1">Offering: {selectedPooja.amountLabel}</p>
                   )}
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                  aria-label="Close booking form"
+                >
+                  ×
+                </button>
+              </div>
 
-              {bookingMode === 'full' && (
-                <div className="inline-flex items-center gap-6 text-sm text-slate-700">
-                  <span>Post Prasadam for this day</span>
-
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === true}
-                      onChange={() =>
-                        setPrasadamSelectionMap((prev) => ({
-                          ...prev,
-                          [selectedPooja.id]: true,
-                        }))
-                      }
-                    />
-                    <span>Yes</span>
-                  </label>
-
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === false}
-                      onChange={() =>
-                        setPrasadamSelectionMap((prev) => ({
-                          ...prev,
-                          [selectedPooja.id]: false,
-                        }))
-                      }
-                    />
-                    <span>No</span>
-                  </label>
-                </div>
-              )}
-
-              {bookingMode === 'full' && (
-                <>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {memberOptions.length > 0 && (
                   <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Mobile Number</label>
-                    <input
-                      name="phoneNumber"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                      value={contactDetails.phoneNumber}
-                      onChange={(event) => setContactDetails((prev) => ({ ...prev, phoneNumber: event.target.value }))}
-                      placeholder="91XXXXXXXXXX"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Devotees
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                      {memberOptions.map((option) => {
+                        const checked = selectedMemberIds.includes(option.value);
+                        return (
+                          <label
+                            key={option.value}
+                            className={`flex items-center p-3 rounded-lg border cursor-pointer transition ${
+                              checked
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 rounded"
+                              checked={checked}
+                              onChange={() => toggleMemberSelection(option.value)}
+                            />
+                            <span className="ml-3 text-sm text-gray-900">{option.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
+                )}
+
+                {selectedMemberEntries.length > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Devotees</h4>
+                    <div className="space-y-3">
+                      {selectedMemberEntries.map((member, index) => {
+                        const roleLabel = index === 0 ? 'Primary' : 'Devotee';
+                        const relationshipLabel = member.relationship ? ` (${member.relationship})` : '';
+                        const donorSuffix =
+                          member.source === 'donor_member' && member.donorName
+                            ? ` — ${member.donorName}`
+                            : member.source === 'donor' && member.donorName
+                              ? ` — ${member.donorName}`
+                              : '';
+                        return (
+                          <div key={member.key} className="text-sm">
+                            <p className="font-medium text-gray-900">
+                              {roleLabel}: {member.name}
+                              {relationshipLabel}
+                              {donorSuffix}
+                            </p>
+                            <div className="mt-1 grid grid-cols-2 gap-1 text-xs text-gray-700">
+                              {member.donorPhone && (
+                                <p>Contact: {member.donorPhone}</p>
+                              )}
+                              {member.gender && <p>Gender: {member.gender}</p>}
+                              {member.dob && (
+                                <p>Birth: {formatDisplayDate(member.dob)}</p>
+                              )}
+                              {member.tamilStar && <p>Star: {member.tamilStar}</p>}
+                              {member.gothra && <p>Gothra: {member.gothra}</p>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {bookingMode === 'full' && dayOptionChoices.length > 0 && (
                   <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Address</label>
-                    <textarea
-                      name="address"
-                      rows={3}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                      value={contactDetails.address}
-                      onChange={(event) => setContactDetails((prev) => ({ ...prev, address: event.target.value }))}
-                      placeholder="Address for correspondence"
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Day Option
+                    </label>
+                    <SearchableSelect
+                      options={dayOptionChoices.map((option) => ({
+                        value: String(option.id),
+                        label: formatDayOptionLabel(option),
+                      }))}
+                      value={selectedDayOptionId ? String(selectedDayOptionId) : ''}
+                      onChange={(val) => {
+                        const valueNum = val ? Number(val) : null;
+                        if (selectedPooja) {
+                          handleDaySelectionChange(selectedPooja.id, val);
+                        }
+                        setSelectedDayOptionId(valueNum);
+                        setFormError('');
+                      }}
+                      placeholder="Select day option"
+                      className="w-full"
                     />
+                    {modalRequiresChartDetails && (
+                      <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Preferred Date
+                          </label>
+                          <input
+                            type="date"
+                            min={new Date().toISOString().split('T')[0]}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                            value={modalChartDetails.date}
+                            onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Donor Instructions
+                          </label>
+                          <textarea
+                            rows={3}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                            value={modalChartDetails.note}
+                            onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
+                            placeholder="Add donor instructions"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
+                )}
+
+                {bookingMode === 'full' && (
                   <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Booking Date</label>
-                    <input
-                      name="bookingDate"
-                      type="date"
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                      value={dateValue}
-                      onChange={(event) => setDateValue(event.target.value)}
-                      required
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Post Prasadam for this day
+                    </label>
+                    <div className="flex space-x-6">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === true}
+                          onChange={() =>
+                            setPrasadamSelectionMap((prev) => ({
+                              ...prev,
+                              [selectedPooja.id]: true,
+                            }))
+                          }
+                        />
+                        <span className="ml-2 text-gray-900">Yes</span>
+                      </label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === false}
+                          onChange={() =>
+                            setPrasadamSelectionMap((prev) => ({
+                              ...prev,
+                              [selectedPooja.id]: false,
+                            }))
+                          }
+                        />
+                        <span className="ml-2 text-gray-900">No</span>
+                      </label>
+                    </div>
                   </div>
-                </>
-              )}
-              {formError && bookingMode === 'full' && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{formError}</p>
-              )}
-              <button
-                type="submit"
-                className="w-full rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-              >
-                {bookingMode === 'memberOnly'
-                  ? 'Save selection'
-                  : selectedPooja.amount
+                )}
+
+                {bookingMode === 'full' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mobile Number
+                      </label>
+                      <input
+                        name="phoneNumber"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={contactDetails.phoneNumber}
+                        onChange={(event) => setContactDetails((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+                        placeholder="91XXXXXXXXXX"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Address
+                      </label>
+                      <textarea
+                        name="address"
+                        rows={3}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={contactDetails.address}
+                        onChange={(event) => setContactDetails((prev) => ({ ...prev, address: event.target.value }))}
+                        placeholder="Address for correspondence"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Booking Date
+                      </label>
+                      <input
+                        name="bookingDate"
+                        type="date"
+                        min={new Date().toISOString().split('T')[0]}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={dateValue}
+                        onChange={(event) => setDateValue(event.target.value)}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {formError && bookingMode === 'full' && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                    {formError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  {bookingMode === 'memberOnly'
+                    ? 'Save selection'
+                    : selectedPooja.amount
                       ? `Pay ₹${formatCurrency(selectedPooja.amount)}`
                       : 'Add to cart'}
-              </button>
-            </form>
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

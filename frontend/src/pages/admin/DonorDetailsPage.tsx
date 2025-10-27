@@ -68,7 +68,6 @@ interface RegistrationRecord {
   post_prasadam?: boolean;
   additional_notes?: string | null;
   total_amount?: string | null;
-  status?: 'pending' | 'confirmed' | 'completed';
   members?: RegistrationMember[];
 }
 
@@ -122,6 +121,8 @@ const formatCurrency = (value?: string | null) => {
 };
 
 const normalizePhone = (value?: string | null) => (value ? value.replace(/\D/g, '') : '');
+
+const formatNumber = (value: number) => value.toLocaleString('en-IN');
 
 const extractRegistrationResults = (payload: any): RegistrationRecord[] => {
   if (Array.isArray(payload)) {
@@ -585,73 +586,291 @@ const DonorDetailsPage = () => {
     });
   };
 
+  const totals = useMemo(() => {
+    const totalRegistrations = registrationGroups.reduce(
+      (count, group) => count + group.registrations.length,
+      0,
+    );
+    const donorsWithRegistrations = registrationGroups.reduce(
+      (count, group) => count + (group.registrations.length > 0 ? 1 : 0),
+      0,
+    );
+    const totalFamilyMembers = donors.reduce(
+      (count, donor) => count + (Array.isArray(donor.members) ? donor.members.length : 0),
+      0,
+    );
+
+    const locationCounts = new Map<string, number>();
+    donors.forEach(({ profile }) => {
+      const locationParts = [profile.city, profile.state].filter(Boolean);
+      const locationLabel = locationParts.join(', ') || 'Not provided';
+      locationCounts.set(locationLabel, (locationCounts.get(locationLabel) ?? 0) + 1);
+    });
+
+    const topLocations = Array.from(locationCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, count]) => ({ label, count }));
+
+    return {
+      totalRegistrations,
+      donorsWithRegistrations,
+      totalFamilyMembers,
+      topLocations,
+    };
+  }, [donors, registrationGroups]);
+
+  const { totalRegistrations, donorsWithRegistrations, totalFamilyMembers, topLocations } = totals;
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: 'Registered Donors',
+        value: formatNumber(donors.length),
+        helper:
+          donorsWithRegistrations > 0
+            ? `${formatNumber(donorsWithRegistrations)} donors with pooja activity`
+            : 'Awaiting first pooja registration',
+        icon: (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-7 w-7 text-brand-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 19a3 3 0 10-6 0m9-11a3 3 0 11-6 0m0 0a3 3 0 11-6 0m6 0v2m0 10v-2m0-8v-2"
+            />
+          </svg>
+        ),
+      },
+      {
+        label: 'Family Members',
+        value: formatNumber(totalFamilyMembers),
+        helper:
+          donors.length > 0
+            ? `${formatNumber(Math.round((totalFamilyMembers || 0) / Math.max(donors.length, 1)))} avg per donor`
+            : 'No donor records yet',
+        icon: (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-7 w-7 text-violet-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM18.75 8.25A2.25 2.25 0 1119 3.75a2.25 2.25 0 01-.25 4.5zM19.5 21a6 6 0 00-12 0m14.25-.75a3.75 3.75 0 00-6.754-2.41"
+            />
+          </svg>
+        ),
+      },
+      {
+        label: 'Pooja Registrations',
+        value: formatNumber(totalRegistrations),
+        helper:
+          totalRegistrations > 0
+            ? `${formatNumber(Math.round(totalRegistrations / Math.max(donors.length, 1)))} per donor (avg)`
+            : 'No registrations recorded',
+        icon: (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-7 w-7 text-emerald-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8.25 6.75h12m-12 10.5h12M3 6.75l1.5 1.5L6 6.75m0 10.5l-1.5-1.5L3 17.25"
+            />
+          </svg>
+        ),
+      },
+      {
+        label: 'Admin Added Members',
+        value: formatNumber(adminMembers.length),
+        helper: 'Centralised records created from this dashboard',
+        icon: (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-7 w-7 text-sky-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 4.5v15m7.5-7.5h-15"
+            />
+          </svg>
+        ),
+      },
+    ],
+    [adminMembers.length, donors.length, donorsWithRegistrations, totalFamilyMembers, totalRegistrations],
+  );
+
   if (loading) {
-    return <p>Loading donor details…</p>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full flex flex-col items-center">
+          <div className="w-16 h-16 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin mb-6"></div>
+          <h3 className="text-xl font-semibold text-slate-800 mb-2">Loading Donor Details</h3>
+          <p className="text-slate-600 text-center">Please wait while we fetch the latest information...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <p className="text-red-600">{error}</p>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+          <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-slate-800 text-center mb-2">Error Loading Data</h3>
+          <p className="text-red-600 bg-red-50 rounded-lg p-4 text-center">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-6 w-full py-3 px-4 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition duration-200"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-800">Donor Details</h1>
-            <p className="text-sm text-slate-600">
-              Overview of registered donors, their family members, and pooja registrations.
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search donors..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-64 rounded-md border border-slate-300 pl-10 pr-4 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-              />
-              <svg
-                className="absolute left-3 top-2.5 h-4 w-4 text-slate-400"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMemberFormVisible(!memberFormVisible)}
-              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-            >
-              {memberFormVisible ? 'Cancel' : 'Add member'}
-            </button>
-          </div>
-        </div>
-
-        {memberFormVisible && (
-          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-            <form onSubmit={handleMemberSubmit} className="space-y-4">
-              {memberError && <p className="rounded-md bg-red-100 p-2 text-sm text-red-700">{memberError}</p>}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header Section */}
+        <header className="mb-10">
+          <div className="bg-white rounded-2xl shadow-md p-6 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Donor Management</h1>
+                </div>
+                <p className="text-slate-600 max-w-2xl">
+                  Manage donor profiles, family members, and pooja registrations. View detailed information and track engagement.
+                </p>
+              </div>
               
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search donors..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
+                  />
+                  <svg
+                    className="absolute left-3 top-3.5 h-5 w-5 text-slate-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMemberFormVisible(!memberFormVisible)}
+                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium transition duration-200 ${memberFormVisible ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-brand-600 text-white hover:bg-brand-700 shadow-md hover:shadow-lg'}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  {memberFormVisible ? 'Cancel' : 'Add Member'}
+                </button>
+              </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-8">
+              {summaryCards.map((card, index) => (
+                <div key={card.label} className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition duration-200">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">{card.label}</p>
+                      <p className="text-2xl font-bold text-slate-800">{card.value}</p>
+                      <p className="text-xs text-slate-500 mt-2">{card.helper}</p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${index === 0 ? 'bg-brand-100 text-brand-600' : index === 1 ? 'bg-violet-100 text-violet-600' : index === 2 ? 'bg-emerald-100 text-emerald-600' : 'bg-sky-100 text-sky-600'}`}>
+                      {card.icon}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        {/* Add Member Form */}
+        {memberFormVisible && (
+          <div className="mb-10 bg-white rounded-2xl shadow-md p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-slate-800">Add New Member</h2>
+            </div>
+            
+            <form onSubmit={handleMemberSubmit} className="space-y-6">
+              {memberError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-red-700">{memberError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="member-name">
-                    Name
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-name">
+                    Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="member-name"
                     name="name"
                     type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.name}
                     onChange={handleMemberChange}
                     required
@@ -659,27 +878,27 @@ const DonorDetailsPage = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="member-dob">
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-dob">
                     Date of Birth
                   </label>
                   <input
                     id="member-dob"
                     name="date_of_birth"
                     type="date"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.date_of_birth}
                     onChange={handleMemberChange}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="member-gender">
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-gender">
                     Gender
                   </label>
                   <select
                     id="member-gender"
                     name="gender"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.gender}
                     onChange={handleMemberChange}
                   >
@@ -691,472 +910,689 @@ const DonorDetailsPage = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="member-star">
-                    Star
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-star">
+                    Tamil Star
                   </label>
                   <input
                     id="member-star"
                     name="tamil_star"
                     type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.tamil_star}
                     onChange={handleMemberChange}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="member-gothra">
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-gothra">
                     Gothram
                   </label>
                   <input
                     id="member-gothra"
                     name="gothra"
                     type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.gothra}
                     onChange={handleMemberChange}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="member-family">
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-family">
                     Family Name
                   </label>
                   <input
                     id="member-family"
                     name="family_name"
                     type="text"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.family_name}
                     onChange={handleMemberChange}
                   />
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setMemberFormVisible(false)}
+                  className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
                   disabled={memberSubmitting}
-                  className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                  className="px-5 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {memberSubmitting ? 'Adding member…' : 'Add member'}
+                  {memberSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Adding...
+                    </span>
+                  ) : 'Add Member'}
                 </button>
               </div>
             </form>
           </div>
         )}
-      </header>
 
-      <div className="space-y-4">
-        {!loading && donors.length === 0 && (
-          <p className="text-sm text-slate-500">No donors found.</p>
-        )}
-        {!loading && donors.length > 0 && filteredDonors.length === 0 && (
-          <p className="text-sm text-slate-500">No donors found matching your search.</p>
-        )}
-        {filteredDonors.map((donor) => {
+        {/* Donor List */}
+        <div className="space-y-6">
+          {!loading && donors.length === 0 && (
+            <div className="bg-white rounded-2xl shadow-md p-8 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-slate-800 mb-2">No Donors Found</h3>
+              <p className="text-slate-600 max-w-md mx-auto">There are no donors in the system yet. Add donors to get started.</p>
+            </div>
+          )}
+          
+          {!loading && donors.length > 0 && filteredDonors.length === 0 && (
+            <div className="bg-white rounded-2xl shadow-md p-8 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-slate-800 mb-2">No Matching Donors</h3>
+              <p className="text-slate-600 max-w-md mx-auto">No donors match your search criteria. Try different keywords.</p>
+            </div>
+          )}
+          
+          {filteredDonors.map((donor) => {
             const { user, profile, members } = donor;
             const sectionState = expandedSections[user.id] ?? { members: false, registrations: false };
             const registrationGroup =
               registrationIndex.byId.get(user.id) ||
               registrationIndex.byPhone.get(normalizePhone(user.phone_number)) ||
-            registrationIndex.byName.get(user.name.trim().toLowerCase());
-          const registrations = registrationGroup?.registrations ?? [];
+              registrationIndex.byName.get(user.name.trim().toLowerCase());
+            const registrations = registrationGroup?.registrations ?? [];
 
-          const profileAddress = [profile.address_line1, profile.address_line2, profile.address_line3]
-            .filter(Boolean)
-            .join(', ');
-          const profileLocation = [profile.city, profile.state, profile.postal_code].filter(Boolean).join(', ');
+            const profileAddress = [profile.address_line1, profile.address_line2, profile.address_line3]
+              .filter(Boolean)
+              .join(', ');
+            const profileLocation = [profile.city, profile.state, profile.postal_code].filter(Boolean).join(', ');
+            const memberCount = Array.isArray(members) ? members.length : 0;
+            const locationLabel = profileLocation || 'Location not provided';
+            const hasProfileMeta = Boolean(profile.tamil_star || profile.gothra || profile.family_name);
 
-          return (
-            <section key={user.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <header className="flex flex-wrap justify-between gap-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {profile.donor_id && (
-                      <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-                        {profile.donor_id}
-                      </span>
-                    )}
-                    <h2 className="text-lg font-semibold text-slate-800">
-                      {user.name}
-                      {profile.family_name && (
-                        <span className="ml-2 text-sm font-normal text-slate-600">
-                          (Family Name: {profile.family_name})
-                        </span>
-                      )}
-                    </h2>
-                  </div>
-                  <p className="text-sm text-slate-600">Phone: {user.phone_number}</p>
-                  {user.email && <p className="text-sm text-slate-600">Email: {user.email}</p>}
-                </div>
-                <span className="self-start rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
-                  {registrations.length} registration{registrations.length === 1 ? '' : 's'}
-                </span>
-              </header>
-
-              <div className="mt-4 space-y-4">
-                <div className="rounded-md border border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(user.id, 'members')}
-                    className="flex w-full items-center justify-between gap-2 bg-slate-50 px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    <span>Profile &amp; Family Details</span>
-                    <span className="text-xs text-slate-500">{sectionState.members ? 'Hide' : 'Show'}</span>
-                  </button>
-
-                  {sectionState.members && (
-                    <div className="space-y-3 px-4 py-3 text-sm text-slate-600">
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-slate-200">
-                          <tbody>
-                            <tr className="text-sm text-slate-600">
-                              <td className="whitespace-nowrap px-3 py-2">
-                                <span className="font-medium text-slate-700">DOB:</span>{' '}
-                                {formatDonorDate(profile.date_of_birth)}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-2">
-                                <span className="font-medium text-slate-700">Tamil Star:</span>{' '}
-                                {profile.tamil_star || 'N/A'}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-2">
-                                <span className="font-medium text-slate-700">Gothram:</span>{' '}
-                                {profile.gothra || 'N/A'}
-                              </td>
-                              <td className="px-3 py-2">
-                                <span className="font-medium text-slate-700">Address:</span>{' '}
-                                {profileAddress || 'N/A'}
-                              </td>
-                              <td className="px-3 py-2">
-                                <span className="font-medium text-slate-700">Location:</span>{' '}
-                                {profileLocation || 'N/A'}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+            return (
+              <section
+                key={user.id}
+                className="bg-white rounded-2xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg"
+              >
+                {/* Donor Header */}
+                <header className="p-6 border-b border-slate-100">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
+                        <span className="text-lg font-bold text-brand-700">{user.name.charAt(0)}</span>
                       </div>
-
                       <div>
-                        <h3 className="text-sm font-semibold text-slate-700">Family Members</h3>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          {profile.donor_id && (
+                            <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                              Donor #{profile.donor_id}
+                            </span>
+                          )}
+                          <h2 className="text-xl font-bold text-slate-800">{user.name}</h2>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {profile.family_name && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5l7.5 6-7.5 6-7.5-6z" />
+                              </svg>
+                              Family: {profile.family_name}
+                            </span>
+                          )}
+                          {profile.tamil_star && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l2.09 6.26H20.5l-5.18 3.76 1.98 6.1L12 15.75l-5.3 3.37 1.98-6.1L3.5 9.26h6.41L12 3z" />
+                              </svg>
+                              Star: {profile.tamil_star}
+                            </span>
+                          )}
+                          {profile.gothra && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 19.5l7.5-15 7.5 15M9 19.5h6" />
+                              </svg>
+                              Gothra: {profile.gothra}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+                          <div className="flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8.25l7.5 4.5L18 8.25" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v10.5A2.25 2.25 0 005.25 19.5h13.5A2.25 2.25 0 0021 17.25V6.75z" />
+                            </svg>
+                            {user.email || 'Email not provided'}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 4.5c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V6c0 .621-.504 1.125-1.125 1.125h-.375A12.084 12.084 0 0014.875 18h.375c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125H14.25C7.67 22.5 2.25 17.08 2.25 10.5V4.5z" />
+                            </svg>
+                            {user.phone_number}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.125-7.5 11.25-7.5 11.25S4.5 17.625 4.5 10.5a7.5 7.5 0 1115 0z" />
+                            </svg>
+                            {locationLabel}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <div className="flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12m-12 10.5h12M3 6.75l1.5 1.5L6 6.75m0 10.5l-1.5-1.5L3 17.25" />
+                        </svg>
+                        {registrations.length} registration{registrations.length === 1 ? '' : 's'}
+                      </div>
+                      <div className="flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zm0 0v12" />
+                        </svg>
+                        {memberCount} family member{memberCount === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                  </div>
+                </header>
+
+                {/* Donor Details Sections */}
+                <div className="divide-y divide-slate-100">
+                  {/* Family Members Section */}
+                  <div className="p-6">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(user.id, 'members')}
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13.5a3 3 0 10-6 0v2.25h6V13.5z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 12a4.125 4.125 0 100-8.25A4.125 4.125 0 0012 12zm0 3.75a7.125 7.125 0 00-7.125 7.125h14.25A7.125 7.125 0 0012 15.75z" />
+                          </svg>
+                        </div>
+                        <span className="font-semibold text-slate-800">Family Members</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500">{sectionState.members ? 'Hide' : 'Show'}</span>
+                        <svg 
+                          className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${sectionState.members ? 'rotate-180' : ''}`} 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {sectionState.members && (
+                      <div className="mt-4 space-y-4">
                         {members.length === 0 ? (
-                          <p className="mt-2 text-sm text-slate-500">No family members recorded.</p>
+                          <div className="text-center py-6">
+                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zm0 0v12" />
+                              </svg>
+                            </div>
+                            <p className="text-slate-600">No family members recorded.</p>
+                          </div>
                         ) : (
-                          <ul className="mt-2 space-y-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {members.map((member) => (
-                              <li
-                                key={member.id}
-                                className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600"
-                              >
-                                <div className="flex flex-wrap gap-4">
-                                  <span>
-                                    Name:{' '}
-                                    <span className="font-medium text-slate-800">{member.name}</span>
-                                  </span>
-                                  <span>Relationship: {member.relationship || 'N/A'}</span>
-                                  <span>Gender: {member.gender || 'N/A'}</span>
-                                  <span>Star: {member.tamil_star || 'N/A'}</span>
-                                  <span>Gothram: {member.gothra || 'N/A'}</span>
-                                  <span>Family Name: {member.family_name || 'N/A'}</span>
-                                  <span>DOB: {formatDonorDate(member.date_of_birth)}</span>
+                              <div key={member.id} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <h3 className="font-semibold text-slate-800">{member.name}</h3>
+                                    <p className="text-xs text-slate-500 uppercase tracking-wide mt-1">
+                                      {member.relationship || 'Relationship not provided'}
+                                    </p>
+                                  </div>
+                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                    <span className="text-sm font-medium text-slate-700">{member.name.charAt(0)}</span>
+                                  </div>
                                 </div>
-                              </li>
+                                
+                                <div className="flex flex-wrap gap-2 text-xs">
+                                  {member.gender && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25a4.5 4.5 0 100-9 4.5 4.5 0 000 9z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25v6" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 20.25h4.5" />
+                                      </svg>
+                                      {member.gender}
+                                    </span>
+                                  )}
+                                  {member.tamil_star && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l2.09 6.26H20.5l-5.18 3.76 1.98 6.1L12 15.75l-5.3 3.37 1.98-6.1L3.5 9.26h6.41L12 3z" />
+                                      </svg>
+                                      {member.tamil_star}
+                                    </span>
+                                  )}
+                                  {member.gothra && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 19.5l7.5-15 7.5 15M9 19.5h6" />
+                                      </svg>
+                                      {member.gothra}
+                                    </span>
+                                  )}
+                                  {member.family_name && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l7.5 4.5-7.5 4.5L4.5 7.5 12 3z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 12l7.5 4.5L19.5 12M12 21V16.5" />
+                                      </svg>
+                                      {member.family_name}
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M4.5 9.75h15" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 7.5h13.5A1.5 1.5 0 0120.25 9v9a1.5 1.5 0 01-1.5 1.5H5.25A1.5 1.5 0 013.75 18V9a1.5 1.5 0 011.5-1.5z" />
+                                    </svg>
+                                    DOB: {formatDonorDate(member.date_of_birth)}
+                                  </span>
+                                </div>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
 
-                <div className="rounded-md border border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(user.id, 'registrations')}
-                    className="flex w-full items-center justify-between gap-2 bg-slate-50 px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    <span>Pooja Registrations</span>
-                    <span className="text-xs text-slate-500">{sectionState.registrations ? 'Hide' : 'Show'}</span>
-                  </button>
-
-                  {sectionState.registrations && (
-                    <div className="px-4 py-3">
-                      {registrations.length === 0 ? (
-                        <p className="text-sm text-slate-500">No pooja registrations recorded.</p>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-slate-200">
-                            <thead>
-                              <tr className="text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                                <th className="whitespace-nowrap px-3 py-2">Registration ID</th>
-                                <th className="whitespace-nowrap px-3 py-2">Pooja Date</th>
-                                <th className="whitespace-nowrap px-3 py-2">Pooja Name</th>
-                                <th className="whitespace-nowrap px-3 py-2">Pooja Day</th>
-                                <th className="whitespace-nowrap px-3 py-2">Member - Devotee</th>
-                                <th className="whitespace-nowrap px-3 py-2">Amount</th>
-                                <th className="whitespace-nowrap px-3 py-2">Post Prasadam</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                              {registrations.map((registration) => (
-                                <tr key={registration.id} className="text-sm text-slate-600">
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    {registration.pooja_reg_id || 'N/A'}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    {formatRegistrationDate(registration.start_date)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    {registration.pooja_option_name || 'N/A'}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    {registration.day_option_description || 'N/A'}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <div className="flex flex-wrap gap-1">
-                                      {registration.members?.map((member) => (
-                                        <span
-                                          key={member.id}
-                                          className="inline-block rounded bg-slate-100 px-2 py-1 text-xs"
-                                        >
-                                          {member.name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    {formatCurrency(registration.total_amount)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    {registration.post_prasadam ? 'Yes' : 'No'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                  {/* Pooja Registrations Section */}
+                  <div className="p-6">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(user.id, 'registrations')}
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12m-12 10.5h12" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 6.75A2.25 2.25 0 0018.75 4.5H6.75A2.25 2.25 0 004.5 6.75v12.75l3-3 3 3 3-3 3 3 3-3 3 3V6.75z" />
+                          </svg>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <span className="font-semibold text-slate-800">Pooja Registrations</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500">{sectionState.registrations ? 'Hide' : 'Show'}</span>
+                        <svg 
+                          className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${sectionState.registrations ? 'rotate-180' : ''}`} 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {sectionState.registrations && (
+                      <div className="mt-4">
+                        {registrations.length === 0 ? (
+                          <div className="text-center py-6">
+                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12m-12 10.5h12M3 6.75l1.5 1.5L6 6.75m0 10.5l-1.5-1.5L3 17.25" />
+                              </svg>
+                            </div>
+                            <p className="text-slate-600">No pooja registrations recorded.</p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-slate-200">
+                              <thead>
+                                <tr className="text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                                  <th className="whitespace-nowrap px-4 py-3">Registration ID</th>
+                                  <th className="whitespace-nowrap px-4 py-3">Pooja Date</th>
+                                  <th className="whitespace-nowrap px-4 py-3">Pooja Name</th>
+                                  <th className="whitespace-nowrap px-4 py-3">Pooja Day</th>
+                                  <th className="whitespace-nowrap px-4 py-3">Members</th>
+                                  <th className="whitespace-nowrap px-4 py-3">Amount</th>
+                                  <th className="whitespace-nowrap px-4 py-3">Post Prasadam</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {registrations.map((registration) => {
+                                  const postPrasadamMeta = registration.post_prasadam
+                                    ? {
+                                        label: 'Yes',
+                                        className: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
+                                      }
+                                    : {
+                                        label: 'No',
+                                        className: 'border border-slate-200 bg-slate-100 text-slate-600',
+                                      };
+                                  return (
+                                    <tr key={registration.id} className="hover:bg-slate-50 transition-colors duration-150">
+                                      <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
+                                        {registration.pooja_reg_id || 'N/A'}
+                                      </td>
+                                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                        {formatRegistrationDate(registration.start_date)}
+                                      </td>
+                                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                        {registration.pooja_option_name || 'N/A'}
+                                      </td>
+                                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                        {registration.day_option_description || 'N/A'}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <div className="flex flex-wrap gap-1">
+                                          {registration.members && registration.members.length > 0 ? (
+                                            registration.members.map((member) => (
+                                              <span
+                                                key={member.id ?? `${registration.id}-${member.name}`}
+                                                className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                                              >
+                                                {member.name}
+                                              </span>
+                                            ))
+                                          ) : (
+                                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                                              No members listed
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
+                                        {formatCurrency(registration.total_amount)}
+                                      </td>
+                                      <td className="whitespace-nowrap px-4 py-3">
+                                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${postPrasadamMeta.className}`}>
+                                          {postPrasadamMeta.label}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        {/* Admin Members Section */}
+        <section className="mt-10 bg-white rounded-2xl shadow-md p-6 md:p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Admin-Added Members</h2>
+                <p className="text-slate-600 text-sm">Members created directly through this admin panel</p>
+              </div>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
+              {adminMembers.length} member{adminMembers.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          <div className="mt-6">
+            {adminMembersLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
+              </div>
+            ) : adminMembersError ? (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">{adminMembersError}</p>
+                  </div>
                 </div>
               </div>
-            </section>
-          );
-        })}
-      </div>
+            ) : adminMembers.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-slate-800 mb-1">No Admin Members Yet</h3>
+                <p className="text-slate-600 max-w-md mx-auto">Add new members using the "Add Member" button at the top of the page.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-200">
+                {adminMembers.map((member) => {
+                  const isEditing = editingAdminMemberId === member.id;
+                  return (
+                    <div key={member.id} className="py-5">
+                      {isEditing ? (
+                        <form onSubmit={handleAdminMemberEditSubmit} className="space-y-5">
+                          {adminMemberEditError && (
+                            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                              <div className="flex">
+                                <div className="flex-shrink-0">
+                                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                                <div className="ml-3">
+                                  <p className="text-sm text-red-700">{adminMemberEditError}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Added Members from Admin</h2>
-            <p className="text-sm text-slate-600">Members created directly through this admin panel.</p>
-          </div>
-          <span className="self-start rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
-            {adminMembers.length} member{adminMembers.length === 1 ? '' : 's'}
-          </span>
-        </header>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-name-${member.id}`}>
+                                Full Name <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                id={`admin-member-name-${member.id}`}
+                                name="name"
+                                type="text"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.name}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                                required
+                              />
+                            </div>
 
-        <div className="mt-4">
-          {adminMembersLoading ? (
-            <p className="text-sm text-slate-500">Loading admin members…</p>
-          ) : adminMembersError ? (
-            <p className="text-sm text-red-600">{adminMembersError}</p>
-          ) : adminMembers.length === 0 ? (
-            <p className="text-sm text-slate-500">No members have been added from the admin panel yet.</p>
-          ) : (
-            <ul className="divide-y divide-slate-200">
-              {adminMembers.map((member) => {
-                const isEditing = editingAdminMemberId === member.id;
-                return (
-                  <li key={member.id} className="py-3 text-sm text-slate-600">
-                    {isEditing ? (
-                      <form onSubmit={handleAdminMemberEditSubmit} className="space-y-3">
-                        {adminMemberEditError && (
-                          <p className="rounded-md bg-red-100 p-2 text-sm text-red-700">
-                            {adminMemberEditError}
-                          </p>
-                        )}
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-dob-${member.id}`}>
+                                Date of Birth
+                              </label>
+                              <input
+                                id={`admin-member-dob-${member.id}`}
+                                name="date_of_birth"
+                                type="date"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.date_of_birth}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                              />
+                            </div>
 
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-name-${member.id}`}
-                            >
-                              Name
-                            </label>
-                            <input
-                              id={`admin-member-name-${member.id}`}
-                              name="name"
-                              type="text"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.name}
-                              onChange={handleAdminMemberEditChange}
-                              disabled={adminMemberEditSubmitting}
-                              required
-                            />
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-gender-${member.id}`}>
+                                Gender
+                              </label>
+                              <select
+                                id={`admin-member-gender-${member.id}`}
+                                name="gender"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.gender}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                              >
+                                <option value="">Select gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-star-${member.id}`}>
+                                Tamil Star
+                              </label>
+                              <input
+                                id={`admin-member-star-${member.id}`}
+                                name="tamil_star"
+                                type="text"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.tamil_star}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-gothra-${member.id}`}>
+                                Gothram
+                              </label>
+                              <input
+                                id={`admin-member-gothra-${member.id}`}
+                                name="gothra"
+                                type="text"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.gothra}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-family-${member.id}`}>
+                                Family Name
+                              </label>
+                              <input
+                                id={`admin-member-family-${member.id}`}
+                                name="family_name"
+                                type="text"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.family_name}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-relationship-${member.id}`}>
+                                Relationship
+                              </label>
+                              <input
+                                id={`admin-member-relationship-${member.id}`}
+                                name="relationship"
+                                type="text"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                value={adminMemberEditForm.relationship}
+                                onChange={handleAdminMemberEditChange}
+                                disabled={adminMemberEditSubmitting}
+                              />
+                            </div>
                           </div>
 
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-dob-${member.id}`}
-                            >
-                              Date of Birth
-                            </label>
-                            <input
-                              id={`admin-member-dob-${member.id}`}
-                              name="date_of_birth"
-                              type="date"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.date_of_birth}
-                              onChange={handleAdminMemberEditChange}
-                              disabled={adminMemberEditSubmitting}
-                            />
-                          </div>
-
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-gender-${member.id}`}
-                            >
-                              Gender
-                            </label>
-                            <select
-                              id={`admin-member-gender-${member.id}`}
-                              name="gender"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.gender}
-                              onChange={handleAdminMemberEditChange}
+                          <div className="flex flex-wrap gap-3 pt-2">
+                            <button
+                              type="submit"
+                              className="px-5 py-2.5 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
                               disabled={adminMemberEditSubmitting}
                             >
-                              <option value="">Select gender</option>
-                              <option value="Male">Male</option>
-                              <option value="Female">Female</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-star-${member.id}`}
-                            >
-                              Star
-                            </label>
-                            <input
-                              id={`admin-member-star-${member.id}`}
-                              name="tamil_star"
-                              type="text"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.tamil_star}
-                              onChange={handleAdminMemberEditChange}
+                              {adminMemberEditSubmitting ? (
+                                <span className="flex items-center gap-2">
+                                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Saving...
+                                </span>
+                              ) : 'Save Changes'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelAdminMemberEdit}
+                              className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
                               disabled={adminMemberEditSubmitting}
-                            />
-                          </div>
-
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-gothra-${member.id}`}
                             >
-                              Gothram
-                            </label>
-                            <input
-                              id={`admin-member-gothra-${member.id}`}
-                              name="gothra"
-                              type="text"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.gothra}
-                              onChange={handleAdminMemberEditChange}
-                              disabled={adminMemberEditSubmitting}
-                            />
+                              Cancel
+                            </button>
                           </div>
-
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-family-${member.id}`}
-                            >
-                              Family Name
-                            </label>
-                            <input
-                              id={`admin-member-family-${member.id}`}
-                              name="family_name"
-                              type="text"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.family_name}
-                              onChange={handleAdminMemberEditChange}
-                              disabled={adminMemberEditSubmitting}
-                            />
+                        </form>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-sky-50 flex items-center justify-center">
+                              <span className="text-lg font-bold text-sky-700">{member.name.charAt(0)}</span>
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-slate-800">{member.name}</h3>
+                              <div className="flex flex-wrap gap-3 mt-2 text-sm text-slate-600">
+                                <span>Gender: {member.gender || 'N/A'}</span>
+                                <span>Star: {member.tamil_star || 'N/A'}</span>
+                                <span>Gothram: {member.gothra || 'N/A'}</span>
+                                <span>DOB: {formatDonorDate(member.date_of_birth)}</span>
+                                <span>Family: {member.family_name || 'N/A'}</span>
+                                <span>Relationship: {member.relationship || 'N/A'}</span>
+                              </div>
+                            </div>
                           </div>
-
-                          <div>
-                            <label
-                              className="mb-1 block text-sm font-medium text-slate-600"
-                              htmlFor={`admin-member-relationship-${member.id}`}
-                            >
-                              Relationship
-                            </label>
-                            <input
-                              id={`admin-member-relationship-${member.id}`}
-                              name="relationship"
-                              type="text"
-                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                              value={adminMemberEditForm.relationship}
-                              onChange={handleAdminMemberEditChange}
-                              disabled={adminMemberEditSubmitting}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                          <button
-                            type="submit"
-                            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-                            disabled={adminMemberEditSubmitting}
-                          >
-                            {adminMemberEditSubmitting ? 'Saving changes…' : 'Save changes'}
-                          </button>
                           <button
                             type="button"
-                            onClick={cancelAdminMemberEdit}
-                            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                            disabled={adminMemberEditSubmitting}
+                            onClick={() => startAdminMemberEdit(member)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
                           >
-                            Cancel
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
                           </button>
                         </div>
-                      </form>
-                    ) : (
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex flex-wrap gap-4">
-                          <span>
-                            Name: <span className="font-medium text-slate-800">{member.name}</span>
-                          </span>
-                          <span>Gender: {member.gender || 'N/A'}</span>
-                          <span>Star: {member.tamil_star || 'N/A'}</span>
-                          <span>Gothram: {member.gothra || 'N/A'}</span>
-                          <span>DOB: {formatDonorDate(member.date_of_birth)}</span>
-                          <span>Family Name: {member.family_name || 'N/A'}</span>
-                          <span>Relationship: {member.relationship || 'N/A'}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => startAdminMemberEdit(member)}
-                          className="text-sm font-medium text-brand-600 hover:text-brand-700"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </section>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 };
