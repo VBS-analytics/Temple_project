@@ -122,6 +122,7 @@ class DonorProfile(models.Model):
     postal_code = models.CharField(max_length=12, blank=True)
     gothra = models.CharField(max_length=128, blank=True)
     tamil_star = models.CharField(max_length=128, blank=True)
+    gender = models.CharField(max_length=32, blank=True, default="")
     date_of_birth = models.DateField(blank=True, null=True)
     family_name = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True)

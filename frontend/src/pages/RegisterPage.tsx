@@ -194,7 +194,7 @@ const RegisterPage = () => {
               className="flex min-w-0 flex-col gap-1 text-left shrink-0"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200">
-                Agraharam Temple&apos;s
+                Kakkazhany Gramam
               </p>
               <p className="text-xs text-white/80">
                 The Architectural Marvel of Agraharam
@@ -515,8 +515,29 @@ const RegisterPage = () => {
                         {...register('family_selection')}
                       >
                         <option value="">Select a family</option>
-                        <option value="1">Family 1</option>
-                        <option value="2">Family 2</option>
+                        <option value="Arunachalam-Sambasiva Iyr">
+                          Arunachalam-Sambasiva Iyr
+                        </option>
+                        <option value="Kadakarar Subramani Iyr">
+                          Kadakarar Subramani Iyr
+                        </option>
+                        <option value="Sundaresa Iyr+ Pannai+Balu Fmly">
+                          Sundaresa Iyr+ Pannai+Balu Fmly
+                        </option>
+                        <option value="Narayanswamy fmly">
+                          Narayanswamy fmly
+                        </option>
+                        <option value="Mangalam Periyamma Fmly">
+                          Mangalam Periyamma Fmly
+                        </option>
+                        <option value="Koorakattu Fmly">Koorakattu Fmly</option>
+                        <option value="RamaniSastri Fmly">
+                          RamaniSastri Fmly
+                        </option>
+                        <option value="Pichu Iyr Fmly">Pichu Iyr Fmly</option>
+                        <option value="Pattamani Iyr Fmly">
+                          Pattamani Iyr Fmly
+                        </option>
                         <option value="other">Other</option>
                       </select>
                     </div>

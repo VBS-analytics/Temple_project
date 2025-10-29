@@ -179,7 +179,7 @@ const LoginPage = () => {
           <div className="flex flex-col justify-between gap-10 text-slate-100">
             <div className="space-y-6">
               <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-amber-300">
-                Agraharam Temple — Member Portal
+                Kakkazhany Village  — Member Portal
               </span>
               <div className="space-y-4">
                 <h1 className="text-3xl font-bold leading-snug text-white sm:text-4xl">

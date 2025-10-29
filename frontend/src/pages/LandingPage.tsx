@@ -85,8 +85,8 @@ const heroHighlights = [
   },
   {
     title: "How to Reach",
-    primary: "Madurai Airport: 12 km",
-    secondary: "Madurai Junction: 2 km",
+    primary: "Kakkazhany Gramam Busstop: 12 km",
+    secondary: "",
     cta: "Get directions →",
     href: "#visit",
     icon: "📍",
@@ -231,14 +231,14 @@ const facilities = [
 const newsUpdates = [
   {
     date: "Apr 28, 2024",
-    title: "Chithirai Festival At Madurai concludes with grandeur",
+    title: "Mahashivratri Pooja",
     excerpt:
       "A ten-day celebration featuring celestial wedding, therottam, and lakhs of devotees from across the world.",
     href: "#",
   },
   {
     date: "Apr 10, 2024",
-    title: "Renovation works begin at the sacred Golden Lotus Tank",
+    title: "Renovation works begin at Kakkazhany Gramam - Pillayar Koil",
     excerpt:
       "Structural restoration and mural conservation initiated to preserve the heritage for future generations.",
     href: "#",
@@ -414,7 +414,7 @@ const LandingPage = () => {
               className="flex flex-col gap-1 text-left md:flex-shrink-0"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200">
-                Kakkalani&apos;s Village
+                Kakkazhany Gramam
               </p>
               <p className="text-xs text-white/80">
                 The Architectural Marvel of Agraharam
@@ -518,7 +518,7 @@ const LandingPage = () => {
           <div className="absolute inset-0 z-0">
             <img
               src="images/temple_gopuram.jpg"
-              alt="Meenakshi Amman Temple backdrop"
+              alt="Temple backdrop"
               className="h-full w-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
@@ -526,12 +526,11 @@ const LandingPage = () => {
           <div className="relative z-10 mx-auto flex max-w-6xl flex-col px-6 py-20 md:py-28">
             <div className="max-w-2xl space-y-6">
               <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-[#f3c428]">
-                Experience Madurai in Houston
+                Experience Kakkazhany Gramam in Houston
               </span>
               <h1 className="text-4xl font-bold leading-tight text-white md:text-5xl">
                 A living temple dedicated to{" "}
-                <span className="text-[#f3c428]">Goddess Meenakshi</span> & Lord
-                Sundareswarar
+                <span className="text-[#f3c428]">Lord Shivan</span> & Ambal
               </h1>
               <p className="text-base text-slate-100 md:text-lg">
                 A 2,500-year-old Dravidian masterpiece, renowned for its
@@ -645,7 +644,7 @@ const LandingPage = () => {
               <p className="text-base text-slate-700 md:text-lg">
                 {selected
                   ? selected.description
-                  : "The Meenakshi Amman Temple complex spans 14 acres and celebrates Dravidian architecture through towering gopurams, intricately carved mandapams, and sacred tanks that mirror centuries of devotion."}
+                  : "   Temple."}
               </p>
               <Link
                 to="/architecture"
@@ -884,6 +883,13 @@ const LandingPage = () => {
                 </div>
               )}
             </div>
+            <p className="mt-6 text-center text-sm text-slate-600 md:text-base">
+              Login to{" "}
+              <Link to="/login" className="font-semibold text-rose-600 hover:text-rose-700">
+                register
+              </Link>{" "}
+              for the pooja schedules.
+            </p>
           </div>
         </section>
 
@@ -952,7 +958,7 @@ const LandingPage = () => {
           <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl space-y-4">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Support the Temple</p>
-              <h2 className="text-3xl font-bold md:text-4xl">Preserve the legacy of Agraharam Town Temple's</h2>
+              <h2 className="text-3xl font-bold md:text-4xl">Preserve the legacy of Kakkazhany Gramam Temple's</h2>
               <p className="text-base text-amber-100">
                 Contributions maintain daily poojas, heritage conservation, annadanam, and cultural outreach. Join hands to
                 safeguard centuries of devotion and artistry.
@@ -970,10 +976,10 @@ const LandingPage = () => {
       <footer id="contact" className="bg-slate-950 py-12 text-slate-300">
         <div className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-4">
           <div className="space-y-3">
-            <p className="text-lg font-semibold text-white">Meenakshi Amman Temple</p>
-            <p className="text-sm text-slate-400">Madurai Main, Madurai, Tamil Nadu 625001</p>
-            <p className="text-sm text-slate-400">Phone: +91 452 234 4360</p>
-            <p className="text-sm text-slate-400">Email: agraharam_temple@gmail.com</p>
+            <p className="text-lg font-semibold text-white">Kakkazhany Gramam Temple</p>
+            <p className="text-sm text-slate-400">Kakkazhany Gramam, Agraharam, Tamil Nadu 625001</p>
+            <p className="text-sm text-slate-400">Phone: +91 9999900000</p>
+            <p className="text-sm text-slate-400">Email: crgrpkakkalany@gmail.com</p>
           </div>
           <div className="space-y-3 text-sm">
             <p className="font-semibold text-white">Temple Hours</p>
@@ -992,7 +998,7 @@ const LandingPage = () => {
             <p className="font-semibold text-white">Stay Connected</p>
             <p>Follow us on Facebook, Instagram, and YouTube for live updates and festival highlights.</p>
             <p className="text-xs text-slate-500">
-              © {new Date().getFullYear()} Agraharam Temple, Agraharam. All rights reserved.
+              © {new Date().getFullYear()} Kakkazhany Gramam Temple, Agraharam. All rights reserved.
             </p>
           </div>
         </div>

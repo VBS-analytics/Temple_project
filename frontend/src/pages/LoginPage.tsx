@@ -85,7 +85,7 @@ const LoginPage = () => {
               className="flex min-w-0 flex-col gap-1 text-left shrink-0"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200">
-                Agraharam Temple&apos;s
+                Kakkazhany Gramam
               </p>
               <p className="text-xs text-white/80">
                 The Architectural Marvel of Agraharam
@@ -134,7 +134,7 @@ const LoginPage = () => {
           <div className="flex flex-col justify-between gap-10 text-amber-50">
             <div className="space-y-6">
               <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f4c956]">
-                Agraharam Temple — Member Portal
+                Kakkazhany Gramam — Member Portal
               </span>
               <div className="space-y-4">
                 <h1 className="text-3xl font-bold leading-snug text-white sm:text-4xl">

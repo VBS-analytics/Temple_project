@@ -1,9 +1,20 @@
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import type { SVGProps } from 'react';
+import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
 import api, { extractResults } from '../lib/api';
 import { isAdmin, useAuthStore } from '../store/auth';
+
+declare global {
+  interface Window {
+    pdfMake?: {
+      createPdf: (documentDefinition: TDocumentDefinitions) => {
+        download: (fileName: string) => void;
+      };
+    };
+  }
+}
 
 const TEMPLE_COUNT = 4;
 const MONTHLY_DONATION_AMOUNT = 20000;
@@ -107,6 +118,37 @@ const formatDateTimeDisplay = (value?: string | null) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+let pdfMakeLoaded = false;
+
+const loadPdfMake = async () => {
+  if (!pdfMakeLoaded) {
+    const script1 = document.createElement('script');
+    script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js';
+    script1.async = true;
+
+    const script2 = document.createElement('script');
+    script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js';
+    script2.async = true;
+
+    await new Promise<void>((resolve) => {
+      script1.onload = () => {
+        document.head.appendChild(script2);
+        script2.onload = () => {
+          pdfMakeLoaded = true;
+          resolve();
+        };
+      };
+      document.head.appendChild(script1);
+    });
+  }
+
+  if (!window.pdfMake) {
+    throw new Error('PDFMake failed to load');
+  }
+
+  return window.pdfMake;
 };
 
 const IconBase = ({ children, ...props }: SVGProps<SVGSVGElement>) => (
@@ -328,6 +370,8 @@ const DashboardPage = () => {
   };
 
   const loadDonorMetrics = async () => {
+    setTodayPoojaLoading(true);
+    setTodayPoojaError(null);
     try {
       setDonorLoading(true);
       setFamilyLoading(true);
@@ -346,6 +390,7 @@ const DashboardPage = () => {
 
       const registrations = extractResults<TodayPoojaRecord>(registrationsResponse.data);
       setDonorCount(registrations.length);
+      setTodayPoojas(selectTodayRegistrations(registrations));
 
       const todayIso = toLocalDateIso(new Date());
       let upcomingTotal = 0;
@@ -370,33 +415,114 @@ const DashboardPage = () => {
       setFamilyMemberCount(null);
       setUpcomingPoojaCount(null);
       setPrasadamRequestCount(null);
+      setTodayPoojas([]);
+      setTodayPoojaError("Unable to load today's pooja details right now.");
     } finally {
       setDonorLoading(false);
       setFamilyLoading(false);
+      setTodayPoojaLoading(false);
     }
   };
 
   const handleRefresh = async () => {
     if (refreshing) return;
-    
+
     setRefreshing(true);
     setError(null);
-    
+
     try {
       // Load metrics based on user role
       if (isAdminUser) {
         await loadAdminMetrics();
+        await loadTodayPoojas();
       } else {
         await loadDonorMetrics();
       }
-      
-      // Load today's poojas
-      await loadTodayPoojas();
     } catch (err) {
       console.error('Failed to refresh dashboard', err);
       setError('Unable to refresh dashboard data right now.');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleDownloadTodayPoojas = async () => {
+    if (todayPoojas.length === 0) {
+      window.alert('No pooja registrations available for today to download.');
+      return;
+    }
+
+    try {
+      const pdfMakeInstance = await loadPdfMake();
+      if (!pdfMakeInstance?.createPdf) {
+        throw new Error('pdfMake is unavailable');
+      }
+
+      const tableBody = [
+        ['Pooja ID', 'Pooja Date', 'Pooja Name', 'Day Option', 'Devotee', 'Post Prasadam', 'Registered By', 'Registration Date'].map((header) => ({ text: header, style: 'tableHeader' })),
+        ...todayPoojas.map((pooja) => [
+          resolvePoojaId(pooja),
+          formatDateDisplay(pooja.start_date),
+          pooja.pooja_option_name?.trim() || 'N/A',
+          pooja.day_option_description?.trim() || 'N/A',
+          joinDevoteeNames(pooja.members),
+          formatBooleanLabel(pooja.post_prasadam),
+          resolveDonorName(pooja.donor_name),
+          formatDateTimeDisplay(pooja.created_at),
+        ]),
+      ];
+
+      const generatedOn = formatDateTimeDisplay(new Date().toISOString());
+      const todayLabel = new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+
+      const docDefinition: TDocumentDefinitions = {
+        info: {
+          title: `Today's Pooja Details - ${todayLabel}`,
+        },
+        pageOrientation: 'landscape',
+        pageSize: 'A4',
+        pageMargins: [24, 24, 24, 24],
+        defaultStyle: {
+          fontSize: 9,
+        },
+        styles: {
+          header: {
+            fontSize: 16,
+            bold: true,
+          },
+          subheader: {
+            fontSize: 10,
+            color: '#475569',
+            margin: [0, 2, 0, 8],
+          },
+          tableHeader: {
+            bold: true,
+            fillColor: '#f1f5f9',
+          },
+        },
+        content: [
+          { text: "Today's Pooja Details", style: 'header', margin: [0, 0, 0, 4] },
+          { text: `Pooja registrations scheduled for ${todayLabel}`, style: 'subheader' },
+          { text: `Generated on: ${generatedOn}`, style: 'subheader' },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['auto', 'auto', 'auto', 'auto', '*', 'auto', 'auto', 'auto'],
+              body: tableBody,
+            },
+            layout: 'lightHorizontalLines',
+          },
+        ],
+      };
+
+      pdfMakeInstance.createPdf(docDefinition).download(`today-pooja-details-${toLocalDateIso(new Date())}.pdf`);
+    } catch (err) {
+      console.error('Failed to generate PDF', err);
+      window.alert('Unable to generate PDF right now. Please try again later.');
     }
   };
 
@@ -615,10 +741,33 @@ const DashboardPage = () => {
                     : `Your pooja registrations scheduled for ${todayReadableLabel}.`}
                 </p>
               </div>
-              <div className="mt-2 sm:mt-0">
+              <div className="mt-2 sm:mt-0 flex items-center space-x-3">
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                  {todayPoojas.length} {todayPoojas.length === 1 ? 'Pooja' : 'Poojas'} Today
+                  {todayPoojas.length} {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
                 </span>
+                {isAdminUser && (
+                  <button
+                    onClick={handleDownloadTodayPoojas}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-rose-600 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      className="h-4 w-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M7 5a2 2 0 012-2h6a2 2 0 012 2v14a2 2 0 01-2 2H9l-4-4V7a2 2 0 012-2z"
+                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 11h6M11 15h4" />
+                    </svg>
+                    Download Data
+                  </button>
+                )}
               </div>
             </div>
           </div>

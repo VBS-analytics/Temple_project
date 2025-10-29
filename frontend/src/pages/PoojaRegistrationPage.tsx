@@ -1771,10 +1771,10 @@ const PoojaRegistrationPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="text-center mb-10">
+      <div>
+        <div className="mb-10">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Pooja Registration</h1>
-          <p className="text-lg text-gray-700 max-w-3xl mx-auto">
+          <p className="text-lg text-gray-700">
             Browse our complete pooja catalogue and select your preferred options to book a pooja ceremony
           </p>
         </div>
@@ -1818,38 +1818,38 @@ const PoojaRegistrationPage = () => {
             )}
 
             {!isLoading && !error && masterRows.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="min-w-[1800px] w-full divide-y divide-gray-200">
+              <div>
+                <table className="w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-32">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
                         Code
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-96">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[15%]">
                         Pooja Name
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[500px]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[20%]">
                         Day Option
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-64">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
                         Devotees
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-48">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
                         Next Occurrence
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
                         Amount
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
                         Prasadam
                       </th>
-                      <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                      <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
                         Add to Cart
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-48">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
                         Registered By
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-40">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
                         Registration Date
                       </th>
                     </tr>

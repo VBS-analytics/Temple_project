@@ -23,11 +23,15 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "postal_code",
             "gothra",
             "tamil_star",
+            "gender",
             "date_of_birth",
             "family_name",
             "notes",
         )
         read_only_fields = ("donor_id",)
+        extra_kwargs = {
+            "gender": {"required": False, "allow_blank": True},
+        }
 
     def get_donor_id(self, obj):
         return obj.donor_id
@@ -166,6 +170,7 @@ class RegisterSerializer(serializers.Serializer):
     date_of_birth = serializers.DateField(required=False, allow_null=True)
     family_name = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+    gender = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
@@ -188,12 +193,17 @@ class RegisterSerializer(serializers.Serializer):
         validated_data.pop("confirm_password")
         otp_code = validated_data.pop("otp_code")  # noqa: F841 - kept for audit/logging if needed
 
+        gender_marker = object()
+        gender_value = validated_data.pop("gender", gender_marker)
+
         profile_fields = [
             field
             for field in DonorProfileSerializer.Meta.fields
             if field not in {"donor_id"}
         ]
         profile_data = {field: validated_data.pop(field, "") for field in profile_fields if field in validated_data}
+        if gender_value is not gender_marker:
+            profile_data["gender"] = gender_value or ""
 
         user = User.objects.create_user(
             phone_number=validated_data.pop("phone_number"),
@@ -201,11 +211,15 @@ class RegisterSerializer(serializers.Serializer):
             password=validated_data.pop("password"),
             email=validated_data.pop("email", ""),
         )
-        DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
+        profile, _ = DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
         token.mark_used()
+        user.refresh_from_db()
         refresh = RefreshToken.for_user(user)
+        user_data = UserSerializer(user).data
+        # Ensure the freshly updated profile data is reflected in the response.
+        user_data["profile"] = DonorProfileSerializer(profile).data
         return {
-            "user": UserSerializer(user).data,
+            "user": user_data,
             "tokens": {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),

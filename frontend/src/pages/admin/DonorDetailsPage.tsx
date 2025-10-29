@@ -14,6 +14,7 @@ interface DonorProfile {
   gothra?: string;
   date_of_birth?: string | null;
   family_name?: string;
+  gender?: string;
 }
 
 interface DonorUser {
@@ -264,7 +265,9 @@ const DonorDetailsPage = () => {
     date_of_birth: '',
     tamil_star: '',
     gothra: '',
-    family_name: ''
+    family_name: '',
+    isOtherSelected: false,
+    customFamilyName: ''
   });
   const [memberError, setMemberError] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
@@ -283,6 +286,9 @@ const DonorDetailsPage = () => {
   }));
   const [adminMemberEditError, setAdminMemberEditError] = useState('');
   const [adminMemberEditSubmitting, setAdminMemberEditSubmitting] = useState(false);
+  const [adminMemberDeleteError, setAdminMemberDeleteError] = useState('');
+  const [adminMemberDeleteSubmitting, setAdminMemberDeleteSubmitting] = useState(false);
+  const [adminMemberDeleteId, setAdminMemberDeleteId] = useState<number | null>(null);
 
   const loadAdminMembers = useCallback(async () => {
     setAdminMembersLoading(true);
@@ -312,13 +318,25 @@ const DonorDetailsPage = () => {
       date_of_birth: '',
       tamil_star: '',
       gothra: '',
-      family_name: ''
+      family_name: '',
+      isOtherSelected: false,
+      customFamilyName: ''
     });
   };
 
   const handleMemberChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
-    setMemberForm((prev) => ({ ...prev, [name]: value }));
+    if (name === 'family_name') {
+      const isOtherSelected = value === 'Other';
+      setMemberForm((prev) => ({
+        ...prev,
+        [name]: value,
+        isOtherSelected,
+        customFamilyName: isOtherSelected ? prev.customFamilyName : ''
+      }));
+    } else {
+      setMemberForm((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -346,8 +364,11 @@ const DonorDetailsPage = () => {
     if (memberForm.date_of_birth) {
       payload.date_of_birth = memberForm.date_of_birth;
     }
-    if (memberForm.family_name.trim()) {
-      payload.family_name = memberForm.family_name.trim();
+    const finalFamilyName = memberForm.isOtherSelected
+      ? memberForm.customFamilyName.trim()
+      : memberForm.family_name.trim();
+    if (finalFamilyName) {
+      payload.family_name = finalFamilyName;
     }
 
     try {
@@ -437,6 +458,36 @@ const DonorDetailsPage = () => {
       setAdminMemberEditError(typeof detail === 'string' ? detail : 'Unable to update member');
     } finally {
       setAdminMemberEditSubmitting(false);
+    }
+  };
+
+  const handleAdminMemberDelete = async (memberId: number) => {
+    if (adminMemberDeleteSubmitting) {
+      return;
+    }
+
+    const confirmed = window.confirm('Are you sure you want to delete this member? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    setAdminMemberDeleteError('');
+    setAdminMemberDeleteSubmitting(true);
+    setAdminMemberDeleteId(memberId);
+
+    try {
+      await api.delete(`auth/family-members/${memberId}/`);
+      setAdminMembers((prev) => prev.filter((item) => item.id !== memberId));
+      if (editingAdminMemberId === memberId) {
+        setEditingAdminMemberId(null);
+        resetAdminMemberEditForm();
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data ?? err?.message ?? 'Unable to delete member';
+      setAdminMemberDeleteError(typeof detail === 'string' ? detail : 'Unable to delete member');
+    } finally {
+      setAdminMemberDeleteSubmitting(false);
+      setAdminMemberDeleteId(null);
     }
   };
 
@@ -941,15 +992,43 @@ const DonorDetailsPage = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-family">
                     Family Name
                   </label>
-                  <input
+                  <select
                     id="member-family"
                     name="family_name"
-                    type="text"
                     className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.family_name}
                     onChange={handleMemberChange}
-                  />
+                  >
+                    <option value="">Select family name</option>
+                    <option value="Arunachalam-Sambasiva Iyr">Arunachalam-Sambasiva Iyr</option>
+                    <option value="Kadakarar Subramani Iyr">Kadakarar Subramani Iyr</option>
+                    <option value="Sundaresa Iyr+ Pannai+Balu Fmly">Sundaresa Iyr+ Pannai+Balu Fmly</option>
+                    <option value="Narayanswamy fmly">Narayanswamy fmly</option>
+                    <option value="Mangalam Periyamma Fmly">Mangalam Periyamma Fmly</option>
+                    <option value="Koorakattu Fmly">Koorakattu Fmly</option>
+                    <option value="RamaniSastri Fmly">RamaniSastri Fmly</option>
+                    <option value="Pichu Iyr Fmly">Pichu Iyr Fmly</option>
+                    <option value="Pattamani Iyr Fmly">Pattamani Iyr Fmly</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
+                {memberForm.isOtherSelected && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-custom-family">
+                      Custom Family Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="member-custom-family"
+                      name="customFamilyName"
+                      type="text"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
+                      value={memberForm.customFamilyName}
+                      onChange={handleMemberChange}
+                      placeholder="Enter custom family name"
+                      required={memberForm.isOtherSelected}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
@@ -1021,6 +1100,8 @@ const DonorDetailsPage = () => {
             const profileLocation = [profile.city, profile.state, profile.postal_code].filter(Boolean).join(', ');
             const memberCount = Array.isArray(members) ? members.length : 0;
             const locationLabel = profileLocation || 'Location not provided';
+            const rawGender = (profile.gender ?? '').trim();
+            const genderLabel = rawGender ? `${rawGender.charAt(0).toUpperCase()}${rawGender.slice(1)}` : 'Gender not provided';
             const hasProfileMeta = Boolean(profile.tamil_star || profile.gothra || profile.family_name);
 
             return (
@@ -1074,11 +1155,12 @@ const DonorDetailsPage = () => {
                         
                         <div className="flex flex-wrap gap-3 text-sm text-slate-600">
                           <div className="flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8.25l7.5 4.5L18 8.25" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v10.5A2.25 2.25 0 005.25 19.5h13.5A2.25 2.25 0 0021 17.25V6.75z" />
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25a4.5 4.5 0 100-9 4.5 4.5 0 000 9z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25v6" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 20.25h4.5" />
                             </svg>
-                            {user.email || 'Email not provided'}
+                            {genderLabel}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1395,13 +1477,31 @@ const DonorDetailsPage = () => {
                 <p className="text-slate-600 max-w-md mx-auto">Add new members using the "Add Member" button at the top of the page.</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-200">
-                {adminMembers.map((member) => {
-                  const isEditing = editingAdminMemberId === member.id;
-                  return (
-                    <div key={member.id} className="py-5">
-                      {isEditing ? (
-                        <form onSubmit={handleAdminMemberEditSubmit} className="space-y-5">
+              <>
+                {adminMemberDeleteError && (
+                  <div className="mb-4">
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-red-700">{adminMemberDeleteError}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="divide-y divide-slate-200">
+                  {adminMembers.map((member) => {
+                    const isEditing = editingAdminMemberId === member.id;
+                    const isDeleting = adminMemberDeleteSubmitting && adminMemberDeleteId === member.id;
+                    return (
+                      <div key={member.id} className="py-5">
+                        {isEditing ? (
+                          <form onSubmit={handleAdminMemberEditSubmit} className="space-y-5">
                           {adminMemberEditError && (
                             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
                               <div className="flex">
@@ -1429,7 +1529,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.name}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                                 required
                               />
                             </div>
@@ -1445,7 +1545,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.date_of_birth}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                               />
                             </div>
 
@@ -1459,7 +1559,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.gender}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                               >
                                 <option value="">Select gender</option>
                                 <option value="Male">Male</option>
@@ -1479,7 +1579,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.tamil_star}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                               />
                             </div>
 
@@ -1494,7 +1594,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.gothra}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                               />
                             </div>
 
@@ -1509,7 +1609,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.family_name}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                               />
                             </div>
 
@@ -1524,7 +1624,7 @@ const DonorDetailsPage = () => {
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.relationship}
                                 onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting}
+                                disabled={adminMemberEditSubmitting || isDeleting}
                               />
                             </div>
                           </div>
@@ -1533,7 +1633,7 @@ const DonorDetailsPage = () => {
                             <button
                               type="submit"
                               className="px-5 py-2.5 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
-                              disabled={adminMemberEditSubmitting}
+                              disabled={adminMemberEditSubmitting || isDeleting}
                             >
                               {adminMemberEditSubmitting ? (
                                 <span className="flex items-center gap-2">
@@ -1549,9 +1649,33 @@ const DonorDetailsPage = () => {
                               type="button"
                               onClick={cancelAdminMemberEdit}
                               className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
-                              disabled={adminMemberEditSubmitting}
+                              disabled={adminMemberEditSubmitting || isDeleting}
                             >
                               Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAdminMemberDelete(member.id)}
+                              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              disabled={isDeleting || adminMemberEditSubmitting}
+                            >
+                              {isDeleting ? (
+                                <span className="flex items-center gap-2">
+                                  <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Deleting...
+                                </span>
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 11v6M14 11v6" />
+                                  </svg>
+                                  Delete
+                                </>
+                              )}
                             </button>
                           </div>
                         </form>
@@ -1569,26 +1693,53 @@ const DonorDetailsPage = () => {
                                 <span>Gothram: {member.gothra || 'N/A'}</span>
                                 <span>DOB: {formatDonorDate(member.date_of_birth)}</span>
                                 <span>Family: {member.family_name || 'N/A'}</span>
-                                <span>Relationship: {member.relationship || 'N/A'}</span>
                               </div>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => startAdminMemberEdit(member)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Edit
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startAdminMemberEdit(member)}
+                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              disabled={isDeleting}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAdminMemberDelete(member.id)}
+                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              disabled={isDeleting}
+                            >
+                              {isDeleting ? (
+                                <span className="flex items-center gap-2">
+                                  <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Deleting...
+                                </span>
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 11v6M14 11v6" />
+                                  </svg>
+                                  Delete
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              </>
             )}
           </div>
         </section>

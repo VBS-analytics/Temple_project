@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 
-import api from '../lib/api';
+import api, { extractResults } from '../lib/api';
 
 interface ApiUser {
   id: number;
@@ -22,6 +22,7 @@ interface ApiDonorProfile {
   postal_code?: string | null;
   gothra?: string | null;
   tamil_star?: string | null;
+  gender?: string | null;
   date_of_birth?: string | null;
   family_name?: string | null;
   notes?: string | null;
@@ -52,6 +53,25 @@ interface FamilyMemberFormState {
   tamil_star: string;
   gothra: string;
   family_name: string;
+  // family_selection holds either one of the predefined family names or the special value 'Other' or ''
+  family_selection: string;
+}
+
+interface RegistrationMember {
+  id?: number;
+  name?: string | null;
+  relationship?: string | null;
+}
+
+interface PoojaRegistration {
+  id: number;
+  pooja_reg_id?: string | null;
+  pooja_option_name?: string | null;
+  start_date?: string | null;
+  day_option_description?: string | null;
+  post_prasadam?: boolean | null;
+  created_at?: string | null;
+  members?: RegistrationMember[];
 }
 
 const formatDate = (value?: string | null) => {
@@ -75,6 +95,20 @@ const resolveText = (value?: string | null) => {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : '—';
+};
+
+const formatGender = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  const normalized = value.replace(/_/g, ' ').trim();
+  if (!normalized) {
+    return '—';
+  }
+  return normalized
+    .split(' ')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
 };
 
 const sortMembers = (list: FamilyMember[]) =>
@@ -123,12 +157,60 @@ const extractErrorMessage = (error: unknown) => {
   return 'Unexpected error';
 };
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDate(value);
+  }
+  return parsed.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const resolvePoojaId = (registration: PoojaRegistration) => {
+  const trimmed = (registration.pooja_reg_id ?? '').trim();
+  return trimmed.length > 0 ? trimmed : `#${registration.id}`;
+};
+
+const formatMemberNames = (members?: RegistrationMember[]) => {
+  if (!Array.isArray(members)) {
+    return '—';
+  }
+  const names = members
+    .map((member) => (member?.name ?? '').trim())
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? names.join(', ') : '—';
+};
+
 const DonorProfile = () => {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [profile, setProfile] = useState<ApiDonorProfile | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [registrations, setRegistrations] = useState<PoojaRegistration[]>([]);
+  const [registrationsLoading, setRegistrationsLoading] = useState(true);
+  const [registrationsError, setRegistrationsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const FAMILY_OPTIONS = [
+    'Arunachalam-Sambasiva Iyr',
+    'Kadakarar Subramani Iyr',
+    'Sundaresa Iyr+ Pannai+Balu Fmly',
+    'Narayanswamy fmly',
+    'Mangalam Periyamma Fmly',
+    'Koorakattu Fmly',
+    'RamaniSastri Fmly',
+    'Pichu Iyr Fmly',
+    'Pattamani Iyr Fmly',
+    'Other',
+  ];
 
   const createInitialFormState = (profileData?: ApiDonorProfile): FamilyMemberFormState => ({
     name: '',
@@ -138,6 +220,12 @@ const DonorProfile = () => {
     tamil_star: '',
     gothra: '',
     family_name: (profileData?.family_name ?? '').trim(),
+    family_selection: (() => {
+      const family = (profileData?.family_name ?? '').trim();
+      if (!family) return '';
+      // if profile family matches one of the predefined options (case-sensitive match), use it, else treat as 'Other'
+      return FAMILY_OPTIONS.includes(family) ? family : 'Other';
+    })(),
   });
 
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -171,7 +259,30 @@ const DonorProfile = () => {
       }
     };
 
+    const loadRegistrations = async () => {
+      setRegistrationsLoading(true);
+      setRegistrationsError(null);
+      try {
+        const response = await api.get('pooja/registrations/', { params: { page_size: 200 } });
+        if (!active) {
+          return;
+        }
+        setRegistrations(extractResults<PoojaRegistration>(response.data));
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+        setRegistrations([]);
+        setRegistrationsError(extractErrorMessage(err));
+      } finally {
+        if (active) {
+          setRegistrationsLoading(false);
+        }
+      }
+    };
+
     loadProfile();
+    loadRegistrations();
     return () => {
       active = false;
     };
@@ -210,6 +321,11 @@ const DonorProfile = () => {
       tamil_star: member.tamil_star || '',
       gothra: member.gothra || '',
       family_name: member.family_name || profile?.family_name || '',
+      family_selection: (() => {
+        const fam = (member.family_name || profile?.family_name || '').trim();
+        if (!fam) return '';
+        return FAMILY_OPTIONS.includes(fam) ? fam : 'Other';
+      })(),
     });
     setEditingMemberId(member.id);
     setIsAddingNew(false);
@@ -313,7 +429,7 @@ const DonorProfile = () => {
                     <td className="px-4 py-3 text-slate-700">{resolveText(profile?.donor_id ?? '')}</td>
                     <td className="px-4 py-3 text-slate-700">{resolveText(profile?.family_name)}</td>
                     <td className="px-4 py-3 text-slate-700">{resolveText(user?.name ?? '')}</td>
-                    <td className="px-4 py-3 text-slate-700">—</td>
+                    <td className="px-4 py-3 text-slate-700">{formatGender(profile?.gender)}</td>
                     <td className="px-4 py-3 text-slate-700">{formatDate(profile?.date_of_birth)}</td>
                     <td className="px-4 py-3 text-slate-700">{resolveText(profile?.gothra)}</td>
                     <td className="px-4 py-3 text-slate-700">{resolveText(profile?.tamil_star)}</td>
@@ -340,7 +456,7 @@ const DonorProfile = () => {
               </button>
             </div>
 
-            {members.length === 0 ? (
+            {members.length === 0 && !isAddingNew ? (
               <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
                 No family members added yet. Click &quot;Add Member&quot; to include your family details.
               </div>
@@ -420,13 +536,37 @@ const DonorProfile = () => {
                         </td>
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                              value={formData.family_name}
-                              onChange={handleInputChange('family_name')}
-                              placeholder="Enter family name"
-                            />
+                            <div className="w-full">
+                              <label className="sr-only">Family</label>
+                              <select
+                                className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.family_selection}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    family_selection: val,
+                                    family_name: val === 'Other' ? '' : val,
+                                  }));
+                                }}
+                              >
+                                <option value="">Select a family</option>
+                                {FAMILY_OPTIONS.map((opt) => (
+                                  <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
+                              {formData.family_selection === 'Other' && (
+                                <input
+                                  type="text"
+                                  className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                  value={formData.family_name}
+                                  onChange={handleInputChange('family_name')}
+                                  placeholder="Enter family name"
+                                />
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={cancelAddingNew}
@@ -509,13 +649,37 @@ const DonorProfile = () => {
                             </td>
                             <td className="px-4 py-2">
                               <div className="flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.family_name}
-                                  onChange={handleInputChange('family_name')}
-                                  placeholder="Enter family name"
-                                />
+                                <div className="w-full">
+                                  <label className="sr-only">Family</label>
+                                  <select
+                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.family_selection}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        family_selection: val,
+                                        family_name: val === 'Other' ? '' : val,
+                                      }));
+                                    }}
+                                  >
+                                    <option value="">Select a family</option>
+                                    {FAMILY_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {formData.family_selection === 'Other' && (
+                                    <input
+                                      type="text"
+                                      className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                      value={formData.family_name}
+                                      onChange={handleInputChange('family_name')}
+                                      placeholder="Enter family name"
+                                    />
+                                  )}
+                                </div>
                                 <button
                                   type="button"
                                   onClick={cancelEditing}
@@ -559,6 +723,82 @@ const DonorProfile = () => {
                             </td>
                           </>
                         )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm w-full overflow-x-auto mx-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Registered Pooja&apos;s</h2>
+                <p className="text-sm text-slate-500">Review all pooja registrations linked to your account.</p>
+              </div>
+              <span className="inline-flex items-center justify-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600">
+                {registrations.length} {registrations.length === 1 ? 'Registration' : 'Registrations'}
+              </span>
+            </div>
+
+            {registrationsLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600"></div>
+                Loading pooja registrations...
+              </div>
+            ) : registrationsError ? (
+              <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {registrationsError}
+              </div>
+            ) : registrations.length === 0 ? (
+              <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                No pooja registrations found for your account.
+              </div>
+            ) : (
+              <div className="mt-6 overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Pooja ID</th>
+                      <th className="px-4 py-3 font-semibold">Pooja Name</th>
+                      <th className="px-4 py-3 font-semibold">Pooja Date</th>
+                      <th className="px-4 py-3 font-semibold">Day Option</th>
+                      <th className="px-4 py-3 font-semibold">Devotees</th>
+                      <th className="px-4 py-3 font-semibold">Post Prasadam</th>
+                      <th className="px-4 py-3 font-semibold">Registered On</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {registrations.map((registration, index) => (
+                      <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
+                          {resolvePoojaId(registration)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
+                          {registration.pooja_option_name?.trim() || '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                          {formatDate(registration.start_date)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700" title={registration.day_option_description ?? undefined}>
+                          {registration.day_option_description?.trim() || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">
+                          {formatMemberNames(registration.members)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              registration.post_prasadam ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {registration.post_prasadam ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                          {formatDateTime(registration.created_at)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
