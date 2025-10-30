@@ -51,7 +51,7 @@ const App = () => (
     <Route
       path="/forgot-password"
       element={
-        <AuthLayout title="Reset your password">
+        <AuthLayout title="Reset your password" variant="immersive">
           <ForgotPasswordPage />
         </AuthLayout>
       }

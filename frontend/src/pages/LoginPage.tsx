@@ -1,3 +1,4 @@
+// LoginPage.jsx
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
@@ -22,15 +23,32 @@ const navLinks = [
   { label: 'About', href: '#top' },
 ] as const;
 
-const highlights = [
-  'Daily darshan updates and priority booking',
-  'Manage seva schedules and donations in one place',
-  'Personalized spiritual content curated for you',
+const features = [
+  { icon: '🙏', title: 'Daily Darshan', description: 'Priority access to temple darshan slots' },
+  { icon: '📿', title: 'Ritual Services', description: 'Book and manage special poojas and rituals' },
+  { icon: '🌟', title: 'Spiritual Content', description: 'Personalized spiritual guidance and updates' },
+] as const;
+
+const testimonials = [
+  {
+    quote: "The portal has transformed how I connect with my spiritual practices. Booking darshan is now effortless!",
+    author: "Priya Sharma",
+    role: "Devotee since 2020"
+  },
+  {
+    quote: "Managing our family rituals has never been easier. The reminders and scheduling features are invaluable.",
+    author: "Rajesh Iyer",
+    role: "Community Member"
+  }
 ] as const;
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -38,7 +56,6 @@ const LoginPage = () => {
   } = useForm<FormValues>({
     defaultValues: { phone_number: '', password: '' },
   });
-  const [apiError, setApiError] = useState<string | null>(null);
 
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
@@ -54,59 +71,75 @@ const LoginPage = () => {
     }
   };
 
-  // Shared button styles to keep Login & Sign Up perfectly aligned
   const navBtn =
-    'inline-flex h-10 items-center justify-center rounded-full px-4 whitespace-nowrap leading-none text-white shadow-sm transition';
+    'inline-flex h-10 items-center justify-center rounded-full px-5 whitespace-nowrap leading-none text-white transition-all duration-300 shadow-sm hover:shadow-lg transform hover:-translate-y-0.5';
+
+  const handleFocus = (fieldName: string) => {
+    setIsFocused(fieldName);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(null);
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden bg-slate-950"
+      className="relative min-h-screen overflow-hidden"
       style={{
         backgroundImage:
-          'url("https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1600&q=80")',
+          'linear-gradient(rgba(9,2,3,0.94), rgba(9,2,3,0.95)), url("https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1800&q=80")',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
     >
-      {/* gradient overlays */}
+      {/* Animated Background Elements */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#2c0a16]/90 via-[#130307]/92 to-[#090203]/96" />
-        <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#ffb347]/25 blur-3xl" />
-        <div className="absolute bottom-[-4rem] right-[-4rem] h-80 w-80 rounded-full bg-[#f5d26a]/20 blur-3xl" />
+        <div className="absolute -left-10 top-10 h-64 w-64 rounded-full bg-[#f3c85c]/20 blur-3xl animate-pulse" />
+        <div className="absolute bottom-[-4rem] right-[-4rem] h-96 w-96 rounded-full bg-[#f06f4a]/15 blur-3xl animate-pulse" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,209,112,0.2),transparent_55%)]" />
+        
+        {/* Floating Elements */}
+        <div className="absolute top-1/4 left-1/4 w-8 h-8 rounded-full bg-amber-400/30 animate-float1" />
+        <div className="absolute top-1/3 right-1/4 w-6 h-6 rounded-full bg-rose-400/30 animate-float2" />
+        <div className="absolute bottom-1/4 left-1/3 w-10 h-10 rounded-full bg-yellow-400/30 animate-float3" />
+        <div className="absolute bottom-1/3 right-1/3 w-5 h-5 rounded-full bg-orange-400/30 animate-float4" />
+        
+        {/* Temple Silhouette */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-amber-900/30 to-transparent opacity-50"></div>
       </div>
 
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="bg-transparent text-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
-            {/* Left: Logo/Title block */}
             <Link
               to="/"
-              className="flex min-w-0 flex-col gap-1 text-left shrink-0"
+              className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
             >
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
                 Kakkazhany Gramam
               </p>
-              <p className="text-xs text-white/80">
+              <p className="text-xs text-white/80 group-hover:text-white transition-colors">
                 The Architectural Marvel of Agraharam
               </p>
             </Link>
 
-            {/* Right: Nav */}
             <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-white">
               {navLinks.map((item) => (
                 <a
                   key={item.label}
                   href={item.href}
-                  className="text-white transition hover:text-[#f4ba1a]"
+                  className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
                 >
                   {item.label}
                 </a>
               ))}
-
               <LanguageToggle />
 
-              {/* Buttons grouped & aligned */}
               <div className="flex items-center gap-3">
                 <Link
                   to="/login"
@@ -118,7 +151,6 @@ const LoginPage = () => {
                   to="/register"
                   className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}
                 >
-                  {/* prevent wrap to a second line */}
                   Sign&nbsp;Up
                 </Link>
               </div>
@@ -128,150 +160,307 @@ const LoginPage = () => {
       </header>
 
       {/* MAIN */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-10 pt-32 md:pt-36">
-        <div className="grid w-full max-w-5xl gap-10 rounded-[2.5rem] bg-white/10 p-10 backdrop-blur-xl ring-1 ring-white/10 lg:grid-cols-[1.15fr_1fr]">
-          {/* Left panel */}
-          <div className="flex flex-col justify-between gap-10 text-amber-50">
-            <div className="space-y-6">
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f4c956]">
-                Kakkazhany Gramam — Member Portal
-              </span>
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-14 pt-36">
+        <div className="w-full max-w-6xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left Column - Content */}
+            <div className="space-y-8 animate-fade-in">
               <div className="space-y-4">
-                <h1 className="text-3xl font-bold leading-snug text-white sm:text-4xl">
-                  Welcome back to your sacred journey
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f4c956] backdrop-blur-sm">
+                  Welcome Back
+                </div>
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+                  Reconnect with Your <span className="text-amber-300">Sacred Journey</span>
                 </h1>
-                <p className="max-w-lg text-base text-amber-50/80 sm:text-lg">
-                  Sign in to access personalized darshan slots, ritual schedules,
-                  temple news, and community seva opportunities curated for your
-                  devotion.
+                <p className="text-lg md:text-xl text-amber-100 leading-relaxed">
+                  Sign in to access personalized darshan slots, ritual schedules, and community seva opportunities.
                 </p>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.28em] text-[#f4c956]">
-                Why members love the portal
-              </h2>
-              <ul className="space-y-3 text-sm text-amber-50/90">
-                {highlights.map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <span className="mt-1 inline-flex h-2.5 w-2.5 flex-shrink-0 rounded-full bg-[#ffb347]" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex flex-wrap items-center gap-6 text-xs uppercase tracking-[0.3em] text-amber-100/80">
-                <div>
-                  70K+{' '}
-                  <span className="ml-1 text-[11px] font-medium text-[#f4c956]">
+              {/* Features */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-amber-200">Portal Features</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {features.map((feature, index) => (
+                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 transition-all duration-300 hover:bg-white/20">
+                      <div className="text-2xl mb-2">{feature.icon}</div>
+                      <h4 className="font-semibold text-white">{feature.title}</h4>
+                      <p className="text-xs text-amber-100/80 mt-1">{feature.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Testimonials */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-amber-200">Community Voices</h3>
+                <div className="space-y-4">
+                  {testimonials.map((testimonial, index) => (
+                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border-l-4 border-amber-400">
+                      <p className="text-amber-50 italic mb-2">"{testimonial.quote}"</p>
+                      <div>
+                        <p className="font-medium text-white">{testimonial.author}</p>
+                        <p className="text-xs text-amber-100/70">{testimonial.role}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="flex flex-wrap items-center gap-6 pt-4">
+                <div className="flex items-center">
+                  <span className="text-amber-300 font-bold text-xl mr-2">70K+</span>
+                  <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Annual Devotees
                   </span>
                 </div>
-                <div>
-                  120+{' '}
-                  <span className="ml-1 text-[11px] font-medium text-[#f4c956]">
+                <div className="flex items-center">
+                  <span className="text-amber-300 font-bold text-xl mr-2">120+</span>
+                  <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Daily Sevas
                   </span>
                 </div>
-                <div>
-                  24/7{' '}
-                  <span className="ml-1 text-[11px] font-medium text-[#f4c956]">
+                <div className="flex items-center">
+                  <span className="text-amber-300 font-bold text-xl mr-2">24/7</span>
+                  <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Support
                   </span>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Right panel (form) */}
-          <div className="rounded-[2rem] bg-white p-8 shadow-[0_45px_70px_-40px_rgba(15,23,42,0.55)] sm:p-10">
-            <div className="space-y-6">
-              <div className="space-y-2 text-center">
-                <h2 className="text-2xl font-semibold text-slate-900">
-                  Sign in to continue
-                </h2>
-                <p className="text-sm text-slate-500">
-                  Enter your registered mobile number and password to access your
-                  dashboard.
-                </p>
+            {/* Right Column - Form */}
+            <div className="animate-fade-in-up">
+              {/* Progress Steps */}
+              <div className="mb-8">
+                <div className="flex justify-center mb-6">
+                  <div className="flex items-center">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold mb-3 bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-lg transform scale-110"
+                      >
+                        1
+                      </div>
+                      <div className="text-center">
+                        <div className="text-base font-semibold text-amber-300">
+                          Sign In
+                        </div>
+                        <div className="text-xs text-white/60 max-w-[120px]">
+                          Enter your credentials
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                {apiError && (
-                  <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-inner">
-                    {apiError}
-                  </p>
-                )}
+              <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-1 shadow-2xl">
+                <div className="bg-white rounded-3xl overflow-hidden shadow-xl">
+                  <form onSubmit={handleSubmit(onSubmit)} className="p-8">
+                    {apiError && (
+                      <div className="mb-6 p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake flex items-center">
+                        <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {apiError}
+                      </div>
+                    )}
 
-                <div className="space-y-2">
-                  <label className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.28em] text-slate-600">
-                    <span>Mobile Number</span>
-                    <span className="text-[10px] text-amber-500">+91 required</span>
-                  </label>
-                  <div className="rounded-2xl border border-slate-200 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-200">
-                    <input
-                      type="tel"
-                      className="w-full rounded-2xl border-0 px-4 py-3 text-slate-800 placeholder:text-slate-400 focus:outline-none"
-                      placeholder="Enter your mobile number"
-                      {...register('phone_number', {
-                        required: 'Mobile number is required',
-                      })}
-                    />
-                  </div>
-                  {errors.phone_number && (
-                    <p className="text-xs text-rose-600">
-                      {errors.phone_number.message}
-                    </p>
-                  )}
+                    <div className="space-y-6">
+                      <div className="text-center mb-8">
+                        <h2 className="text-3xl font-bold text-gray-800 mb-2">Sign In</h2>
+                        <p className="text-gray-600">Enter your credentials to access your dashboard</p>
+                      </div>
+                      
+                      <div className="space-y-5">
+                        <div className="relative">
+                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                            Mobile Number <span className="text-rose-500 ml-1">*</span>
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                            </div>
+                            <div className="absolute inset-y-0 left-12 flex items-center pointer-events-none text-gray-400">
+                              +91
+                            </div>
+                            <input
+                              type="tel"
+                              className={`w-full rounded-xl border pl-20 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                              }`}
+                              placeholder="Enter your mobile number"
+                              {...register('phone_number', {
+                                required: 'Mobile number is required',
+                              })}
+                              onFocus={() => handleFocus('phone_number')}
+                              onBlur={handleBlur}
+                            />
+                          </div>
+                          {errors.phone_number && (
+                            <p className="mt-1 text-xs text-red-600 flex items-center">
+                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              {errors.phone_number.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="relative">
+                          <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
+                            <span>Password <span className="text-rose-500 ml-1">*</span></span>
+                            <Link
+                              to="/forgot-password"
+                              className="text-xs text-amber-600 hover:text-amber-700 transition-colors"
+                            >
+                              Forgot?
+                            </Link>
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                              </svg>
+                            </div>
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              className={`w-full rounded-xl border pl-10 pr-12 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                isFocused === 'password' || errors.password ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                              }`}
+                              placeholder="Enter your password"
+                              {...register('password', { required: 'Password is required' })}
+                              onFocus={() => handleFocus('password')}
+                              onBlur={handleBlur}
+                            />
+                            <button
+                              type="button"
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                              onClick={togglePasswordVisibility}
+                            >
+                              {showPassword ? (
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                </svg>
+                              ) : (
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                          {errors.password && (
+                            <p className="mt-1 text-xs text-red-600 flex items-center">
+                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              {errors.password.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center">
+                        <input
+                          id="remember-me"
+                          name="remember-me"
+                          type="checkbox"
+                          className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                          Remember me
+                        </label>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Signing in…
+                          </>
+                        ) : (
+                          <>
+                            Sign In
+                            <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                          </>
+                        )}
+                      </button>
+
+                      <div className="text-center text-sm text-gray-600">
+                        New devotee?{' '}
+                        <Link
+                          to="/register"
+                          className="font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                        >
+                          Create your account
+                        </Link>
+                      </div>
+                    </div>
+                  </form>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.28em] text-slate-600">
-                    <span>Password</span>
-                    <Link
-                      to="/forgot-password"
-                      className="text-[10px] text-amber-600 hover:text-amber-700"
-                    >
-                      Forgot?
-                    </Link>
-                  </label>
-                  <div className="rounded-2xl border border-slate-200 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-200">
-                    <input
-                      type="password"
-                      className="w-full rounded-2xl border-0 px-4 py-3 text-slate-800 placeholder:text-slate-400 focus:outline-none"
-                      placeholder="Enter your password"
-                      {...register('password', { required: 'Password is required' })}
-                    />
-                  </div>
-                  {errors.password && (
-                    <p className="text-xs text-rose-600">
-                      {errors.password.message}
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full rounded-2xl bg-gradient-to-r from-rose-600 to-amber-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.25em] text-white shadow-lg transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSubmitting ? 'Signing in…' : 'Sign In'}
-                </button>
-
-                <div className="text-center text-sm text-slate-500">
-                  New devotee?{' '}
-                  <Link
-                    to="/register"
-                    className="font-semibold text-rose-600 hover:text-rose-700"
-                  >
-                    Create your account
-                  </Link>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-white/60 text-xs z-10">
+        <p>© {new Date().getFullYear()} Kakkazhany Gramam. All rights reserved.</p>
+      </footer>
+
+      {/* Custom CSS for animations */}
+      <style>{`
+        @keyframes float1 {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(10px, 10px); }
+        }
+        @keyframes float2 {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(-15px, 5px); }
+        }
+        @keyframes float3 {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(5px, -15px); }
+        }
+        @keyframes float4 {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(-10px, -10px); }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .animate-float1 { animation: float1 6s ease-in-out infinite; }
+        .animate-float2 { animation: float2 8s ease-in-out infinite; }
+        .animate-float3 { animation: float3 7s ease-in-out infinite; }
+        .animate-float4 { animation: float4 9s ease-in-out infinite; }
+        .animate-fade-in { animation: fade-in 0.6s ease-out; }
+        .animate-fade-in-up { animation: fade-in-up 0.8s ease-out; }
+        .animate-shake { animation: shake 0.5s ease-in-out; }
+      `}</style>
     </div>
   );
 };
