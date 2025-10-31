@@ -978,14 +978,23 @@ const DonorDetailsPage = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-gothra">
                     Gothram
                   </label>
-                  <input
+                  <select
                     id="member-gothra"
                     name="gothra"
-                    type="text"
                     className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none transition duration-200"
                     value={memberForm.gothra}
                     onChange={handleMemberChange}
-                  />
+                  >
+                    <option value="">Select Gothram</option>
+                    <option value="Atri">Atri</option>
+                    <option value="Bharadvaja">Bharadvaja</option>
+                    <option value="Gautama">Gautama</option>
+                    <option value="Jamadagni">Jamadagni</option>
+                    <option value="Kashyapa">Kashyapa</option>
+                    <option value="Vasishta">Vasishta</option>
+                    <option value="Vishvamitra">Vishvamitra</option>
+                    <option value="Agastya">Agastya</option>
+                  </select>
                 </div>
 
                 <div>
@@ -1587,15 +1596,24 @@ const DonorDetailsPage = () => {
                               <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-gothra-${member.id}`}>
                                 Gothram
                               </label>
-                              <input
+                              <select
                                 id={`admin-member-gothra-${member.id}`}
                                 name="gothra"
-                                type="text"
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
                                 value={adminMemberEditForm.gothra}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
-                              />
+                              >
+                                <option value="">Select Gothram</option>
+                                <option value="Atri">Atri</option>
+                                <option value="Bharadvaja">Bharadvaja</option>
+                                <option value="Gautama">Gautama</option>
+                                <option value="Jamadagni">Jamadagni</option>
+                                <option value="Kashyapa">Kashyapa</option>
+                                <option value="Vasishta">Vasishta</option>
+                                <option value="Vishvamitra">Vishvamitra</option>
+                                <option value="Agastya">Agastya</option>
+                              </select>
                             </div>
 
                             <div>

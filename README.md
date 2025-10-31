@@ -2,7 +2,26 @@
 
 A modern operations suite for the Kakkazhany Gramam temple unifying a content-rich public website with donor and admin workspaces. The repository ships a Vite/React frontend, a Django REST API, and PostgreSQL, orchestrated with Docker for local development.
 
-## Highlights
+## Project Overview
+
+- **Vision**: Provide a single digital hub where temple visitors explore events, donors manage registrations, and administrators orchestrate daily operations.
+- **Core modules**:
+  - Public site with landing, about, event, gallery, and project pages backed by live pooja registrations.
+  - Donor workspace handling account onboarding, family profiles, pooja carts, checkout, and donation history.
+  - Admin console for maintaining master data, monitoring KPIs, exporting rosters, and reconciling payments.
+- **Technology pillars**: React-based SPA for user experience, Django REST API for business logic, PostgreSQL for data, and Docker for local parity with production.
+
+## How It Works
+
+1. Visitors browse the public microsite to learn about temple history, events, and upcoming poojas.
+2. Donors register with their phone number, verify via OTP, and create a password-protected account.
+3. Donors curate family profiles, plan poojas using Tamil star/day guidance, and stage items in a cart.
+4. Submissions hit the API where sequential registration IDs and donor-specific confirmations are generated.
+5. Administrators review registrations, export reports, reorder master data, and record offline payments.
+6. Astronomy services cache ephemeris data to answer “next occurrence” queries for Tamil star and weekday calculations.
+7. Frontend surfaces real-time updates (ticker, dashboards) using cached API responses and local persistence.
+
+## Feature Highlights
 
 ### Public experience
 - Immersive landing page with hero sections, festival highlights, temple timings, visit planner, and live ticker of confirmed pooja registrations pulled from `/pooja/registrations/today-public/`.
@@ -10,7 +29,7 @@ A modern operations suite for the Kakkazhany Gramam temple unifying a content-ri
 - Dedicated pages for About (founder and committee biographies, family tree downloads), Gallery, Events, and Projects to showcase ongoing initiatives.
 
 ### Donor workspace
-- Phone-number based authentication with OTP-based registration, password reset, and JWT sessions stored via Zustand.
+- Phone-number based authentication with OTP registration, password reset, and JWT sessions stored via Zustand.
 - Dashboard with donor metrics, today's pooja roster, and one-click PDF exports for admins.
 - Profile management with family member directory, gothra/star metadata, and historical pooja registrations.
 - Pooja registration flow featuring searchable master data, Tamil-star aware day selection, member multi-select, cart staging, and persistence per user.
@@ -36,6 +55,28 @@ A modern operations suite for the Kakkazhany Gramam temple unifying a content-ri
 - Backend: Django 5, Django REST Framework, Simple JWT, PostgreSQL 15, Skyfield astronomy utilities.
 - Tooling: Docker Compose, Gunicorn, PostCSS, ESLint, npm.
 
+## Core Logic & Process
+
+- **Authentication**: Phone numbers are the primary identity key. OTP tokens validate sign-up/sign-in, and Simple JWT issues access/refresh pairs stored by the frontend in Zustand stores with localStorage persistence.
+- **Donor Profiling**: Each authenticated user auto-spawns a `DonorProfile` (`donor_id` generated sequentially). Profiles maintain gothram, star, and family member references that downstream flows reuse.
+- **Pooja Catalog**: Administrators curate pooja headers/options with metadata (pricing, Tamil star relevance, scheduling rules). The frontend fetches this catalog and caches it for quick search/filter operations.
+- **Cart & Checkout**: Donors stage pooja selections in a client-side cart. Submissions hit `/api/pooja/registrations/`, which assigns sequential `PR####` IDs, persists member mappings, and returns confirmation payloads stored locally for offline reference.
+- **Astronomy Scheduling**: `pooja/services/calendar.py` calculates the next valid date for Tamil star/day combinations via Skyfield ephemeris data and caches results under `backend/data/skyfield` to avoid repeat downloads.
+- **Payments & Reconciliation**: Offline payments (Form-13) register via `/api/payments/records/`. Records track mode/status enums, amounts, and donor linkage, enabling admins to reconcile pending balances within the console.
+- **Dashboards & Exports**: Admin dashboards aggregate donor totals, registration counts, and member breakdowns. Exports leverage `xlsx` and `pdfmake` to generate printable rosters and receipts on demand.
+
+## Execution Cheat Sheet
+
+| Task | Command |
+| --- | --- |
+| Start full stack (recommended) | `docker compose up --build` |
+| Run backend locally | `python manage.py runserver 0.0.0.0:8000` |
+| Run frontend locally | `VITE_API_BASE_URL=http://localhost:8000/api npm run dev` |
+| Build frontend for production | `npm run build` |
+| Lint frontend code | `npm run lint` |
+| Apply backend migrations | `python manage.py migrate` |
+| Create Django superuser | `python manage.py createsuperuser` |
+
 ## Repository Layout
 
 ```text
@@ -58,50 +99,108 @@ docker-compose.yml
 .env                  # sample development configuration
 ```
 
-## Getting Started
+## Step-by-Step Setup
+
+### Prerequisites
+1. Install Docker/Docker Compose **or** Python 3.11+, Node.js 18+, and PostgreSQL 15.
+2. Copy `.env` to a local environment file and populate secrets (see [Environment & Configuration](#environment--configuration)).
+3. Ensure ports `5173` (frontend) and `8000` (backend) are free on your machine.
 
 ### Option 1 – Docker Compose (recommended)
-
-```bash
-# Update .env with your secrets before first run
-docker compose up --build
-```
-
-Services exposed:
-
-- Frontend dev server: http://localhost:5173
-- Django API + admin: http://localhost:8000 (admin login defaults to `phone_number=9999999999`, `password=adminpass` — change immediately)
+1. From the repository root, review `docker-compose.yml` to understand service names (`web`, `api`, `db`).
+2. Update `.env` with database credentials, Django secrets, and the desired API base URL.
+3. Run:
+   ```bash
+   docker compose up --build
+   ```
+4. Wait for the backend container to apply migrations and seed the default admin user (`phone_number=9999999999`, `password=adminpass` — change immediately after login).
+5. Visit:
+   - Frontend dev server: http://localhost:5173
+   - Django API + admin: http://localhost:8000
 
 ### Option 2 – Local runtimes
 
-Backend:
+#### Backend
+1. Create and activate a virtual environment:
+   ```bash
+   cd backend
+   python -m venv .venv
+   source .venv/bin/activate  # .venv\Scripts\activate on Windows
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Provision PostgreSQL and export environment variables matching `.env`.
+4. Apply migrations and optionally seed an extra admin:
+   ```bash
+   python manage.py migrate
+   python manage.py createsuperuser  # optional
+   ```
+5. Run the API:
+   ```bash
+   python manage.py runserver 0.0.0.0:8000
+   ```
 
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # .venv\Scripts\activate on Windows
-pip install -r requirements.txt
+#### Frontend
+1. Install dependencies:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Point the SPA at your API:
+   ```bash
+   VITE_API_BASE_URL=http://localhost:8000/api npm run dev
+   ```
+3. For production-style bundles:
+   ```bash
+   npm run build   # generates dist/ for static deployment
+   npm run lint    # react + typescript linting
+   ```
 
-# Configure PostgreSQL (e.g. docker compose up db) and export env vars matching .env
-python manage.py migrate
-python manage.py createsuperuser  # optional extra admin
-python manage.py runserver 0.0.0.0:8000
-```
+### Post-Setup Checks
+1. Load http://localhost:5173 and confirm the landing page renders with live ticker data.
+2. Sign in using the seeded admin credentials and verify dashboard metrics populate.
+3. Create a donor account, complete an OTP flow, and submit a sample pooja registration.
+4. Confirm the admin console reflects the new registration and exports generate PDFs/XLSX.
 
-Frontend:
+## Operational Workflows
 
-```bash
-cd frontend
-npm install
-VITE_API_BASE_URL=http://localhost:8000/api npm run dev
-```
+### Donor Journey
+1. **Discover**: Browse the landing page, upcoming events, and temple timings.
+2. **Onboard**: Sign up with phone number, validate the OTP, and set a password.
+3. **Curate Profile**: Add family members, gothra, and star details for scheduling guidance.
+4. **Plan Poojas**: Search master data, filter by Tamil star/day, and stage items in the cart.
+5. **Checkout**: Submit the cart, receive sequential `PR####` confirmation, and view history.
+6. **Follow Up**: Track payment status, download receipts, and manage future registrations.
 
-Preview/build commands:
+### Admin Operations
+1. **Dashboard**: Review daily KPIs for donor counts, registrations, and payments.
+2. **Master Data**: Maintain pooja headers/options and reorder day codes via drag-and-drop.
+3. **Registration Review**: Filter by date, download XLSX/PDF reports, and reconcile offline payments.
+4. **Payments**: Record Form-13 entries with mode/status enums and track outstanding balances.
+5. **Content**: Update featured pooja media, gallery assets, and about page biographies as needed.
+6. **Astronomy Cache**: Monitor `backend/data/skyfield` for ephemeris freshness (downloads happen on demand).
 
-```bash
-npm run build   # generates dist/ for static deployment
-npm run lint    # react + typescript linting
-```
+### Back-Office Checklist
+1. Ensure database backups run nightly and store offsite.
+2. Rotate default admin credentials after first login.
+3. Audit OTP delivery logs to maintain SMS reliability.
+4. Review donor feedback and update landing page highlights accordingly.
+
+## Development Workflow
+- **Plan**: Capture features/issues in `docs/architecture.md` or your task tracker.
+- **Branch**: Create feature branches from `main` (e.g., `feature/donor-reports`).
+- **Develop**: Run `npm run dev` and `python manage.py runserver` side-by-side for rapid iteration.
+- **Test**: Add unit tests (frontend with Vitest, backend with Django’s test runner) and run linting before commits.
+- **Review**: Use pull requests for peer review, referencing API contracts and UI mockups.
+- **Deploy**: Build frontend assets (`npm run build`), run backend migrations, and restart services with Docker or your target environment.
+
+## Deployment Notes
+- **Staging**: Mirror Docker compose in a staging environment to validate end-to-end changes before production.
+- **Environment Variables**: Store secrets in a managed vault and inject at runtime; do not commit `.env`.
+- **Static Assets**: Serve `frontend/dist` via a CDN or static host; configure Django to serve only API endpoints.
+- **Monitoring**: Enable logging for OTP, payments, and calendar services; alert on API error spikes and failed ephemeris downloads.
 
 ## Environment & Configuration
 
@@ -146,4 +245,3 @@ The repository includes a development `.env`. Key variables:
 
 - `docs/architecture.md` — architecture goals, data model overview, and future roadmap.
 - `frontend/public/` and `frontend/src/pages/About.tsx` — contains founder/committee bios and family tree references for content editors.
-

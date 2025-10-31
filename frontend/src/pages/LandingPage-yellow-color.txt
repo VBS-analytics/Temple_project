@@ -1,0 +1,1116 @@
+import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+
+import LanguageToggle from "../components/LanguageToggle";
+import api, { extractResults } from "../lib/api";
+import { resolveMediaUrl } from "../lib/media";
+
+type LinkType = "anchor" | "route";
+
+interface NavLinkItem {
+  label: string;
+  href: string;
+  type: LinkType;
+  children?: Array<{ label: string; href: string; type: LinkType }>;
+}
+
+interface FeaturedPoojaCard {
+  id: number;
+  name: string;
+  image: string;
+  image_url?: string;
+  amount: string | null;
+}
+
+interface TodayPoojaMemberRecord {
+  id?: number;
+  name?: string | null;
+}
+
+interface TodayPoojaLandingRecord {
+  id: number;
+  pooja_reg_id?: string | null;
+  start_date?: string | null;
+  pooja_option_name?: string | null;
+  day_option_description?: string | null;
+  donor_name?: string | null;
+  post_prasadam?: boolean | null;
+  created_at?: string | null;
+  members?: TodayPoojaMemberRecord[];
+}
+
+const navLinks: NavLinkItem[] = [
+  { label: "Home", href: "#top", type: "anchor" },
+  {
+    label: "About",
+    href: "/about",
+    type: "route",
+    children: [
+      { label: "Founder Members", href: "/about#founder-members", type: "route" },
+      { label: "Committee Members", href: "/about#committee-members", type: "route" },
+      { label: "Family Tree", href: "/about#family-tree", type: "route" },
+    ],
+  },
+  { label: "Darshan & Pooja", href: "#darshan", type: "anchor" },
+  { label: "Gallery", href: "/gallery", type: "route" },
+  { label: "Visit", href: "#visit", type: "anchor" },
+  { label: "Events", href: "/events", type: "route" },
+  { label: "Projects", href: "/projects", type: "route" },
+];
+
+const heroHighlights = [
+  {
+    title: "Temple Timings",
+    primary: "Morning: 5:00 AM – 12:30 PM",
+    secondary: "Evening: 4:00 PM – 10:00 PM",
+    cta: "View full schedule",
+    href: "#timings",
+    icon: "🕰️",
+  },
+  {
+    title: "Entry Fee",
+    primary: "General: Free",
+    secondary: "Special Darshan: Varies",
+    cta: "View fee details",
+    href: "/login",
+    icon: "🎟️",
+  },
+  {
+    title: "Best Time to Visit",
+    primary: "Weekday mornings (7 – 10 AM)",
+    secondary: "December to February",
+    cta: "Tips to avoid crowds",
+    href: "#visit",
+    icon: "📅",
+  },
+  {
+    title: "How to Reach",
+    primary: "Kakkazhany Gramam Busstop: 12 km",
+    secondary: "",
+    cta: "Get directions",
+    href: "#visit",
+    icon: "📍",
+  },
+] as const;
+
+const visitHighlights = [
+  {
+    title: "Guided Temple Tours",
+    description:
+      "Daily tours at 10:00 AM & 4:00 PM covering gopurams, mandapams, and the sacred tank.",
+    icon: "🛕",
+  },
+  {
+    title: "Special Darshan",
+    description:
+      "Express darshan counters available during peak festival days. Online booking recommended.",
+    icon: "🙏",
+  },
+  {
+    title: "Dress Code",
+    description:
+      "Traditional attire preferred. Shoulders and knees must be covered inside sanctum areas.",
+    icon: "👘",
+  },
+] as const;
+
+/** Architecture cards (images left). Each click updates right-side content. */
+const architectureHighlights = [
+  {
+    image:
+      "images/vinayakar.jpg",
+    displayTitle: "Pillayar Koil",
+    displayDescription: "Pillayar Koil Details",
+    alt: "Pillayar Koil",
+  },
+  {
+    image:
+      "images/shivan_koil.jpg",
+    displayTitle: "Shivan Koil",
+    displayDescription:
+      "A sculptural wonder dating back to the 16th century, featuring musical pillars and murals. - Shivan Koil Details",
+    alt: "Shivan Koil",
+  },
+  {
+    image:
+      "images/ayyanar_koil.jpg",
+    displayTitle: "Ayyanar Koil",
+    displayDescription:
+      "Sacred tank where poets presented their works; reflects the grandeur of the surrounding halls. - Ayyanar Koil Details",
+    alt: "Ayyanar Koil",
+  },
+  {
+    image:
+      "images/perumal_koil.jpg",
+    displayTitle: "Perumal Koil",
+    displayDescription:
+      "Intricately carved mandapams hosting nightly rituals, music, and cultural celebrations. - Perumal Koil Details",
+    alt: "Perumal Koil",
+  },
+] as const;
+
+const galleryImages = [
+  "https://images.unsplash.com/photo-1596265130137-02d0ed684495?auto=format&fit=crop&w=1100&q=80",
+  "https://images.unsplash.com/photo-1544552866-0f474b117a30?auto=format&fit=crop&w=1100&q=80",
+  "https://images.unsplash.com/photo-1517814083926-912067cec463?auto=format&fit=crop&w=1100&q=80",
+  "https://images.unsplash.com/photo-1518548865246-1e2922e03e94?auto=format&fit=crop&w=1100&q=80",
+] as const;
+
+const joinDevoteeNames = (members?: TodayPoojaMemberRecord[]) => {
+  if (!Array.isArray(members)) {
+    return "N/A";
+  }
+  const names = members
+    .map((member) => (member?.name ?? "").trim())
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? names.join(", ") : "N/A";
+};
+
+const resolvePoojaId = (pooja: TodayPoojaLandingRecord) => {
+  const trimmed = (pooja.pooja_reg_id ?? "").trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  return `#${pooja.id}`;
+};
+
+const formatBooleanLabel = (value?: boolean | null) => (value ? "Yes" : "No");
+
+const resolveDonorName = (value?: string | null) => {
+  const trimmed = (value ?? "").trim();
+  return trimmed || "Temple Admin";
+};
+
+const formatDateDisplay = (value?: string | null) => {
+  if (!value) {
+    return "N/A";
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    if (year && month && day) {
+      return `${day}-${month}-${year}`;
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatDateTimeDisplay = (value?: string | null) => {
+  if (!value) {
+    return "N/A";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDateDisplay(value);
+  }
+  return parsed.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const facilities = [
+  "Temple canteen open 7:00 AM – 9:00 PM with prasadam and South Indian meals.",
+  "Wheelchair access and assistance available at the South Gopuram entrance.",
+  "Cloak rooms for footwear and valuables located near East Tower.",
+  "On-site book shop with devotional literature, souvenirs, and prasadam counters.",
+  "Clean drinking water and rest areas provided across the campus.",
+  "24/7 security desk and lost-and-found near the main office.",
+] as const;
+
+const newsUpdates = [
+  {
+    date: "Apr 28, 2024",
+    title: "Mahashivratri Pooja",
+    excerpt:
+      "A ten-day celebration featuring celestial wedding, therottam, and lakhs of devotees from across the world.",
+    href: "#",
+  },
+  {
+    date: "Apr 10, 2024",
+    title: "Renovation works begin at Kakkazhany Gramam - Pillayar Koil",
+    excerpt:
+      "Structural restoration and mural conservation initiated to preserve the heritage for future generations.",
+    href: "#",
+  },
+  {
+    date: "Mar 30, 2024",
+    title: "Temple introduces bilingual guided tours for visitors",
+    excerpt:
+      "Daily Tamil and English tours now available with pre-booking through the information center.",
+    href: "#",
+  },
+] as const;
+
+/* ---------- DATA (put near your other constants) ---------- */
+const dailyPooja = [
+  {
+    day: "Sunday",
+    text:
+      "குருபூஜை திருவிழா • அபிஷேகம் • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், சுந்தரேசுவரர் அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+  {
+    day: "Monday",
+    text:
+      "திங்கள்நாள் நித்யமம் அர்ச்சனை • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+  {
+    day: "Tuesday",
+    text:
+      "செவ்வாய்க்கிழமை • அபிஷேகம் • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், சுந்தரேசுவரர் அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+  {
+    day: "Wednesday",
+    text:
+      "புதன் வழிபாடு • அபிஷேகம் • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+  {
+    day: "Thursday",
+    text:
+      "குருவாரம் • அர்ச்சனை • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+  {
+    day: "Friday",
+    text:
+      "வெள்ளி நித்யமம் • அபிஷேகம் • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+  {
+    day: "Saturday",
+    text:
+      "சனிக்கிழமை • அபிஷேகம் • ஆதித்தன்கரை பிள்ளையார்; சிவன் கோவிலில், அம்பாள், அய்யனார் கோவிலில்; பெரியமான் கோவிலில்",
+  },
+] as const;
+
+
+const LandingPage = () => {
+  // Selected card content (title + description) for Architecture section
+  const [selected, setSelected] = useState<null | {
+    title: string;
+    description: string;
+  }>(null);
+
+  // Ref & click-outside to reset Architecture section to default
+  const archRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (archRef.current && !archRef.current.contains(e.target as Node)) {
+        setSelected(null);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  /* ---------- HOOKS (inside LandingPage component, above return) ---------- */
+  const [poojaIdx, setPoojaIdx] = useState(0);
+  const [poojaPaused, setPoojaPaused] = useState(false);
+  const [featuredPoojas, setFeaturedPoojas] = useState<FeaturedPoojaCard[]>([]);
+  const [featuredError, setFeaturedError] = useState('');
+  const [todayPoojas, setTodayPoojas] = useState<TodayPoojaLandingRecord[]>([]);
+  const [todayPoojasError, setTodayPoojasError] = useState('');
+  const [poojaScheduleLoading, setPoojaScheduleLoading] = useState(true);
+  const todayReadableLabel = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!poojaPaused) setPoojaIdx((i) => (i + 1) % dailyPooja.length);
+    }, 4000); // auto-advance speed
+    return () => clearInterval(id);
+  }, [poojaPaused]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFeatured = async () => {
+      try {
+        const { data } = await api.get('/pooja/featured-poojas/');
+        if (!isMounted) return;
+        const cards = extractResults<FeaturedPoojaCard>(data)
+          .filter((item) => Boolean(item.image))
+          .slice(0, 4);
+        setFeaturedPoojas(cards);
+      } catch (error) {
+        if (isMounted) {
+          setFeaturedError('Unable to load featured poojas right now.');
+        }
+      }
+    };
+    fetchFeatured();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTodayPoojas = async () => {
+      setPoojaScheduleLoading(true);
+      setTodayPoojasError('');
+      try {
+        const { data } = await api.get('/pooja/registrations/today-public/');
+        if (!isMounted) {
+          return;
+        }
+        const records = extractResults<TodayPoojaLandingRecord>(data)
+          .filter((record): record is TodayPoojaLandingRecord => typeof record?.id === 'number');
+        const sorted = [...records].sort((a, b) => {
+          const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NaN;
+          const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NaN;
+          const aHasTime = !Number.isNaN(aTime);
+          const bHasTime = !Number.isNaN(bTime);
+          if (aHasTime && bHasTime) {
+            return bTime - aTime;
+          }
+          if (aHasTime) {
+            return -1;
+          }
+          if (bHasTime) {
+            return 1;
+          }
+          return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
+        });
+        setTodayPoojas(sorted);
+      } catch (error) {
+        if (isMounted) {
+          setTodayPoojasError("Unable to load today's pooja details right now.");
+          setTodayPoojas([]);
+        }
+      } finally {
+        if (isMounted) {
+          setPoojaScheduleLoading(false);
+        }
+      }
+    };
+
+    fetchTodayPoojas();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Mobile menu state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <div id="top" className="bg-amber-50 text-amber-900 min-h-screen">
+      {/* HEADER */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-amber-900 to-amber-800 shadow-lg">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <a
+              href="#top"
+              className="flex flex-col"
+            >
+              <p className="text-xl font-bold text-amber-100 tracking-wide">
+                காக்காழநி கிராமம்
+              </p>
+              <p className="text-xs text-amber-200">
+                Kakkazhany Gramam Temple
+              </p>
+            </a>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-8">
+              {navLinks.map((item) => {
+                if (item.children?.length) {
+                  return (
+                    <div key={item.label} className="relative group">
+                      <Link
+                        to={item.href}
+                        className="text-amber-100 hover:text-amber-50 transition-colors font-medium flex items-center"
+                      >
+                        {item.label}
+                        <svg
+                          className="ml-1 h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </Link>
+                      <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-amber-50 ring-1 ring-amber-900/20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                        <div className="py-1">
+                          {item.children.map((child) => (
+                            <Link
+                              key={child.label}
+                              to={child.href}
+                              className="block px-4 py-2 text-sm text-amber-900 hover:bg-amber-100"
+                            >
+                              {child.label}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return item.type === "route" ? (
+                  <Link
+                    key={item.label}
+                    to={item.href}
+                    className="text-amber-100 hover:text-amber-50 transition-colors font-medium"
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="text-amber-100 hover:text-amber-50 transition-colors font-medium"
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
+              <div className="flex items-center space-x-3 ml-4">
+                <Link
+                  to="/login"
+                  className="text-amber-100 hover:text-amber-50 font-medium"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="bg-amber-700 hover:bg-amber-600 text-amber-100 px-4 py-2 rounded-md transition-colors"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            </nav>
+
+            {/* Mobile menu button */}
+            <button
+              className="md:hidden text-amber-100"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+              </svg>
+            </button>
+          </div>
+
+          {/* Mobile menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden mt-4 pb-4">
+              <nav className="flex flex-col space-y-3">
+                {navLinks.map((item) => {
+                  if (item.children?.length) {
+                    return (
+                      <div key={item.label} className="space-y-2">
+                        <Link
+                          to={item.href}
+                          className="text-amber-100 font-medium"
+                        >
+                          {item.label}
+                        </Link>
+                        <div className="pl-4 space-y-2">
+                          {item.children.map((child) => (
+                            <Link
+                              key={child.label}
+                              to={child.href}
+                              className="block text-amber-200"
+                            >
+                              {child.label}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return item.type === "route" ? (
+                    <Link
+                      key={item.label}
+                      to={item.href}
+                      className="text-amber-100 font-medium"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      className="text-amber-100 font-medium"
+                    >
+                      {item.label}
+                    </a>
+                  );
+                })}
+                <div className="pt-3 flex space-x-3">
+                  <Link
+                    to="/login"
+                    className="text-amber-100 font-medium"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="bg-amber-700 text-amber-100 px-4 py-2 rounded-md"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              </nav>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <main className="pt-16">
+        {/* HERO */}
+        <section className="relative h-screen flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 z-0">
+            <img
+              src="images/temple_gopuram.jpg"
+              alt="Temple backdrop"
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-amber-900/90 via-amber-800/80 to-amber-900/90" />
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDBMMjAgNDBNMTAgMTBMMzAgMTBNMTAgMzBMMzAgMzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIwLjUiLz4KPC9zdmc+')] opacity-10"></div>
+          </div>
+          
+          <div className="relative z-10 container mx-auto px-6 text-center text-amber-100">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8">
+                <div className="inline-block p-1 bg-gradient-to-r from-amber-400 to-amber-600 rounded-full">
+                  <span className="block px-6 py-2 bg-amber-900 rounded-full text-sm font-bold tracking-wider text-amber-100 uppercase">
+                    ஸ்ரீ காக்காழநி கிராமம் திருக்கோவில்
+                  </span>
+                </div>
+              </div>
+              <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                A living temple dedicated to{" "}
+                <span className="text-amber-300">Lord Shivan</span> & Ambal
+              </h1>
+              <p className="text-xl md:text-2xl mb-10 text-amber-100 max-w-3xl mx-auto leading-relaxed">
+                A 2,500-year-old Dravidian masterpiece, renowned for its towering gopurams, intricate carvings, and cultural legacy.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-6 justify-center">
+                <a
+                  href="#visit"
+                  className="px-8 py-4 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-amber-100 font-bold rounded-lg transition-all duration-300 shadow-xl transform hover:scale-105"
+                >
+                  Plan Your Visit
+                </a>
+                <a
+                  href="#darshan"
+                  className="px-8 py-4 bg-transparent border-2 border-amber-300 hover:bg-amber-300 hover:text-amber-900 text-amber-100 font-bold rounded-lg transition-all duration-300"
+                >
+                  View Pooja Schedule
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 text-amber-300 animate-bounce">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </div>
+        </section>
+
+        {/* TIMINGS */}
+        <section id="timings" className="py-20 bg-gradient-to-b from-amber-50 to-amber-100 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0iI0Y1OTU0NiIgZmlsbC1vcGFjaXR5PSIwLjIiLz4KPC9zdmc+')] opacity-30"></div>
+          
+          <div className="container mx-auto px-6 relative z-10">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold text-amber-900 mb-4">Temple Information</h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-amber-600 to-amber-700 mx-auto mb-6"></div>
+              <p className="text-lg text-amber-800 max-w-2xl mx-auto">
+                Everything you need to know for your visit to Kakkazhany Gramam Temple
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {heroHighlights.map((item) => (
+                <div
+                  key={item.title}
+                  className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-t-4 border-amber-600"
+                >
+                  <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-100 to-amber-200 rounded-full mb-4 mx-auto">
+                    <span className="text-3xl">{item.icon}</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-amber-900 mb-2 text-center">{item.title}</h3>
+                  <p className="text-amber-800 text-center mb-1 font-medium">{item.primary}</p>
+                  {item.secondary && <p className="text-amber-700 text-sm text-center mb-4">{item.secondary}</p>}
+                  {item.href.startsWith("/") ? (
+                    <Link
+                      to={item.href}
+                      className="block text-center text-amber-600 hover:text-amber-700 font-medium text-sm flex items-center justify-center"
+                    >
+                      {item.cta}
+                      <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  ) : (
+                    <a
+                      href={item.href}
+                      className="block text-center text-amber-600 hover:text-amber-700 font-medium text-sm flex items-center justify-center"
+                    >
+                      {item.cta}
+                      <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ARCHITECTURE */}
+        <section id="architecture" className="py-20 bg-gradient-to-b from-amber-100 to-amber-50">
+          <div className="container mx-auto px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold text-amber-900 mb-4">Extraordinary Dravidian Architecture</h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-amber-600 to-amber-700 mx-auto mb-6"></div>
+              <p className="text-lg text-amber-800 max-w-2xl mx-auto">
+                Explore the architectural marvels of our ancient temple
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              {/* Images Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                {architectureHighlights.map((item, index) => (
+                  <div
+                    key={item.displayTitle}
+                    className={`relative overflow-hidden rounded-lg cursor-pointer transform transition-all duration-300 hover:scale-105 ${index === 0 ? 'row-span-2' : ''}`}
+                    onClick={() => setSelected({ title: item.displayTitle, description: item.displayDescription })}
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.alt}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-amber-900/80 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                      <p className="text-amber-100 font-semibold">{item.displayTitle}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Content */}
+              <div className="bg-white rounded-xl shadow-lg p-8 border-l-4 border-amber-600">
+                <h3 className="text-2xl font-bold text-amber-900 mb-4">
+                  {selected ? selected.title : "Select a temple structure"}
+                </h3>
+                <p className="text-amber-800 mb-6 leading-relaxed">
+                  {selected
+                    ? selected.description
+                    : "Click on any image to learn more about the architectural elements of our temple."}
+                </p>
+                <Link
+                  to="/architecture"
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-amber-100 font-bold rounded-lg transition-all duration-300 shadow-lg"
+                >
+                  Explore Architecture
+                  <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* VISIT */}
+        <section id="visit" className="py-20 bg-gradient-to-b from-amber-50 to-amber-100 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQwIDBMODAgNDBMNDAgODBMMA0wQzQwIDBaIiBmaWxsPSIjRjU5NTQ2IiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-20"></div>
+          
+          <div className="container mx-auto px-6 relative z-10">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold text-amber-900 mb-4">Plan Your Visit</h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-amber-600 to-amber-700 mx-auto mb-6"></div>
+              <p className="text-lg text-amber-800 max-w-2xl mx-auto">
+                Make the most of your visit with our helpful information
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Plan Your Visit Card */}
+              <div className="lg:col-span-2">
+                <div className="bg-white rounded-xl shadow-lg p-8 h-full border-t-4 border-amber-600">
+                  <h3 className="text-2xl font-bold text-amber-900 mb-4">Visit Information</h3>
+                  <p className="text-amber-800 mb-6 leading-relaxed">
+                    Open daily, with extended hours on festival days. Please remove footwear, observe temple etiquette, and maintain silence in sanctum areas.
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                      Open Today
+                    </span>
+                    <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full">
+                      Peak: 7–10 AM
+                    </span>
+                    <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                      Dress Code Applies
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div className="flex items-start space-x-3 bg-amber-50 p-4 rounded-lg">
+                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-amber-200 to-amber-300 rounded-full flex items-center justify-center">
+                        <span className="text-xl">🛕</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-amber-900">Guided Temple Tours</h4>
+                        <p className="text-sm text-amber-700">Daily at 10:00 AM & 4:00 PM</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start space-x-3 bg-amber-50 p-4 rounded-lg">
+                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-amber-200 to-amber-300 rounded-full flex items-center justify-center">
+                        <span className="text-xl">🙏</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-amber-900">Special Darshan</h4>
+                        <p className="text-sm text-amber-700">Available on festival days</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start space-x-3 bg-amber-50 p-4 rounded-lg">
+                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-amber-200 to-amber-300 rounded-full flex items-center justify-center">
+                        <span className="text-xl">👘</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-amber-900">Dress Code</h4>
+                        <p className="text-sm text-amber-700">Traditional attire preferred</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start space-x-3 bg-amber-50 p-4 rounded-lg">
+                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-amber-200 to-amber-300 rounded-full flex items-center justify-center">
+                        <span className="text-xl">📍</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-amber-900">Location</h4>
+                        <p className="text-sm text-amber-700">Kakkazhany Gramam, Agraharam</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <a
+                      href="#darshan"
+                      className="px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-amber-100 font-bold rounded-lg transition-all duration-300 shadow-lg text-center"
+                    >
+                      Book Darshan
+                    </a>
+                    <a
+                      href="https://www.google.com/maps/place/Meenakshi+Amman+Temple"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-6 py-3 bg-white border-2 border-amber-600 hover:bg-amber-50 text-amber-700 font-bold rounded-lg transition-all duration-300 text-center"
+                    >
+                      Get Directions
+                    </a>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Daily Pooja Card */}
+              <div className="lg:col-span-1">
+                <div className="bg-white rounded-xl shadow-lg p-6 h-full border-t-4 border-amber-600">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-amber-900">Daily Pooja</h3>
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                      <span className="text-xs text-amber-700">Live</span>
+                    </div>
+                  </div>
+                  
+                  <div
+                    className="relative h-64 overflow-hidden rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 mb-4"
+                    onMouseEnter={() => setPoojaPaused(true)}
+                    onMouseLeave={() => setPoojaPaused(false)}
+                  >
+                    <div
+                      className="transition-transform duration-700 ease-out"
+                      style={{ transform: `translateY(-${poojaIdx * 16}rem)` }}
+                    >
+                      {dailyPooja.map((slot) => (
+                        <div key={slot.day} className="h-64 p-4">
+                          <p className="text-sm font-bold text-amber-700 mb-2">
+                            {slot.day}
+                          </p>
+                          <p className="text-sm text-amber-800 whitespace-pre-line leading-6">
+                            {slot.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-center space-x-2">
+                    {dailyPooja.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPoojaIdx(i)}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                          poojaIdx === i
+                            ? "bg-amber-600 w-8"
+                            : "bg-amber-300 hover:bg-amber-400"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* DARSHAN & POOJA */}
+        <section id="darshan" className="py-20 bg-gradient-to-b from-amber-100 to-amber-50">
+          <div className="container mx-auto px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold text-amber-900 mb-4">Pooja Schedule</h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-amber-600 to-amber-700 mx-auto mb-6"></div>
+              <p className="text-lg text-amber-800 max-w-2xl mx-auto">
+                List of Donor Pooja Schedules and Timings
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 border-amber-600">
+              {poojaScheduleLoading ? (
+                <div className="p-10 text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+                  <p className="mt-2 text-sm text-amber-700">Loading today&apos;s pooja details...</p>
+                </div>
+              ) : todayPoojasError ? (
+                <div className="p-10 text-center">
+                  <svg className="w-12 h-12 text-red-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-red-600">{todayPoojasError}</p>
+                </div>
+              ) : todayPoojas.length === 0 ? (
+                <div className="p-10 text-center">
+                  <svg className="w-12 h-12 text-amber-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-sm text-amber-700">
+                    No pooja registrations are scheduled for today.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-amber-200">
+                    <thead className="bg-gradient-to-r from-amber-50 to-amber-100">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Pooja ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Pooja Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Pooja Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Day Option
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Devotee
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Post Prasadam
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Pooja Register by
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
+                          Registration Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-amber-100">
+                      {todayPoojas.map((pooja) => (
+                        <tr key={pooja.id} className="hover:bg-amber-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-900">
+                            {resolvePoojaId(pooja)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {formatDateDisplay(pooja.start_date)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {pooja.pooja_option_name?.trim() || "N/A"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {pooja.day_option_description?.trim() || "N/A"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {joinDevoteeNames(pooja.members)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {formatBooleanLabel(pooja.post_prasadam)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {resolveDonorName(pooja.donor_name)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                            {formatDateTimeDisplay(pooja.created_at)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-6 text-center">
+              <p className="text-amber-800">
+                Login to{" "}
+                <Link to="/login" className="font-medium text-amber-600 hover:text-amber-700">
+                  register
+                </Link>{" "}
+                for the pooja schedules.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* NEWS */}
+        <section id="news" className="py-20 bg-gradient-to-b from-amber-50 to-amber-100 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0iI0Y1OTU0NiIgZmlsbC1vcGFjaXR5PSIwLjIiLz4KPC9zdmc+')] opacity-30"></div>
+          
+          <div className="container mx-auto px-6 relative z-10">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold text-amber-900 mb-4">Temple Blog & Updates</h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-amber-600 to-amber-700 mx-auto mb-6"></div>
+              <p className="text-lg text-amber-800 max-w-2xl mx-auto">
+                Stay informed about festivals, restoration projects, and community initiatives
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {newsUpdates.map((item) => (
+                <article key={item.title} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-t-4 border-amber-600">
+                  <div className="p-6">
+                    <p className="text-sm font-medium text-amber-600 mb-2">{item.date}</p>
+                    <h3 className="text-xl font-bold text-amber-900 mb-3">{item.title}</h3>
+                    <p className="text-amber-800 mb-4">{item.excerpt}</p>
+                    <a href={item.href} className="inline-flex items-center text-amber-600 hover:text-amber-700 font-medium">
+                      Continue reading
+                      <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* SUPPORT */}
+        <section id="support" className="py-20 bg-gradient-to-r from-amber-800 to-amber-900 text-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDBMMjAgNDBNMTAgMTBMMzAgMTBNMTAgMzBMMzAgMzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIwLjUiLz4KPC9zdmc+')] opacity-10"></div>
+          
+          <div className="container mx-auto px-6 relative z-10">
+            <div className="max-w-4xl mx-auto text-center">
+              <h2 className="text-4xl md:text-5xl font-bold mb-4">Support Our Temple</h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-500 mx-auto mb-6"></div>
+              <p className="text-xl mb-8 text-amber-100">
+                Preserve the legacy of Kakkazhany Gramam Temple for future generations
+              </p>
+              <p className="mb-8 text-amber-100 max-w-2xl mx-auto leading-relaxed">
+                Contributions maintain daily poojas, heritage conservation, annadanam, and cultural outreach. Join hands to safeguard centuries of devotion and artistry.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="#" className="px-8 py-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-amber-900 font-bold rounded-lg transition-all duration-300 shadow-xl transform hover:scale-105">
+                  Donate Now
+                </a>
+                <a href="#" className="px-8 py-3 bg-transparent border-2 border-amber-300 hover:bg-amber-300 hover:text-amber-900 text-amber-100 font-bold rounded-lg transition-all duration-300">
+                  Become a Patron
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* FOOTER */}
+      <footer id="contact" className="bg-gradient-to-r from-amber-900 to-amber-800 text-amber-100 py-12 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0iI0ZGRkZGRiIgZmlsbC1vcGFjaXR5PSIwLjEiLz4KPC9zdmc+')] opacity-10"></div>
+        
+        <div className="container mx-auto px-6 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+              <h3 className="text-lg font-bold text-amber-100 mb-4">Kakkazhany Gramam Temple</h3>
+              <p className="text-sm mb-2 text-amber-200">Kakkazhany Gramam, Agraharam, Tamil Nadu 625001</p>
+              <p className="text-sm mb-2 text-amber-200">Phone: +91 9999900000</p>
+              <p className="text-sm text-amber-200">Email: crgrpkakkalany@gmail.com</p>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-bold text-amber-100 mb-4">Temple Hours</h3>
+              <p className="text-sm mb-2 text-amber-200">Morning Darshan: 5:00 AM – 12:30 PM</p>
+              <p className="text-sm mb-2 text-amber-200">Evening Darshan: 4:00 PM – 10:00 PM</p>
+              <p className="text-sm text-amber-200">Friday Special Abhishekam: 7:00 PM</p>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-bold text-amber-100 mb-4">Quick Links</h3>
+              <ul className="space-y-2">
+                <li><a href="#visit" className="text-sm text-amber-200 hover:text-amber-100 transition-colors">Plan Your Visit</a></li>
+                <li><a href="#architecture" className="text-sm text-amber-200 hover:text-amber-100 transition-colors">Architecture</a></li>
+                <li><a href="#darshan" className="text-sm text-amber-200 hover:text-amber-100 transition-colors">Pooja Schedule</a></li>
+                <li><a href="#news" className="text-sm text-amber-200 hover:text-amber-100 transition-colors">Blog</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-bold text-amber-100 mb-4">Stay Connected</h3>
+              <p className="text-sm mb-4 text-amber-200">Follow us on social media for updates</p>
+              <div className="flex space-x-4">
+                <a href="#" className="text-amber-200 hover:text-amber-100 transition-colors">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                </a>
+                <a href="#" className="text-amber-200 hover:text-amber-100 transition-colors">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zM5.838 12a6.162 6.162 0 1112.324 0 6.162 6.162 0 01-12.324 0zM12 16a4 4 0 110-8 4 4 0 010 8zm4.965-10.405a1.44 1.44 0 112.881.001 1.44 1.44 0 01-2.881-.001z"/>
+                  </svg>
+                </a>
+                <a href="#" className="text-amber-200 hover:text-amber-100 transition-colors">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-8 pt-8 border-t border-amber-700 text-center text-sm text-amber-200">
+            <p>&copy; {new Date().getFullYear()} Kakkazhany Gramam Temple, Agraharam. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default LandingPage;

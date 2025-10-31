@@ -199,18 +199,29 @@ const DonorProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const FAMILY_OPTIONS = [
-    'Arunachalam-Sambasiva Iyr',
-    'Kadakarar Subramani Iyr',
-    'Sundaresa Iyr+ Pannai+Balu Fmly',
-    'Narayanswamy fmly',
-    'Mangalam Periyamma Fmly',
-    'Koorakattu Fmly',
-    'RamaniSastri Fmly',
-    'Pichu Iyr Fmly',
-    'Pattamani Iyr Fmly',
-    'Other',
-  ];
+const FAMILY_OPTIONS = [
+  'Arunachalam-Sambasiva Iyr',
+  'Kadakarar Subramani Iyr',
+  'Sundaresa Iyr+ Pannai+Balu Fmly',
+  'Narayanswamy fmly',
+  'Mangalam Periyamma Fmly',
+  'Koorakattu Fmly',
+  'RamaniSastri Fmly',
+  'Pichu Iyr Fmly',
+  'Pattamani Iyr Fmly',
+  'Other',
+];
+
+const GOTHRA_OPTIONS = [
+  'Atri',
+  'Bharadvaja',
+  'Gautama',
+  'Jamadagni',
+  'Kashyapa',
+  'Vasishta',
+  'Vishvamitra',
+  'Agastya',
+];
 
   const createInitialFormState = (profileData?: ApiDonorProfile): FamilyMemberFormState => ({
     name: '',
@@ -526,13 +537,18 @@ const DonorProfile = () => {
                           />
                         </td>
                         <td className="px-4 py-2">
-                          <input
-                            type="text"
+                          <select
                             className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
                             value={formData.gothra}
                             onChange={handleInputChange('gothra')}
-                            placeholder="Enter gothra"
-                          />
+                          >
+                            <option value="">Select Gothra</option>
+                            {GOTHRA_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
@@ -639,13 +655,18 @@ const DonorProfile = () => {
                               />
                             </td>
                             <td className="px-4 py-2">
-                              <input
-                                type="text"
+                              <select
                                 className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
                                 value={formData.gothra}
                                 onChange={handleInputChange('gothra')}
-                                placeholder="Enter gothra"
-                              />
+                              >
+                                <option value="">Select Gothra</option>
+                                {GOTHRA_OPTIONS.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
                             <td className="px-4 py-2">
                               <div className="flex items-center gap-2">

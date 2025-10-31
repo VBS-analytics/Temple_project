@@ -96,21 +96,23 @@ const heroHighlights = [
 const visitHighlights = [
   {
     title: "Guided Temple Tours",
-    description:
-      "Daily tours at 10:00 AM & 4:00 PM covering gopurams, mandapams, and the sacred tank.",
+    description: "Daily at 10:00 AM & 4:00 PM with heritage narrations.",
     icon: "🛕",
   },
   {
     title: "Special Darshan",
-    description:
-      "Express darshan counters available during peak festival days. Online booking recommended.",
+    description: "Available on festive days with prior booking.",
     icon: "🙏",
   },
   {
     title: "Dress Code",
-    description:
-      "Traditional attire preferred. Shoulders and knees must be covered inside sanctum areas.",
+    description: "Traditional attire preferred for darshan.",
     icon: "👘",
+  },
+  {
+    title: "Location",
+    description: "Kakkazhany Gramam, Agraharam campus.",
+    icon: "📍",
   },
 ] as const;
 
@@ -658,157 +660,139 @@ const LandingPage = () => {
 
 
 
-        {/* VISIT (Three Column Layout - Swapped Daily Pooja & Plan Your Visit) */}
+        {/* VISITOR GUIDE AND PLAN YOUR VISIT */}
         <section id="visit" className="py-16 bg-gradient-to-b from-slate-100 to-white">
-          <div className="mx-auto grid max-w-[1400px] gap-8 px-6 md:items-start lg:grid-cols-[1.7fr_1.7fr_1.1fr]">
-            
-            {/* LEFT: Plan Your Visit */}
-            <div className="space-y-6">
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_45px_-22px_rgba(12,16,43,0.18)]">
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <h2 className="text-3xl font-bold text-slate-900 md:text-4xl">
-                      Plan Your Visit
-                    </h2>
-                    <p className="mt-2 text-slate-600 md:text-lg">
-                      Open daily, with extended hours on festival days. Please remove
-                      footwear, observe temple etiquette, and maintain silence in sanctum
-                      areas.
-                    </p>
+          <div className="mx-auto max-w-6xl px-6">
+            {/* Header Section */}
+            <div className="text-center mb-8">
+              <span className="inline-flex items-center rounded-full bg-[#b10026]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-[#b10026]">
+                VISITOR GUIDE
+              </span>
+              <h2 className="text-3xl font-bold text-slate-900 md:text-4xl mt-4">
+                Plan Your Visit
+              </h2>
+              <p className="mt-2 text-slate-600 md:text-lg">
+                Make the most of your visit with our helpful information.
+              </p>
+            </div>
+
+            {/* Two Column Layout */}
+            <div className="grid gap-8 md:grid-cols-2">
+              
+              {/* LEFT: Visit Information */}
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_45px_-22pxrgba(12,16,43,0.18)]">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-2xl font-bold text-slate-900">
+                        Visit Information
+                      </h3>
+                      <p className="mt-2 text-slate-600">
+                        Open daily, with extended hours on festival days. Please remove
+                        footwear, observe temple etiquette, and maintain silence in sanctum
+                        areas.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                        Open Today
+                      </span>
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+                        Peak: 7–10 AM
+                      </span>
+                      <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 ring-1 ring-sky-200">
+                        Dress Code Applies
+                      </span>
+                    </div>
+                    
+                    {/* Visit Highlights */}
+                    <div className="space-y-4 mt-6">
+                      {visitHighlights.map((item) => (
+                        <div key={item.title} className="flex items-start gap-3">
+                          <span className="text-2xl leading-none">{item.icon}</span>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {item.title}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">
+                              {item.description}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="mt-6 flex flex-wrap gap-3 text-sm font-semibold uppercase tracking-wide">
+                      <a
+                        href="#darshan"
+                        className="rounded-full bg-[#b10026] px-6 py-3 text-white transition hover:bg-[#8e001c]"
+                      >
+                        Book Darshan
+                      </a>
+                      <a
+                        href="https://www.google.com/maps/place/Meenakshi+Amman+Temple"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-[#b10026] px-6 py-3 text-[#b10026] transition hover:bg-[#b10026]/10"
+                      >
+                        Get Directions
+                      </a>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                      Open Today
-                    </span>
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
-                      Peak: 7–10 AM
-                    </span>
-                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 ring-1 ring-sky-200">
-                      Dress Code Applies
+                </div>
+              </div>
+
+              {/* RIGHT: Daily Pooja */}
+              <div className="space-y-6">
+                <div
+                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_45px_-22pxrgba(12,16,43,0.18)]"
+                  onMouseEnter={() => setPoojaPaused(true)}
+                  onMouseLeave={() => setPoojaPaused(false)}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-2xl font-bold text-slate-900">Daily Pooja</h3>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-600">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                      </span>
+                      LIVE
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm font-semibold uppercase tracking-wide">
-                    <a
-                      href="#darshan"
-                      className="rounded-full bg-[#b10026] px-6 py-3 text-white transition hover:bg-[#8e001c]"
+                  <div className="relative h-64 overflow-hidden rounded-2xl bg-slate-50/40 ring-1 ring-slate-200/60">
+                    <div
+                      className="transition-transform duration-700 ease-out"
+                      style={{ transform: `translateY(-${poojaIdx * 16}rem)` }}
                     >
-                      Book Darshan
-                    </a>
-                    <a
-                      href="https://www.google.com/maps/place/Meenakshi+Amman+Temple"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-[#b10026] px-6 py-3 text-[#b10026] transition hover:bg-[#b10026]/10"
-                    >
-                      Get Directions
-                    </a>
+                      {dailyPooja.map((slot) => (
+                        <div key={slot.day} className="h-64 px-4 py-3">
+                          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-rose-700">
+                            {slot.day}
+                          </p>
+                          <p className="mt-2 text-base text-slate-700 whitespace-pre-line leading-6">
+                            {slot.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-center gap-1.5">
+                    {dailyPooja.map((_, i) => (
+                      <button
+                        key={i}
+                        aria-label={`Show ${dailyPooja[i].day}`}
+                        onClick={() => setPoojaIdx(i)}
+                        className={`h-2 w-2 rounded-full transition ${
+                          poojaIdx === i
+                            ? "bg-rose-600"
+                            : "bg-slate-300 hover:bg-slate-400"
+                        }`}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* CENTER: Highlights */}
-            <aside>
-              <ul className="grid gap-4 sm:grid-cols-2">
-                <li className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl leading-none">🛕</span>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        Guided Temple Tours
-                      </p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Daily tours at 10:00 AM & 4:00 PM covering gopurams, mandapams,
-                        and the sacred tank.
-                      </p>
-                    </div>
-                  </div>
-                </li>
-                <li className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl leading-none">🙏</span>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        Special Darshan
-                      </p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Express darshan counters available during peak festival days.
-                        Online booking recommended.
-                      </p>
-                    </div>
-                  </div>
-                </li>
-                <li className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl leading-none">👘</span>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">Dress Code</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Traditional attire preferred. Shoulders and knees must be
-                        covered inside sanctum areas.
-                      </p>
-                    </div>
-                  </div>
-                </li>
-                <li className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-slate-900">Visitor Etiquette</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    No photography inside sanctum. Please queue calmly and follow
-                    volunteer instructions during peak hours.
-                  </p>
-                </li>
-                <li className="sm:col-span-2">
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    Pro tip: Weekday mornings (7–10 AM) are the most relaxed for darshan.
-                    Online booking is recommended on festival days.
-                  </div>
-                </li>
-              </ul>
-            </aside>
-
-            {/* RIGHT: Daily Pooja */}
-            <aside className="space-y-5">
-              <div
-                className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                onMouseEnter={() => setPoojaPaused(true)}
-                onMouseLeave={() => setPoojaPaused(false)}
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-slate-900">Daily Pooja</h3>
-                </div>
-                <div className="relative h-48 overflow-hidden rounded-2xl bg-slate-50/40 ring-1 ring-slate-200/60">
-                  <div
-                    className="transition-transform duration-700 ease-out"
-                    style={{ transform: `translateY(-${poojaIdx * 12}rem)` }}
-                  >
-                    {dailyPooja.map((slot) => (
-                      <div key={slot.day} className="h-48 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">
-                          {slot.day}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-700 whitespace-pre-line leading-6">
-                          {slot.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-center gap-1.5">
-                  {dailyPooja.map((_, i) => (
-                    <button
-                      key={i}
-                      aria-label={`Show ${dailyPooja[i].day}`}
-                      onClick={() => setPoojaIdx(i)}
-                      className={`h-1.5 w-1.5 rounded-full transition ${
-                        poojaIdx === i
-                          ? "bg-rose-600"
-                          : "bg-slate-300 hover:bg-slate-400"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </aside>
           </div>
         </section>
       
