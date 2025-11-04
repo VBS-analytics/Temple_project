@@ -20,9 +20,9 @@ const AppLayout = () => {
   const cartKey = user ? String(user.id) : 'guest';
   const cartCount = useCartStore((state) => state.itemsByUser[cartKey]?.length ?? 0);
   const isPoojaRegistrationPage = location.pathname.startsWith('/pooja/register');
-  const mainClassName = isPoojaRegistrationPage
-    ? 'w-full px-4 py-6'
-    : 'mx-auto w-full max-w-6xl px-4 py-6';
+  const isProfilePage = location.pathname.startsWith('/profile');
+  const useFullWidthLayout = isPoojaRegistrationPage || isProfilePage;
+  const mainClassName = useFullWidthLayout ? 'w-full px-4 py-6' : 'mx-auto w-full max-w-6xl px-4 py-6';
   const userInitials = user?.name
     ?.split(' ')
     .filter(Boolean)
