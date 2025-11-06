@@ -71,6 +71,7 @@ interface PoojaRegistration {
   day_option_description?: string | null;
   post_prasadam?: boolean | null;
   created_at?: string | null;
+  updated_at?: string | null;
   members?: RegistrationMember[];
 }
 
@@ -174,6 +175,24 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const formatDateForInput = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+  const isoMatch = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  if (isoMatch) {
+    return isoMatch[1];
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const resolvePoojaId = (registration: PoojaRegistration) => {
   const trimmed = (registration.pooja_reg_id ?? '').trim();
   return trimmed.length > 0 ? trimmed : `#${registration.id}`;
@@ -189,6 +208,30 @@ const formatMemberNames = (members?: RegistrationMember[]) => {
   return names.length > 0 ? names.join(', ') : '—';
 };
 
+const formatRegistrationTimeline = (registration: PoojaRegistration) => {
+  const createdAt = registration.created_at;
+  if (!createdAt) {
+    return '—';
+  }
+  const createdText = formatDateTime(createdAt);
+  const updatedAt = registration.updated_at;
+  if (!updatedAt) {
+    return createdText;
+  }
+
+  const createdTime = new Date(createdAt).getTime();
+  const updatedTime = new Date(updatedAt).getTime();
+  if (
+    Number.isNaN(createdTime) ||
+    Number.isNaN(updatedTime) ||
+    Math.abs(createdTime - updatedTime) < 1000
+  ) {
+    return createdText;
+  }
+
+  return `${formatDateTime(updatedAt)}** updated`;
+};
+
 const DonorProfile = () => {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [profile, setProfile] = useState<ApiDonorProfile | null>(null);
@@ -196,66 +239,71 @@ const DonorProfile = () => {
   const [registrations, setRegistrations] = useState<PoojaRegistration[]>([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(true);
   const [registrationsError, setRegistrationsError] = useState<string | null>(null);
+  const [editingRegistrationId, setEditingRegistrationId] = useState<number | null>(null);
+  const [registrationEditDate, setRegistrationEditDate] = useState('');
+  const [registrationEditError, setRegistrationEditError] = useState<string | null>(null);
+  const [registrationEditSubmitting, setRegistrationEditSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-const FAMILY_OPTIONS = [
-  'Arunachalam-Sambasiva Iyr',
-  'Kadakarar Subramani Iyr',
-  'Sundaresa Iyr+ Pannai+Balu Fmly',
-  'Narayanswamy fmly',
-  'Mangalam Periyamma Fmly',
-  'Koorakattu Fmly',
-  'RamaniSastri Fmly',
-  'Pichu Iyr Fmly',
-  'Pattamani Iyr Fmly',
-  'Other',
-];
+  const FAMILY_OPTIONS = [
+    'Arunachalam-Sambasiva Iyr',
+    'Kadakarar Subramani Iyr',
+    'Sundaresa Iyr+ Pannai+Balu Fmly',
+    'Narayanswamy fmly',
+    'Mangalam Periyamma Fmly',
+    'Koorakattu Fmly',
+    'RamaniSastri Fmly',
+    'Pichu Iyr Fmly',
+    'Pattamani Iyr Fmly',
+    'Other',
+  ];
 
-const GOTHRA_OPTIONS = [
-  'Atri',
-  'Bharadvaja',
-  'Gautama',
-  'Jamadagni',
-  'Kashyapa',
-  'Vasishta',
-  'Vishvamitra',
-  'Agastya',
-];
+  const GOTHRA_OPTIONS = [
+    'Atri',
+    'Bharadvaja',
+    'Gautama',
+    'Jamadagni',
+    'Kashyapa',
+    'Vasishta',
+    'Vishvamitra',
+    'Agastya',
+  ];
 
-const TAMIL_STAR_OPTIONS = [
-  'aswini',
-  'bharani',
-  'karthigai',
-  'rohini',
-  'mrigsheersham',
-  'tiruvadarai',
-  'punarpoosam',
-  'poosam',
-  'aayilyam',
-  'magam',
-  'pooram',
-  'uttiram',
-  'chitrai',
-  'swathi',
-  'visakam',
-  'anusham',
-  'kettai',
-  'moolam',
-  'pooradam',
-  'uttiradam',
-  'thirivonam',
-  'avittam',
-  'sadayam',
-  'poorattathi',
-  'uttrattathi',
-  'revathi',
-];
+  const TAMIL_STAR_OPTIONS = [
+    'aswini',
+    'bharani',
+    'karthigai',
+    'rohini',
+    'mrigsheersham',
+    'tiruvadarai',
+    'punarpoosam',
+    'poosam',
+    'aayilyam',
+    'magam',
+    'pooram',
+    'uttiram',
+    'chitrai',
+    'swathi',
+    'visakam',
+    'anusham',
+    'kettai',
+    'moolam',
+    'pooradam',
+    'uttiradam',
+    'thirivonam',
+    'avittam',
+    'sadayam',
+    'poorattathi',
+    'uttrattathi',
+    'revathi',
+  ];
 
 interface SearchableSelectProps {
   options: readonly string[];
   value: string;
   placeholder?: string;
+  // eslint-disable-next-line no-unused-vars
   onChange: (value: string) => void;
 }
 
@@ -462,6 +510,50 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     setFormError(null);
   };
 
+  const startEditingRegistration = (registration: PoojaRegistration) => {
+    if (registrationEditSubmitting) {
+      return;
+    }
+    setEditingRegistrationId(registration.id);
+    setRegistrationEditDate(formatDateForInput(registration.start_date));
+    setRegistrationEditError(null);
+  };
+
+  const cancelRegistrationEditing = () => {
+    if (registrationEditSubmitting) {
+      return;
+    }
+    setEditingRegistrationId(null);
+    setRegistrationEditDate('');
+    setRegistrationEditError(null);
+  };
+
+  const submitRegistrationEdit = async () => {
+    if (!editingRegistrationId) {
+      return;
+    }
+    if (!registrationEditDate) {
+      setRegistrationEditError('Pooja date is required');
+      return;
+    }
+    setRegistrationEditSubmitting(true);
+    setRegistrationEditError(null);
+    try {
+      const response = await api.patch<PoojaRegistration>(`pooja/registrations/${editingRegistrationId}/`, {
+        start_date: registrationEditDate,
+      });
+      setRegistrations((prev) =>
+        prev.map((item) => (item.id === editingRegistrationId ? { ...item, ...response.data } : item))
+      );
+      setEditingRegistrationId(null);
+      setRegistrationEditDate('');
+    } catch (err) {
+      setRegistrationEditError(extractErrorMessage(err));
+    } finally {
+      setRegistrationEditSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       setFormError('Name is required');
@@ -529,7 +621,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8 lg:px-8">
+    <div className="mx-auto w-full max-w-[90rem] px-4 py-8 lg:px-8">
       <div>
         <h1 className="text-2xl font-semibold text-slate-800">Donor Profile</h1>
         <p className="text-sm text-slate-500">Review your donor details and manage your family members.</p>
@@ -543,7 +635,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
         <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
       ) : (
         <div className="mt-6 space-y-8">
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 w-full">
             <h2 className="text-lg font-semibold text-slate-800">Donor Details</h2>
             <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {donorDetails.map(({ label, value, span }) => (
@@ -558,7 +650,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
             </dl>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">Family Members</h2>
@@ -572,6 +664,12 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                 + Add Member
               </button>
             </div>
+
+            {formError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {formError}
+              </div>
+            )}
 
             {members.length === 0 && !isAddingNew ? (
               <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
@@ -878,7 +976,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">Registered Pooja&apos;s</h2>
@@ -915,40 +1013,95 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                         <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
                         <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
                         <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
+                        <th scope="col" className="px-4 py-3 text-left font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {registrations.map((registration, index) => (
-                        <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
-                          <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
-                            {resolvePoojaId(registration)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
-                            {registration.pooja_option_name?.trim() || '—'}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                            {formatDate(registration.start_date)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700" title={registration.day_option_description ?? undefined}>
-                            {registration.day_option_description?.trim() || '—'}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                registration.post_prasadam
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : 'bg-slate-100 text-slate-700'
-                              }`}
+                      {registrations.map((registration, index) => {
+                        const isEditingRegistration = editingRegistrationId === registration.id;
+                        return (
+                          <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
+                            <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
+                              {resolvePoojaId(registration)}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
+                              {registration.pooja_option_name?.trim() || '—'}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                              {isEditingRegistration ? (
+                                <div className="flex flex-col gap-2">
+                                  <input
+                                    type="date"
+                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={registrationEditDate}
+                                    onChange={(event) => setRegistrationEditDate(event.target.value)}
+                                    max="9999-12-31"
+                                  />
+                                  {registrationEditError && (
+                                    <span className="text-xs text-red-600">{registrationEditError}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                formatDate(registration.start_date)
+                              )}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-slate-700"
+                              title={registration.day_option_description ?? undefined}
                             >
-                              {registration.post_prasadam ? 'Yes' : 'No'}
-                            </span>
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                            {formatDateTime(registration.created_at)}
-                          </td>
-                        </tr>
-                      ))}
+                              {registration.day_option_description?.trim() || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                  registration.post_prasadam
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {registration.post_prasadam ? 'Yes' : 'No'}
+                              </span>
+                            </td>
+                            <td
+                              className="whitespace-nowrap px-4 py-3 text-slate-700"
+                              title={formatRegistrationTimeline(registration)}
+                            >
+                              {formatRegistrationTimeline(registration)}
+                            </td>
+                            <td className="px-4 py-3 text-right min-w-[160px]">
+                              {isEditingRegistration ? (
+                                <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={cancelRegistrationEditing}
+                                    className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                                    disabled={registrationEditSubmitting}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={submitRegistrationEdit}
+                                    className="rounded bg-brand-600 px-3 py-1 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-70"
+                                    disabled={registrationEditSubmitting}
+                                  >
+                                    {registrationEditSubmitting ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingRegistration(registration)}
+                                  className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                                >
+                                  Edit Date
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
