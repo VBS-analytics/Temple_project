@@ -55,6 +55,45 @@ class PoojaOptionViewSet(viewsets.ModelViewSet):
     serializer_class = PoojaOptionSerializer
     permission_classes = (ReadOnlyOrAdmin,)
 
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            
+            # Delete all child items first if this is a header
+            if instance.is_group_header:
+                # Use select_for_update to prevent race conditions
+                children = PoojaOption.objects.select_for_update().filter(parent_id=instance.id)
+                children.delete()
+            
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except PoojaOption.DoesNotExist:
+            return Response(
+                {"detail": "This pooja item no longer exists"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            with transaction.atomic():
+                instance = self.get_object()
+                
+                # If this is a header, delete all children first
+                if instance.is_group_header:
+                    PoojaOption.objects.filter(parent_id=instance.id).delete()
+                
+                # Now delete the instance itself
+                instance.delete()
+                
+                return Response(status=status.HTTP_204_NO_CONTENT)
+        except PoojaOption.DoesNotExist:
+            return Response(
+                {"detail": "Pooja option no longer exists"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 
 class PoojaDayOptionViewSet(viewsets.ModelViewSet):
     queryset = PoojaDayOption.objects.all()

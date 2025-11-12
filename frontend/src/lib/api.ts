@@ -18,11 +18,13 @@ api.interceptors.request.use((config) => {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${tokens.access}`;
   }
-  if (config.data && !(config.data instanceof FormData)) {
-    config.headers = config.headers ?? {};
-    if (!config.headers['Content-Type']) {
-      config.headers['Content-Type'] = 'application/json';
-    }
+  config.headers = config.headers ?? {};
+  if (!config.headers['Cache-Control']) {
+    config.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0';
+    config.headers.Pragma = 'no-cache';
+  }
+  if (config.data && !(config.data instanceof FormData) && !config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
   }
   return config;
 });

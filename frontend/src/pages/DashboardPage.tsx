@@ -573,7 +573,7 @@ const DashboardPage = () => {
       value: formatNumber(TEMPLE_COUNT),
       description: 'Temples currently managed on the portal.',
       icon: TempleIcon,
-      accent: 'bg-indigo-100 text-indigo-700',
+      accent: 'bg-green-100 text-green-700',
     },
     {
       id: 'donors',
@@ -581,7 +581,7 @@ const DashboardPage = () => {
       value: displayValue(donorCount, donorLoading),
       description: 'Unique donors who have registered with the temple.',
       icon: DonorIcon,
-      accent: 'bg-blue-100 text-blue-700',
+      accent: 'bg-green-100 text-green-700',
     },
     {
       id: 'family-members',
@@ -589,7 +589,7 @@ const DashboardPage = () => {
       value: displayValue(familyMemberCount, familyLoading),
       description: 'Family members linked to donor accounts and admin additions.',
       icon: FamilyIcon,
-      accent: 'bg-amber-100 text-amber-700',
+      accent: 'bg-green-100 text-green-700',
     },
     {
       id: 'monthly-donations',
@@ -597,7 +597,7 @@ const DashboardPage = () => {
       value: formatCurrency(MONTHLY_DONATION_AMOUNT),
       description: 'Approximate monthly inflow (static for now).',
       icon: WalletIcon,
-      accent: 'bg-emerald-100 text-emerald-700',
+      accent: 'bg-green-100 text-green-700',
     },
   ];
 
@@ -615,7 +615,7 @@ const DashboardPage = () => {
       value: displayValue(donorCount, donorLoading),
       description: 'Total pooja registrations completed with your account.',
       icon: TempleIcon,
-      accent: 'bg-indigo-100 text-indigo-700',
+      accent: 'bg-green-100 text-green-700',
     },
     {
       id: 'upcoming-poojas',
@@ -623,7 +623,7 @@ const DashboardPage = () => {
       value: displayValue(upcomingPoojaCount, donorLoading),
       description: 'Scheduled poojas that are yet to be performed.',
       icon: DonorIcon,
-      accent: 'bg-blue-100 text-blue-700',
+      accent: 'bg-green-100 text-green-700',
     },
     {
       id: 'family-members',
@@ -631,7 +631,7 @@ const DashboardPage = () => {
       value: displayValue(familyMemberCount, familyLoading),
       description: 'Family members saved for quick pooja registrations.',
       icon: FamilyIcon,
-      accent: 'bg-amber-100 text-amber-700',
+      accent: 'bg-green-100 text-green-700',
     },
     {
       id: 'prasadam-requests',
@@ -639,7 +639,7 @@ const DashboardPage = () => {
       value: displayValue(prasadamRequestCount, donorLoading),
       description: 'Registrations where prasadam delivery was requested.',
       icon: WalletIcon,
-      accent: 'bg-emerald-100 text-emerald-700',
+      accent: 'bg-green-100 text-green-700',
     },
   ];
 
@@ -650,13 +650,13 @@ const DashboardPage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
         <div className="mb-10">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Welcome back, <span className="text-indigo-700">{displayName}</span></h1>
+              <h1 className="text-3xl font-bold text-slate-900">Welcome back, <span className="text-green-700">{displayName}</span></h1>
               <p className="mt-2 text-slate-600 max-w-2xl">
                 {isAdminUser
                   ? 'Here is a quick overview of the key metrics across the donor portal.'
@@ -671,15 +671,15 @@ const DashboardPage = () => {
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="inline-flex items-center px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                className="inline-flex items-center px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
               >
                 {refreshing ? (
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
-                  <RefreshIcon className="h-4 w-4 mr-2 text-indigo-600" />
+                  <RefreshIcon className="h-4 w-4 mr-2 text-green-600" />
                 )}
                 <span className="text-sm font-medium text-slate-700">Refresh</span>
               </button>
@@ -742,7 +742,7 @@ const DashboardPage = () => {
                 </p>
               </div>
               <div className="mt-2 sm:mt-0 flex items-center space-x-3">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   {todayPoojas.length} {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
                 </span>
                 {isAdminUser && (
@@ -775,7 +775,7 @@ const DashboardPage = () => {
           <div className="p-6">
             {todayPoojaLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
                 <p className="text-slate-500">Loading today's pooja details...</p>
               </div>
             ) : todayPoojaError ? (
@@ -829,8 +829,8 @@ const DashboardPage = () => {
                       </thead>
                       <tbody className="bg-white divide-y divide-slate-200">
                         {todayPoojas.map((pooja, index) => (
-                          <tr key={pooja.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50 transition-colors duration-150`}>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-indigo-700">
+                          <tr key={pooja.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-green-50 transition-colors duration-150`}>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-700">
                               {resolvePoojaId(pooja)}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">

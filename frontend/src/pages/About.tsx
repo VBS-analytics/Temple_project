@@ -8,6 +8,9 @@ import { useLocation } from "react-router-dom";
  * • TailwindCSS styling, responsive, a11y-friendly
  * • Sections: Hero, Story, Founder Members, Managing Committee, Stats, FAQ, CTA
  * • Image fallback + lazy loading + small hover interactions
+ *
+ * • REVISION: Changed color theme from teal to sky (light blue).
+ * • REVISION: Updated StatCard design to be bordered/white bg.
  */
 
 // --- Types ---------------------------------------------------------------
@@ -48,17 +51,18 @@ const AVATAR_PLACEHOLDER =
   <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
     <defs>
       <linearGradient id='g' x1='0' x2='1' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#eef2ff'/>
-        <stop offset='100%' stop-color='#dbeafe'/>
+        <stop offset='0%' stop-color='#f0f9ff'/>
+        <stop offset='100%' stop-color='#e0f2fe'/>
       </linearGradient>
     </defs>
     <rect width='64' height='64' fill='url(#g)'/>
-    <circle cx='32' cy='24' r='12' fill='#94a3b8'/>
-    <rect x='14' y='40' width='36' height='18' rx='9' fill='#94a3b8'/>
+    <circle cx='32' cy='24' r='12' fill='#7dd3fc'/>
+    <rect x='14' y='40' width='36' height='18' rx='9' fill='#7dd3fc'/>
   </svg>`);
 
 // --- Data ----------------------------------------------------------------
 
+// ... (All your data arrays like founderMembers, managingCommitteeMembers, etc. remain unchanged) ...
 const founderMembers: Member[] = [
   {
     name: "Smt. Alamelu (Bharani) Venkateswaran (Appapalu)",
@@ -399,7 +403,7 @@ function MemberRow({ member, index }: { member: Member; index: number }) {
       className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-4 last:border-b-0 last:pb-0"
     >
       <div className="flex items-center gap-4">
-        <span className="text-sm font-semibold text-indigo-600 tabular-nums">
+        <span className="text-sm font-semibold text-sky-600 tabular-nums">
           {index + 1}.
         </span>
         <Avatar src={member.image} alt={member.name} />
@@ -446,11 +450,12 @@ function MemberCard({
   );
 }
 
+// --- MODIFIED DESIGN ---
 function StatCard({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-6 text-center shadow-sm">
-      <p className="text-3xl font-semibold text-indigo-700">{value}</p>
-      <p className="mt-1 text-sm text-indigo-900/80">{label}</p>
+    <div className="rounded-2xl border border-sky-200 bg-white p-6 text-center shadow-lg shadow-sky-500/10">
+      <p className="text-3xl font-semibold text-sky-700">{value}</p>
+      <p className="mt-1 text-sm text-sky-900/80">{label}</p>
     </div>
   );
 }
@@ -462,22 +467,22 @@ function CoreGroupSection() {
         title="Core Group Families & Contacts"
         subtitle="Coordinators representing each core family for Kakkazhany Gramam."
       />
-      <div className="overflow-x-auto rounded-2xl border border-indigo-100 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-indigo-100 text-left text-sm text-gray-700">
-          <thead className="bg-indigo-50 text-xs font-semibold uppercase tracking-wide text-indigo-900">
+      <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-sm">
+        <table className="min-w-full divide-y divide-sky-100 text-left text-sm text-gray-700">
+          <thead className="bg-sky-50 text-xs font-semibold uppercase tracking-wide text-sky-900">
             <tr>
               <th className="px-4 py-3">Tab No.</th>
               <th className="px-4 py-3">Family Name</th>
               <th className="px-4 py-3">Representative(s)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-indigo-50">
+          <tbody className="divide-y divide-sky-50">
             {coreGroupFamilies.map((family) => (
               <tr
                 key={family.tabNo}
-                className="transition hover:bg-indigo-50/60"
+                className="transition hover:bg-sky-50/60"
               >
-                <td className="px-4 py-3 font-semibold text-indigo-600">
+                <td className="px-4 py-3 font-semibold text-sky-600">
                   {family.tabNo}
                 </td>
                 <td className="px-4 py-3">{family.family}</td>
@@ -524,8 +529,14 @@ function CoreGroupSection() {
 
 function FamilyTreeSection() {
   const [activeTreeId, setActiveTreeId] = useState(familyTrees[0]?.id);
+  const [zoomLevel, setZoomLevel] = useState(1); // 添加缩放状态
   const activeTree =
     familyTrees.find((tree) => tree.id === activeTreeId) ?? familyTrees[0];
+
+  // 缩放控制函数
+  const zoomIn = () => setZoomLevel(prev => Math.min(prev + 0.25, 3));
+  const zoomOut = () => setZoomLevel(prev => Math.max(prev - 0.25, 0.5));
+  const resetZoom = () => setZoomLevel(1);
 
   return (
     <section id="family-tree" className="space-y-6">
@@ -540,11 +551,14 @@ function FamilyTreeSection() {
             <button
               key={tree.id}
               type="button"
-              onClick={() => setActiveTreeId(tree.id)}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+              onClick={() => {
+                setActiveTreeId(tree.id);
+                resetZoom(); // 切换家族树时重置缩放
+              }}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${
                 isActive
-                  ? "border-indigo-600 bg-indigo-600 text-white shadow"
-                  : "border-indigo-200 bg-white text-indigo-700 hover:border-indigo-400"
+                  ? "border-sky-600 bg-sky-600 text-white shadow"
+                  : "border-sky-200 bg-white text-sky-700 hover:border-sky-400"
               }`}
             >
               {tree.name}
@@ -552,30 +566,65 @@ function FamilyTreeSection() {
           );
         })}
       </div>
-      <figure className="rounded-2xl border border-indigo-100 bg-white shadow-sm">
+      
+      {/* 缩放控制按钮 */}
+      <div className="flex justify-center gap-2">
+        <button
+          onClick={zoomOut}
+          disabled={zoomLevel <= 0.5}
+          className="px-3 py-1 bg-sky-100 text-sky-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Zoom out"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+        <button
+          onClick={resetZoom}
+          className="px-3 py-1 bg-sky-100 text-sky-700 rounded-lg"
+        >
+          {zoomLevel === 1 ? "100%" : `${Math.round(zoomLevel * 100)}%`}
+        </button>
+        <button
+          onClick={zoomIn}
+          disabled={zoomLevel >= 3}
+          className="px-3 py-1 bg-sky-100 text-sky-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Zoom in"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
+      
+      <figure className="rounded-2xl border border-sky-100 bg-white shadow-sm">
         {activeTree?.isAvailable && activeTree.image ? (
           <>
-            <div className="max-h-[560px] overflow-auto rounded-t-2xl border-b border-indigo-50 bg-slate-50/40 p-4">
-              <img
-                src={activeTree.image}
-                alt={`Family tree diagram for the ${activeTree.subtitle.toLowerCase()}.`}
-                className="mx-auto max-h-[520px] min-w-[720px] w-auto object-contain"
-                loading="lazy"
-              />
+            <div className="max-h-[560px] overflow-auto rounded-t-2xl border-b border-sky-50 bg-slate-50/40 p-4">
+              <div 
+                className="mx-auto transition-transform duration-300 ease-in-out"
+                style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}
+              >
+                <img
+                  src={activeTree.image}
+                  alt={`Family tree diagram for the ${activeTree.subtitle.toLowerCase()}.`}
+                  className="max-h-[520px] min-w-[720px] w-auto object-contain"
+                  loading="lazy"
+                />
+              </div>
             </div>
-            <figcaption className="px-6 py-4 text-sm text-indigo-900/80">
+            <figcaption className="px-6 py-4 text-sm text-sky-900/80">
               {activeTree.description ??
                 "Diagram generated from the latest family records."}
             </figcaption>
           </>
         ) : (
-          <div className="px-6 py-12 text-center text-sm text-indigo-900/70">
+          <div className="px-6 py-12 text-center text-sm text-sky-900/70">
             Family tree visual coming soon. If you have details or records to
             add, please share them with the core group.
           </div>
         )}
       </figure>
-
     </section>
   );
 }
@@ -599,9 +648,9 @@ export default function AboutPage() {
           langSubtitle="கக்காழணி கிராமம் குழு நிறுவனர் உறுப்பினர்கள்"
           members={founderMembers}
           after={
-            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 sm:p-6 shadow-sm">
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 sm:p-6 shadow-sm">
               <div className="flex items-center gap-4">
-                <span className="w-28 h-28 rounded-xl overflow-hidden shadow-sm border border-indigo-100 flex-shrink-0 bg-white">
+                <span className="w-28 h-28 rounded-xl overflow-hidden shadow-sm border border-sky-100 flex-shrink-0 bg-white">
                   <img
                     src="/images/Kakkalany-Gramam-Founder-Members-images/RS_Mani_family.png"
                     alt="RS Mani family meeting at Kakkazhany village"
@@ -613,10 +662,10 @@ export default function AboutPage() {
                   />
                 </span>
                 <div>
-                  <h3 className="text-sm font-semibold text-indigo-800 uppercase tracking-wide">
+                  <h3 className="text-sm font-semibold text-sky-800 uppercase tracking-wide">
                     Brief note about this group
                   </h3>
-                  <p className="mt-1 text-sm text-indigo-900">
+                  <p className="mt-1 text-sm text-sky-900">
                     R.S. Mani family, Radhachandran / Sriram family, Rema &amp; Lakshmi met
                     Srichu &amp; Rajendran at Kakkazhany village in Jan 2021 when the thought
                     process to collect the family tree began.
@@ -651,7 +700,7 @@ export default function AboutPage() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-8rem] -z-10 h-[28rem] w-[56rem] -translate-x-1/2 rounded-full bg-indigo-100 blur-3xl opacity-40"
+        className="pointer-events-none absolute left-1/2 top-[-8rem] -z-10 h-[28rem] w-[56rem] -translate-x-1/2 rounded-full bg-sky-100 blur-3xl opacity-40"
       />
 
       {/* Container */}
@@ -678,10 +727,10 @@ export default function AboutPage() {
 
         {/* CTA */}
         <section className="text-center">
-          <div className="inline-flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 px-6 py-4 shadow-sm">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-indigo-100 text-indigo-600">ℹ️</span>
-            <p className="text-sm text-indigo-900">
-              Have a photo or detail to add? Email us and we’ll include it in the
+          <div className="inline-flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-6 py-4 shadow-sm">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-sky-100 text-sky-600">ℹ️</span>
+            <p className="text-sm text-sky-900">
+              Have a photo or detail to add? Email us and we'll include it in the
               next update.
             </p>
           </div>

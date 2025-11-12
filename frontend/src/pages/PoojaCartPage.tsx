@@ -60,7 +60,7 @@ const PoojaCartPage = () => {
         <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
           <p className="text-sm text-slate-600">
             Browse the available poojas and add them to your cart from the{' '}
-            <Link to="/pooja/register" className="font-semibold text-brand-600 hover:text-brand-700">
+            <Link to="/pooja/register" className="font-semibold text-green-600 hover:text-green-700">
               Pooja Registration
             </Link>{' '}
             page.
@@ -287,7 +287,7 @@ const PoojaCartPage = () => {
                           <div className="text-sm font-semibold text-slate-700">
                             {member.name}
                             {index === 0 && membersForDisplay.length > 1 && (
-                              <span className="ml-2 rounded bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+                              <span className="ml-2 rounded bg-green-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-600">
                                 Primary
                               </span>
                             )}
@@ -352,8 +352,8 @@ const PoojaCartPage = () => {
             disabled={processing}
             className={`rounded-full px-5 py-2 text-sm font-semibold text-white shadow focus:outline-none ${
               processing
-                ? 'cursor-not-allowed bg-red-400'
-                : 'bg-red-700 hover:bg-red-800'
+                ? 'cursor-not-allowed bg-green-400'
+                : 'bg-green-700 hover:bg-green-800'
             }`}
           >
             {processing ? 'Processing…' : `Pay ₹${formatCurrency(totalAmount.toString())}`}

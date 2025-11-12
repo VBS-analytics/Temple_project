@@ -659,7 +659,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
               <button
                 type="button"
                 onClick={startAddingNew}
-                className="inline-flex items-center justify-center rounded-lg border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-600 transition hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                className="inline-flex items-center justify-center rounded-lg border border-green-600 px-3 py-2 text-sm font-semibold text-green-600 transition hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
               >
                 + Add Member
               </button>
@@ -807,7 +807,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                               <button
                                 type="button"
                                 onClick={handleSubmit}
-                                className="rounded bg-brand-600 px-3 py-1 text-sm font-semibold text-white hover:bg-brand-500"
+                                className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500"
                                 disabled={submitting}
                               >
                                 {submitting ? 'Saving...' : 'Save'}
@@ -933,7 +933,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                   <button
                                     type="button"
                                     onClick={handleSubmit}
-                                    className="rounded bg-brand-600 px-3 py-1 text-sm font-semibold text-white hover:bg-brand-500"
+                                    className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500"
                                     disabled={submitting}
                                   >
                                     {submitting ? 'Saving...' : 'Save'}
@@ -1083,7 +1083,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                   <button
                                     type="button"
                                     onClick={submitRegistrationEdit}
-                                    className="rounded bg-brand-600 px-3 py-1 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-70"
+                                    className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-70"
                                     disabled={registrationEditSubmitting}
                                   >
                                     {registrationEditSubmitting ? 'Saving...' : 'Save'}

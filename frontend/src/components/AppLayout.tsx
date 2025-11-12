@@ -53,17 +53,17 @@ const AppLayout = () => {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-gradient-to-r from-brand-50 via-white to-brand-50/70 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-gradient-to-r from-green-50 via-white to-green-50/70 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <Link to="/" className="flex items-center gap-3 text-left">
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-lg font-semibold text-white shadow-sm">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-green-600 text-lg font-semibold text-white shadow-sm">
                   TD
                 </span>
                 <span>
                   <span className="block text-lg font-semibold text-slate-900">Temple Donor Portal</span>
-                  <span className="block text-xs font-medium uppercase tracking-wide text-brand-600">
+                  <span className="block text-xs font-medium uppercase tracking-wide text-green-600">
                     {headerSubtitle.toUpperCase()}
                   </span>
                 </span>
@@ -72,8 +72,8 @@ const AppLayout = () => {
                 <LanguageToggle theme="light" />
                 <div className="hidden h-10 w-px bg-slate-200 md:block" />
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 rounded-full border border-brand-100 bg-white px-3 py-1.5 shadow-sm">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+                  <div className="flex items-center gap-2 rounded-full border border-green-100 bg-white px-3 py-1.5 shadow-sm">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
                       {userInitials}
                     </span>
                     <div className="flex flex-col">
@@ -84,14 +84,14 @@ const AppLayout = () => {
                   <button
                     type="button"
                     onClick={clear}
-                    className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                    className="rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700"
                   >
                     Logout
                   </button>
                 </div>
               </div>
             </div>
-            <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-brand-100 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
+            <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-green-100 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
               {navItems
                 .filter((item) => item.show)
                 .map((item) => (
@@ -103,14 +103,14 @@ const AppLayout = () => {
                       clsx(
                         'relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition',
                         isActive
-                          ? 'bg-brand-600 text-white shadow-[0_12px_20px_-14px_rgba(55,48,163,0.9)]'
-                          : 'text-slate-600 hover:bg-brand-50/80 hover:text-brand-600'
+                          ? 'bg-green-600 text-white shadow-[0_12px_20px_-14px_rgba(5,150,105,0.9)]'
+                          : 'text-slate-600 hover:bg-green-50/80 hover:text-green-600'
                       )
                     }
                   >
                     {item.label}
                     {item.badge && (
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1 text-xs font-semibold text-brand-600 shadow-sm">
+                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1 text-xs font-semibold text-green-600 shadow-sm">
                         {item.badge}
                       </span>
                     )}

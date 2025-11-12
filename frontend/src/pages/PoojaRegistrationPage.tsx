@@ -27,6 +27,7 @@ function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState<number>(-1);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const selected = useMemo(
     () => options.find((o) => o.value === value) || null,
@@ -37,6 +38,22 @@ function SearchableSelect({
   useEffect(() => {
     setQuery(selected?.label ?? '');
   }, [selected?.label]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setActiveIndex(-1);
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,17 +68,37 @@ function SearchableSelect({
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} ref={containerRef}>
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={query}
           disabled={disabled}
+          onMouseDown={(event) => {
+            if (disabled) return;
+            if (open && query === (selected?.label ?? '')) {
+              event.preventDefault();
+              setOpen(false);
+              setActiveIndex(-1);
+              return;
+            }
+            if (!open) {
+              setOpen(true);
+            }
+          }}
           onChange={(e) => {
             setQuery(e.target.value);
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget;
+            if (nextTarget && containerRef.current?.contains(nextTarget as Node)) {
+              return;
+            }
+            setActiveIndex(-1);
+            setOpen(false);
+          }}
           onKeyDown={(e) => {
             if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) {
               setOpen(true);
@@ -82,7 +119,7 @@ function SearchableSelect({
             }
           }}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm transition-all"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white shadow-sm transition-all"
           aria-autocomplete="list"
           aria-expanded={open}
           role="combobox"
@@ -96,6 +133,7 @@ function SearchableSelect({
               setQuery('');
               setOpen(false);
             }}
+            onMouseDown={(event) => event.preventDefault()}
             aria-label="Clear selection"
           >
             ×
@@ -105,6 +143,7 @@ function SearchableSelect({
           type="button"
           className="text-gray-400 hover:text-gray-600 text-xs transition-colors"
           onClick={() => setOpen((o) => !o)}
+          onMouseDown={(event) => event.preventDefault()}
           aria-label="Toggle options"
         >
           ▾
@@ -130,8 +169,8 @@ function SearchableSelect({
                 role="option"
                 aria-selected={isSelected}
                 className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
-                  active ? 'bg-blue-50' : ''
-                } ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`}
+                  active ? 'bg-green-50' : ''
+                } ${isSelected ? 'font-medium text-green-900' : 'text-gray-700'}`}
                 onMouseEnter={() => setActiveIndex(idx)}
                 onMouseDown={(e) => e.preventDefault()} // keep focus on input
                 onClick={() => commit(opt)}
@@ -215,7 +254,7 @@ function MemberMultiSelect({
                     <span>{option.label}</span>
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 rounded"
+                      className="h-4 w-4 text-green-600 focus:ring-green-500 rounded"
                       checked={checked}
                       onChange={() => onToggleValue(option.value)}
                     />
@@ -488,9 +527,14 @@ const parseAmountFromLabel = (label?: string | null): string | null => {
 
 type BookingMode = 'full' | 'memberOnly';
 
+type UpcomingOccurrence = {
+  date: string;
+  label?: string;
+};
+
 type DayOccurrenceState =
   | { status: 'loading'; key: string }
-  | { status: 'ready'; key: string; date: string; label: string; note?: string | null }
+  | { status: 'ready'; key: string; date: string; label: string; note?: string | null; occurrences?: UpcomingOccurrence[] }
   | { status: 'error'; key: string; message: string }
   | { status: 'needsStar'; key: string; message: string }
   | { status: 'manual'; key: string; message: string };
@@ -1146,6 +1190,17 @@ const PoojaRegistrationPage = () => {
           params.tamil_star_id = tamilStarId;
         }
         const { data } = await api.get(`/pooja/day-options/${option.id}/next-occurrence/`, { params });
+        const upcomingOccurrences: UpcomingOccurrence[] = Array.isArray(data?.meta?.upcoming_occurrences)
+          ? data.meta.upcoming_occurrences
+              .map((entry: any) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const occurrenceDate = typeof entry.date === 'string' ? entry.date : '';
+                if (!occurrenceDate) return null;
+                const occurrenceLabel = typeof entry.label === 'string' ? entry.label : '';
+                return { date: occurrenceDate, label: occurrenceLabel };
+              })
+              .filter((entry): entry is UpcomingOccurrence => Boolean(entry))
+          : [];
         setDayOccurrenceMap((prev) => {
           const nextState: DayOccurrenceState = {
             status: 'ready',
@@ -1153,6 +1208,7 @@ const PoojaRegistrationPage = () => {
             date: data?.occurrence_date ?? '',
             label: data?.occurrence_label ?? '',
             note: data?.meta?.note ?? null,
+            occurrences: upcomingOccurrences.length > 0 ? upcomingOccurrences : undefined,
           };
           const current = prev[poojaId];
           if (current && current.key === stateKey && current.status === 'ready' && current.date === nextState.date && current.label === nextState.label && current.note === nextState.note) {
@@ -1788,8 +1844,8 @@ const PoojaRegistrationPage = () => {
                   Select a pooja, choose your preferred day option, and add to cart
                 </p>
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-blue-900 text-sm font-medium">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-green-900 text-sm font-medium">
                   நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
                 </p>
               </div>
@@ -1917,7 +1973,7 @@ const PoojaRegistrationPage = () => {
                                       <input
                                         type="date"
                                         min={new Date().toISOString().split('T')[0]}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                                         value={chartDetails.date}
                                         onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
                                       />
@@ -1928,7 +1984,7 @@ const PoojaRegistrationPage = () => {
                                       </label>
                                       <textarea
                                         rows={2}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                                         value={chartDetails.note}
                                         onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
                                         placeholder="Add donor instructions"
@@ -1958,13 +2014,23 @@ const PoojaRegistrationPage = () => {
                             ) : occurrenceState.status === 'loading' ? (
                               <span className="text-xs text-gray-600">Fetching date…</span>
                             ) : occurrenceState.status === 'ready' ? (
-                              <div className="space-y-1">
-                                <span className="font-medium text-gray-900">
-                                  {formatDisplayDate(occurrenceState.date)}
-                                </span>
-                                {occurrenceState.label && (
-                                  <span className="block text-xs text-gray-600">{occurrenceState.label}</span>
-                                )}
+                              <div className="space-y-2">
+                                {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
+                                  ? occurrenceState.occurrences
+                                  : [{ date: occurrenceState.date, label: occurrenceState.label }]
+                                ).map((entry, index) => (
+                                  <div
+                                    key={`${entry.date}-${index}`}
+                                    className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
+                                  >
+                                    <span className="font-medium text-gray-900">
+                                      {formatDisplayDate(entry.date)}
+                                    </span>
+                                    {entry.label && (
+                                      <span className="block text-xs text-gray-600">{entry.label}</span>
+                                    )}
+                                  </div>
+                                ))}
                                 {occurrenceState.note && (
                                   <span className="block text-xs text-gray-500">{occurrenceState.note}</span>
                                 )}
@@ -1987,7 +2053,7 @@ const PoojaRegistrationPage = () => {
                               <label className="inline-flex items-center">
                                 <input
                                   type="radio"
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                  className="h-4 w-4 text-green-600 focus:ring-green-500"
                                   checked={postPrasadamSelected === true}
                                   onChange={() => {
                                     setPrasadamSelectionMap((prev) => ({
@@ -2002,7 +2068,7 @@ const PoojaRegistrationPage = () => {
                               <label className="inline-flex items-center">
                                 <input
                                   type="radio"
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                  className="h-4 w-4 text-green-600 focus:ring-green-500"
                                   checked={postPrasadamSelected === false}
                                   onChange={() => {
                                     setPrasadamSelectionMap((prev) => ({
@@ -2090,13 +2156,13 @@ const PoojaRegistrationPage = () => {
                             key={option.value}
                             className={`flex items-center p-3 rounded-lg border cursor-pointer transition ${
                               checked
-                                ? 'border-blue-500 bg-blue-50'
+                                ? 'border-green-500 bg-green-50'
                                 : 'border-gray-200 hover:border-gray-300'
                             }`}
                           >
                             <input
                               type="checkbox"
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 rounded"
+                              className="h-4 w-4 text-green-600 focus:ring-green-500 rounded"
                               checked={checked}
                               onChange={() => toggleMemberSelection(option.value)}
                             />
@@ -2177,7 +2243,7 @@ const PoojaRegistrationPage = () => {
                           <input
                             type="date"
                             min={new Date().toISOString().split('T')[0]}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                             value={modalChartDetails.date}
                             onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
                           />
@@ -2188,7 +2254,7 @@ const PoojaRegistrationPage = () => {
                           </label>
                           <textarea
                             rows={3}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                             value={modalChartDetails.note}
                             onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
                             placeholder="Add donor instructions"
@@ -2208,7 +2274,7 @@ const PoojaRegistrationPage = () => {
                       <label className="inline-flex items-center">
                         <input
                           type="radio"
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          className="h-4 w-4 text-green-600 focus:ring-green-500"
                           checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === true}
                           onChange={() =>
                             setPrasadamSelectionMap((prev) => ({
@@ -2222,7 +2288,7 @@ const PoojaRegistrationPage = () => {
                       <label className="inline-flex items-center">
                         <input
                           type="radio"
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          className="h-4 w-4 text-green-600 focus:ring-green-500"
                           checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === false}
                           onChange={() =>
                             setPrasadamSelectionMap((prev) => ({
@@ -2245,7 +2311,7 @@ const PoojaRegistrationPage = () => {
                       </label>
                       <input
                         name="phoneNumber"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                         value={contactDetails.phoneNumber}
                         onChange={(event) => setContactDetails((prev) => ({ ...prev, phoneNumber: event.target.value }))}
                         placeholder="91XXXXXXXXXX"
@@ -2258,7 +2324,7 @@ const PoojaRegistrationPage = () => {
                       <textarea
                         name="address"
                         rows={3}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                         value={contactDetails.address}
                         onChange={(event) => setContactDetails((prev) => ({ ...prev, address: event.target.value }))}
                         placeholder="Address for correspondence"
@@ -2272,7 +2338,7 @@ const PoojaRegistrationPage = () => {
                         name="bookingDate"
                         type="date"
                         min={new Date().toISOString().split('T')[0]}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
                         value={dateValue}
                         onChange={(event) => setDateValue(event.target.value)}
                         required
@@ -2289,7 +2355,7 @@ const PoojaRegistrationPage = () => {
 
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                 >
                   {bookingMode === 'memberOnly'
                     ? 'Save selection'

@@ -216,8 +216,14 @@ class TempleCalendarService:
             target = self._next_tithi(start, targets=(6, 21))
             return self._format_result(target, f"   Sashti Tithi – {TITHI_NAME_MAP.get(self._tithi_on(target), '')}")
         if code == "second_ashtami":
-            target = self._next_tithi(start, targets=(23,))
-            return self._format_result(target, "   Krishna Paksha Ashtami")
+            occurrences = self._upcoming_ashtami_window(start)
+            primary = occurrences[0]
+            result = self._format_result(primary, "Upcoming Ashtami dates")
+            result.meta["upcoming_occurrences"] = [
+                {"date": when.isoformat(), "label": when.strftime("%A, %d %b %Y")}
+                for when in occurrences
+            ]
+            return result
         if code == "pournami":
             target = self._next_tithi(start, targets=(15,))
             return self._format_result(target, "Pournami (Full moon)")
@@ -343,6 +349,12 @@ class TempleCalendarService:
             return date(year + 1, 1, 1)
         return date(year, month + 1, 1)
 
+    @staticmethod
+    def _month_end(day: date) -> date:
+        """Return the last date of the provided date's month."""
+        next_month = day.replace(day=28) + timedelta(days=4)  # safely jump to next month
+        return next_month - timedelta(days=next_month.day)
+
     # --------------------------- Tamil solar months ------------------------ #
 
     def _next_tamil_month_start(self, start: date) -> date:
@@ -375,6 +387,50 @@ class TempleCalendarService:
                 return probe
             probe += timedelta(days=1)
         raise RuntimeError("Tithi not found within search horizon.")
+
+    def _collect_tithi_dates(self, start: date, end: date, targets: Iterable[int]) -> list[date]:
+        """Collect all dates within [start, end] that match the given tithi targets."""
+        wanted = set(targets)
+        occurrences: list[date] = []
+        probe = start
+        while probe <= end:
+            if self._tithi_occurs_on_day(probe, wanted):
+                occurrences.append(probe)
+            probe += timedelta(days=1)
+        return occurrences
+
+    @staticmethod
+    def _compress_consecutive_dates(dates: list[date]) -> list[date]:
+        """Drop consecutive next-day duplicates caused by tithi spanning two dates."""
+        if not dates:
+            return []
+        deduped: list[date] = []
+        for day in dates:
+            if deduped and (day - deduped[-1]).days <= 1:
+                continue
+            deduped.append(day)
+        return deduped
+
+    def _upcoming_ashtami_window(self, start: date) -> list[date]:
+        """Return upcoming Ashtami dates from the current or next month window."""
+        targets = (8, 23)  # Shukla and Krishna Paksha Ashtami
+        current_month_end = self._month_end(start)
+        current_window = self._compress_consecutive_dates(
+            self._collect_tithi_dates(start, current_month_end, targets)
+        )
+        if current_window:
+            return current_window[:2]
+
+        next_month_start = self._next_gregorian_first(start)
+        next_month_end = self._month_end(next_month_start)
+        next_window = self._compress_consecutive_dates(
+            self._collect_tithi_dates(next_month_start, next_month_end, targets)
+        )
+        if next_window:
+            return next_window[:2]
+
+        fallback = self._next_tithi(next_month_end + timedelta(days=1), targets=targets)
+        return [fallback]
 
     def _tithi_occurs_on_day(self, day: date, wanted: set[int]) -> bool:
         for minute_offset in range(0, 24 * 60, 30):
