@@ -136,16 +136,13 @@ const ForgotPasswordPage = () => {
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="bg-transparent text-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+          <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-6 px-6 py-4 lg:px-10">
             <Link
               to="/"
               className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
                 Kakkazhany Gramam
-              </p>
-              <p className="text-xs text-white/80 group-hover:text-white transition-colors">
-                The Architectural Marvel of Agraharam
               </p>
             </Link>
 
@@ -159,8 +156,6 @@ const ForgotPasswordPage = () => {
                   {item.label}
                 </a>
               ))}
-              <LanguageToggle />
-
               <div className="flex items-center gap-3">
                 <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
                   Login
@@ -171,6 +166,7 @@ const ForgotPasswordPage = () => {
                 >
                   Sign&nbsp;Up
                 </Link>
+                <LanguageToggle />
               </div>
             </div>
           </div>
@@ -178,8 +174,8 @@ const ForgotPasswordPage = () => {
       </header>
 
       {/* MAIN */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-14 pt-36">
-        <div className="w-full max-w-6xl">
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-14 pt-36 lg:px-10">
+        <div className="w-full max-w-screen-2xl">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left Column - Content */}
             <div className="space-y-8 animate-fade-in">

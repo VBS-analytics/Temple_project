@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-
 import LanguageToggle from '../components/LanguageToggle';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
@@ -13,14 +12,13 @@ type FormValues = {
 };
 
 const navLinks = [
-  { label: 'Home', href: '#top' },
-  { label: 'Darshan & Pooja', href: '#darshan' },
-  { label: 'Architecture', href: '#architecture' },
-  { label: 'Gallery', href: '#gallery' },
-  { label: 'Visit', href: '#visit' },
-  { label: 'Events', href: '#top' },
-  { label: 'Projects', href: '#top' },
-  { label: 'About', href: '#top' },
+  { label: 'Home', href: '/' },
+  { label: 'Darshan & Pooja', href: '/#darshan' },
+  { label: 'Gallery', href: '/gallery' },
+  { label: 'Visit', href: '/#visit' },
+  { label: 'Events', href: '/events' },
+  { label: 'Projects', href: '/projects' },
+  { label: 'About', href: '/about' },
 ] as const;
 
 const features = [
@@ -48,7 +46,8 @@ const LoginPage = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
   const {
     register,
     handleSubmit,
@@ -111,134 +110,208 @@ const LoginPage = () => {
         {/* Temple Silhouette */}
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-amber-900/30 to-transparent opacity-50"></div>
       </div>
-
+      
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="bg-transparent text-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
-            <Link
-              to="/"
-              className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
-            >
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
-                Kakkazhany Gramam
-              </p>
-              <p className="text-xs text-white/80 group-hover:text-white transition-colors">
-                The Architectural Marvel of Agraharam
-              </p>
-            </Link>
+          <div className="mx-auto flex w-full max-w-screen-2xl items-center px-4 py-3 text-white sm:px-6 lg:px-10">
+            <div className="flex h-16 w-full items-center justify-between">
+              <Link
+                to="/"
+                className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
+              >
+                <p className="text-sm sm:text-base font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
+                  Kakkazhany Gramam
+                </p>
+              </Link>
+              
+              {/* Desktop Nav */}
+              <div className="hidden md:flex items-center gap-4 sm:gap-6 text-sm font-semibold">
+                {navLinks.map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
+                  >
+                    {item.label}
+                  </a>
+                ))}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Link
+                    to="/register"
+                    className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] text-xs sm:text-sm`}
+                  >
+                    Sign&nbsp;Up
+                  </Link>
+                  <LanguageToggle />
+                </div>
+              </div>
 
-            <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-white">
-              {navLinks.map((item) => (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
+              {/* Mobile Hamburger Button */}
+              <div className="md:hidden">
+                <button
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="inline-flex items-center justify-center rounded-md p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400"
+                  aria-controls="mobile-menu"
+                  aria-expanded={isMobileMenuOpen}
                 >
-                  {item.label}
-                </a>
-              ))}
-              <LanguageToggle />
-
-              <div className="flex items-center gap-3">
-                <Link
-                  to="/login"
-                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}
-                >
-                  Sign&nbsp;Up
-                </Link>
+                  <span className="sr-only">Open main menu</span>
+                  {isMobileMenuOpen ? (
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : (
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-8 6h8" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
           </div>
         </div>
       </header>
 
+      {/* Mobile Menu Panel */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-md md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div
+            className="absolute right-0 top-0 h-full w-4/5 max-w-xs bg-gradient-to-b from-[#090203] to-gray-900 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-8">
+              <span className="text-base font-semibold uppercase tracking-[0.28em] text-amber-200">
+                Menu
+              </span>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="rounded-md p-2 text-white hover:bg-white/10"
+              >
+                <span className="sr-only">Close menu</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <nav className="flex flex-col space-y-4">
+              {navLinks.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-3 text-base font-medium text-white transition-all duration-300 hover:bg-white/10 hover:text-[#f4ba1a]"
+                >
+                  {item.label}
+                </a>
+              ))}
+              <hr className="border-white/20 pt-4" />
+              <div className="flex flex-col space-y-3">
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] w-full`}
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] w-full`}
+                >
+                  Sign Up
+                </Link>
+                <div className="flex justify-center pt-2">
+                  <LanguageToggle />
+                </div>
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* MAIN */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-14 pt-36">
-        <div className="w-full max-w-6xl">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <div className="relative z-10 flex min-h-screen items-start justify-center px-4 pb-16 pt-20 sm:pt-24 sm:px-6 lg:px-10">
+        <div className="w-full max-w-screen-2xl">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
             {/* Left Column - Content */}
-            <div className="space-y-8 animate-fade-in">
-              <div className="space-y-4">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f4c956] backdrop-blur-sm">
+            <div className="space-y-6 sm:space-y-8 animate-fade-in text-center sm:text-left">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-[#f4c956] backdrop-blur-sm">
                   Welcome Back
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4 tracking-tight">
                   Reconnect with Your <span className="text-amber-300">Sacred Journey</span>
                 </h1>
-                <p className="text-lg md:text-xl text-amber-100 leading-relaxed">
+                <p className="text-base sm:text-lg md:text-xl text-amber-100 leading-relaxed max-w-2xl mx-auto sm:mx-0">
                   Sign in to access personalized darshan slots, ritual schedules, and community seva opportunities.
                 </p>
               </div>
-
+              
               {/* Features */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-amber-200">Portal Features</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold text-amber-200">Portal Features</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   {features.map((feature, index) => (
-                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 transition-all duration-300 hover:bg-white/20">
-                      <div className="text-2xl mb-2">{feature.icon}</div>
-                      <h4 className="font-semibold text-white">{feature.title}</h4>
+                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 transition-all duration-300 hover:bg-white/20">
+                      <div className="text-xl sm:text-2xl mb-2">{feature.icon}</div>
+                      <h4 className="font-semibold text-white text-sm sm:text-base">{feature.title}</h4>
                       <p className="text-xs text-amber-100/80 mt-1">{feature.description}</p>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Testimonials */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-amber-200">Community Voices</h3>
-                <div className="space-y-4">
+              
+              {/* Testimonials - Hidden on mobile, shown on md and up */}
+              <div className="space-y-3 sm:space-y-4 hidden md:block">
+                <h3 className="text-base sm:text-lg font-semibold text-amber-200">Community Voices</h3>
+                <div className="space-y-3 sm:space-y-4">
                   {testimonials.map((testimonial, index) => (
-                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border-l-4 border-amber-400">
-                      <p className="text-amber-50 italic mb-2">"{testimonial.quote}"</p>
+                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border-l-4 border-amber-400">
+                      <p className="text-amber-50 italic mb-2 text-sm">"{testimonial.quote}"</p>
                       <div>
-                        <p className="font-medium text-white">{testimonial.author}</p>
+                        <p className="font-medium text-white text-sm">{testimonial.author}</p>
                         <p className="text-xs text-amber-100/70">{testimonial.role}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-
+              
               {/* Stats */}
-              <div className="flex flex-wrap items-center gap-6 pt-4">
+              <div className="flex flex-wrap justify-center sm:justify-start items-center gap-4 sm:gap-6 pt-2 sm:pt-4 text-sm">
                 <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-xl mr-2">70K+</span>
+                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">70K+</span>
                   <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Annual Devotees
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-xl mr-2">120+</span>
+                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">120+</span>
                   <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Daily Sevas
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-xl mr-2">24/7</span>
+                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">24/7</span>
                   <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Support
                   </span>
                 </div>
               </div>
             </div>
-
+            
             {/* Right Column - Form */}
-            <div className="animate-fade-in-up">
+            <div className="animate-fade-in-up w-full max-w-md mx-auto lg:max-w-xl">
               {/* Progress Steps */}
-              <div className="mb-8">
-                <div className="flex justify-center mb-6">
+              <div className="mb-6 sm:mb-8">
+                <div className="flex justify-center mb-4 sm:mb-6">
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
                       <div
-                        className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold mb-3 bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-lg transform scale-110"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-base sm:text-lg font-bold mb-2 sm:mb-3 bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-lg"
                       >
                         1
                       </div>
@@ -254,26 +327,26 @@ const LoginPage = () => {
                   </div>
                 </div>
               </div>
-
+              
               <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-1 shadow-2xl">
                 <div className="bg-white rounded-3xl overflow-hidden shadow-xl">
-                  <form onSubmit={handleSubmit(onSubmit)} className="p-8">
+                  <form onSubmit={handleSubmit(onSubmit)} className="p-5 sm:p-6 md:p-8">
                     {apiError && (
-                      <div className="mb-6 p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake flex items-center">
+                      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake flex items-center">
                         <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
                         {apiError}
                       </div>
                     )}
-
-                    <div className="space-y-6">
-                      <div className="text-center mb-8">
-                        <h2 className="text-3xl font-bold text-gray-800 mb-2">Sign In</h2>
-                        <p className="text-gray-600">Enter your credentials to access your dashboard</p>
+                    
+                    <div className="space-y-4 sm:space-y-6">
+                      <div className="text-center mb-6 sm:mb-8">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Sign In</h2>
+                        <p className="text-gray-600 text-sm sm:text-base">Enter your credentials to access your dashboard</p>
                       </div>
                       
-                      <div className="space-y-5">
+                      <div className="space-y-4 sm:space-y-5">
                         <div className="relative">
                           <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                             Mobile Number <span className="text-rose-500 ml-1">*</span>
@@ -295,9 +368,24 @@ const LoginPage = () => {
                               placeholder="Enter your mobile number"
                               {...register('phone_number', {
                                 required: 'Mobile number is required',
+                                pattern: {
+                                  value: /^\d{10}$/,
+                                  message: 'Mobile number must be exactly 10 digits'
+                                }
                               })}
                               onFocus={() => handleFocus('phone_number')}
                               onBlur={handleBlur}
+                              onInput={(e) => {
+                                const input = e.target as HTMLInputElement;
+                                // Remove any non-digit characters
+                                const value = input.value.replace(/\D/g, '');
+                                // Limit to 10 digits
+                                const truncatedValue = value.slice(0, 10);
+                                if (truncatedValue !== input.value) {
+                                  input.value = truncatedValue;
+                                  input.dispatchEvent(new Event('input', { bubbles: true }));
+                                }
+                              }}
                             />
                           </div>
                           {errors.phone_number && (
@@ -309,13 +397,13 @@ const LoginPage = () => {
                             </p>
                           )}
                         </div>
-
+                        
                         <div className="relative">
-                          <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
+                          <label className="flex flex-col sm:flex-row sm:items-center justify-between text-sm font-medium text-gray-700 mb-1">
                             <span>Password <span className="text-rose-500 ml-1">*</span></span>
                             <Link
                               to="/forgot-password"
-                              className="text-xs text-amber-600 hover:text-amber-700 transition-colors"
+                              className="text-xs text-amber-600 hover:text-amber-700 transition-colors mt-1 sm:mt-0"
                             >
                               Forgot?
                             </Link>
@@ -332,7 +420,10 @@ const LoginPage = () => {
                                 isFocused === 'password' || errors.password ? 'border-amber-500 shadow-sm' : 'border-gray-300'
                               }`}
                               placeholder="Enter your password"
-                              {...register('password', { required: 'Password is required' })}
+                              {...register('password', { 
+                                required: 'Password is required',
+                                minLength: { value: 8, message: 'Password must be at least 8 characters' }
+                              })}
                               onFocus={() => handleFocus('password')}
                               onBlur={handleBlur}
                             />
@@ -363,7 +454,7 @@ const LoginPage = () => {
                           )}
                         </div>
                       </div>
-
+                      
                       <div className="flex items-center">
                         <input
                           id="remember-me"
@@ -375,7 +466,7 @@ const LoginPage = () => {
                           Remember me
                         </label>
                       </div>
-
+                      
                       <button
                         type="submit"
                         disabled={isSubmitting}
@@ -398,7 +489,7 @@ const LoginPage = () => {
                           </>
                         )}
                       </button>
-
+                      
                       <div className="text-center text-sm text-gray-600">
                         New devotee?{' '}
                         <Link
@@ -416,12 +507,12 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
-
+      
       {/* Footer */}
       <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-white/60 text-xs z-10">
         <p>© {new Date().getFullYear()} Kakkazhany Gramam. All rights reserved.</p>
       </footer>
-
+      
       {/* Custom CSS for animations */}
       <style>{`
         @keyframes float1 {

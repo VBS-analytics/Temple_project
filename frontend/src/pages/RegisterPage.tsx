@@ -4,6 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import LanguageToggle from '../components/LanguageToggle';
+import { nakshatraOptions } from '../data/nakshatraOptions';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
 
@@ -28,49 +29,19 @@ interface FormValues {
 }
 
 const navLinks = [
-  { label: 'Home', href: '#top' },
-  { label: 'Darshan & Pooja', href: '#darshan' },
-  { label: 'Architecture', href: '#architecture' },
-  { label: 'Gallery', href: '#gallery' },
-  { label: 'Visit', href: '#visit' },
-  { label: 'Events', href: '#top' },
-  { label: 'Projects', href: '#top' },
-  { label: 'About', href: '#top' },
+  { label: 'Home', href: '/' },
+  { label: 'Darshan & Pooja', href: '/#darshan' },
+  { label: 'Gallery', href: '/gallery' },
+  { label: 'Visit', href: '/#visit' },
+  { label: 'Events', href: '/events' },
+  { label: 'Projects', href: '/projects' },
+  { label: 'About', href: '/about' },
 ] as const;
 
 const benefits = [
   { icon: '📱', title: 'Mobile Access', description: 'Access all services from your mobile device' },
   { icon: '📅', title: 'Easy Booking', description: 'Book darshan and sevas with just a few taps' },
   { icon: '👨‍👩‍👧‍👦', title: 'Family Profiles', description: 'Manage multiple family members under one account' },
-] as const;
-
-const nakshatraOptions: string[] = [
-  'aswini',
-  'bharani',
-  'karthigai',
-  'rohini',
-  'mrigsheersham',
-  'tiruvadarai',
-  'punarpoosam',
-  'poosam',
-  'aayilyam',
-  'magam',
-  'pooram',
-  'uttiram',
-  'chitrai',
-  'swathi',
-  'visakam',
-  'anusham',
-  'kettai',
-  'moolam',
-  'pooradam',
-  'uttiradam',
-  'thirivonam',
-  'avittam',
-  'sadayam',
-  'poorattathi',
-  'uttrattathi',
-  'revathi',
 ] as const;
 
 const RegisterPage = () => {
@@ -85,6 +56,7 @@ const RegisterPage = () => {
   const starInputRef = useRef<HTMLInputElement | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const {
     register,
@@ -315,7 +287,7 @@ const RegisterPage = () => {
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="bg-transparent text-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+          <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-10">
             <Link
               to="/"
               className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
@@ -323,11 +295,9 @@ const RegisterPage = () => {
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
                 Kakkazhany Gramam
               </p>
-              <p className="text-xs text-white/80 group-hover:text-white transition-colors">
-                The Architectural Marvel of Agraharam
-              </p>
             </Link>
 
+            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-white">
               {navLinks.map((item) => (
                 <a
@@ -338,50 +308,89 @@ const RegisterPage = () => {
                   {item.label}
                 </a>
               ))}
-              <LanguageToggle />
-
               <div className="flex items-center gap-3">
                 <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
                   Login
                 </Link>
-                <Link
-                  to="/register"
-                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}
-                >
-                  Sign&nbsp;Up
-                </Link>
+                <LanguageToggle />
               </div>
             </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="md:hidden text-white focus:outline-none"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {mobileMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
           </div>
+
+          {/* Mobile Navigation Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden bg-black/70 backdrop-blur-lg">
+              <div className="px-4 py-3 space-y-3">
+                {navLinks.map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="block text-white text-base font-medium py-2 px-3 rounded-lg hover:bg-amber-900/30 transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+                <div className="flex flex-col gap-3 pt-2 pb-1">
+                  <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] justify-center`}>
+                    Login
+                  </Link>
+                  <Link
+                    to="/register"
+                    className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] justify-center`}
+                  >
+                    Sign&nbsp;Up
+                  </Link>
+                  <div className="flex justify-center pt-2">
+                    <LanguageToggle />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
       {/* MAIN */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-14 pt-36">
-        <div className="w-full max-w-6xl">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-14 pt-28 sm:px-6 lg:px-10 lg:pt-36">
+        <div className="w-full max-w-screen-2xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             {/* Left Column - Content */}
-            <div className="space-y-8 animate-fade-in">
-              <div className="space-y-4">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f4c956] backdrop-blur-sm">
+            <div className="space-y-6 sm:space-y-8 animate-fade-in">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 sm:px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f4c956] backdrop-blur-sm">
                   Join Our Community
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4 tracking-tight">
                   Create Your <span className="text-amber-300">Sacred Profile</span>
                 </h1>
-                <p className="text-lg md:text-xl text-amber-100 leading-relaxed">
+                <p className="text-base sm:text-lg md:text-xl text-amber-100 leading-relaxed">
                   Join our community to access temple services and receive personalized spiritual updates.
                 </p>
               </div>
 
               {/* Benefits */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-amber-200">Membership Benefits</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold text-amber-200">Membership Benefits</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   {benefits.map((benefit, index) => (
-                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 transition-all duration-300 hover:bg-white/20">
-                      <div className="text-2xl mb-2">{benefit.icon}</div>
-                      <h4 className="font-semibold text-white">{benefit.title}</h4>
+                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 transition-all duration-300 hover:bg-white/20">
+                      <div className="text-xl sm:text-2xl mb-2">{benefit.icon}</div>
+                      <h4 className="font-semibold text-white text-sm sm:text-base">{benefit.title}</h4>
                       <p className="text-xs text-amber-100/80 mt-1">{benefit.description}</p>
                     </div>
                   ))}
@@ -389,15 +398,15 @@ const RegisterPage = () => {
               </div>
 
               {/* Progress Steps Visualization */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-amber-200">Registration Process</h3>
-                <div className="space-y-3">
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold text-amber-200">Registration Process</h3>
+                <div className="space-y-2 sm:space-y-3">
                   {steps.map((step) => (
                     <div 
                       key={step.id} 
-                      className={`flex items-start gap-3 ${currentStep >= step.id ? 'opacity-100' : 'opacity-60'}`}
+                      className={`flex items-start gap-2 sm:gap-3 ${currentStep >= step.id ? 'opacity-100' : 'opacity-60'}`}
                     >
-                      <div className={`mt-1 flex-shrink-0 rounded-full w-6 h-6 flex items-center justify-center ${
+                      <div className={`mt-1 flex-shrink-0 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center ${
                         currentStep >= step.id 
                           ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-white' 
                           : 'bg-white/20 text-white/70'
@@ -405,7 +414,7 @@ const RegisterPage = () => {
                         {step.id}
                       </div>
                       <div>
-                        <div className={`font-medium ${currentStep >= step.id ? 'text-amber-300' : 'text-white/70'}`}>
+                        <div className={`font-medium text-sm sm:text-base ${currentStep >= step.id ? 'text-amber-300' : 'text-white/70'}`}>
                           {step.title}
                         </div>
                         <div className="text-xs text-white/60">
@@ -418,21 +427,21 @@ const RegisterPage = () => {
               </div>
 
               {/* Stats */}
-              <div className="flex flex-wrap items-center gap-6 pt-4">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6 pt-2 sm:pt-4">
                 <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-xl mr-2">70K+</span>
+                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">70K+</span>
                   <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Annual Devotees
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-xl mr-2">120+</span>
+                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">120+</span>
                   <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Daily Sevas
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-xl mr-2">24/7</span>
+                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">24/7</span>
                   <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
                     Support
                   </span>
@@ -443,12 +452,12 @@ const RegisterPage = () => {
             {/* Right Column - Form */}
             <div className="animate-fade-in-up">
               {/* Progress Steps */}
-              <div className="mb-8">
-                <div className="flex justify-between mb-6">
+              <div className="mb-6 sm:mb-8">
+                <div className="flex justify-between mb-4 sm:mb-6">
                   {steps.map((step) => (
                     <div key={step.id} className="flex flex-col items-center w-1/3 relative">
                       <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold mb-3 transition-all duration-500 ${
+                        className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-sm sm:text-lg font-bold mb-2 sm:mb-3 transition-all duration-500 ${
                           currentStep >= step.id
                             ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-lg transform scale-110'
                             : 'bg-white/20 text-white/70'
@@ -457,17 +466,17 @@ const RegisterPage = () => {
                         {step.id}
                       </div>
                       <div className="text-center">
-                        <div className={`text-base font-semibold ${currentStep >= step.id ? 'text-amber-300' : 'text-white/70'}`}>
+                        <div className={`text-xs sm:text-base font-semibold ${currentStep >= step.id ? 'text-amber-300' : 'text-white/70'}`}>
                           {step.title}
                         </div>
-                        <div className="text-xs text-white/60 mt-1 max-w-[120px]">
+                        <div className="text-xs text-white/60 mt-1 max-w-[80px] sm:max-w-[120px]">
                           {step.description}
                         </div>
                       </div>
                       
                       {/* Connector Line */}
                       {step.id < steps.length && (
-                        <div className="absolute top-6 left-3/4 w-1/2 h-0.5 bg-white/20">
+                        <div className="absolute top-4 sm:top-6 left-3/4 w-1/2 h-0.5 bg-white/20">
                           <div 
                             className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-500"
                             style={{ width: currentStep > step.id ? '100%' : '0%' }}
@@ -481,22 +490,22 @@ const RegisterPage = () => {
 
               <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-1 shadow-2xl">
                 <div className="bg-white rounded-3xl overflow-hidden shadow-xl">
-                  <form onSubmit={handleSubmit(onSubmit)} className="p-8">
+                  <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 md:p-8">
                     {apiError && (
-                      <div className="mb-6 p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake">
+                      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake">
                         {apiError}
                       </div>
                     )}
 
                     {/* Step 1: Basic Information */}
                     {currentStep === 1 && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div className="text-center mb-8">
-                          <h2 className="text-3xl font-bold text-gray-800 mb-2">Basic Information</h2>
-                          <p className="text-gray-600">Let's start with your essential details</p>
+                      <div className="space-y-4 sm:space-y-6 animate-fade-in">
+                        <div className="text-center mb-6 sm:mb-8">
+                          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Basic Information</h2>
+                          <p className="text-gray-600 text-sm sm:text-base">Let's start with your essential details</p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-4 sm:gap-6">
                           <div className="relative">
                             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                               Mobile Number <span className="text-rose-500 ml-1">*</span>
@@ -599,7 +608,7 @@ const RegisterPage = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                             OTP Verification <span className="text-rose-500 ml-1">*</span>
                           </label>
-                          <div className="flex gap-3">
+                          <div className="flex flex-col sm:flex-row gap-3">
                             <div className="relative flex-1">
                               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -623,7 +632,7 @@ const RegisterPage = () => {
                             <button
                               type="button"
                               onClick={requestOtp}
-                              className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center"
+                              className="px-4 sm:px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center"
                             >
                               <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -649,7 +658,7 @@ const RegisterPage = () => {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-4 sm:gap-6">
                           <div className="relative">
                             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                               Password <span className="text-rose-500 ml-1">*</span>
@@ -755,10 +764,10 @@ const RegisterPage = () => {
 
                     {/* Step 2: Residential Details */}
                     {currentStep === 2 && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div className="text-center mb-8">
-                          <h2 className="text-3xl font-bold text-gray-800 mb-2">Residential Details</h2>
-                          <p className="text-gray-600">Help us know where you're located</p>
+                      <div className="space-y-4 sm:space-y-6 animate-fade-in">
+                        <div className="text-center mb-6 sm:mb-8">
+                          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Residential Details</h2>
+                          <p className="text-gray-600 text-sm sm:text-base">Help us know where you're located</p>
                         </div>
                         
                         <div className="space-y-4">
@@ -829,7 +838,7 @@ const RegisterPage = () => {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 gap-4">
                             <div className="relative">
                               <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                                 City / Town <span className="text-rose-500 ml-1">*</span>
@@ -875,95 +884,97 @@ const RegisterPage = () => {
                               )}
                             </div>
 
-                            <div className="relative">
-                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                                State <span className="text-rose-500 ml-1">*</span>
-                              </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                  State <span className="text-rose-500 ml-1">*</span>
+                                </label>
+                                <div className="relative">
+                                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                      isFocused === 'state' || errors.state ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                    }`}
+                                    placeholder="State"
+                                    {...register('state', {
+                                      required: 'State is required',
+                                      pattern: {
+                                        value: /^[a-zA-Z\s'-]+$/,
+                                        message: 'State should contain only letters, spaces, hyphens, and apostrophes'
+                                      }
+                                    })}
+                                    onFocus={() => handleFocus('state')}
+                                    onBlur={handleBlur}
+                                    onInput={(e) => {
+                                      const input = e.target as HTMLInputElement;
+                                      const value = input.value.replace(/[^a-zA-Z\s'-]/g, '');
+                                      if (value !== input.value) {
+                                        input.value = value;
+                                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                                      }
+                                    }}
+                                  />
                                 </div>
-                                <input
-                                  type="text"
-                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                    isFocused === 'state' || errors.state ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                  }`}
-                                  placeholder="State"
-                                  {...register('state', {
-                                    required: 'State is required',
-                                    pattern: {
-                                      value: /^[a-zA-Z\s'-]+$/,
-                                      message: 'State should contain only letters, spaces, hyphens, and apostrophes'
-                                    }
-                                  })}
-                                  onFocus={() => handleFocus('state')}
-                                  onBlur={handleBlur}
-                                  onInput={(e) => {
-                                    const input = e.target as HTMLInputElement;
-                                    const value = input.value.replace(/[^a-zA-Z\s'-]/g, '');
-                                    if (value !== input.value) {
-                                      input.value = value;
-                                      input.dispatchEvent(new Event('input', { bubbles: true }));
-                                    }
-                                  }}
-                                />
+                                {errors.state && (
+                                  <p className="mt-1 text-xs text-red-600 flex items-center">
+                                    <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    {errors.state.message}
+                                  </p>
+                                )}
                               </div>
-                              {errors.state && (
-                                <p className="mt-1 text-xs text-red-600 flex items-center">
-                                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                  </svg>
-                                  {errors.state.message}
-                                </p>
-                              )}
-                            </div>
 
-                            <div className="relative">
-                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                                PIN Code <span className="text-rose-500 ml-1">*</span>
-                              </label>
                               <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                  </svg>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                  PIN Code <span className="text-rose-500 ml-1">*</span>
+                                </label>
+                                <div className="relative">
+                                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                      isFocused === 'postal_code' || errors.postal_code ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                    }`}
+                                    placeholder="PIN"
+                                    {...register('postal_code', {
+                                      required: 'PIN code is required',
+                                      pattern: { 
+                                        value: /^\d{6}$/, 
+                                        message: 'PIN must be exactly 6 digits' 
+                                      }
+                                    })}
+                                    onFocus={() => handleFocus('postal_code')}
+                                    onBlur={handleBlur}
+                                    onInput={(e) => {
+                                      const input = e.target as HTMLInputElement;
+                                      const value = input.value.replace(/\D/g, '');
+                                      const truncatedValue = value.slice(0, 6);
+                                      if (truncatedValue !== input.value) {
+                                        input.value = truncatedValue;
+                                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                                      }
+                                    }}
+                                  />
                                 </div>
-                                <input
-                                  type="text"
-                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                    isFocused === 'postal_code' || errors.postal_code ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                  }`}
-                                  placeholder="PIN"
-                                  {...register('postal_code', {
-                                    required: 'PIN code is required',
-                                    pattern: { 
-                                      value: /^\d{6}$/, 
-                                      message: 'PIN must be exactly 6 digits' 
-                                    }
-                                  })}
-                                  onFocus={() => handleFocus('postal_code')}
-                                  onBlur={handleBlur}
-                                  onInput={(e) => {
-                                    const input = e.target as HTMLInputElement;
-                                    const value = input.value.replace(/\D/g, '');
-                                    const truncatedValue = value.slice(0, 6);
-                                    if (truncatedValue !== input.value) {
-                                      input.value = truncatedValue;
-                                      input.dispatchEvent(new Event('input', { bubbles: true }));
-                                    }
-                                  }}
-                                />
+                                {errors.postal_code && (
+                                  <p className="mt-1 text-xs text-red-600 flex items-center">
+                                    <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    {errors.postal_code.message}
+                                  </p>
+                                )}
                               </div>
-                              {errors.postal_code && (
-                                <p className="mt-1 text-xs text-red-600 flex items-center">
-                                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                  </svg>
-                                  {errors.postal_code.message}
-                                </p>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -972,13 +983,13 @@ const RegisterPage = () => {
 
                     {/* Step 3: Spiritual Details */}
                     {currentStep === 3 && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div className="text-center mb-8">
-                          <h2 className="text-3xl font-bold text-gray-800 mb-2">Spiritual Details</h2>
-                          <p className="text-gray-600">Share your spiritual and family information</p>
+                      <div className="space-y-4 sm:space-y-6 animate-fade-in">
+                        <div className="text-center mb-6 sm:mb-8">
+                          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Spiritual Details</h2>
+                          <p className="text-gray-600 text-sm sm:text-base">Share your spiritual and family information</p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-4 sm:gap-6">
                           <div className="relative">
                             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                               Date of Birth <span className="text-rose-500 ml-1">*</span>
@@ -1161,92 +1172,94 @@ const RegisterPage = () => {
                             )}
                           </div>
 
-                          <div className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                              Gothram <span className="text-rose-500 ml-1">*</span>
-                            </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                </svg>
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                Gothram <span className="text-rose-500 ml-1">*</span>
+                              </label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                  </svg>
+                                </div>
+                                <select
+                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 appearance-none ${
+                                    isFocused === 'gothra' || errors.gothra ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                  }`}
+                                  {...register('gothra', {
+                                    required: 'Gothram is required'
+                                  })}
+                                  onFocus={() => handleFocus('gothra')}
+                                  onBlur={handleBlur}
+                                >
+                                  <option value="">Select Gothram</option>
+                                  <option value="Atri">Atri</option>
+                                  <option value="Bharadvaja">Bharadvaja</option>
+                                  <option value="Gautama">Gautama</option>
+                                  <option value="Jamadagni">Jamadagni</option>
+                                  <option value="Kashyapa">Kashyapa</option>
+                                  <option value="Vasishta">Vasishta</option>
+                                  <option value="Vishvamitra">Vishvamitra</option>
+                                  <option value="Agastya">Agastya</option>
+                                </select>
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
                               </div>
-                              <select
-                                className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 appearance-none ${
-                                  isFocused === 'gothra' || errors.gothra ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                }`}
-                                {...register('gothra', {
-                                  required: 'Gothram is required'
-                                })}
-                                onFocus={() => handleFocus('gothra')}
-                                onBlur={handleBlur}
-                              >
-                                <option value="">Select Gothram</option>
-                                <option value="Atri">Atri</option>
-                                <option value="Bharadvaja">Bharadvaja</option>
-                                <option value="Gautama">Gautama</option>
-                                <option value="Jamadagni">Jamadagni</option>
-                                <option value="Kashyapa">Kashyapa</option>
-                                <option value="Vasishta">Vasishta</option>
-                                <option value="Vishvamitra">Vishvamitra</option>
-                                <option value="Agastya">Agastya</option>
-                              </select>
-                              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </div>
+                              {errors.gothra && (
+                                <p className="mt-1 text-xs text-red-600 flex items-center">
+                                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {errors.gothra.message}
+                                </p>
+                              )}
                             </div>
-                            {errors.gothra && (
-                              <p className="mt-1 text-xs text-red-600 flex items-center">
-                                <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                {errors.gothra.message}
-                              </p>
-                            )}
-                          </div>
 
-                          <div className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                              Gender <span className="text-rose-500 ml-1">*</span>
-                            </label>
                             <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                Gender <span className="text-rose-500 ml-1">*</span>
+                              </label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  </svg>
+                                </div>
+                                <select
+                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 appearance-none ${
+                                    isFocused === 'gender' || errors.gender ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                  }`}
+                                  {...register('gender', {
+                                    required: 'Gender is required'
+                                  })}
+                                  onFocus={() => handleFocus('gender')}
+                                  onBlur={handleBlur}
+                                >
+                                  <option value="">Select gender</option>
+                                  <option value="male">Male</option>
+                                  <option value="female">Female</option>
+                                  <option value="non_binary">Non-binary</option>
+                                  <option value="prefer_not_to_say">Prefer not to say</option>
+                                </select>
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
                               </div>
-                              <select
-                                className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 appearance-none ${
-                                  isFocused === 'gender' || errors.gender ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                }`}
-                                {...register('gender', {
-                                  required: 'Gender is required'
-                                })}
-                                onFocus={() => handleFocus('gender')}
-                                onBlur={handleBlur}
-                              >
-                                <option value="">Select gender</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="non_binary">Non-binary</option>
-                                <option value="prefer_not_to_say">Prefer not to say</option>
-                              </select>
-                              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </div>
+                              {errors.gender && (
+                                <p className="mt-1 text-xs text-red-600 flex items-center">
+                                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {errors.gender.message}
+                                </p>
+                              )}
                             </div>
-                            {errors.gender && (
-                              <p className="mt-1 text-xs text-red-600 flex items-center">
-                                <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                {errors.gender.message}
-                              </p>
-                            )}
                           </div>
                         </div>
 
@@ -1350,12 +1363,12 @@ const RegisterPage = () => {
                     )}
 
                     {/* Navigation Buttons */}
-                    <div className="mt-10 flex justify-between">
+                    <div className="mt-8 flex flex-col sm:flex-row justify-between gap-3">
                       {currentStep > 1 && (
                         <button
                           type="button"
                           onClick={prevStep}
-                          className="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-all duration-300 shadow hover:shadow-md transform hover:-translate-y-0.5 flex items-center"
+                          className="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-all duration-300 shadow hover:shadow-md transform hover:-translate-y-0.5 flex items-center justify-center"
                         >
                           <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -1368,7 +1381,7 @@ const RegisterPage = () => {
                         <button
                           type="button"
                           onClick={nextStep}
-                          className="ml-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center"
+                          className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center sm:ml-auto"
                         >
                           Next
                           <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1379,7 +1392,7 @@ const RegisterPage = () => {
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="ml-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center disabled:opacity-70 disabled:cursor-not-allowed"
+                          className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center sm:ml-auto disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                           {isSubmitting ? (
                             <>
@@ -1401,7 +1414,7 @@ const RegisterPage = () => {
                       )}
                     </div>
 
-                    <div className="mt-6 text-center text-sm text-gray-600">
+                    <div className="mt-4 sm:mt-6 text-center text-sm text-gray-600">
                       Already registered?{' '}
                       <Link to="/login" className="font-medium text-amber-600 hover:text-amber-700 transition-colors">
                         Sign in

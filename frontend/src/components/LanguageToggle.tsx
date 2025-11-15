@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import useLanguageStore from '../store/language';
 
@@ -30,31 +30,22 @@ const ensureTranslateContainer = () => {
   }
 };
 
-const applyGoogleTranslation = (lang: 'en' | 'ta', attempt = 0) => {
-  const combo = document.querySelector<HTMLSelectElement>('select.goog-te-combo');
-  if (!combo) {
-    if (attempt < 10) {
-      setTimeout(() => applyGoogleTranslation(lang, attempt + 1), 300);
-    }
-    return;
-  }
-
-  const targetValue = lang === 'ta' ? 'ta' : 'en';
-  if (combo.value !== targetValue) {
-    combo.value = targetValue;
-    combo.dispatchEvent(new Event('change'));
-  }
-};
-
 const removeGoogleBanner = () => {
   const bannerFrame = document.querySelector<HTMLIFrameElement>('.goog-te-banner-frame');
   if (bannerFrame) {
     bannerFrame.style.display = 'none';
   }
-  const bannerParent = document.querySelector('.goog-te-banner-frame');
-  if (bannerParent && bannerParent.parentNode) {
-    bannerParent.parentNode.removeChild(bannerParent);
+  const parent = bannerFrame?.parentElement;
+  if (parent) {
+    parent.style.display = 'none';
   }
+  document.querySelectorAll('.goog-te-banner-frame, .goog-te-banner, #goog-gt-tt').forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.display = 'none';
+    if (el.parentNode) {
+      el.parentNode.removeChild(el);
+    }
+  });
   const body = document.body;
   if (body) {
     body.style.top = '0px';
@@ -69,11 +60,43 @@ type LanguageToggleProps = {
 const LanguageToggle = ({ theme = 'dark', className = '' }: LanguageToggleProps) => {
   const { language, setLanguage } = useLanguageStore();
   const [initialized, setInitialized] = useState(false);
+  const [comboReady, setComboReady] = useState(false);
+  const comboRef = useRef<HTMLSelectElement | null>(null);
+
+  const ensureComboReady = useCallback((attempt = 0) => {
+    const combo = document.querySelector<HTMLSelectElement>('select.goog-te-combo');
+    if (combo) {
+      comboRef.current = combo;
+      setComboReady(true);
+      removeGoogleBanner();
+      return;
+    }
+    if (attempt < 20) {
+      setTimeout(() => ensureComboReady(attempt + 1), 300);
+    }
+  }, []);
+
+  const applyGoogleTranslation = useCallback(
+    (lang: 'en' | 'ta') => {
+      const combo = comboRef.current;
+      if (!combo) {
+        ensureComboReady();
+        return;
+      }
+      const targetValue = lang === 'ta' ? 'ta' : 'en';
+      if (combo.value !== targetValue) {
+        combo.value = targetValue;
+        combo.dispatchEvent(new Event('change'));
+      }
+    },
+    [ensureComboReady],
+  );
 
   const initGoogleTranslate = useCallback(() => {
     if (initialized) return;
     if (document.querySelector('select.goog-te-combo')) {
       setInitialized(true);
+      ensureComboReady();
       return;
     }
     if (window.google?.translate?.TranslateElement) {
@@ -86,6 +109,7 @@ const LanguageToggle = ({ theme = 'dark', className = '' }: LanguageToggleProps)
         'google_translate_element',
       );
       setInitialized(true);
+      ensureComboReady();
       return;
     }
 
@@ -101,12 +125,13 @@ const LanguageToggle = ({ theme = 'dark', className = '' }: LanguageToggleProps)
             'google_translate_element',
           );
           setInitialized(true);
+          ensureComboReady();
         }
       };
     }
 
     loadGoogleTranslateScript();
-  }, [initialized]);
+  }, [initialized, ensureComboReady]);
 
   useEffect(() => {
     ensureTranslateContainer();
@@ -123,9 +148,13 @@ const LanguageToggle = ({ theme = 'dark', className = '' }: LanguageToggleProps)
 
   useEffect(() => {
     if (!initialized) return;
+    if (!comboReady) {
+      ensureComboReady();
+      return;
+    }
     applyGoogleTranslation(language);
     removeGoogleBanner();
-  }, [language, initialized]);
+  }, [language, initialized, applyGoogleTranslation, comboReady, ensureComboReady]);
 
   const handleClick = () => {
     const nextLang = language === 'en' ? 'ta' : 'en';

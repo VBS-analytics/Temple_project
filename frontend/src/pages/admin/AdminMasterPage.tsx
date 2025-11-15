@@ -15,6 +15,34 @@ const generateHeaderCode = (name: string) => {
   return raw.slice(0, 16);
 };
 
+const formatCurrency = (value?: string | null) => {
+  if (!value) return '';
+  const amountNumber = Number(value);
+  if (Number.isNaN(amountNumber)) {
+    return value;
+  }
+  return amountNumber.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const describePoojaAmount = (pooja: Pick<PoojaOption, 'default_amount' | 'min_amount' | 'max_amount' | 'description'>) => {
+  const toLabel = (value?: string | null) => {
+    const formatted = formatCurrency(value);
+    return formatted ? `₹ ${formatted}` : '';
+  };
+
+  const defaultLabel = toLabel(pooja.default_amount);
+  if (defaultLabel) return defaultLabel;
+
+  const minLabel = toLabel(pooja.min_amount);
+  const maxLabel = toLabel(pooja.max_amount);
+  if (minLabel && maxLabel) {
+    return `${minLabel} – ${maxLabel}`;
+  }
+  if (minLabel) return `Min ${minLabel}`;
+  if (maxLabel) return `Max ${maxLabel}`;
+  return pooja.description || '';
+};
+
 interface DayOption {
   id: number;
   code: string;
@@ -51,6 +79,8 @@ type PoojaOptionFormValues = {
   code: string;
   poojaDescription: string;
   rate: string;
+  minRate: string;
+  maxRate: string;
   headerId: string;
 };
 
@@ -80,12 +110,15 @@ const AdminMasterPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const originalDayOrderRef = useRef<DayOption[]>([]);
 
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
   const tamilDayForm = useForm<TamilDayOptionFormValues>({ defaultValues: { code: '', description: '' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
-  const poojaForm = useForm<PoojaOptionFormValues>({ defaultValues: { code: '', poojaDescription: '', rate: '', headerId: '' } });
+  const poojaForm = useForm<PoojaOptionFormValues>({
+    defaultValues: { code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' },
+  });
 
   const parentCandidates = useMemo(() => poojaOptions.filter((option) => option.is_group_header), [poojaOptions]);
   const availableParentOptions = useMemo(
@@ -533,7 +566,7 @@ const AdminMasterPage = () => {
 
   const resetPoojaForm = () => {
     setEditingPooja(null);
-    poojaForm.reset({ code: '', poojaDescription: '', rate: '', headerId: '' });
+    poojaForm.reset({ code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' });
   };
 
   const onSubmitHeader = async (values: HeaderFormValues) => {
@@ -578,16 +611,27 @@ const AdminMasterPage = () => {
     const rawCode = values.code.trim();
     const name = values.poojaDescription.trim();
     const rate = values.rate.trim();
-    const headerId = values.headerId ? Number(values.headerId) : null;
+    const minRate = values.minRate.trim();
+    const maxRate = values.maxRate.trim();
+    const headerIdValue = values.headerId.trim();
+    const headerId = headerIdValue ? Number(headerIdValue) : null;
 
-    if (!rawCode || !name) {
-      setNotice('Code and description are required.');
+    if (!rawCode || !name || !headerId) {
+      setNotice('Code, header and pooja description are required.');
       setIsSubmitting(false);
       return;
     }
 
-    if (!rate) {
-      setNotice('Rate is required for the pooja.');
+    if (!rate && !minRate && !maxRate) {
+      setNotice('Please enter a rate, minimum rate or maximum rate.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const minNumber = minRate ? Number(minRate) : null;
+    const maxNumber = maxRate ? Number(maxRate) : null;
+    if (minNumber !== null && maxNumber !== null && minNumber > maxNumber) {
+      setNotice('Minimum rate cannot be greater than maximum rate.');
       setIsSubmitting(false);
       return;
     }
@@ -595,7 +639,10 @@ const AdminMasterPage = () => {
     const payload: Record<string, any> = {
       code: rawCode,
       name,
-      description: rate,
+      description: editingPooja?.description ?? '',
+      default_amount: rate || null,
+      min_amount: minRate || null,
+      max_amount: maxRate || null,
       is_group_header: false,
       parent_id: headerId,
     };
@@ -648,7 +695,9 @@ const AdminMasterPage = () => {
     poojaForm.reset({
       code: pooja.code,
       poojaDescription: pooja.name,
-      rate: pooja.description ?? '',
+      rate: pooja.default_amount ?? pooja.description ?? '',
+      minRate: pooja.min_amount ?? '',
+      maxRate: pooja.max_amount ?? '',
       headerId: pooja.parent_id ? String(pooja.parent_id) : '',
     });
   };
@@ -765,12 +814,12 @@ const AdminMasterPage = () => {
   }, [notice]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-16">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white pb-16">
       <div className="mx-auto max-w-full px-4 pt-6 sm:px-6 lg:px-8">
         {/* Header Section */}
-        <header className="rounded-3xl bg-gradient-to-br from-green-700 via-green-700 to-green-800 p-8 text-white shadow-xl">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
+        <header className="rounded-3xl bg-gradient-to-br from-orange-500 via-amber-400 to-rose-500/90 p-6 sm:p-8 text-white shadow-xl">
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
+            <div className="w-full sm:w-auto">
               <div className="flex items-center gap-2">
                 <div className="rounded-lg bg-white/10 p-2">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -780,16 +829,16 @@ const AdminMasterPage = () => {
                 </div>
                 <p className="text-sm font-semibold uppercase tracking-widest text-white/80">Admin Console</p>
               </div>
-              <h1 className="mt-3 text-3xl font-bold leading-tight">Master Data Control</h1>
+              <h1 className="mt-3 text-2xl sm:text-3xl font-bold leading-tight">Master Data Control</h1>
               <p className="mt-3 max-w-2xl text-sm text-white/90">
                 Configure headers, pooja catalog items, and day codes that power bookings and rituals.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
               <button 
                 onClick={load}
                 disabled={isLoading || isSubmitting}
-                className="flex items-center gap-2 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/30 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/30 disabled:opacity-50 w-full sm:w-auto"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
@@ -797,23 +846,23 @@ const AdminMasterPage = () => {
                 Refresh Data
               </button>
               <div className="flex items-center gap-2 text-xs font-medium text-white/80">
-                <span className={`flex h-2 w-2 rounded-full ${isLoading ? 'bg-yellow-300 animate-pulse' : 'bg-emerald-300'}`} />
-                {isLoading ? 'Syncing data...' : 'Data synced with backend'}
+                <span className={`flex h-2 w-2 rounded-full ${isLoading ? 'bg-yellow-300 animate-pulse' : 'bg-orange-300'}`} />
+                {isLoading ? 'Syncing data...' : 'Data synced'}
               </div>
             </div>
           </div>
 
           {/* Summary Cards */}
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-6 sm:mt-8 grid gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((card) => (
               <div
                 key={card.label}
-                className="group rounded-2xl bg-white/15 p-5 shadow-sm backdrop-blur transition-all duration-300 hover:bg-white/20 hover:shadow-md"
+                className="group rounded-2xl bg-gradient-to-br from-white/20 via-white/10 to-white/5 p-4 sm:p-5 shadow-sm backdrop-blur transition-all duration-300 hover:from-white/30 hover:via-white/20 hover:to-white/10 hover:shadow-md"
               >
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wider text-white/75">{card.label}</p>
-                    <p className="mt-2 text-3xl font-bold text-white">{card.value}</p>
+                    <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{card.value}</p>
                     <p className="mt-1 text-xs text-white/70">{card.helper}</p>
                   </div>
                   <div className="rounded-lg bg-white/10 p-2 text-white/80 group-hover:text-white">
@@ -827,21 +876,21 @@ const AdminMasterPage = () => {
 
         {/* Notice Alert */}
         {notice && (
-          <div className="rounded-2xl border-l-4 border-green-500 bg-green-50 px-6 py-4 shadow-sm">
+          <div className="mt-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50 px-4 sm:px-6 py-4 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-orange-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-green-800">{notice}</p>
+                  <p className="text-sm font-medium text-orange-800">{notice}</p>
                 </div>
               </div>
               <button
                 onClick={() => setNotice('')}
-                className="text-green-500 hover:text-green-700"
+                className="text-orange-500 hover:text-orange-700"
               >
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -852,61 +901,73 @@ const AdminMasterPage = () => {
         )}
 
         {/* Tab Navigation */}
-        <div className="rounded-3xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           <div className="border-b border-slate-200">
-            <nav className="flex -mb-px">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-0">
+              <nav className="flex -mb-px overflow-x-auto">
+                <button
+                  onClick={() => setActiveTab('pooja')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'pooja'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    Pooja Catalogue
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('english')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'english'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    English Day Codes
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('tamil')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'tamil'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                    Tamil Day Codes
+                  </div>
+                </button>
+              </nav>
+              
+              {/* Mobile menu button for form access */}
               <button
-                onClick={() => setActiveTab('pooja')}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'pooja'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="sm:hidden py-3 px-2 text-slate-500 hover:text-slate-700"
               >
-                <div className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  Pooja Catalogue
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
               </button>
-              <button
-                onClick={() => setActiveTab('english')}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'english'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  English Day Codes
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('tamil')}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'tamil'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
-                  Tamil Day Codes
-                </div>
-              </button>
-            </nav>
+            </div>
           </div>
 
           {/* Pooja Catalogue Tab */}
           {activeTab === 'pooja' && (
-            <div className="p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-bold text-slate-900">Pooja Catalogue</h2>
                   <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -915,14 +976,14 @@ const AdminMasterPage = () => {
                     <span>{totalPoojaEntries} entries</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="relative">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                  <div className="relative w-full sm:w-auto">
                     <input
                       type="text"
                       placeholder="Search poojas..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                     />
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 absolute left-3 top-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -935,7 +996,7 @@ const AdminMasterPage = () => {
                         viewMode === 'card' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
                       }`}
                     >
-                      Card View
+                      Card
                     </button>
                     <button
                       onClick={() => setViewMode('table')}
@@ -943,36 +1004,19 @@ const AdminMasterPage = () => {
                         viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
                       }`}
                     >
-                      Table View
+                      Table
                     </button>
                   </div>
-                  {headerSections.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={expandAllHeaders}
-                        className="text-sm text-green-600 hover:text-green-800 font-medium"
-                      >
-                        Expand All
-                      </button>
-                      <span className="text-slate-300">|</span>
-                      <button
-                        onClick={collapseAllHeaders}
-                        className="text-sm text-green-600 hover:text-green-800 font-medium"
-                      >
-                        Collapse All
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
 
               <div className="flex flex-col lg:flex-row gap-8">
-                {/* Sidebar Forms */}
-                <aside className="w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit">
+                {/* Sidebar Forms - Hidden on mobile, shown when menu is open */}
+                <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
                   {/* Header Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-green-100 p-1.5 text-green-700">
+                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                         </svg>
@@ -984,7 +1028,7 @@ const AdminMasterPage = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Header Title</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                           placeholder="Enter header name"
                           {...headerForm.register('headerName', { required: true })}
                         />
@@ -993,7 +1037,7 @@ const AdminMasterPage = () => {
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-500 disabled:opacity-50"
+                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-50"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1018,9 +1062,9 @@ const AdminMasterPage = () => {
                   </div>
 
                   {/* Pooja Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-green-100 p-1.5 text-green-700">
+                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                         </svg>
@@ -1033,7 +1077,7 @@ const AdminMasterPage = () => {
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-700">Code</label>
                           <input
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                             placeholder="Enter code"
                             {...poojaForm.register('code', { required: true })}
                           />
@@ -1041,10 +1085,10 @@ const AdminMasterPage = () => {
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-700">Header</label>
                           <select
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
-                            {...poojaForm.register('headerId')}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            {...poojaForm.register('headerId', { required: true })}
                           >
-                            <option value="">None</option>
+                            <option value="">Select header</option>
                             {availableParentOptions.map((option) => (
                               <option key={option.id} value={option.id}>
                                 {option.name}
@@ -1056,7 +1100,7 @@ const AdminMasterPage = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Pooja Description</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                           placeholder="Enter description"
                           {...poojaForm.register('poojaDescription', { required: true })}
                         />
@@ -1067,16 +1111,41 @@ const AdminMasterPage = () => {
                           type="number"
                           min="0"
                           step="0.01"
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                           placeholder="Enter rate"
-                          {...poojaForm.register('rate', { required: true })}
+                          {...poojaForm.register('rate')}
                         />
                       </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-700">Minimum Rate</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            placeholder="Enter minimum rate"
+                            {...poojaForm.register('minRate')}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-700">Maximum Rate</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            placeholder="Enter maximum rate"
+                            {...poojaForm.register('maxRate')}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500">Code, header, description and at least one rate field are mandatory.</p>
                       <div className="flex flex-wrap items-center gap-3 pt-2">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-500 disabled:opacity-50"
+                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-50"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1102,19 +1171,37 @@ const AdminMasterPage = () => {
 
                 {/* Main Content */}
                 <div className="flex-1 space-y-6 min-w-0">
+                  {headerSections.length > 0 && (
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={expandAllHeaders}
+                        className="text-sm text-orange-600 hover:text-orange-800 font-medium"
+                      >
+                        Expand All
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        onClick={collapseAllHeaders}
+                        className="text-sm text-orange-600 hover:text-orange-800 font-medium"
+                      >
+                        Collapse All
+                      </button>
+                    </div>
+                  )}
+                  
                   {viewMode === 'card' ? (
                     <>
                       {filteredHeaderSections.map(({ option, children }) => (
                         <article
                           key={option.id}
-                          className="rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all duration-300 hover:border-green-300 hover:shadow-md"
+                          className="rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all duration-300 hover:border-orange-300 hover:shadow-md"
                         >
-                          <div className="border-b border-slate-100 bg-gradient-to-r from-green-50 to-white px-6 py-4">
-                            <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 to-white px-4 sm:px-6 py-4">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                               <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => toggleHeaderCollapse(option.id)}
-                                  className="rounded-lg bg-green-100 p-2 text-green-700 hover:bg-green-200 transition-colors"
+                                  className="rounded-lg bg-orange-100 p-2 text-orange-700 hover:bg-orange-200 transition-colors"
                                 >
                                   <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -1127,9 +1214,9 @@ const AdminMasterPage = () => {
                                   </svg>
                                 </button>
                                 <div>
-                                  <h3 className="text-lg font-bold text-green-800">{option.name}</h3>
+                                  <h3 className="text-lg font-bold text-orange-800">{option.name}</h3>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                    <span className="rounded-full bg-green-100 px-2.5 py-0.5 font-medium text-green-800">
+                                    <span className="rounded-full bg-orange-100 px-2.5 py-0.5 font-medium text-orange-800">
                                       Header
                                     </span>
                                     {option.code && (
@@ -1167,7 +1254,7 @@ const AdminMasterPage = () => {
                           </div>
                           
                           {!collapsedHeaders.has(option.id) && (
-                            <div className="p-5">
+                            <div className="p-4 sm:p-5">
                               {children.length === 0 && (
                                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
                                   <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1179,13 +1266,15 @@ const AdminMasterPage = () => {
                               
                               {children.length > 0 && (
                                 <div className="space-y-3">
-                                  {children.map((child) => (
+                                  {children.map((child) => {
+                                    const childRateLabel = describePoojaAmount(child);
+                                    return (
                                     <div
                                       key={child.id}
-                                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-green-300 hover:shadow-md"
+                                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-orange-300 hover:shadow-md"
                                     >
                                       <div className="flex items-start gap-3">
-                                        <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-800">
+                                        <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-800">
                                           <span className="text-xs font-semibold">
                                             {child.code ? child.code.substring(0, 2) : 'PK'}
                                           </span>
@@ -1198,13 +1287,13 @@ const AdminMasterPage = () => {
                                             ) : null}
                                           </p>
                                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                                            {child.description && (
-                                              <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-0.5 font-medium text-green-700">
+                                            {childRateLabel && (
+                                              <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                                                   <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
                                                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
                                                 </svg>
-                                                Rate: {child.description}
+                                                Rate: {childRateLabel}
                                               </span>
                                             )}
                                             {child.parent_id && (
@@ -1243,7 +1332,8 @@ const AdminMasterPage = () => {
                                         </button>
                                       </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -1253,7 +1343,7 @@ const AdminMasterPage = () => {
 
                       {filteredUngroupedPoojas.length > 0 && (
                         <article className="rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all duration-300 hover:border-slate-300 hover:shadow-md">
-                          <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-6 py-4">
+                          <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 sm:px-6 py-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className="rounded-lg bg-slate-200 p-2 text-slate-700">
@@ -1268,65 +1358,68 @@ const AdminMasterPage = () => {
                               </span>
                             </div>
                           </div>
-                          <div className="p-5">
+                          <div className="p-4 sm:p-5">
                             <div className="space-y-3">
-                              {filteredUngroupedPoojas.map((pooja) => (
-                                <div
-                                  key={pooja.id}
-                                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-slate-300 hover:shadow-md"
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-800">
-                                      <span className="text-xs font-semibold">
-                                        {pooja.code ? pooja.code.substring(0, 2) : 'PK'}
-                                      </span>
+                              {filteredUngroupedPoojas.map((pooja) => {
+                                const rateLabel = describePoojaAmount(pooja);
+                                return (
+                                  <div
+                                    key={pooja.id}
+                                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-slate-300 hover:shadow-md"
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-800">
+                                        <span className="text-xs font-semibold">
+                                          {pooja.code ? pooja.code.substring(0, 2) : 'PK'}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <p className="font-medium text-slate-900">
+                                          {pooja.name}
+                                          {pooja.code ? (
+                                            <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{pooja.code}</span>
+                                          ) : null}
+                                        </p>
+                                        {rateLabel && (
+                                          <div className="mt-1 flex items-center text-xs text-slate-500">
+                                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-700">
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                                              </svg>
+                                              Rate: {rateLabel}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div>
-                                      <p className="font-medium text-slate-900">
-                                        {pooja.name}
-                                        {pooja.code ? (
-                                          <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{pooja.code}</span>
-                                        ) : null}
-                                      </p>
-                                      {pooja.description && (
-                                        <div className="mt-1 flex items-center text-xs text-slate-500">
-                                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-700">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                              <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                                            </svg>
-                                            Rate: {pooja.description}
-                                          </span>
-                                        </div>
-                                      )}
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEditPooja(pooja)}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                        </svg>
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePooja(pooja)}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:opacity-50"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        Delete
+                                      </button>
                                     </div>
                                   </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEditPooja(pooja)}
-                                      disabled={isSubmitting}
-                                      className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                      </svg>
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeletePooja(pooja)}
-                                      disabled={isSubmitting}
-                                      className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:opacity-50"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                      </svg>
-                                      Delete
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         </article>
@@ -1364,13 +1457,13 @@ const AdminMasterPage = () => {
                               return null;
                             }
                             return (
-                            <tr key={row.item.id} className={row.type === 'header' ? 'bg-green-50' : 'hover:bg-slate-50'}>
+                            <tr key={row.item.id} className={row.type === 'header' ? 'bg-orange-50' : 'hover:bg-slate-50'}>
                               <td className="px-4 py-3">
                                 <div className={`flex items-center ${row.type === 'pooja' ? 'pl-6' : ''}`}>
                                   {row.type === 'header' && (
                                     <button
                                       onClick={() => toggleHeaderCollapse(row.item.id)}
-                                      className="mr-2 text-green-600 hover:text-green-900"
+                                      className="mr-2 text-orange-600 hover:text-orange-900"
                                     >
                                       <svg
                                         xmlns="http://www.w3.org/2000/svg"
@@ -1383,7 +1476,7 @@ const AdminMasterPage = () => {
                                       </svg>
                                     </button>
                                   )}
-                                  <div className={`text-sm font-medium ${row.type === 'header' ? 'text-green-900' : 'text-slate-900'} truncate`}>
+                                  <div className={`text-sm font-medium ${row.type === 'header' ? 'text-orange-900' : 'text-slate-900'} truncate`}>
                                     {row.item.name}
                                   </div>
                                 </div>
@@ -1394,14 +1487,14 @@ const AdminMasterPage = () => {
                               <td className="px-4 py-3">
                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                   row.type === 'header' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-green-100 text-green-800'
+                                    ? 'bg-orange-100 text-orange-800' 
+                                    : 'bg-orange-100 text-orange-800'
                                 }`}>
                                   {row.type === 'header' ? 'Header' : 'Pooja'}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-sm text-slate-500">
-                                {row.type === 'header' ? '-' : row.item.description}
+                                {row.type === 'header' ? '-' : describePoojaAmount(row.item) || '--'}
                               </td>
                               <td className="px-4 py-3 text-sm text-slate-500">
                                 <span className="truncate block">{row.headerName || '-'}</span>
@@ -1410,7 +1503,7 @@ const AdminMasterPage = () => {
                                 <button
                                   onClick={() => row.type === 'header' ? handleEditHeader(row.item) : handleEditPooja(row.item)}
                                   disabled={isSubmitting}
-                                  className="text-green-600 hover:text-green-900 mr-3 disabled:opacity-50"
+                                  className="text-orange-600 hover:text-orange-900 mr-3 disabled:opacity-50"
                                 >
                                   Edit
                                 </button>
@@ -1450,8 +1543,8 @@ const AdminMasterPage = () => {
 
           {/* English Day Options Tab */}
           {activeTab === 'english' && (
-            <div className="p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-bold text-slate-900">Day Options — English Codes</h2>
                   <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -1461,10 +1554,10 @@ const AdminMasterPage = () => {
               </div>
               
               <div className="flex flex-col lg:flex-row gap-8">
-                <aside className="w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit">
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm">
+                <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-green-100 p-1.5 text-green-700">
+                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                         </svg>
@@ -1477,7 +1570,7 @@ const AdminMasterPage = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Code</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200 disabled:bg-slate-100"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
                           placeholder="Enter code"
                           disabled={isEditingTamilDay || isSubmitting}
                           {...dayForm.register('code', { required: true })}
@@ -1486,7 +1579,7 @@ const AdminMasterPage = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Description</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200 disabled:bg-slate-100"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
                           placeholder="Enter description"
                           disabled={isEditingTamilDay || isSubmitting}
                           {...dayForm.register('description', { required: true })}
@@ -1496,7 +1589,7 @@ const AdminMasterPage = () => {
                         <button
                           type="submit"
                           disabled={isEditingTamilDay || isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1531,14 +1624,14 @@ const AdminMasterPage = () => {
                         onDragEnd={handleDayDragEnd}
                         onDrop={(event) => event.preventDefault()}
                         aria-grabbed={draggingDayId === day.id}
-                        className={`group flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-300 ${
+                        className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-300 ${
                           draggingDayId === day.id
-                            ? 'cursor-grabbing border-green-400 bg-green-50 shadow-md'
-                            : 'cursor-grab border-slate-200 hover:border-green-300 hover:shadow-md'
+                            ? 'cursor-grabbing border-orange-400 bg-orange-50 shadow-md'
+                            : 'cursor-grab border-slate-200 hover:border-orange-300 hover:shadow-md'
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-800">
+                          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-800">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                             </svg>
@@ -1548,7 +1641,7 @@ const AdminMasterPage = () => {
                               {day.description}{' '}
                               <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{day.code}</span>
                             </p>
-                            <span className="mt-2 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                            <span className="mt-2 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
                               {formatCategoryLabel(day.category)}
                             </span>
                           </div>
@@ -1596,8 +1689,8 @@ const AdminMasterPage = () => {
 
           {/* Tamil Day Options Tab */}
           {activeTab === 'tamil' && (
-            <div className="p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-bold text-slate-900">Day Options — Tamil Codes</h2>
                   <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -1607,10 +1700,10 @@ const AdminMasterPage = () => {
               </div>
               
               <div className="flex flex-col lg:flex-row gap-8">
-                <aside className="w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit">
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm">
+                <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-green-100 p-1.5 text-green-700">
+                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                         </svg>
@@ -1622,7 +1715,7 @@ const AdminMasterPage = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Code</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200 disabled:bg-slate-100"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
                           placeholder="Enter code"
                           disabled={isEditingEnglishDay || isSubmitting}
                           {...tamilDayForm.register('code', { required: true })}
@@ -1631,7 +1724,7 @@ const AdminMasterPage = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Description</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200 disabled:bg-slate-100"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
                           placeholder="Enter description"
                           disabled={isEditingEnglishDay || isSubmitting}
                           {...tamilDayForm.register('description', { required: true })}
@@ -1641,7 +1734,7 @@ const AdminMasterPage = () => {
                         <button
                           type="submit"
                           disabled={isEditingEnglishDay || isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1676,14 +1769,14 @@ const AdminMasterPage = () => {
                         onDragEnd={handleDayDragEnd}
                         onDrop={(event) => event.preventDefault()}
                         aria-grabbed={draggingDayId === day.id}
-                        className={`group flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-300 ${
+                        className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-300 ${
                           draggingDayId === day.id
-                            ? 'cursor-grabbing border-green-400 bg-green-50 shadow-md'
-                            : 'cursor-grab border-slate-200 hover:border-green-300 hover:shadow-md'
+                            ? 'cursor-grabbing border-orange-400 bg-orange-50 shadow-md'
+                            : 'cursor-grab border-slate-200 hover:border-orange-300 hover:shadow-md'
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-800">
+                          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-800">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                             </svg>
@@ -1693,7 +1786,7 @@ const AdminMasterPage = () => {
                               {day.description}{' '}
                               <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{day.code}</span>
                             </p>
-                            <span className="mt-2 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                            <span className="mt-2 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
                               {formatCategoryLabel(day.category)}
                             </span>
                           </div>

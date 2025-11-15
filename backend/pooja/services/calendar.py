@@ -211,7 +211,14 @@ class TempleCalendarService:
         if code == "last_saturday":
             return self._format_result(self._last_weekday_of_month(start, weekday=5), "Last Saturday of month")
         if code == "weekly_sunday":
-            return self._format_result(self._next_weekday(start, weekday=6), "Sunday service day")
+            sunday_dates = self._upcoming_weekday_series(start, weekday=6)
+            primary = sunday_dates[0]
+            result = self._format_result(primary, "Sunday service day")
+            result.meta["upcoming_occurrences"] = [
+                {"date": when.isoformat(), "label": when.strftime("%A, %d %b %Y")}
+                for when in sunday_dates
+            ]
+            return result
         if code == "sashti":
             target = self._next_tithi(start, targets=(6, 21))
             return self._format_result(target, f"   Sashti Tithi – {TITHI_NAME_MAP.get(self._tithi_on(target), '')}")
@@ -270,6 +277,7 @@ class TempleCalendarService:
             "LSAT": "last_saturday",
             "SUN": "weekly_sunday",
             "SUNY": "weekly_sunday",
+            "S": "weekly_sunday",
             "SAS": "sashti",
             "SHT": "sashti",
             "2AS": "second_ashtami",
@@ -300,6 +308,29 @@ class TempleCalendarService:
         """Return the next occurrence of weekday (0=Monday...6=Sunday)."""
         delta = (weekday - start.weekday()) % 7
         return start + timedelta(days=delta)
+
+    def _upcoming_weekday_series(self, start: date, weekday: int) -> list[date]:
+        """Return weekday occurrences after the provided date, spanning month boundary if needed."""
+        month_end = self._month_end(start)
+        upcoming = self._weekday_window(start + timedelta(days=1), month_end, weekday)
+        if upcoming:
+            return upcoming
+        next_month_start = month_end + timedelta(days=1)
+        next_month_end = self._month_end(next_month_start)
+        return self._weekday_window(next_month_start, next_month_end, weekday)
+
+    def _weekday_window(self, window_start: date, window_end: date, weekday: int) -> list[date]:
+        if window_start > window_end:
+            return []
+        first = self._next_weekday(window_start, weekday)
+        if first > window_end:
+            return []
+        occurrences: list[date] = []
+        current = first
+        while current <= window_end:
+            occurrences.append(current)
+            current += timedelta(days=7)
+        return occurrences
 
     def _first_weekday_of_month(self, start: date, weekday: int) -> date:
         """Return first given weekday on/after start, moving to next month if needed."""

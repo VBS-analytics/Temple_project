@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import api, { extractResults } from '../lib/api';
 
+// All interfaces remain the same
 interface ApiUser {
   id: number;
   name?: string | null;
@@ -39,6 +40,7 @@ interface FamilyMember {
   family_name?: string | null;
 }
 
+// Add this interface definition
 interface ProfileResponse {
   user: ApiUser;
   profile: ApiDonorProfile;
@@ -53,7 +55,6 @@ interface FamilyMemberFormState {
   tamil_star: string;
   gothra: string;
   family_name: string;
-  // family_selection holds either one of the predefined family names or the special value 'Other' or ''
   family_selection: string;
 }
 
@@ -75,6 +76,7 @@ interface PoojaRegistration {
   members?: RegistrationMember[];
 }
 
+// All utility functions remain the same
 const formatDate = (value?: string | null) => {
   if (!value) {
     return '—';
@@ -303,7 +305,6 @@ interface SearchableSelectProps {
   options: readonly string[];
   value: string;
   placeholder?: string;
-  // eslint-disable-next-line no-unused-vars
   onChange: (value: string) => void;
 }
 
@@ -343,7 +344,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     <div className="relative w-full" ref={containerRef}>
       <input
         type="text"
-        className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         value={query}
         placeholder={placeholder}
         onFocus={() => setIsOpen(true)}
@@ -395,7 +396,6 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     family_selection: (() => {
       const family = (profileData?.family_name ?? '').trim();
       if (!family) return '';
-      // if profile family matches one of the predefined options (case-sensitive match), use it, else treat as 'Other'
       return FAMILY_OPTIONS.includes(family) ? family : 'Other';
     })(),
   });
@@ -411,13 +411,16 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     const loadProfile = async () => {
       setLoading(true);
       try {
-        const response = await api.get<ProfileResponse>('auth/profile/');
+        // Fixed the API call to avoid the type error
+        const response = await api.get('auth/profile/');
+        const data = response.data as ProfileResponse;
+        
         if (!active) {
           return;
         }
-        setUser(response.data.user);
-        setProfile(response.data.profile);
-        setMembers(sortMembers(response.data.members ?? []));
+        setUser(data.user);
+        setProfile(data.profile);
+        setMembers(sortMembers(data.members ?? []));
         setError(null);
       } catch (err) {
         if (!active) {
@@ -573,12 +576,10 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
       };
 
       if (editingMemberId) {
-        // Update existing member
         const response = await api.put<FamilyMember>(`auth/family-members/${editingMemberId}/`, payload);
         setMembers((prev) => sortMembers(prev.map(m => m.id === editingMemberId ? response.data : m)));
         setEditingMemberId(null);
       } else {
-        // Create new member
         const response = await api.post<FamilyMember>('auth/family-members/', payload);
         setMembers((prev) => sortMembers([...prev, response.data]));
         setIsAddingNew(false);
@@ -621,22 +622,26 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[90rem] px-4 py-8 lg:px-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-800">Donor Profile</h1>
-        <p className="text-sm text-slate-500">Review your donor details and manage your family members.</p>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-6 sm:py-8">
+      <div className="mx-auto w-full max-w-[90rem] px-4 lg:px-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl font-bold text-slate-800 sm:text-3xl">Donor Profile</h1>
+        <p className="mt-2 text-sm text-slate-500 sm:text-base">Review your donor details and manage your family members.</p>
       </div>
 
       {loading ? (
-        <div className="mt-10 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
-          Loading profile...
+        <div className="mt-10 flex justify-center rounded-lg border border-slate-200 bg-white/90 p-8 text-sm text-slate-500 shadow-sm backdrop-blur">
+          <div className="flex flex-col items-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-orange-600"></div>
+            <span className="mt-3">Loading profile...</span>
+          </div>
         </div>
       ) : error ? (
         <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
       ) : (
         <div className="mt-6 space-y-8">
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 w-full">
-            <h2 className="text-lg font-semibold text-slate-800">Donor Details</h2>
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full">
+            <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Donor Details</h2>
             <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {donorDetails.map(({ label, value, span }) => (
                 <div
@@ -644,22 +649,22 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                   className={`flex flex-col rounded-lg border border-slate-100 bg-slate-50/60 p-4 ${span ?? ''}`}
                 >
                   <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-                  <dd className="mt-2 text-sm font-semibold text-slate-800">{value}</dd>
+                  <dd className="mt-2 text-sm font-semibold text-slate-800 break-words">{value}</dd>
                 </div>
               ))}
             </dl>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 w-full">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Family Members</h2>
+                <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Family Members</h2>
                 <p className="text-sm text-slate-500">Keep your family list current for Pooja registrations.</p>
               </div>
               <button
                 type="button"
                 onClick={startAddingNew}
-                className="inline-flex items-center justify-center rounded-lg border border-green-600 px-3 py-2 text-sm font-semibold text-green-600 transition hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                className="mt-2 inline-flex items-center justify-center rounded-lg border border-orange-600 px-4 py-2 text-sm font-semibold text-orange-600 transition hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 sm:mt-0"
               >
                 + Add Member
               </button>
@@ -672,49 +677,169 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
             )}
 
             {members.length === 0 && !isAddingNew ? (
-              <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+              <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
                 No family members added yet. Click &quot;Add Member&quot; to include your family details.
               </div>
             ) : (
-              <div className="mt-6 overflow-hidden rounded-lg border border-slate-200">
-                <div className="overflow-x-auto">
-                  <table className="min-w-[1150px] w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[160px]">Name</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[160px]">Relationship</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[120px]">Gender</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[140px]">Date of Birth</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[180px]">Tamil Star</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[150px]">Gothra</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[220px]">Family Name</th>
-                        <th scope="col" className="px-4 py-3 text-right font-semibold min-w-[140px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {isAddingNew && (
-                        <tr className="bg-slate-50/70">
-                          <td className="px-4 py-3 align-top min-w-[160px]">
+              <div className="mt-6">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                  {isAddingNew && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <h3 className="text-sm font-medium text-slate-800 mb-3">Add New Member</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
+                          <input
+                            type="text"
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.name}
+                            onChange={handleInputChange('name')}
+                            placeholder="Enter full name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Relationship</label>
+                          <input
+                            type="text"
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.relationship}
+                            onChange={handleInputChange('relationship')}
+                            placeholder="e.g., Son, Daughter"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Gender</label>
+                          <select
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.gender}
+                            onChange={handleInputChange('gender')}
+                          >
+                            <option value="">Select</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Date of Birth</label>
+                          <input
+                            type="date"
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.date_of_birth}
+                            onChange={handleInputChange('date_of_birth')}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
+                          <SearchableSelect
+                            options={TAMIL_STAR_OPTIONS}
+                            value={formData.tamil_star}
+                            placeholder="Select Tamil star"
+                            onChange={(value) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                tamil_star: value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Gothra</label>
+                          <select
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.gothra}
+                            onChange={handleInputChange('gothra')}
+                          >
+                            <option value="">Select Gothra</option>
+                            {GOTHRA_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Family Name</label>
+                          <select
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.family_selection}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormData((prev) => ({
+                                ...prev,
+                                family_selection: val,
+                                family_name: val === 'Other' ? '' : val,
+                              }));
+                            }}
+                          >
+                            <option value="">Select a family</option>
+                            {FAMILY_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                          {formData.family_selection === 'Other' && (
                             <input
                               type="text"
-                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                              className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                              value={formData.family_name}
+                              onChange={handleInputChange('family_name')}
+                              placeholder="Enter family name"
+                            />
+                          )}
+                        </div>
+                        <div className="flex justify-end space-x-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={cancelAddingNew}
+                            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                            disabled={submitting}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSubmit}
+                            className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500"
+                            disabled={submitting}
+                          >
+                            {submitting ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {members.map((member) => (
+                    <div key={member.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                      {editingMemberId === member.id ? (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
+                            <input
+                              type="text"
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                               value={formData.name}
                               onChange={handleInputChange('name')}
                               placeholder="Enter full name"
                             />
-                          </td>
-                          <td className="px-4 py-3 align-top min-w-[160px]">
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Relationship</label>
                             <input
                               type="text"
-                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                               value={formData.relationship}
                               onChange={handleInputChange('relationship')}
                               placeholder="e.g., Son, Daughter"
                             />
-                          </td>
-                          <td className="px-4 py-3 align-top min-w-[120px]">
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Gender</label>
                             <select
-                              className="w-full min-w-[120px] rounded border border-slate-300 px-2 py-1 text-sm"
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                               value={formData.gender}
                               onChange={handleInputChange('gender')}
                             >
@@ -723,16 +848,18 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                               <option value="Female">Female</option>
                               <option value="Other">Other</option>
                             </select>
-                          </td>
-                          <td className="px-4 py-3 align-top min-w-[140px]">
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Date of Birth</label>
                             <input
                               type="date"
-                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                               value={formData.date_of_birth}
                               onChange={handleInputChange('date_of_birth')}
                             />
-                          </td>
-                          <td className="px-4 py-3 align-top min-w-[180px]">
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
                             <SearchableSelect
                               options={TAMIL_STAR_OPTIONS}
                               value={formData.tamil_star}
@@ -744,10 +871,11 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 }))
                               }
                             />
-                          </td>
-                          <td className="px-4 py-3 align-top min-w-[150px]">
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Gothra</label>
                             <select
-                              className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 text-sm"
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                               value={formData.gothra}
                               onChange={handleInputChange('gothra')}
                             >
@@ -758,228 +886,407 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 </option>
                               ))}
                             </select>
-                          </td>
-                          <td className="px-4 py-3 align-top min-w-[220px]">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-                              <div className="w-full sm:min-w-[220px]">
-                                <label className="sr-only">Family</label>
-                                <select
-                                  className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.family_selection}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      family_selection: val,
-                                      family_name: val === 'Other' ? '' : val,
-                                    }));
-                                  }}
-                                >
-                                  <option value="">Select a family</option>
-                                  {FAMILY_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
-                                      {opt}
-                                    </option>
-                                  ))}
-                                </select>
-                                {formData.family_selection === 'Other' && (
-                                  <input
-                                    type="text"
-                                    className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                    value={formData.family_name}
-                                    onChange={handleInputChange('family_name')}
-                                    placeholder="Enter family name"
-                                  />
-                                )}
-                              </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Family Name</label>
+                            <select
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                              value={formData.family_selection}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  family_selection: val,
+                                  family_name: val === 'Other' ? '' : val,
+                                }));
+                              }}
+                            >
+                              <option value="">Select a family</option>
+                              {FAMILY_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                            {formData.family_selection === 'Other' && (
+                              <input
+                                type="text"
+                                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                value={formData.family_name}
+                                onChange={handleInputChange('family_name')}
+                                placeholder="Enter family name"
+                              />
+                            )}
+                          </div>
+                          <div className="flex justify-end space-x-3 pt-2">
+                            <button
+                              type="button"
+                              onClick={cancelEditing}
+                              className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                              disabled={submitting}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSubmit}
+                              className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500"
+                              disabled={submitting}
+                            >
+                              {submitting ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex justify-between items-start">
+                            <h3 className="text-base font-medium text-slate-800">{resolveText(member.name)}</h3>
+                            <button
+                              type="button"
+                              onClick={() => startEditing(member)}
+                              className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <dt className="text-xs text-slate-500">Relationship</dt>
+                              <dd className="text-slate-700">{resolveText(member.relationship)}</dd>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 align-top text-right min-w-[140px]">
-                            <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
-                              <button
-                                type="button"
-                                onClick={cancelAddingNew}
-                                className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
-                                disabled={submitting}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleSubmit}
-                                className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500"
-                                disabled={submitting}
-                              >
-                                {submitting ? 'Saving...' : 'Save'}
-                              </button>
+                            <div>
+                              <dt className="text-xs text-slate-500">Gender</dt>
+                              <dd className="text-slate-700">{resolveText(member.gender)}</dd>
                             </div>
-                          </td>
-                        </tr>
+                            <div>
+                              <dt className="text-xs text-slate-500">Date of Birth</dt>
+                              <dd className="text-slate-700">{formatDate(member.date_of_birth)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-slate-500">Tamil Star</dt>
+                              <dd className="text-slate-700">{resolveText(member.tamil_star)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-slate-500">Gothra</dt>
+                              <dd className="text-slate-700">{resolveText(member.gothra)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-slate-500">Family Name</dt>
+                              <dd className="text-slate-700">{resolveText(member.family_name ?? profile?.family_name ?? '')}</dd>
+                            </div>
+                          </dl>
+                        </div>
                       )}
-                      {members.map((member) => (
-                        <tr key={member.id} className="hover:bg-slate-50">
-                          {editingMemberId === member.id ? (
-                            <>
-                              <td className="px-4 py-3 align-top min-w-[160px]">
-                                <input
-                                  type="text"
-                                  className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.name}
-                                  onChange={handleInputChange('name')}
-                                  placeholder="Enter full name"
-                                />
-                              </td>
-                              <td className="px-4 py-3 align-top min-w-[160px]">
-                                <input
-                                  type="text"
-                                  className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.relationship}
-                                  onChange={handleInputChange('relationship')}
-                                  placeholder="e.g., Son, Daughter"
-                                />
-                              </td>
-                              <td className="px-4 py-3 align-top min-w-[120px]">
-                                <select
-                                  className="w-full min-w-[120px] rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.gender}
-                                  onChange={handleInputChange('gender')}
-                                >
-                                  <option value="">Select</option>
-                                  <option value="Male">Male</option>
-                                  <option value="Female">Female</option>
-                                  <option value="Other">Other</option>
-                                </select>
-                              </td>
-                              <td className="px-4 py-3 align-top min-w-[140px]">
-                                <input
-                                  type="date"
-                                  className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.date_of_birth}
-                                  onChange={handleInputChange('date_of_birth')}
-                                />
-                              </td>
-                              <td className="px-4 py-3 align-top min-w-[180px]">
-                                <SearchableSelect
-                                  options={TAMIL_STAR_OPTIONS}
-                                  value={formData.tamil_star}
-                                  placeholder="Select Tamil star"
-                                  onChange={(value) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      tamil_star: value,
-                                    }))
-                                  }
-                                />
-                              </td>
-                              <td className="px-4 py-3 align-top min-w-[150px]">
-                                <select
-                                  className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 text-sm"
-                                  value={formData.gothra}
-                                  onChange={handleInputChange('gothra')}
-                                >
-                                  <option value="">Select Gothra</option>
-                                  {GOTHRA_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt}>
-                                      {opt}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-4 py-3 align-top min-w-[220px]">
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-                                  <div className="w-full sm:min-w-[220px]">
-                                    <label className="sr-only">Family</label>
-                                    <select
-                                      className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
-                                      value={formData.family_selection}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setFormData((prev) => ({
-                                          ...prev,
-                                          family_selection: val,
-                                          family_name: val === 'Other' ? '' : val,
-                                        }));
-                                      }}
-                                    >
-                                      <option value="">Select a family</option>
-                                      {FAMILY_OPTIONS.map((opt) => (
-                                        <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
-                                          {opt}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {formData.family_selection === 'Other' && (
-                                      <input
-                                        type="text"
-                                        className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                        value={formData.family_name}
-                                        onChange={handleInputChange('family_name')}
-                                        placeholder="Enter family name"
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 align-top text-right min-w-[140px]">
-                                <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={cancelEditing}
-                                    className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
-                                    disabled={submitting}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[160px]">Name</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[160px]">Relationship</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[120px]">Gender</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[140px]">Date of Birth</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[180px]">Tamil Star</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[150px]">Gothra</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[220px]">Family Name</th>
+                          <th scope="col" className="px-4 py-3 text-right font-semibold min-w-[140px]">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {isAddingNew && (
+                          <tr className="bg-slate-50/70">
+                            <td className="px-4 py-3 align-top min-w-[160px]">
+                              <input
+                                type="text"
+                                className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.name}
+                                onChange={handleInputChange('name')}
+                                placeholder="Enter full name"
+                              />
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[160px]">
+                              <input
+                                type="text"
+                                className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.relationship}
+                                onChange={handleInputChange('relationship')}
+                                placeholder="e.g., Son, Daughter"
+                              />
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[120px]">
+                              <select
+                                className="w-full min-w-[120px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.gender}
+                                onChange={handleInputChange('gender')}
+                              >
+                                <option value="">Select</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[140px]">
+                              <input
+                                type="date"
+                                className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.date_of_birth}
+                                onChange={handleInputChange('date_of_birth')}
+                              />
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[180px]">
+                              <SearchableSelect
+                                options={TAMIL_STAR_OPTIONS}
+                                value={formData.tamil_star}
+                                placeholder="Select Tamil star"
+                                onChange={(value) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    tamil_star: value,
+                                  }))
+                                }
+                              />
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[150px]">
+                              <select
+                                className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.gothra}
+                                onChange={handleInputChange('gothra')}
+                              >
+                                <option value="">Select Gothra</option>
+                                {GOTHRA_OPTIONS.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[220px]">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+                                <div className="w-full sm:min-w-[220px]">
+                                  <label className="sr-only">Family</label>
+                                  <select
+                                    className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.family_selection}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        family_selection: val,
+                                        family_name: val === 'Other' ? '' : val,
+                                      }));
+                                    }}
                                   >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleSubmit}
-                                    className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500"
-                                    disabled={submitting}
-                                  >
-                                    {submitting ? 'Saving...' : 'Save'}
-                                  </button>
+                                    <option value="">Select a family</option>
+                                    {FAMILY_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {formData.family_selection === 'Other' && (
+                                    <input
+                                      type="text"
+                                      className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                      value={formData.family_name}
+                                      onChange={handleInputChange('family_name')}
+                                      placeholder="Enter family name"
+                                    />
+                                  )}
                                 </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-4 py-3 text-slate-700 min-w-[160px]">{resolveText(member.name)}</td>
-                              <td className="px-4 py-3 text-slate-600 min-w-[160px]">
-                                {resolveText(member.relationship)}
-                              </td>
-                              <td className="px-4 py-3 text-slate-600 min-w-[120px]">{resolveText(member.gender)}</td>
-                              <td className="px-4 py-3 text-slate-600 min-w-[140px]">
-                                {formatDate(member.date_of_birth)}
-                              </td>
-                              <td className="px-4 py-3 text-slate-600 min-w-[180px]">{resolveText(member.tamil_star)}</td>
-                              <td className="px-4 py-3 text-slate-600 min-w-[150px]">{resolveText(member.gothra)}</td>
-                              <td className="px-4 py-3 text-slate-600 min-w-[220px]">
-                                {resolveText(member.family_name ?? profile?.family_name ?? '')}
-                              </td>
-                              <td className="px-4 py-3 text-right min-w-[140px]">
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 align-top text-right min-w-[140px]">
+                              <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
                                 <button
                                   type="button"
-                                  onClick={() => startEditing(member)}
-                                  className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                                  onClick={cancelAddingNew}
+                                  className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                                  disabled={submitting}
                                 >
-                                  Edit
+                                  Cancel
                                 </button>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                                <button
+                                  type="button"
+                                  onClick={handleSubmit}
+                                  className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500"
+                                  disabled={submitting}
+                                >
+                                  {submitting ? 'Saving...' : 'Save'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {members.map((member) => (
+                          <tr key={member.id} className="hover:bg-slate-50">
+                            {editingMemberId === member.id ? (
+                              <>
+                                <td className="px-4 py-3 align-top min-w-[160px]">
+                                  <input
+                                    type="text"
+                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.name}
+                                    onChange={handleInputChange('name')}
+                                    placeholder="Enter full name"
+                                  />
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[160px]">
+                                  <input
+                                    type="text"
+                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.relationship}
+                                    onChange={handleInputChange('relationship')}
+                                    placeholder="e.g., Son, Daughter"
+                                  />
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[120px]">
+                                  <select
+                                    className="w-full min-w-[120px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.gender}
+                                    onChange={handleInputChange('gender')}
+                                  >
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[140px]">
+                                  <input
+                                    type="date"
+                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.date_of_birth}
+                                    onChange={handleInputChange('date_of_birth')}
+                                  />
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[180px]">
+                                  <SearchableSelect
+                                    options={TAMIL_STAR_OPTIONS}
+                                    value={formData.tamil_star}
+                                    placeholder="Select Tamil star"
+                                    onChange={(value) =>
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        tamil_star: value,
+                                      }))
+                                    }
+                                  />
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[150px]">
+                                  <select
+                                    className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.gothra}
+                                    onChange={handleInputChange('gothra')}
+                                  >
+                                    <option value="">Select Gothra</option>
+                                    {GOTHRA_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[220px]">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+                                    <div className="w-full sm:min-w-[220px]">
+                                      <label className="sr-only">Family</label>
+                                      <select
+                                        className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                        value={formData.family_selection}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setFormData((prev) => ({
+                                            ...prev,
+                                            family_selection: val,
+                                            family_name: val === 'Other' ? '' : val,
+                                          }));
+                                        }}
+                                      >
+                                        <option value="">Select a family</option>
+                                        {FAMILY_OPTIONS.map((opt) => (
+                                          <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
+                                            {opt}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {formData.family_selection === 'Other' && (
+                                        <input
+                                          type="text"
+                                          className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                          value={formData.family_name}
+                                          onChange={handleInputChange('family_name')}
+                                          placeholder="Enter family name"
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 align-top text-right min-w-[140px]">
+                                  <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditing}
+                                      className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                                      disabled={submitting}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleSubmit}
+                                      className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500"
+                                      disabled={submitting}
+                                    >
+                                      {submitting ? 'Saving...' : 'Save'}
+                                    </button>
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-4 py-3 text-slate-700 min-w-[160px]">{resolveText(member.name)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[160px]">
+                                  {resolveText(member.relationship)}
+                                </td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[120px]">{resolveText(member.gender)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[140px]">
+                                  {formatDate(member.date_of_birth)}
+                                </td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[180px]">{resolveText(member.tamil_star)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[150px]">{resolveText(member.gothra)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[220px]">
+                                  {resolveText(member.family_name ?? profile?.family_name ?? '')}
+                                </td>
+                                <td className="px-4 py-3 text-right min-w-[140px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditing(member)}
+                                    className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                                  >
+                                    Edit
+                                  </button>
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 w-full">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Registered Pooja&apos;s</h2>
+                <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Registered Pooja&apos;s</h2>
                 <p className="text-sm text-slate-500">Review all pooja registrations linked to your account.</p>
               </div>
               <span className="inline-flex items-center justify-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600">
@@ -1001,38 +1308,39 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                 No pooja registrations found for your account.
               </div>
             ) : (
-              <div className="mt-6 overflow-hidden rounded-lg border border-slate-200">
-                <div className="overflow-x-auto">
-                  <table className="min-w-[1150px] w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja ID</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Name</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Date</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Day Option</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
-                        <th scope="col" className="px-4 py-3 text-left font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {registrations.map((registration, index) => {
-                        const isEditingRegistration = editingRegistrationId === registration.id;
-                        return (
-                          <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
-                            <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
-                              {resolvePoojaId(registration)}
-                            </td>
-                            <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
-                              {registration.pooja_option_name?.trim() || '—'}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+              <div className="mt-6">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                  {registrations.map((registration) => {
+                    const isEditingRegistration = editingRegistrationId === registration.id;
+                    return (
+                      <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                          <h3 className="text-base font-medium text-indigo-700">
+                            {resolvePoojaId(registration)}
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() => startEditingRegistration(registration)}
+                            className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                          >
+                            Edit Date
+                          </button>
+                        </div>
+                        
+                        <dl className="space-y-2 text-sm">
+                          <div>
+                            <dt className="text-xs text-slate-500">Pooja Name</dt>
+                            <dd className="text-slate-700">{registration.pooja_option_name?.trim() || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Pooja Date</dt>
+                            <dd className="text-slate-700">
                               {isEditingRegistration ? (
                                 <div className="flex flex-col gap-2">
                                   <input
                                     type="date"
-                                    className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                                     value={registrationEditDate}
                                     onChange={(event) => setRegistrationEditDate(event.target.value)}
                                     max="9999-12-31"
@@ -1044,75 +1352,176 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                               ) : (
                                 formatDate(registration.start_date)
                               )}
-                            </td>
-                            <td
-                              className="px-4 py-3 text-slate-700"
-                              title={registration.day_option_description ?? undefined}
-                            >
-                              {registration.day_option_description?.trim() || '—'}
-                            </td>
-                            <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Day Option</dt>
+                            <dd className="text-slate-700">{registration.day_option_description?.trim() || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Devotees</dt>
+                            <dd className="text-slate-700">{formatMemberNames(registration.members)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Post Prasadam</dt>
+                            <dd className="text-slate-700">
                               <span
                                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                                   registration.post_prasadam
-                                    ? 'bg-emerald-100 text-emerald-700'
+                                    ? 'bg-rose-100 text-rose-700'
                                     : 'bg-slate-100 text-slate-700'
                                 }`}
                               >
                                 {registration.post_prasadam ? 'Yes' : 'No'}
                               </span>
-                            </td>
-                            <td
-                              className="whitespace-nowrap px-4 py-3 text-slate-700"
-                              title={formatRegistrationTimeline(registration)}
-                            >
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Registered On</dt>
+                            <dd className="text-slate-700" title={formatRegistrationTimeline(registration)}>
                               {formatRegistrationTimeline(registration)}
-                            </td>
-                            <td className="px-4 py-3 text-right min-w-[160px]">
-                              {isEditingRegistration ? (
-                                <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={cancelRegistrationEditing}
-                                    className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
-                                    disabled={registrationEditSubmitting}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={submitRegistrationEdit}
-                                    className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-70"
-                                    disabled={registrationEditSubmitting}
-                                  >
-                                    {registrationEditSubmitting ? 'Saving...' : 'Save'}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => startEditingRegistration(registration)}
-                                  className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                            </dd>
+                          </div>
+                        </dl>
+                        
+                        {isEditingRegistration && (
+                          <div className="flex justify-end space-x-3 mt-4">
+                            <button
+                              type="button"
+                              onClick={cancelRegistrationEditing}
+                              className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                              disabled={registrationEditSubmitting}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={submitRegistrationEdit}
+                              className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
+                              disabled={registrationEditSubmitting}
+                            >
+                              {registrationEditSubmitting ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja ID</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Name</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Date</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Day Option</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {registrations.map((registration, index) => {
+                          const isEditingRegistration = editingRegistrationId === registration.id;
+                          return (
+                            <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
+                              <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
+                                {resolvePoojaId(registration)}
+                              </td>
+                              <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
+                                {registration.pooja_option_name?.trim() || '—'}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                                {isEditingRegistration ? (
+                                  <div className="flex flex-col gap-2">
+                                    <input
+                                      type="date"
+                                      className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                      value={registrationEditDate}
+                                      onChange={(event) => setRegistrationEditDate(event.target.value)}
+                                      max="9999-12-31"
+                                    />
+                                    {registrationEditError && (
+                                      <span className="text-xs text-red-600">{registrationEditError}</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  formatDate(registration.start_date)
+                                )}
+                              </td>
+                              <td
+                                className="px-4 py-3 text-slate-700"
+                                title={registration.day_option_description ?? undefined}
+                              >
+                                {registration.day_option_description?.trim() || '—'}
+                              </td>
+                              <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
+                              <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    registration.post_prasadam
+                                      ? 'bg-rose-100 text-rose-700'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
                                 >
-                                  Edit Date
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                  {registration.post_prasadam ? 'Yes' : 'No'}
+                                </span>
+                              </td>
+                              <td
+                                className="whitespace-nowrap px-4 py-3 text-slate-700"
+                                title={formatRegistrationTimeline(registration)}
+                              >
+                                {formatRegistrationTimeline(registration)}
+                              </td>
+                              <td className="px-4 py-3 text-right min-w-[160px]">
+                                {isEditingRegistration ? (
+                                  <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={cancelRegistrationEditing}
+                                      className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                                      disabled={registrationEditSubmitting}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={submitRegistrationEdit}
+                                      className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
+                                      disabled={registrationEditSubmitting}
+                                    >
+                                      {registrationEditSubmitting ? 'Saving...' : 'Save'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingRegistration(registration)}
+                                    className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+                                  >
+                                    Edit Date
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
           </section>
         </div>
       )}
-
-
     </div>
+  </div>
   );
 };
 

@@ -28,6 +28,7 @@ function SearchableSelect({
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const selected = useMemo(
     () => options.find((o) => o.value === value) || null,
@@ -66,6 +67,30 @@ function SearchableSelect({
     onChange(opt.value);
     setOpen(false);
   };
+
+  // Adjust dropdown position if it goes off-screen
+  useEffect(() => {
+    if (!open || !dropdownRef.current || !containerRef.current) return;
+    
+    const dropdown = dropdownRef.current;
+    const container = containerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+    
+    // Check if dropdown goes off the right side of the screen
+    if (dropdownRect.right > window.innerWidth) {
+      dropdown.style.left = 'auto';
+      dropdown.style.right = '0';
+      dropdown.style.width = `${Math.min(400, window.innerWidth - containerRect.left)}px`;
+    }
+    
+    // Check if dropdown goes off the left side of the screen
+    if (dropdownRect.left < 0) {
+      dropdown.style.left = '0';
+      dropdown.style.right = 'auto';
+      dropdown.style.width = `${Math.min(400, containerRect.right)}px`;
+    }
+  }, [open, filtered]);
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
@@ -119,7 +144,7 @@ function SearchableSelect({
             }
           }}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white shadow-sm transition-all"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-sm transition-all"
           aria-autocomplete="list"
           aria-expanded={open}
           role="combobox"
@@ -127,7 +152,7 @@ function SearchableSelect({
         {value && (
           <button
             type="button"
-            className="text-gray-400 hover:text-gray-600 text-sm transition-colors"
+            className="text-gray-400 hover:text-gray-600 text-sm transition-colors flex-shrink-0"
             onClick={() => {
               onChange('');
               setQuery('');
@@ -141,7 +166,7 @@ function SearchableSelect({
         )}
         <button
           type="button"
-          className="text-gray-400 hover:text-gray-600 text-xs transition-colors"
+          className="text-gray-400 hover:text-gray-600 text-xs transition-colors flex-shrink-0"
           onClick={() => setOpen((o) => !o)}
           onMouseDown={(event) => event.preventDefault()}
           aria-label="Toggle options"
@@ -152,7 +177,8 @@ function SearchableSelect({
 
       {open && (
         <div
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+          ref={dropdownRef}
+          className="absolute z-50 mt-1 w-full max-w-md max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
           role="listbox"
           onMouseLeave={() => setActiveIndex(-1)}
         >
@@ -169,8 +195,8 @@ function SearchableSelect({
                 role="option"
                 aria-selected={isSelected}
                 className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
-                  active ? 'bg-green-50' : ''
-                } ${isSelected ? 'font-medium text-green-900' : 'text-gray-700'}`}
+                  active ? 'bg-orange-50' : ''
+                } ${isSelected ? 'font-medium text-orange-900' : 'text-gray-700'}`}
                 onMouseEnter={() => setActiveIndex(idx)}
                 onMouseDown={(e) => e.preventDefault()} // keep focus on input
                 onClick={() => commit(opt)}
@@ -206,6 +232,7 @@ function MemberMultiSelect({
 }: MemberMultiSelectProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -230,6 +257,30 @@ function MemberMultiSelect({
     };
   }, [open]);
 
+  // Adjust dropdown position if it goes off-screen
+  useEffect(() => {
+    if (!open || !dropdownRef.current || !containerRef.current) return;
+    
+    const dropdown = dropdownRef.current;
+    const container = containerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+    
+    // Check if dropdown goes off the right side of the screen
+    if (dropdownRect.right > window.innerWidth) {
+      dropdown.style.left = 'auto';
+      dropdown.style.right = '0';
+      dropdown.style.width = `${Math.min(400, window.innerWidth - containerRect.left)}px`;
+    }
+    
+    // Check if dropdown goes off the left side of the screen
+    if (dropdownRect.left < 0) {
+      dropdown.style.left = '0';
+      dropdown.style.right = 'auto';
+      dropdown.style.width = `${Math.min(400, containerRect.right)}px`;
+    }
+  }, [open, options]);
+
   return (
     <div className="relative w-full min-w-[13rem] max-w-sm" ref={containerRef}>
       <button
@@ -241,20 +292,23 @@ function MemberMultiSelect({
         aria-expanded={open}
       >
         <span className="truncate">{label}</span>
-        <span className="ml-2 text-gray-400">▾</span>
+        <span className="ml-2 text-gray-400 flex-shrink-0">▾</span>
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
-          <ul className="max-h-60 overflow-auto py-1 text-sm">
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 mt-1 w-full max-w-md max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+        >
+          <ul className="py-1 text-sm">
             {options.map((option) => {
               const checked = selectedValues.includes(option.value);
               return (
                 <li key={option.value}>
                   <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors">
-                    <span>{option.label}</span>
+                    <span className="pr-2 truncate">{option.label}</span>
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 rounded"
+                      className="h-4 w-4 text-orange-600 focus:ring-orange-500 rounded flex-shrink-0"
                       checked={checked}
                       onChange={() => onToggleValue(option.value)}
                     />
@@ -396,6 +450,9 @@ interface MasterRow {
   uiLabel: string;
   rateLabel: string;
   amountValue: string | null;
+  minAmount?: string | null;
+  maxAmount?: string | null;
+  defaultAmount?: string | null;
   parentName?: string | null;
 }
 
@@ -480,6 +537,7 @@ const toCurrencyLabel = (value?: string | null) => {
 };
 
 const CHART_DAY_OPTION_CODE = 'CHRT';
+const VARIABLE_AMOUNT_STEP = 50;
 
 const isChartDayOption = (option?: { code?: string | null } | null) => {
   if (!option?.code) return false;
@@ -581,6 +639,7 @@ const PoojaRegistrationPage = () => {
   const [memberSelectionMap, setMemberSelectionMap] = useState<Record<number, string[]>>({});
   const [prasadamSelectionMap, setPrasadamSelectionMap] = useState<Record<number, boolean>>({});
   const [chartDetailsMap, setChartDetailsMap] = useState<Record<number, { date: string; note: string }>>({});
+  const [amountSelectionMap, setAmountSelectionMap] = useState<Record<number, string>>({});
   const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
   const [bookingMode, setBookingMode] = useState<BookingMode>('full');
   const [tableMessage, setTableMessage] = useState<{ status: 'info' | 'error'; text: string } | null>(null);
@@ -941,6 +1000,9 @@ const PoojaRegistrationPage = () => {
         uiLabel,
         rateLabel: describePoojaRate(option),
         amountValue: deriveAmountValue(option),
+        minAmount: option.min_amount,
+        maxAmount: option.max_amount,
+        defaultAmount: option.default_amount,
         parentName: parent?.name ?? null,
       };
     };
@@ -978,20 +1040,55 @@ const PoojaRegistrationPage = () => {
   const resolvedName = primaryMember?.name ?? baseName;
   const resolvedEmail = baseEmail;
 
+  const fetchAllPages = useCallback(async <T,>(initialUrl: string): Promise<T[]> => {
+    const records: T[] = [];
+    let nextUrl: string | null = initialUrl;
+
+    const normalizeNextUrl = (nextValue: unknown): string | null => {
+      if (typeof nextValue !== 'string' || nextValue.length === 0) {
+        return null;
+      }
+      let path = nextValue;
+      if (path.startsWith('http')) {
+        try {
+          const url = new URL(path);
+          path = `${url.pathname}${url.search}`;
+        } catch (error) {
+          console.warn('Unable to parse next url', path, error);
+          return null;
+        }
+      }
+      if (path.startsWith('/')) {
+        path = path.slice(1);
+      }
+      if (path.startsWith('api/')) {
+        path = path.slice(4);
+      }
+      return path;
+    };
+
+    while (nextUrl) {
+      const response = await api.get(nextUrl);
+      records.push(...extractResults<T>(response.data));
+      nextUrl = normalizeNextUrl(response.data?.next);
+    }
+
+    return records;
+  }, []);
+
   useEffect(() => {
     let isActive = true;
     const fetchAll = async () => {
       setIsLoading(true);
       try {
-        const [featuredRes, poojaRes, dayRes] = await Promise.all([
+        const [featuredRes, poojaList, dayListRaw] = await Promise.all([
           api.get('/pooja/featured-poojas/'),
-          api.get('/pooja/options/'),
-          api.get('/pooja/day-options/'),
+          fetchAllPages<PoojaOption>('/pooja/options/?page_size=200'),
+          fetchAllPages<DayOption>('/pooja/day-options/?page_size=200'),
         ]);
         if (!isActive) return;
         const featured = extractResults<FeaturedPooja>(featuredRes.data).filter((item) => item.is_active);
-        const poojaList = extractResults<PoojaOption>(poojaRes.data);
-        const dayList = extractResults<DayOption>(dayRes.data)
+        const dayList = dayListRaw
           .slice()
           .sort((a, b) => {
             const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
@@ -1018,7 +1115,7 @@ const PoojaRegistrationPage = () => {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [fetchAllPages]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -1415,8 +1512,42 @@ const PoojaRegistrationPage = () => {
     rateLabel: pooja.amount ? toCurrencyLabel(pooja.amount) : 'Temple suggested amount',
   });
 
+  const getDefaultAmountForRow = (row: MasterRow): string | null => {
+    return row.defaultAmount ?? row.amountValue ?? row.minAmount ?? row.maxAmount ?? parseAmountFromLabel(row.rateLabel);
+  };
+
   const getRowAmount = (row: MasterRow): string | null => {
-    return row.amountValue ?? parseAmountFromLabel(row.rateLabel);
+    const explicit = amountSelectionMap[row.pooja.id];
+    if (explicit && explicit.trim()) {
+      return explicit.trim();
+    }
+    return getDefaultAmountForRow(row);
+  };
+
+  const validateRowAmount = (row: MasterRow, amount: string | null): string | null => {
+    if (!amount) {
+      return 'Please enter an amount for this pooja.';
+    }
+    const numericValue = Number(amount);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      return 'Enter a valid amount.';
+    }
+    if (row.minAmount && numericValue < Number(row.minAmount)) {
+      return `Amount cannot be less than ₹ ${formatCurrency(row.minAmount)}`;
+    }
+    if (row.maxAmount && numericValue > Number(row.maxAmount)) {
+      return `Amount cannot be more than ₹ ${formatCurrency(row.maxAmount)}`;
+    }
+    const hasVariableRange = row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount;
+    if (hasVariableRange) {
+      const base = Number(row.minAmount ?? 0);
+      const scaledDiff = Math.round((numericValue - base) * 100);
+      const scaledStep = VARIABLE_AMOUNT_STEP * 100;
+      if (scaledDiff % scaledStep !== 0) {
+        return `Amount must increase in ₹ ${VARIABLE_AMOUNT_STEP} steps.`;
+      }
+    }
+    return null;
   };
 
   const convertMasterToBooking = (row: MasterRow): BookingPooja => ({
@@ -1432,6 +1563,19 @@ const PoojaRegistrationPage = () => {
     rateLabel: row.rateLabel,
     parentName: row.parentName ?? null,
   });
+
+  const handleAmountChange = (poojaId: number, value: string) => {
+    setAmountSelectionMap((prev) => {
+      const next = { ...prev };
+      if (!value.trim()) {
+        delete next[poojaId];
+      } else {
+        next[poojaId] = value;
+      }
+      return next;
+    });
+    setTableMessage(null);
+  };
 
   const findMatchingCartItem = (row: MasterRow, dayId?: number | null): CartItem | undefined => {
     const effectiveDayId = dayId !== undefined ? dayId : resolveSelectedDayId(row.pooja.id);
@@ -1637,6 +1781,11 @@ const PoojaRegistrationPage = () => {
       return;
     }
     const amountForCart = getRowAmount(row);
+    const amountValidationMessage = validateRowAmount(row, amountForCart);
+    if (amountValidationMessage) {
+      setTableMessage({ status: 'error', text: amountValidationMessage });
+      return;
+    }
     const mapSelection = memberSelectionMap[row.pooja.id];
     const selectedMemberKeysRaw = mapSelection && mapSelection.length > 0
       ? mapSelection
@@ -1826,33 +1975,33 @@ const PoojaRegistrationPage = () => {
   const modalChartDetails = selectedPooja ? chartDetailsMap[selectedPooja.id] ?? { date: '', note: '' } : { date: '', note: '' };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div>
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Pooja Registration</h1>
-          <p className="text-lg text-gray-700">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 sm:mb-8 md:mb-10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Pooja Registration</h1>
+          <p className="text-base sm:text-lg text-gray-700">
             Browse our complete pooja catalogue and select your preferred options to book a pooja ceremony
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8 border border-gray-200">
-          <div className="p-6 border-b border-gray-200 bg-gray-50">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6 sm:mb-8 border border-gray-200">
+          <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Available Poojas</h2>
-                <p className="text-gray-700 mt-1">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Available Poojas</h2>
+                <p className="text-sm sm:text-base text-gray-700 mt-1">
                   Select a pooja, choose your preferred day option, and add to cart
                 </p>
               </div>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-green-900 text-sm font-medium">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
+                <p className="text-orange-900 font-medium">
                   நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {isLoading && (
               <div className="flex flex-col gap-4">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -1868,76 +2017,333 @@ const PoojaRegistrationPage = () => {
             )}
 
             {!isLoading && !error && masterRows.length === 0 && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 sm:p-8 text-center">
                 <p className="text-gray-700">No pooja options available at the moment.</p>
               </div>
             )}
 
             {!isLoading && !error && masterRows.length > 0 && (
-              <div>
-                <table className="w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
-                        Code
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[15%]">
-                        Pooja Name
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[20%]">
-                        Day Option
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
-                        Devotees
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
-                        Next Occurrence
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
-                        Amount
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
-                        Prasadam
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
-                        Add to Cart
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
-                        Registered By
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
-                        Registration Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {masterRows.map((row) => {
-                      const selectedDayId = resolveSelectedDayId(row.pooja.id);
-                      const matchingItem = findMatchingCartItem(row, selectedDayId);
-                      const inCart = Boolean(matchingItem);
-                      const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
-                      const requiresChartDetails = isChartDayOption(selectedDayOption);
-                      const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
-                      const occurrenceState = dayOccurrenceMap[row.pooja.id];
-                      const iconLabel = inCart
-                        ? `Remove ${row.uiLabel} from cart`
-                        : `Add ${row.uiLabel} to cart`;
-                      const iconClasses = inCart
-                        ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
-                        : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-green-600 text-white shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300';
-                      const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
-                      const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
-                      const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
-                      
-                      return (
-                        <tr key={row.pooja.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {row.code}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                            {row.uiLabel}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
+                  <table className="min-w-full divide-y divide-gray-200 bg-white">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                          Code
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[15%]">
+                          Pooja Name
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[20%]">
+                          Day Option
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
+                          Devotees
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
+                          Next Occurrence
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                          Amount
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
+                          Prasadam
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
+                          Add to Cart
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                          Registered By
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                          Registration Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {masterRows.map((row) => {
+                        const selectedDayId = resolveSelectedDayId(row.pooja.id);
+                        const matchingItem = findMatchingCartItem(row, selectedDayId);
+                        const inCart = Boolean(matchingItem);
+                        const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
+                        const requiresChartDetails = isChartDayOption(selectedDayOption);
+                        const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
+                        const occurrenceState = dayOccurrenceMap[row.pooja.id];
+                        const iconLabel = inCart
+                          ? `Remove ${row.uiLabel} from cart`
+                          : `Add ${row.uiLabel} to cart`;
+                        const iconClasses = inCart
+                          ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
+                          : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
+                        const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+                        const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
+                        const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
+                        const hasAdjustableAmount =
+                          Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
+                        const amountInputValue =
+                          amountSelectionMap[row.pooja.id] ??
+                          row.defaultAmount ??
+                          row.amountValue ??
+                          row.minAmount ??
+                          row.maxAmount ??
+                          '';
+                        const amountInputError =
+                          hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
+                        
+                        return (
+                          <tr key={row.pooja.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {row.code}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                              {row.uiLabel}
+                            </td>
+                            <td className="px-4 py-3 text-sm overflow-visible">
+                              {dayOptionChoices.length > 0 ? (
+                                <div className="space-y-3">
+                                  <SearchableSelect
+                                    options={dayOptionChoices.map((option) => ({
+                                      value: String(option.id),
+                                      label: formatDayOptionLabel(option),
+                                    }))}
+                                    value={selectedDayId !== null ? String(selectedDayId) : ''}
+                                    onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
+                                    placeholder="Select day option"
+                                    className="w-64"
+                                  />
+                                  {selectedDayOption?.code === 'CS' && (
+                                    <div className="mt-2">
+                                      <SearchableSelect
+                                        options={tamilStarOptions.map((option) => ({
+                                          value: String(option.id),
+                                          label: formatDayOptionLabel(option),
+                                        }))}
+                                        value={tamilStarSelectionMap[row.pooja.id] || ''}
+                                        onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
+                                        placeholder="Select your star"
+                                        className="w-64"
+                                      />
+                                    </div>
+                                  )}
+                                  {requiresChartDetails && (
+                                    <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 mt-2">
+                                      <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">
+                                          Preferred Date
+                                        </label>
+                                        <input
+                                          type="date"
+                                          min={new Date().toISOString().split('T')[0]}
+                                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                          value={chartDetails.date}
+                                          onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">
+                                          Donor Instructions
+                                        </label>
+                                        <textarea
+                                          rows={2}
+                                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                          value={chartDetails.note}
+                                          onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
+                                          placeholder="Add donor instructions"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-500">Not configured</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-sm overflow-visible">
+                              <MemberMultiSelect
+                                label={memberButtonLabel}
+                                options={memberOptions}
+                                selectedValues={resolvedMemberKeys.length > 0 ? resolvedMemberKeys : ['self']}
+                                onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
+                                disabled={memberOptions.length === 0}
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {selectedDayId === null ? (
+                                <span className="text-xs text-gray-500">Select a day option</span>
+                              ) : !occurrenceState ? (
+                                <span className="text-xs text-gray-500">Select a day option</span>
+                              ) : occurrenceState.status === 'loading' ? (
+                                <span className="text-xs text-gray-600">Fetching date…</span>
+                              ) : occurrenceState.status === 'ready' ? (
+                                <div className="space-y-2">
+                                  {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
+                                    ? occurrenceState.occurrences
+                                    : [{ date: occurrenceState.date, label: occurrenceState.label }]
+                                  ).map((entry, index) => (
+                                    <div
+                                      key={`${entry.date}-${index}`}
+                                      className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
+                                    >
+                                      <span className="font-medium text-gray-900">
+                                        {formatDisplayDate(entry.date)}
+                                      </span>
+                                      {entry.label && (
+                                        <span className="block text-xs text-gray-600">{entry.label}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {occurrenceState.note && (
+                                    <span className="block text-xs text-gray-500">{occurrenceState.note}</span>
+                                  )}
+                                </div>
+                              ) : occurrenceState.status === 'manual' ||
+                                occurrenceState.status === 'needsStar' ||
+                                occurrenceState.status === 'error' ? (
+                                <span className="text-xs text-gray-600">
+                                  {occurrenceState.message}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-500">Select a day option</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {hasAdjustableAmount ? (
+                                <div className="space-y-2">
+                                  <p className="text-xs text-gray-500">Range: {row.rateLabel}</p>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-gray-500">₹</span>
+                                    <input
+                                      type="number"
+                                      min={row.minAmount ?? undefined}
+                                      max={row.maxAmount ?? undefined}
+                                      step={VARIABLE_AMOUNT_STEP}
+                                      className="w-28 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                      value={amountInputValue}
+                                      onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
+                                    />
+                                  </div>
+                                  {amountInputError && (
+                                    <p className="text-xs text-red-600">{amountInputError}</p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span>{row.rateLabel}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm">
+                              <div className="flex items-center justify-center space-x-4">
+                                <label className="inline-flex items-center">
+                                  <input
+                                    type="radio"
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                    checked={postPrasadamSelected === true}
+                                    onChange={() => {
+                                      setPrasadamSelectionMap((prev) => ({
+                                        ...prev,
+                                        [row.pooja.id]: true,
+                                      }));
+                                      setTableMessage(null);
+                                    }}
+                                  />
+                                  <span className="ml-2 text-gray-700">Yes</span>
+                                </label>
+                                <label className="inline-flex items-center">
+                                  <input
+                                    type="radio"
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                    checked={postPrasadamSelected === false}
+                                    onChange={() => {
+                                      setPrasadamSelectionMap((prev) => ({
+                                        ...prev,
+                                        [row.pooja.id]: false,
+                                      }));
+                                      setTableMessage(null);
+                                    }}
+                                  />
+                                  <span className="ml-2 text-gray-700">No</span>
+                                </label>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm">
+                              <button
+                                type="button"
+                                onClick={() => toggleCartItem(row)}
+                                className={iconClasses}
+                                aria-label={iconLabel}
+                              >
+                                {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                              {user?.name?.trim() || user?.phone_number || '--'}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                              {registrationDateLabel}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="lg:hidden space-y-4">
+                  {masterRows.map((row) => {
+                    const selectedDayId = resolveSelectedDayId(row.pooja.id);
+                    const matchingItem = findMatchingCartItem(row, selectedDayId);
+                    const inCart = Boolean(matchingItem);
+                    const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
+                    const requiresChartDetails = isChartDayOption(selectedDayOption);
+                    const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
+                    const occurrenceState = dayOccurrenceMap[row.pooja.id];
+                    const iconLabel = inCart
+                      ? `Remove ${row.uiLabel} from cart`
+                      : `Add ${row.uiLabel} to cart`;
+                    const iconClasses = inCart
+                      ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
+                      : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
+                    const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+                    const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
+                    const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
+                    const hasAdjustableAmount =
+                      Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
+                    const amountInputValue =
+                      amountSelectionMap[row.pooja.id] ??
+                      row.defaultAmount ??
+                      row.amountValue ??
+                      row.minAmount ??
+                      row.maxAmount ??
+                      '';
+                    const amountInputError =
+                      hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
+
+                    return (
+                      <div key={row.pooja.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-200 bg-gray-50">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-medium text-gray-900">{row.uiLabel}</h3>
+                              <p className="text-sm text-gray-600">Code: {row.code}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleCartItem(row)}
+                              className={iconClasses}
+                              aria-label={iconLabel}
+                            >
+                              {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-4 space-y-4">
+                          {/* Day Option Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Day Option
+                            </label>
                             {dayOptionChoices.length > 0 ? (
                               <div className="space-y-3">
                                 <SearchableSelect
@@ -1948,7 +2354,7 @@ const PoojaRegistrationPage = () => {
                                   value={selectedDayId !== null ? String(selectedDayId) : ''}
                                   onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
                                   placeholder="Select day option"
-                                  className="w-full max-w-md"
+                                  className="w-full"
                                 />
                                 {selectedDayOption?.code === 'CS' && (
                                   <div className="mt-2">
@@ -1960,7 +2366,7 @@ const PoojaRegistrationPage = () => {
                                       value={tamilStarSelectionMap[row.pooja.id] || ''}
                                       onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
                                       placeholder="Select your star"
-                                      className="w-full max-w-md"
+                                      className="w-full"
                                     />
                                   </div>
                                 )}
@@ -1973,7 +2379,7 @@ const PoojaRegistrationPage = () => {
                                       <input
                                         type="date"
                                         min={new Date().toISOString().split('T')[0]}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                                         value={chartDetails.date}
                                         onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
                                       />
@@ -1984,7 +2390,7 @@ const PoojaRegistrationPage = () => {
                                       </label>
                                       <textarea
                                         rows={2}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                                         value={chartDetails.note}
                                         onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
                                         placeholder="Add donor instructions"
@@ -1996,8 +2402,13 @@ const PoojaRegistrationPage = () => {
                             ) : (
                               <span className="text-xs text-gray-500">Not configured</span>
                             )}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
+                          </div>
+
+                          {/* Devotees Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Devotees
+                            </label>
                             <MemberMultiSelect
                               label={memberButtonLabel}
                               options={memberOptions}
@@ -2005,8 +2416,13 @@ const PoojaRegistrationPage = () => {
                               onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
                               disabled={memberOptions.length === 0}
                             />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
+                          </div>
+
+                          {/* Next Occurrence Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Next Occurrence
+                            </label>
                             {selectedDayId === null ? (
                               <span className="text-xs text-gray-500">Select a day option</span>
                             ) : !occurrenceState ? (
@@ -2044,16 +2460,47 @@ const PoojaRegistrationPage = () => {
                             ) : (
                               <span className="text-xs text-gray-500">Select a day option</span>
                             )}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {row.rateLabel}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            <div className="flex items-center justify-center space-x-4">
+                          </div>
+
+                          {/* Amount Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Amount
+                            </label>
+                            {hasAdjustableAmount ? (
+                              <div className="space-y-2">
+                                <p className="text-xs text-gray-500">Range: {row.rateLabel}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-gray-500">₹</span>
+                                  <input
+                                    type="number"
+                                    min={row.minAmount ?? undefined}
+                                    max={row.maxAmount ?? undefined}
+                                    step={VARIABLE_AMOUNT_STEP}
+                                    className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                    value={amountInputValue}
+                                    onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
+                                  />
+                                </div>
+                                {amountInputError && (
+                                  <p className="text-xs text-red-600">{amountInputError}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <span>{row.rateLabel}</span>
+                            )}
+                          </div>
+
+                          {/* Prasadam Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Post Prasadam
+                            </label>
+                            <div className="flex space-x-6">
                               <label className="inline-flex items-center">
                                 <input
                                   type="radio"
-                                  className="h-4 w-4 text-green-600 focus:ring-green-500"
+                                  className="h-4 w-4 text-orange-600 focus:ring-orange-500"
                                   checked={postPrasadamSelected === true}
                                   onChange={() => {
                                     setPrasadamSelectionMap((prev) => ({
@@ -2068,7 +2515,7 @@ const PoojaRegistrationPage = () => {
                               <label className="inline-flex items-center">
                                 <input
                                   type="radio"
-                                  className="h-4 w-4 text-green-600 focus:ring-green-500"
+                                  className="h-4 w-4 text-orange-600 focus:ring-orange-500"
                                   checked={postPrasadamSelected === false}
                                   onChange={() => {
                                     setPrasadamSelectionMap((prev) => ({
@@ -2081,33 +2528,31 @@ const PoojaRegistrationPage = () => {
                                 <span className="ml-2 text-gray-700">No</span>
                               </label>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            <button
-                              type="button"
-                              onClick={() => toggleCartItem(row)}
-                              className={iconClasses}
-                              aria-label={iconLabel}
-                            >
-                              {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                            {user?.name?.trim() || user?.phone_number || '--'}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                            {registrationDateLabel}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+
+                          {/* Registration Info */}
+                          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                            <div>
+                              <p className="text-xs text-gray-500">Registered By</p>
+                              <p className="text-sm text-gray-700 truncate">
+                                {user?.name?.trim() || user?.phone_number || '--'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Registration Date</p>
+                              <p className="text-sm text-gray-700">{registrationDateLabel}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             {tableMessage && (
-              <div className={`mt-4 p-3 rounded-lg text-center ${tableMessage.status === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+              <div className={`mt-4 p-3 rounded-lg text-center ${tableMessage.status === 'error' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'}`}>
                 {tableMessage.text}
               </div>
             )}
@@ -2118,8 +2563,8 @@ const PoojaRegistrationPage = () => {
       {/* Booking Modal */}
       {selectedPooja && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200">
-            <div className="p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-h-[90vh] overflow-y-auto border border-gray-200 max-w-md mx-auto">
+            <div className="p-4 sm:p-6">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">
@@ -2156,13 +2601,13 @@ const PoojaRegistrationPage = () => {
                             key={option.value}
                             className={`flex items-center p-3 rounded-lg border cursor-pointer transition ${
                               checked
-                                ? 'border-green-500 bg-green-50'
+                                ? 'border-orange-500 bg-orange-50'
                                 : 'border-gray-200 hover:border-gray-300'
                             }`}
                           >
                             <input
                               type="checkbox"
-                              className="h-4 w-4 text-green-600 focus:ring-green-500 rounded"
+                              className="h-4 w-4 text-orange-600 focus:ring-orange-500 rounded flex-shrink-0"
                               checked={checked}
                               onChange={() => toggleMemberSelection(option.value)}
                             />
@@ -2194,7 +2639,7 @@ const PoojaRegistrationPage = () => {
                               {relationshipLabel}
                               {donorSuffix}
                             </p>
-                            <div className="mt-1 grid grid-cols-2 gap-1 text-xs text-gray-700">
+                            <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-gray-700">
                               {member.donorPhone && (
                                 <p>Contact: {member.donorPhone}</p>
                               )}
@@ -2243,7 +2688,7 @@ const PoojaRegistrationPage = () => {
                           <input
                             type="date"
                             min={new Date().toISOString().split('T')[0]}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                             value={modalChartDetails.date}
                             onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
                           />
@@ -2254,7 +2699,7 @@ const PoojaRegistrationPage = () => {
                           </label>
                           <textarea
                             rows={3}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                             value={modalChartDetails.note}
                             onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
                             placeholder="Add donor instructions"
@@ -2274,7 +2719,7 @@ const PoojaRegistrationPage = () => {
                       <label className="inline-flex items-center">
                         <input
                           type="radio"
-                          className="h-4 w-4 text-green-600 focus:ring-green-500"
+                          className="h-4 w-4 text-orange-600 focus:ring-orange-500"
                           checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === true}
                           onChange={() =>
                             setPrasadamSelectionMap((prev) => ({
@@ -2288,7 +2733,7 @@ const PoojaRegistrationPage = () => {
                       <label className="inline-flex items-center">
                         <input
                           type="radio"
-                          className="h-4 w-4 text-green-600 focus:ring-green-500"
+                          className="h-4 w-4 text-orange-600 focus:ring-orange-500"
                           checked={(prasadamSelectionMap[selectedPooja.id] ?? false) === false}
                           onChange={() =>
                             setPrasadamSelectionMap((prev) => ({
@@ -2311,7 +2756,7 @@ const PoojaRegistrationPage = () => {
                       </label>
                       <input
                         name="phoneNumber"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                         value={contactDetails.phoneNumber}
                         onChange={(event) => setContactDetails((prev) => ({ ...prev, phoneNumber: event.target.value }))}
                         placeholder="91XXXXXXXXXX"
@@ -2324,7 +2769,7 @@ const PoojaRegistrationPage = () => {
                       <textarea
                         name="address"
                         rows={3}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                         value={contactDetails.address}
                         onChange={(event) => setContactDetails((prev) => ({ ...prev, address: event.target.value }))}
                         placeholder="Address for correspondence"
@@ -2338,7 +2783,7 @@ const PoojaRegistrationPage = () => {
                         name="bookingDate"
                         type="date"
                         min={new Date().toISOString().split('T')[0]}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                         value={dateValue}
                         onChange={(event) => setDateValue(event.target.value)}
                         required
@@ -2355,7 +2800,7 @@ const PoojaRegistrationPage = () => {
 
                 <button
                   type="submit"
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 px-4 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                 >
                   {bookingMode === 'memberOnly'
                     ? 'Save selection'

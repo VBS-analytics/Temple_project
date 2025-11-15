@@ -62,6 +62,7 @@ class CalendarCodeAliasTests(SimpleTestCase):
             "P": "pournami",
             "SC": "sankata_chaturthi",
             "C": "chaturthi",
+            "S": "weekly_sunday",
         }
         for alias, expected in cases.items():
             self.assertEqual(canonicalize(alias), expected)
@@ -78,6 +79,26 @@ class AnyDayOccurrenceTests(SimpleTestCase):
         service = TempleCalendarService.__new__(TempleCalendarService)
         result = TempleCalendarService.next_occurrence(service, "AD", date(2025, 1, 30))
         self.assertEqual(result.date, date(2025, 2, 1))
+
+
+class WeeklySundayOccurrenceTests(SimpleTestCase):
+    def test_weekly_sunday_lists_remaining_month(self):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        result = TempleCalendarService.next_occurrence(service, "S", date(2025, 11, 14))
+        self.assertEqual(result.date, date(2025, 11, 16))
+        self.assertEqual(
+            [entry["date"] for entry in result.meta["upcoming_occurrences"]],
+            ["2025-11-16", "2025-11-23", "2025-11-30"],
+        )
+
+    def test_weekly_sunday_rolls_to_next_month_when_needed(self):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        result = TempleCalendarService.next_occurrence(service, "S", date(2025, 11, 30))
+        self.assertEqual(result.date, date(2025, 12, 7))
+        self.assertEqual(
+            [entry["date"] for entry in result.meta["upcoming_occurrences"]],
+            ["2025-12-07", "2025-12-14", "2025-12-21", "2025-12-28"],
+        )
 
 
 class TithiSearchBehaviourTests(SimpleTestCase):

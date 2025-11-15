@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useLocation } from "react-router-dom";
 
+import PublicSiteHeader from "../components/PublicSiteHeader";
+
 /**
  * Kakkazhany Gramam – About Page
  * ------------------------------------------------------
@@ -602,13 +604,13 @@ function FamilyTreeSection() {
           <>
             <div className="max-h-[560px] overflow-auto rounded-t-2xl border-b border-sky-50 bg-slate-50/40 p-4">
               <div 
-                className="mx-auto transition-transform duration-300 ease-in-out"
+                className="mx-auto w-full max-w-4xl transition-transform duration-300 ease-in-out"
                 style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}
               >
                 <img
                   src={activeTree.image}
                   alt={`Family tree diagram for the ${activeTree.subtitle.toLowerCase()}.`}
-                  className="max-h-[520px] min-w-[720px] w-auto object-contain"
+                  className="h-auto max-h-[520px] w-full object-contain"
                   loading="lazy"
                 />
               </div>
@@ -692,58 +694,59 @@ export default function AboutPage() {
   }
 
   return (
-    <main className="min-h-screen relative overflow-x-clip">
-      {/* Soft background */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-slate-50 via-white to-slate-50"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-8rem] -z-10 h-[28rem] w-[56rem] -translate-x-1/2 rounded-full bg-sky-100 blur-3xl opacity-40"
-      />
+    <div className="min-h-screen bg-slate-50">
+      <PublicSiteHeader />
+      <main className="relative overflow-x-clip">
+        {/* Soft background */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-slate-50 via-white to-slate-50"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-[-8rem] -z-10 h-[28rem] w-[56rem] -translate-x-1/2 rounded-full bg-sky-100 blur-3xl opacity-40"
+        />
 
-      {/* Container */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16 space-y-16">
-        {/* Hero */}
-        <header className="text-center space-y-4">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900">
-            Kakkazhany Gramam
-          </h1>
-          <p className="mx-auto max-w-2xl text-gray-600">
-            Honouring the people who laid the foundation and continue to guide
-            the Kakkazhany Gramam community.
-          </p>
-        </header>
-
-        {/* Stats */}
-        <section className="grid grid-cols-3 gap-4">
-          <StatCard value="9" label="Founder Members" />
-          <StatCard value="12" label="Committee Members" />
-          <StatCard value="2021" label="Initiative Began" />
-        </section>
-
-        {sectionContent}
-
-        {/* CTA */}
-        <section className="text-center">
-          <div className="inline-flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-6 py-4 shadow-sm">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-sky-100 text-sky-600">ℹ️</span>
-            <p className="text-sm text-sky-900">
-              Have a photo or detail to add? Email us and we'll include it in the
-              next update.
+        {/* Container */}
+        <div className="mx-auto w-full max-w-screen-2xl space-y-16 px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+          {/* Hero */}
+          <header className="space-y-4 text-center">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+              Kakkazhany Gramam
+            </h1>
+            <p className="mx-auto max-w-2xl text-gray-600">
+              Honouring the people who laid the foundation and continue to guide
+              the Kakkazhany Gramam community.
             </p>
-          </div>
-        </section>
+          </header>
 
-        {/* Footer */}
-        <footer className="text-center text-xs text-gray-500">
-          <p>
-            © {new Date().getFullYear()} Kakkazhany Gramam. Built with ❤ for the
-            community.
-          </p>
-        </footer>
-      </div>
-    </main>
+          {/* Stats */}
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <StatCard value="9" label="Founder Members" />
+            <StatCard value="12" label="Committee Members" />
+            <StatCard value="2021" label="Initiative Began" />
+          </section>
+
+          {sectionContent}
+
+          {/* CTA */}
+          <section className="text-center">
+            <div className="inline-flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-6 py-4 shadow-sm">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white text-sky-600">
+                ℹ️
+              </span>
+              <p className="text-sm text-sky-900">
+                Have a photo or detail to add? Email us and we'll include it in the next update.
+              </p>
+            </div>
+          </section>
+
+          {/* Footer */}
+          <footer className="text-center text-xs text-gray-500">
+            <p>© {new Date().getFullYear()} Kakkazhany Gramam. Built with ❤ for the community.</p>
+          </footer>
+        </div>
+      </main>
+    </div>
   );
 }

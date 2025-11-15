@@ -1,5 +1,6 @@
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { nakshatraOptions } from '../../data/nakshatraOptions';
 import api from '../../lib/api';
 
 interface DonorProfile {
@@ -269,6 +270,16 @@ const DonorDetailsPage = () => {
     isOtherSelected: false,
     customFamilyName: ''
   });
+  const [memberStarSearch, setMemberStarSearch] = useState('');
+  const [memberStarDropdownOpen, setMemberStarDropdownOpen] = useState(false);
+  const memberStarInputRef = useRef<HTMLInputElement | null>(null);
+  const filteredMemberStars = useMemo(() => {
+    const normalized = memberStarSearch.trim().toLowerCase();
+    if (!normalized) {
+      return nakshatraOptions;
+    }
+    return nakshatraOptions.filter((option) => option.toLowerCase().includes(normalized));
+  }, [memberStarSearch]);
   const [memberError, setMemberError] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
   const [adminMembers, setAdminMembers] = useState<DonorMember[]>([]);
@@ -322,6 +333,8 @@ const DonorDetailsPage = () => {
       isOtherSelected: false,
       customFamilyName: ''
     });
+    setMemberStarSearch('');
+    setMemberStarDropdownOpen(false);
   };
 
   const handleMemberChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -337,6 +350,15 @@ const DonorDetailsPage = () => {
     } else {
       setMemberForm((prev) => ({ ...prev, [name]: value }));
     }
+  };
+
+  const handleMemberStarSelection = (value: string) => {
+    setMemberForm((prev) => ({ ...prev, tamil_star: value }));
+    setMemberStarSearch(value);
+    setMemberStarDropdownOpen(false);
+    requestAnimationFrame(() => {
+      memberStarInputRef.current?.blur();
+    });
   };
 
   const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -685,7 +707,7 @@ const DonorDetailsPage = () => {
         icon: (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 text-green-500"
+            className="h-7 w-7 text-orange-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -709,7 +731,7 @@ const DonorDetailsPage = () => {
         icon: (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 text-green-500"
+            className="h-7 w-7 text-orange-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -733,7 +755,7 @@ const DonorDetailsPage = () => {
         icon: (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 text-emerald-500"
+            className="h-7 w-7 text-rose-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -774,9 +796,9 @@ const DonorDetailsPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full flex flex-col items-center">
-          <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-6"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-rose-50 to-white p-4">
+        <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full flex flex-col items-center">
+          <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mb-6"></div>
           <h3 className="text-xl font-semibold text-slate-800 mb-2">Loading Donor Details</h3>
           <p className="text-slate-600 text-center">Please wait while we fetch the latest information...</p>
         </div>
@@ -786,8 +808,8 @@ const DonorDetailsPage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-rose-50 to-white p-4">
+        <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full">
           <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -797,7 +819,7 @@ const DonorDetailsPage = () => {
           <p className="text-red-600 bg-red-50 rounded-lg p-4 text-center">{error}</p>
           <button 
             onClick={() => window.location.reload()} 
-            className="mt-6 w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition duration-200"
+            className="mt-6 w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition duration-200"
           >
             Try Again
           </button>
@@ -807,22 +829,22 @@ const DonorDetailsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white p-3 sm:p-4 md:p-6">
+      <div className="mx-auto w-full max-w-screen-2xl">
         {/* Header Section */}
-        <header className="mb-10">
-          <div className="bg-white rounded-2xl shadow-md p-6 md:p-8">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+        <header className="mb-6 sm:mb-8 md:mb-10">
+          <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-6">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Donor Management</h1>
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800">Donor Management</h1>
                 </div>
-                <p className="text-slate-600 max-w-2xl">
+                <p className="text-slate-600 max-w-2xl text-sm sm:text-base">
                   Manage donor profiles, family members, and pooja registrations. View detailed information and track engagement.
                 </p>
               </div>
@@ -834,10 +856,10 @@ const DonorDetailsPage = () => {
                     placeholder="Search donors..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                   />
                   <svg
-                    className="absolute left-3 top-3.5 h-5 w-5 text-slate-400"
+                    className="absolute left-3 top-2.5 sm:top-3.5 h-5 w-5 text-slate-400"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -854,7 +876,7 @@ const DonorDetailsPage = () => {
                 <button
                   type="button"
                   onClick={() => setMemberFormVisible(!memberFormVisible)}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium transition duration-200 ${memberFormVisible ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'}`}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-xl font-medium transition duration-200 text-sm sm:text-base ${memberFormVisible ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-md hover:shadow-lg'}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -865,16 +887,16 @@ const DonorDetailsPage = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mt-6 sm:mt-8">
               {summaryCards.map((card, index) => (
-                <div key={card.label} className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition duration-200">
+                <div key={card.label} className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">{card.label}</p>
-                      <p className="text-2xl font-bold text-slate-800">{card.value}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-slate-800">{card.value}</p>
                       <p className="text-xs text-slate-500 mt-2">{card.helper}</p>
                     </div>
-                    <div className={`p-3 rounded-lg ${index === 0 ? 'bg-green-100 text-green-600' : index === 1 ? 'bg-green-100 text-green-600' : index === 2 ? 'bg-emerald-100 text-emerald-600' : 'bg-sky-100 text-sky-600'}`}>
+                    <div className={`p-3 rounded-lg ${index === 0 ? 'bg-orange-100 text-orange-600' : index === 1 ? 'bg-orange-100 text-orange-600' : index === 2 ? 'bg-rose-100 text-rose-600' : 'bg-sky-100 text-sky-600'}`}>
                       {card.icon}
                     </div>
                   </div>
@@ -886,17 +908,17 @@ const DonorDetailsPage = () => {
 
         {/* Add Member Form */}
         {memberFormVisible && (
-          <div className="mb-10 bg-white rounded-2xl shadow-md p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="mb-6 sm:mb-8 md:mb-10 bg-white rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-4 sm:mb-6">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-slate-800">Add New Member</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Add New Member</h2>
             </div>
             
-            <form onSubmit={handleMemberSubmit} className="space-y-6">
+            <form onSubmit={handleMemberSubmit} className="space-y-4 sm:space-y-6">
               {memberError && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
                   <div className="flex">
@@ -912,7 +934,7 @@ const DonorDetailsPage = () => {
                 </div>
               )}
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-name">
                     Full Name <span className="text-red-500">*</span>
@@ -921,7 +943,7 @@ const DonorDetailsPage = () => {
                     id="member-name"
                     name="name"
                     type="text"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                     value={memberForm.name}
                     onChange={handleMemberChange}
                     required
@@ -936,7 +958,7 @@ const DonorDetailsPage = () => {
                     id="member-dob"
                     name="date_of_birth"
                     type="date"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                     value={memberForm.date_of_birth}
                     onChange={handleMemberChange}
                   />
@@ -949,7 +971,7 @@ const DonorDetailsPage = () => {
                   <select
                     id="member-gender"
                     name="gender"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                     value={memberForm.gender}
                     onChange={handleMemberChange}
                   >
@@ -964,14 +986,102 @@ const DonorDetailsPage = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-star">
                     Tamil Star
                   </label>
-                  <input
-                    id="member-star"
-                    name="tamil_star"
-                    type="text"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
-                    value={memberForm.tamil_star}
-                    onChange={handleMemberChange}
-                  />
+                  <div className="relative">
+                    <input
+                      ref={memberStarInputRef}
+                      id="member-star"
+                      name="tamil_star"
+                      type="text"
+                      className="w-full rounded-lg border border-slate-300 px-4 pr-11 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 capitalize text-sm sm:text-base"
+                      placeholder="Search Nakshatra"
+                      value={memberStarDropdownOpen ? memberStarSearch : memberForm.tamil_star}
+                      onFocus={() => {
+                        setMemberStarSearch(memberForm.tamil_star || '');
+                        setMemberStarDropdownOpen(true);
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => setMemberStarDropdownOpen(false), 120);
+                      }}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setMemberStarSearch(value);
+                        if (!memberStarDropdownOpen) {
+                          setMemberStarDropdownOpen(true);
+                        }
+                        if (value === '') {
+                          setMemberForm((prev) => ({ ...prev, tamil_star: '' }));
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          const normalized = memberStarSearch.trim().toLowerCase();
+                          const exactMatch = nakshatraOptions.find(
+                            (option) => option.toLowerCase() === normalized
+                          );
+                          const selection = exactMatch ?? filteredMemberStars[0];
+                          if (selection) {
+                            handleMemberStarSelection(selection);
+                          }
+                        }
+                        if (event.key === 'Escape') {
+                          setMemberStarDropdownOpen(false);
+                          requestAnimationFrame(() => {
+                            memberStarInputRef.current?.blur();
+                          });
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-2 flex items-center text-slate-500 hover:text-slate-700"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        if (memberStarDropdownOpen) {
+                          setMemberStarDropdownOpen(false);
+                          requestAnimationFrame(() => {
+                            memberStarInputRef.current?.blur();
+                          });
+                        } else {
+                          setMemberStarSearch(memberForm.tamil_star || '');
+                          setMemberStarDropdownOpen(true);
+                          requestAnimationFrame(() => {
+                            memberStarInputRef.current?.focus();
+                          });
+                        }
+                      }}
+                      aria-label="Toggle Nakshatra options"
+                    >
+                      <svg
+                        className={`h-5 w-5 transition-transform ${memberStarDropdownOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {memberStarDropdownOpen && (
+                      <ul className="absolute z-10 mt-2 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                        {filteredMemberStars.length > 0 ? (
+                          filteredMemberStars.map((option) => (
+                            <li
+                              key={option}
+                              className="cursor-pointer px-4 py-2 text-sm text-slate-700 hover:bg-orange-50 capitalize"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                handleMemberStarSelection(option);
+                              }}
+                            >
+                              {option}
+                            </li>
+                          ))
+                        ) : (
+                          <li className="px-4 py-2 text-sm text-slate-500">No matches found</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -981,7 +1091,7 @@ const DonorDetailsPage = () => {
                   <select
                     id="member-gothra"
                     name="gothra"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                     value={memberForm.gothra}
                     onChange={handleMemberChange}
                   >
@@ -1004,7 +1114,7 @@ const DonorDetailsPage = () => {
                   <select
                     id="member-family"
                     name="family_name"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                     value={memberForm.family_name}
                     onChange={handleMemberChange}
                   >
@@ -1022,7 +1132,7 @@ const DonorDetailsPage = () => {
                   </select>
                 </div>
                 {memberForm.isOtherSelected && (
-                  <div>
+                  <div className="sm:col-span-2 lg:col-span-3">
                     <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-custom-family">
                       Custom Family Name <span className="text-red-500">*</span>
                     </label>
@@ -1030,7 +1140,7 @@ const DonorDetailsPage = () => {
                       id="member-custom-family"
                       name="customFamilyName"
                       type="text"
-                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-green-500 focus:ring-2 focus:ring-green-100 focus:outline-none transition duration-200"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                       value={memberForm.customFamilyName}
                       onChange={handleMemberChange}
                       placeholder="Enter custom family name"
@@ -1040,18 +1150,18 @@ const DonorDetailsPage = () => {
                 )}
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setMemberFormVisible(false)}
-                  className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
+                  className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 text-sm sm:text-base order-2 sm:order-1"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={memberSubmitting}
-                  className="px-5 py-2.5 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="px-5 py-2.5 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base order-1 sm:order-2"
                 >
                   {memberSubmitting ? (
                     <span className="flex items-center gap-2">
@@ -1069,28 +1179,28 @@ const DonorDetailsPage = () => {
         )}
 
         {/* Donor List */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {!loading && donors.length === 0 && (
-            <div className="bg-white rounded-2xl shadow-md p-8 text-center">
+            <div className="bg-white rounded-2xl shadow-md p-6 sm:p-8 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-slate-800 mb-2">No Donors Found</h3>
-              <p className="text-slate-600 max-w-md mx-auto">There are no donors in the system yet. Add donors to get started.</p>
+              <h3 className="text-lg sm:text-xl font-semibold text-slate-800 mb-2">No Donors Found</h3>
+              <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base">There are no donors in the system yet. Add donors to get started.</p>
             </div>
           )}
           
           {!loading && donors.length > 0 && filteredDonors.length === 0 && (
-            <div className="bg-white rounded-2xl shadow-md p-8 text-center">
+            <div className="bg-white rounded-2xl shadow-md p-6 sm:p-8 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-slate-800 mb-2">No Matching Donors</h3>
-              <p className="text-slate-600 max-w-md mx-auto">No donors match your search criteria. Try different keywords.</p>
+              <h3 className="text-lg sm:text-xl font-semibold text-slate-800 mb-2">No Matching Donors</h3>
+              <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base">No donors match your search criteria. Try different keywords.</p>
             </div>
           )}
           
@@ -1119,20 +1229,20 @@ const DonorDetailsPage = () => {
                 className="bg-white rounded-2xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg"
               >
                 {/* Donor Header */}
-                <header className="p-6 border-b border-slate-100">
+                <header className="p-4 sm:p-6 border-b border-slate-100">
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 flex items-center justify-center">
-                        <span className="text-lg font-bold text-green-700">{user.name.charAt(0)}</span>
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center">
+                        <span className="text-lg font-bold text-orange-700">{user.name.charAt(0)}</span>
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           {profile.donor_id && (
-                            <span className="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                            <span className="inline-flex items-center rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
                               Donor #{profile.donor_id}
                             </span>
                           )}
-                          <h2 className="text-xl font-bold text-slate-800">{user.name}</h2>
+                          <h2 className="text-lg sm:text-xl font-bold text-slate-800">{user.name}</h2>
                         </div>
                         
                         <div className="flex flex-wrap gap-2 mb-3">
@@ -1162,9 +1272,9 @@ const DonorDetailsPage = () => {
                           )}
                         </div>
                         
-                        <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 text-sm text-slate-600">
                           <div className="flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25a4.5 4.5 0 100-9 4.5 4.5 0 000 9z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25v6" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 20.25h4.5" />
@@ -1172,7 +1282,7 @@ const DonorDetailsPage = () => {
                             {genderLabel}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 4.5c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V6c0 .621-.504 1.125-1.125 1.125h-.375A12.084 12.084 0 0014.875 18h.375c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125H14.25C7.67 22.5 2.25 17.08 2.25 10.5V4.5z" />
                             </svg>
                             {user.phone_number}
@@ -1189,13 +1299,13 @@ const DonorDetailsPage = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      <div className="flex items-center gap-2 rounded-full border border-green-100 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                      <div className="flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12m-12 10.5h12M3 6.75l1.5 1.5L6 6.75m0 10.5l-1.5-1.5L3 17.25" />
                         </svg>
                         {registrations.length} registration{registrations.length === 1 ? '' : 's'}
                       </div>
-                      <div className="flex items-center gap-2 rounded-full border border-green-100 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                      <div className="flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zm0 0v12" />
                         </svg>
@@ -1208,15 +1318,15 @@ const DonorDetailsPage = () => {
                 {/* Donor Details Sections */}
                 <div className="divide-y divide-slate-100">
                   {/* Family Members Section */}
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     <button
                       type="button"
                       onClick={() => toggleSection(user.id, 'members')}
                       className="flex w-full items-center justify-between gap-2 text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13.5a3 3 0 10-6 0v2.25h6V13.5z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 12a4.125 4.125 0 100-8.25A4.125 4.125 0 0012 12zm0 3.75a7.125 7.125 0 00-7.125 7.125h14.25A7.125 7.125 0 0012 15.75z" />
                           </svg>
@@ -1303,7 +1413,7 @@ const DonorDetailsPage = () => {
                                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M4.5 9.75h15" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 7.5h13.5A1.5 1.5 0 0120.25 9v9a1.5 1.5 0 01-1.5 1.5H5.25A1.5 1.5 0 013.75 18V9a1.5 1.5 0 011.5-1.5z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 7.5h13.5A1.5 1.5 0 0120.25 9v9a1.5 1.5 0 01-1.5 1.5H5.25A1.5 1.5 0 003.75 18V9a1.5 1.5 0 011.5-1.5z" />
                                     </svg>
                                     DOB: {formatDonorDate(member.date_of_birth)}
                                   </span>
@@ -1317,15 +1427,15 @@ const DonorDetailsPage = () => {
                   </div>
 
                   {/* Pooja Registrations Section */}
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     <button
                       type="button"
                       onClick={() => toggleSection(user.id, 'registrations')}
                       className="flex w-full items-center justify-between gap-2 text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12m-12 10.5h12" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 6.75A2.25 2.25 0 0018.75 4.5H6.75A2.25 2.25 0 004.5 6.75v12.75l3-3 3 3 3-3 3 3 3-3 3 3V6.75z" />
                           </svg>
@@ -1376,7 +1486,7 @@ const DonorDetailsPage = () => {
                                   const postPrasadamMeta = registration.post_prasadam
                                     ? {
                                         label: 'Yes',
-                                        className: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
+                                        className: 'border border-rose-200 bg-rose-50 text-rose-700',
                                       }
                                     : {
                                         label: 'No',
@@ -1439,8 +1549,8 @@ const DonorDetailsPage = () => {
         </div>
 
         {/* Admin Members Section */}
-        <section className="mt-10 bg-white rounded-2xl shadow-md p-6 md:p-8">
-          <div className="flex items-center justify-between mb-6">
+        <section className="mt-6 sm:mt-8 md:mt-10 bg-white rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1448,16 +1558,16 @@ const DonorDetailsPage = () => {
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-800">Admin-Added Members</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Admin-Added Members</h2>
                 <p className="text-slate-600 text-sm">Members created directly through this admin panel</p>
               </div>
             </div>
-            <span className="inline-flex items-center rounded-full bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
+            <span className="inline-flex items-center rounded-full bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 self-start sm:self-auto">
               {adminMembers.length} member{adminMembers.length === 1 ? '' : 's'}
             </span>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             {adminMembersLoading ? (
               <div className="flex justify-center py-8">
                 <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
@@ -1483,7 +1593,7 @@ const DonorDetailsPage = () => {
                   </svg>
                 </div>
                 <h3 className="text-lg font-medium text-slate-800 mb-1">No Admin Members Yet</h3>
-                <p className="text-slate-600 max-w-md mx-auto">Add new members using the "Add Member" button at the top of the page.</p>
+                <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base">Add new members using the "Add Member" button at the top of the page.</p>
               </div>
             ) : (
               <>
@@ -1526,7 +1636,7 @@ const DonorDetailsPage = () => {
                             </div>
                           )}
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                             <div>
                               <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-name-${member.id}`}>
                                 Full Name <span className="text-red-500">*</span>
@@ -1535,7 +1645,7 @@ const DonorDetailsPage = () => {
                                 id={`admin-member-name-${member.id}`}
                                 name="name"
                                 type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.name}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1551,7 +1661,7 @@ const DonorDetailsPage = () => {
                                 id={`admin-member-dob-${member.id}`}
                                 name="date_of_birth"
                                 type="date"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.date_of_birth}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1565,7 +1675,7 @@ const DonorDetailsPage = () => {
                               <select
                                 id={`admin-member-gender-${member.id}`}
                                 name="gender"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.gender}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1585,7 +1695,7 @@ const DonorDetailsPage = () => {
                                 id={`admin-member-star-${member.id}`}
                                 name="tamil_star"
                                 type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.tamil_star}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1599,7 +1709,7 @@ const DonorDetailsPage = () => {
                               <select
                                 id={`admin-member-gothra-${member.id}`}
                                 name="gothra"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.gothra}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1624,7 +1734,7 @@ const DonorDetailsPage = () => {
                                 id={`admin-member-family-${member.id}`}
                                 name="family_name"
                                 type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.family_name}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1639,7 +1749,7 @@ const DonorDetailsPage = () => {
                                 id={`admin-member-relationship-${member.id}`}
                                 name="relationship"
                                 type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.relationship}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
@@ -1650,7 +1760,7 @@ const DonorDetailsPage = () => {
                           <div className="flex flex-wrap gap-3 pt-2">
                             <button
                               type="submit"
-                              className="px-5 py-2.5 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              className="px-5 py-2.5 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
                               disabled={adminMemberEditSubmitting || isDeleting}
                             >
                               {adminMemberEditSubmitting ? (
@@ -1666,7 +1776,7 @@ const DonorDetailsPage = () => {
                             <button
                               type="button"
                               onClick={cancelAdminMemberEdit}
-                              className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200"
+                              className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 text-sm sm:text-base"
                               disabled={adminMemberEditSubmitting || isDeleting}
                             >
                               Cancel
@@ -1674,7 +1784,7 @@ const DonorDetailsPage = () => {
                             <button
                               type="button"
                               onClick={() => handleAdminMemberDelete(member.id)}
-                              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
                               disabled={isDeleting || adminMemberEditSubmitting}
                             >
                               {isDeleting ? (
@@ -1688,8 +1798,8 @@ const DonorDetailsPage = () => {
                               ) : (
                                 <>
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 11v6M14 11v6" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 11v6M14 11v6" />
                                   </svg>
                                   Delete
                                 </>
@@ -1705,7 +1815,7 @@ const DonorDetailsPage = () => {
                             </div>
                             <div>
                               <h3 className="font-semibold text-slate-800">{member.name}</h3>
-                              <div className="flex flex-wrap gap-3 mt-2 text-sm text-slate-600">
+                              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 mt-2 text-sm text-slate-600">
                                 <span>Gender: {member.gender || 'N/A'}</span>
                                 <span>Star: {member.tamil_star || 'N/A'}</span>
                                 <span>Gothram: {member.gothra || 'N/A'}</span>
@@ -1714,11 +1824,11 @@ const DonorDetailsPage = () => {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap gap-2 sm:gap-3">
                             <button
                               type="button"
                               onClick={() => startAdminMemberEdit(member)}
-                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
                               disabled={isDeleting}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1729,7 +1839,7 @@ const DonorDetailsPage = () => {
                             <button
                               type="button"
                               onClick={() => handleAdminMemberDelete(member.id)}
-                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
                               disabled={isDeleting}
                             >
                               {isDeleting ? (
@@ -1743,8 +1853,8 @@ const DonorDetailsPage = () => {
                               ) : (
                                 <>
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 11v6M14 11v6" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 11v6M14 11v6" />
                                   </svg>
                                   Delete
                                 </>

@@ -431,7 +431,6 @@ const DashboardPage = () => {
     setError(null);
 
     try {
-      // Load metrics based on user role
       if (isAdminUser) {
         await loadAdminMetrics();
         await loadTodayPoojas();
@@ -519,7 +518,9 @@ const DashboardPage = () => {
         ],
       };
 
-      pdfMakeInstance.createPdf(docDefinition).download(`today-pooja-details-${toLocalDateIso(new Date())}.pdf`);
+      pdfMakeInstance
+        .createPdf(docDefinition)
+        .download(`today-pooja-details-${toLocalDateIso(new Date())}.pdf`);
     } catch (err) {
       console.error('Failed to generate PDF', err);
       window.alert('Unable to generate PDF right now. Please try again later.');
@@ -528,8 +529,7 @@ const DashboardPage = () => {
 
   useEffect(() => {
     if (!user) return;
-    
-    // Initial load based on user role
+
     if (isAdminUser) {
       loadAdminMetrics();
     } else {
@@ -539,8 +539,7 @@ const DashboardPage = () => {
 
   useEffect(() => {
     if (!isAdminUser) return;
-    
-    // Load today's poojas for admin users
+
     loadTodayPoojas();
   }, [isAdminUser]);
 
@@ -573,7 +572,7 @@ const DashboardPage = () => {
       value: formatNumber(TEMPLE_COUNT),
       description: 'Temples currently managed on the portal.',
       icon: TempleIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
     {
       id: 'donors',
@@ -581,7 +580,7 @@ const DashboardPage = () => {
       value: displayValue(donorCount, donorLoading),
       description: 'Unique donors who have registered with the temple.',
       icon: DonorIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
     {
       id: 'family-members',
@@ -589,7 +588,7 @@ const DashboardPage = () => {
       value: displayValue(familyMemberCount, familyLoading),
       description: 'Family members linked to donor accounts and admin additions.',
       icon: FamilyIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
     {
       id: 'monthly-donations',
@@ -597,7 +596,7 @@ const DashboardPage = () => {
       value: formatCurrency(MONTHLY_DONATION_AMOUNT),
       description: 'Approximate monthly inflow (static for now).',
       icon: WalletIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
   ];
 
@@ -615,7 +614,7 @@ const DashboardPage = () => {
       value: displayValue(donorCount, donorLoading),
       description: 'Total pooja registrations completed with your account.',
       icon: TempleIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
     {
       id: 'upcoming-poojas',
@@ -623,7 +622,7 @@ const DashboardPage = () => {
       value: displayValue(upcomingPoojaCount, donorLoading),
       description: 'Scheduled poojas that are yet to be performed.',
       icon: DonorIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
     {
       id: 'family-members',
@@ -631,7 +630,7 @@ const DashboardPage = () => {
       value: displayValue(familyMemberCount, familyLoading),
       description: 'Family members saved for quick pooja registrations.',
       icon: FamilyIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
     {
       id: 'prasadam-requests',
@@ -639,7 +638,7 @@ const DashboardPage = () => {
       value: displayValue(prasadamRequestCount, donorLoading),
       description: 'Registrations where prasadam delivery was requested.',
       icon: WalletIcon,
-      accent: 'bg-green-100 text-green-700',
+      accent: 'bg-orange-100 text-orange-700',
     },
   ];
 
@@ -650,36 +649,55 @@ const DashboardPage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50">
+      <div className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
         {/* Header Section */}
-        <div className="mb-10">
+        <div className="mb-8 sm:mb-10">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Welcome back, <span className="text-green-700">{displayName}</span></h1>
-              <p className="mt-2 text-slate-600 max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                Welcome back,{' '}
+                <span className="text-orange-700">{displayName}</span>
+              </h1>
+              <p className="mt-2 text-slate-600 text-sm sm:text-base max-w-2xl">
                 {isAdminUser
                   ? 'Here is a quick overview of the key metrics across the donor portal.'
                   : 'Here is a quick snapshot of your pooja bookings and saved devotees.'}
               </p>
             </div>
             <div className="mt-4 md:mt-0 flex items-center space-x-3">
-              <div className="inline-flex items-center px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200">
-                <div className="h-3 w-3 rounded-full bg-emerald-500 mr-2"></div>
+              <div className="inline-flex items-center px-3 sm:px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200">
+                <div className="h-3 w-3 rounded-full bg-orange-500 mr-2"></div>
                 <span className="text-sm font-medium text-slate-700">Dashboard</span>
               </div>
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="inline-flex items-center px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                className="inline-flex items-center px-3 sm:px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
               >
                 {refreshing ? (
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-orange-600"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                 ) : (
-                  <RefreshIcon className="h-4 w-4 mr-2 text-green-600" />
+                  <RefreshIcon className="h-4 w-4 mr-2 text-orange-600" />
                 )}
                 <span className="text-sm font-medium text-slate-700">Refresh</span>
               </button>
@@ -689,10 +707,19 @@ const DashboardPage = () => {
 
         {/* Error Alert */}
         {error && !loading && (
-          <div className="mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-4 flex items-start">
+          <div className="mb-6 sm:mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-4 flex items-start">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <svg
+                className="h-5 w-5 text-red-400"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
@@ -702,53 +729,61 @@ const DashboardPage = () => {
         )}
 
         {/* Metrics Cards */}
-        <div className="mb-12">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {(isAdminUser ? adminMetrics : donorMetrics).map(({ id, label, value, description, icon: Icon, accent }) => (
-              <div
-                key={id}
-                className="group relative rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
-              >
-                {/* Decorative background element */}
-                <div className="absolute top-0 right-0 h-32 w-32 -mr-8 -mt-8 rounded-full bg-slate-50 opacity-50 group-hover:bg-slate-100 transition-colors duration-300"></div>
-                
-                <div className="relative z-10">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-500">{label}</p>
-                      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+        <div className="mb-8 sm:mb-12">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {(isAdminUser ? adminMetrics : donorMetrics).map(
+              ({ id, label, value, description, icon: Icon, accent }) => (
+                <div
+                  key={id}
+                  className="group relative rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 md:p-8 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 h-24 w-24 -mr-6 -mt-6 rounded-full bg-rose-50 opacity-50 group-hover:bg-rose-100 transition-colors duration-300"></div>
+
+                  <div className="relative z-10">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-slate-500">{label}</p>
+                        <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">
+                          {value}
+                        </p>
+                      </div>
+                      <div
+                        className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-xl ${accent} shadow-sm flex-shrink-0`}
+                      >
+                        <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
+                      </div>
                     </div>
-                    <div className={`flex h-16 w-16 items-center justify-center rounded-xl ${accent} shadow-sm flex-shrink-0`}>
-                      <Icon className="h-8 w-8" />
-                    </div>
+                    <p className="mt-3 sm:mt-4 text-sm text-slate-500">{description}</p>
                   </div>
-                  <p className="mt-4 text-sm text-slate-500">{description}</p>
                 </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         </div>
 
         {/* Today's Pooja Section */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200 bg-slate-50">
             <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Today's Pooja Details</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+                  Today's Pooja Details
+                </h2>
                 <p className="mt-1 text-sm text-slate-600">
                   {isAdminUser
                     ? `Pooja registrations scheduled for ${todayReadableLabel}.`
                     : `Your pooja registrations scheduled for ${todayReadableLabel}.`}
                 </p>
               </div>
-              <div className="mt-2 sm:mt-0 flex items-center space-x-3">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  {todayPoojas.length} {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
+              <div className="mt-2 sm:mt-0 flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                  {todayPoojas.length}{' '}
+                  {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
                 </span>
                 {isAdminUser && (
                   <button
                     onClick={handleDownloadTodayPoojas}
-                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-rose-600 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-orange-500 to-pink-600 px-3 sm:px-4 py-2 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-orange-600 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -763,7 +798,11 @@ const DashboardPage = () => {
                         strokeLinejoin="round"
                         d="M7 5a2 2 0 012-2h6a2 2 0 012 2v14a2 2 0 01-2 2H9l-4-4V7a2 2 0 012-2z"
                       />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 11h6M11 15h4" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M11 11h6M11 15h4"
+                      />
                     </svg>
                     Download Data
                   </button>
@@ -772,27 +811,55 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {todayPoojaLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mb-4"></div>
                 <p className="text-slate-500">Loading today's pooja details...</p>
               </div>
             ) : todayPoojaError ? (
               <div className="text-center py-12">
-                <svg className="mx-auto h-12 w-12 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <svg
+                  className="mx-auto h-12 w-12 text-red-400"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
                 </svg>
-                <h3 className="mt-4 text-lg font-medium text-slate-900">Unable to load pooja details</h3>
+                <h3 className="mt-4 text-lg font-medium text-slate-900">
+                  Unable to load pooja details
+                </h3>
                 <p className="mt-2 text-sm text-slate-500">{todayPoojaError}</p>
               </div>
             ) : todayPoojas.length === 0 ? (
               <div className="text-center py-12">
-                <svg className="mx-auto h-12 w-12 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="mx-auto h-12 w-12 text-slate-400"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
-                <h3 className="mt-4 text-lg font-medium text-slate-900">No poojas scheduled today</h3>
-                <p className="mt-2 text-sm text-slate-500">There are no pooja registrations scheduled for today.</p>
+                <h3 className="mt-4 text-lg font-medium text-slate-900">
+                  No poojas scheduled today
+                </h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  There are no pooja registrations scheduled for today.
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -801,59 +868,103 @@ const DashboardPage = () => {
                     <table className="min-w-full divide-y divide-slate-200">
                       <thead className="bg-slate-50">
                         <tr>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Pooja ID
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Pooja Date
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Pooja Name
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Day Option
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Devotee
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Post Prasadam
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Registered By
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          >
                             Registration Date
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-slate-200">
                         {todayPoojas.map((pooja, index) => (
-                          <tr key={pooja.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-green-50 transition-colors duration-150`}>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-700">
+                          <tr
+                            key={pooja.id}
+                            className={`${
+                              index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                            } hover:bg-orange-50 transition-colors duration-150`}
+                          >
+                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm font-medium text-orange-700">
                               {resolvePoojaId(pooja)}
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm text-slate-700">
                               {formatDateDisplay(pooja.start_date)}
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate" title={pooja.pooja_option_name?.trim() || 'N/A'}>
+                            <td
+                              className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-slate-700 max-w-xs truncate"
+                              title={pooja.pooja_option_name?.trim() || 'N/A'}
+                            >
                               {pooja.pooja_option_name?.trim() || 'N/A'}
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate" title={pooja.day_option_description?.trim() || 'N/A'}>
+                            <td
+                              className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-slate-700 max-w-xs truncate"
+                              title={pooja.day_option_description?.trim() || 'N/A'}
+                            >
                               {pooja.day_option_description?.trim() || 'N/A'}
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate" title={joinDevoteeNames(pooja.members)}>
+                            <td
+                              className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-slate-700 max-w-xs truncate"
+                              title={joinDevoteeNames(pooja.members)}
+                            >
                               {joinDevoteeNames(pooja.members)}
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${pooja.post_prasadam ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm text-slate-700">
+                              <span
+                                className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  pooja.post_prasadam
+                                    ? 'bg-orange-100 text-orange-800'
+                                    : 'bg-slate-100 text-slate-800'
+                                }`}
+                              >
                                 {formatBooleanLabel(pooja.post_prasadam)}
                               </span>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm text-slate-700">
                               {resolveDonorName(pooja.donor_name)}
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm text-slate-700">
                               {formatDateTimeDisplay(pooja.created_at)}
                             </td>
                           </tr>

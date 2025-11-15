@@ -17,19 +17,33 @@ const AppLayout = () => {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
+
   const cartKey = user ? String(user.id) : 'guest';
-  const cartCount = useCartStore((state) => state.itemsByUser[cartKey]?.length ?? 0);
+  const cartCount =
+    useCartStore((state) => state.itemsByUser[cartKey]?.length ?? 0) ?? 0;
+
   const isPoojaRegistrationPage = location.pathname.startsWith('/pooja/register');
   const isProfilePage = location.pathname.startsWith('/profile');
+
   const useFullWidthLayout = isPoojaRegistrationPage || isProfilePage;
-  const mainClassName = useFullWidthLayout ? 'w-full px-4 py-6' : 'mx-auto w-full max-w-6xl px-4 py-6';
-  const userInitials = user?.name
-    ?.split(' ')
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase())
-    .slice(0, 2)
-    .join('') ?? 'TA';
-  const userRoleLabel = user ? (isAdmin(user.role) ? 'Temple Admin' : 'Donor') : 'Guest';
+  const mainClassName = useFullWidthLayout
+    ? 'w-full px-4 py-6 lg:px-6'
+    : 'mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8';
+
+  const userInitials =
+    user?.name
+      ?.split(' ')
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase())
+      .slice(0, 2)
+      .join('') ?? 'TA';
+
+  const userRoleLabel = user
+    ? isAdmin(user.role)
+      ? 'Temple Admin'
+      : 'Donor'
+    : 'Guest';
+
   const headerSubtitle = !user
     ? 'Temple operations portal'
     : isAdmin(user.role)
@@ -49,49 +63,67 @@ const AppLayout = () => {
       show: true,
       badge: cartCount > 0 ? String(cartCount) : undefined
     }
-  ] as const;
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-gradient-to-r from-green-50 via-white to-green-50/70 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 py-3">
+    <div className="min-h-screen bg-orange-50">
+      {/* HEADER */}
+      <header className="border-b border-orange-200 bg-gradient-to-r from-orange-100 via-white to-rose-100/70">
+        <div className="mx-auto w-full max-w-screen-2xl px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4">
+
+            {/* TOP ROW */}
             <div className="flex flex-wrap items-center justify-between gap-4">
+              {/* LOGO */}
               <Link to="/" className="flex items-center gap-3 text-left">
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-green-600 text-lg font-semibold text-white shadow-sm">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-lg font-semibold text-white shadow-sm">
                   TD
                 </span>
                 <span>
-                  <span className="block text-lg font-semibold text-slate-900">Temple Donor Portal</span>
-                  <span className="block text-xs font-medium uppercase tracking-wide text-green-600">
+                  <span className="block text-lg font-semibold text-slate-900">
+                    Temple Donor Portal
+                  </span>
+                  <span className="block text-xs font-medium uppercase tracking-wide text-orange-600">
                     {headerSubtitle.toUpperCase()}
                   </span>
                 </span>
               </Link>
+
+              {/* ACTIONS */}
               <div className="flex items-center gap-3">
                 <LanguageToggle theme="light" />
-                <div className="hidden h-10 w-px bg-slate-200 md:block" />
+                <div className="hidden h-10 w-px bg-orange-200 md:block" />
+
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 rounded-full border border-green-100 bg-white px-3 py-1.5 shadow-sm">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
+                  {/* USER CARD */}
+                  <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-white px-3 py-1.5 shadow-sm">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-700">
                       {userInitials}
                     </span>
                     <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-slate-700">{user?.name ?? 'Temple Admin'}</span>
-                      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">{userRoleLabel}</span>
+                      <span className="text-sm font-semibold text-slate-700">
+                        {user?.name ?? 'Temple Admin'}
+                      </span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                        {userRoleLabel}
+                      </span>
                     </div>
                   </div>
+
+                  {/* LOGOUT BUTTON */}
                   <button
                     type="button"
                     onClick={clear}
-                    className="rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700"
+                    className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
                   >
                     Logout
                   </button>
                 </div>
               </div>
             </div>
-            <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-green-100 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
+
+            {/* NAVIGATION */}
+            <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-orange-200 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
               {navItems
                 .filter((item) => item.show)
                 .map((item) => (
@@ -103,23 +135,28 @@ const AppLayout = () => {
                       clsx(
                         'relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition',
                         isActive
-                          ? 'bg-green-600 text-white shadow-[0_12px_20px_-14px_rgba(5,150,105,0.9)]'
-                          : 'text-slate-600 hover:bg-green-50/80 hover:text-green-600'
+                          ? 'bg-orange-600 text-white shadow-[0_12px_20px_-14px_rgba(234,88,12,0.9)]'
+                          : 'text-slate-600 hover:bg-orange-50 hover:text-orange-600'
                       )
                     }
                   >
                     {item.label}
+
+                    {/* BADGE */}
                     {item.badge && (
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1 text-xs font-semibold text-green-600 shadow-sm">
+                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1 text-xs font-semibold text-orange-600 shadow-sm">
                         {item.badge}
                       </span>
                     )}
                   </NavLink>
                 ))}
             </nav>
+
           </div>
         </div>
       </header>
+
+      {/* CONTENT */}
       <main className={mainClassName}>
         <Outlet />
       </main>
