@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
 
+  const apiBaseUrl = env.VITE_API_BASE_URL || '/api';
+
   return {
     plugins: [react()],
     server: {
@@ -17,7 +19,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      __API_BASE_URL__: JSON.stringify('/api'),
+      __API_BASE_URL__: JSON.stringify(apiBaseUrl),
     },
   };
 });
