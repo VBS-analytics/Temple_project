@@ -7,6 +7,7 @@ __pycache__/
 # Node
 frontend/node_modules/
 frontend/dist/
+node-dist/
 
 # Django
 /staticfiles/
@@ -15,3 +16,6 @@ frontend/dist/
 # Env files
 .env
 *.env
+
+# Archives
+*.tar.gz
