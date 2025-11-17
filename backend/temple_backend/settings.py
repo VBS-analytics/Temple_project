@@ -157,7 +157,13 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+from corsheaders.defaults import default_headers
+
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = tuple(default_headers) + (
+    'cache-control',
+    'pragma',
+)
 
 LOGIN_REDIRECT_URL = '/'  # placeholder for admin use
