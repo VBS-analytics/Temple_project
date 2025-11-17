@@ -12,4 +12,6 @@ if not User.objects.filter(phone_number='9999999999').exists():
     User.objects.create_superuser(phone_number='9999999999', name='Temple Admin', password='adminpass')
 PYCODE
 
-gunicorn temple_backend.wsgi:application --bind 0.0.0.0:8000 --workers 3
+APP_PORT=${PORT:-8000}
+
+gunicorn temple_backend.wsgi:application --bind 0.0.0.0:${APP_PORT} --workers 3
