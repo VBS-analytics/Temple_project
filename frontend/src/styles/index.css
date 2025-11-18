@@ -5,7 +5,8 @@
 /* Hide default Google Translate UI artifacts */
 .goog-te-banner-frame.skiptranslate,
 #goog-gt-tt,
-.goog-te-menu-frame {
+.goog-te-menu-frame,
+body > .skiptranslate {
   display: none !important;
 }
 
