@@ -152,6 +152,13 @@ const RegisterPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const redirectToDashboard = () => {
+    navigate('/dashboard', { replace: true });
+    if (typeof window !== 'undefined') {
+      window.location.replace('/dashboard');
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
     const {
@@ -175,7 +182,7 @@ const RegisterPage = () => {
     try {
       const { data } = await api.post('/auth/register/', payload);
       setAuth({ user: data.user, tokens: data.tokens });
-      navigate('/dashboard');
+      redirectToDashboard();
     } catch (error: any) {
       const responseData = error?.response?.data;
 
