@@ -817,60 +817,82 @@ const AdminMasterPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white pb-16">
       <div className="mx-auto max-w-full px-4 pt-6 sm:px-6 lg:px-8">
         {/* Header Section */}
-        <header className="rounded-3xl bg-gradient-to-br from-orange-500 via-amber-400 to-rose-500/90 p-6 sm:p-8 text-white shadow-xl">
-          <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
-            <div className="w-full sm:w-auto">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-white/10 p-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <header className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-orange-700 via-rose-700 to-slate-900 p-5 sm:p-6 md:p-8 text-white shadow-2xl ring-1 ring-black/5">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-40"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.25) 1px, transparent 0)',
+              backgroundSize: '22px 22px',
+            }}
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute -right-16 top-0 h-48 w-48 rounded-full bg-white/20 blur-3xl" aria-hidden />
+          <div className="relative z-10 flex flex-col gap-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-3">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 sm:px-4 py-1 sm:py-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-white/90 backdrop-blur-sm">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
+                  Admin Console
+                </span>
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Master Data Control</h1>
+                  <p className="mt-2 max-w-2xl text-sm sm:text-base text-orange-100/90">
+                    Configure headers, pooja catalog items, and day codes that power bookings and rituals.
+                  </p>
                 </div>
-                <p className="text-sm font-semibold uppercase tracking-widest text-white/80">Admin Console</p>
               </div>
-              <h1 className="mt-3 text-2xl sm:text-3xl font-bold leading-tight">Master Data Control</h1>
-              <p className="mt-3 max-w-2xl text-sm text-white/90">
-                Configure headers, pooja catalog items, and day codes that power bookings and rituals.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
-              <button 
-                onClick={load}
-                disabled={isLoading || isSubmitting}
-                className="flex items-center justify-center gap-2 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/30 disabled:opacity-50 w-full sm:w-auto"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                </svg>
-                Refresh Data
-              </button>
-              <div className="flex items-center gap-2 text-xs font-medium text-white/80">
-                <span className={`flex h-2 w-2 rounded-full ${isLoading ? 'bg-yellow-300 animate-pulse' : 'bg-orange-300'}`} />
-                {isLoading ? 'Syncing data...' : 'Data synced'}
+              <div className="flex flex-col gap-3 text-sm text-white sm:flex-row sm:items-center">
+                <button
+                  onClick={load}
+                  disabled={isLoading || isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-50"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Refresh Data
+                </button>
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-100">
+                  <span className={`flex h-2 w-2 rounded-full ${isLoading ? 'bg-yellow-200 animate-pulse' : 'bg-lime-300'}`} />
+                  {isLoading ? 'Syncing data…' : 'Data synced'}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Summary Cards */}
-          <div className="mt-6 sm:mt-8 grid gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
-            {summaryCards.map((card) => (
-              <div
-                key={card.label}
-                className="group rounded-2xl bg-gradient-to-br from-white/20 via-white/10 to-white/5 p-4 sm:p-5 shadow-sm backdrop-blur transition-all duration-300 hover:from-white/30 hover:via-white/20 hover:to-white/10 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-white/75">{card.label}</p>
-                    <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{card.value}</p>
-                    <p className="mt-1 text-xs text-white/70">{card.helper}</p>
-                  </div>
-                  <div className="rounded-lg bg-white/10 p-2 text-white/80 group-hover:text-white">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {summaryCards.map((card) => (
+                <div
+                  key={card.label}
+                  className="flex items-start gap-3 rounded-2xl bg-white/12 px-4 py-3 text-white shadow-inner ring-1 ring-white/30 backdrop-blur"
+                >
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-white">
                     {card.icon}
+                  </span>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-orange-100/90">{card.label}</p>
+                    <p className="text-2xl font-bold">{card.value}</p>
+                    <p className="text-xs text-orange-100">{card.helper}</p>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </header>
 
