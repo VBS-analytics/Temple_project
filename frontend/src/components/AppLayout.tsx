@@ -90,11 +90,11 @@ const AppLayout = () => {
               </Link>
 
               {/* ACTIONS */}
-              <div className="flex items-center gap-3">
+              <div className="notranslate flex items-center gap-3" translate="no">
                 <LanguageToggle theme="light" />
                 <div className="hidden h-10 w-px bg-orange-200 md:block" />
 
-                <div className="flex items-center gap-3">
+                <div className="notranslate flex items-center gap-3" translate="no">
                   {/* USER CARD */}
                   <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-white px-3 py-1.5 shadow-sm">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-700">

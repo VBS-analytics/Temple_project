@@ -172,7 +172,8 @@ const LanguageToggle = ({ theme = 'dark', className = '' }: LanguageToggleProps)
     <button
       type="button"
       onClick={handleClick}
-      className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] transition ${baseStyles} ${className}`.trim()}
+      translate="no"
+      className={`notranslate rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] transition ${baseStyles} ${className}`.trim()}
     >
       {label}
     </button>

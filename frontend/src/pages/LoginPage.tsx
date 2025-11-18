@@ -56,12 +56,19 @@ const LoginPage = () => {
     defaultValues: { phone_number: '', password: '' },
   });
 
+  const redirectToDashboard = () => {
+    navigate('/dashboard', { replace: true });
+    if (typeof window !== 'undefined') {
+      window.location.replace('/dashboard');
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
     try {
       const { data } = await api.post('/auth/login/', values);
       setAuth({ user: data.user, tokens: data.tokens });
-      navigate('/dashboard');
+      redirectToDashboard();
     } catch (error: any) {
       const detail =
         error?.response?.data?.detail ??
