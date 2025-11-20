@@ -550,6 +550,7 @@ const toCurrencyLabel = (value?: string | null) => {
 
 const CHART_DAY_OPTION_CODE = 'CHRT';
 const VARIABLE_AMOUNT_STEP = 50;
+const EXCLUSIVE_DAY_OPTION_CODES = new Set(['AST', 'PRD']);
 
 const isChartDayOption = (option?: { code?: string | null } | null) => {
   if (!option?.code) return false;
@@ -1111,17 +1112,23 @@ const PoojaRegistrationPage = () => {
     return map;
   }, [dayOptions]);
 
+  const compareDayOptions = useCallback((a: DayOption, b: DayOption) => {
+    const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+    if (orderDiff !== 0) {
+      return orderDiff;
+    }
+    return a.description.localeCompare(b.description);
+  }, []);
+
   const dayOptionChoices = useMemo(() => {
     return dayOptions
       .filter((option) => option.category !== 'tamil_star')
-      .sort((a, b) => {
-        const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
-        if (orderDiff !== 0) {
-          return orderDiff;
-        }
-        return a.description.localeCompare(b.description);
-      });
-  }, [dayOptions]);
+      .filter((option) => {
+        const code = option.code?.trim()?.toUpperCase() ?? '';
+        return !code || !EXCLUSIVE_DAY_OPTION_CODES.has(code);
+      })
+      .sort(compareDayOptions);
+  }, [compareDayOptions, dayOptions]);
 
   const filterDayOptionsForNames = useCallback(
     (names: { name?: string | null; displayName?: string | null; uiLabel?: string | null }) => {
@@ -1129,15 +1136,19 @@ const PoojaRegistrationPage = () => {
       if (!restriction) {
         return dayOptionChoices;
       }
-      return dayOptionChoices.filter((option) => {
-        const code = option.code?.trim()?.toUpperCase() ?? '';
-        if (!code) {
-          return false;
+      const restrictedOptions: DayOption[] = [];
+      restriction.forEach((code) => {
+        const option = dayOptionCodeMap.get(code);
+        if (option && option.category !== 'tamil_star') {
+          restrictedOptions.push(option);
         }
-        return restriction.has(code);
       });
+      if (restrictedOptions.length > 0) {
+        return restrictedOptions.sort(compareDayOptions);
+      }
+      return dayOptionChoices;
     },
-    [dayOptionChoices],
+    [compareDayOptions, dayOptionChoices, dayOptionCodeMap],
   );
 
   // Filter Tamil star options
