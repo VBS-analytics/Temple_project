@@ -231,6 +231,15 @@ class TempleCalendarService:
                 for when in occurrences
             ]
             return result
+        if code == "pradosham":
+            occurrences = self._upcoming_pradosham_occurrences(start)
+            primary = occurrences[0]
+            result = self._format_result(primary, "Pradosham (Trayodashi) schedule")
+            result.meta["upcoming_occurrences"] = [
+                {"date": when.isoformat(), "label": when.strftime("%A, %d %b %Y")}
+                for when in occurrences
+            ]
+            return result
         if code == "pournami":
             target = self._next_tithi(start, targets=(15,))
             return self._format_result(target, "Pournami (Full moon)")
@@ -299,6 +308,9 @@ class TempleCalendarService:
             "CS": "tamil_star",
             "STAR": "tamil_star",
             "CHRT": "custom_date",
+            "PRD": "pradosham",
+            "PRADOSHAM": "pradosham",
+            "PRADOSHA": "pradosham",
         }
         return mapping.get(raw, raw.lower())
 
@@ -461,6 +473,33 @@ class TempleCalendarService:
             return next_window[:2]
 
         fallback = self._next_tithi(next_month_end + timedelta(days=1), targets=targets)
+        return [fallback]
+
+    def _upcoming_pradosham_occurrences(self, start: date, count: int = 2) -> list[date]:
+        """Return upcoming Pradosham dates (Trayodashi tithi) from start."""
+        targets = (13, 28)  # Shukla and Krishna Trayodashi
+        occurrences: list[date] = []
+        window_start = start
+
+        for _ in range(0, 6):  # look ahead up to ~6 months
+            window_end = self._month_end(window_start)
+            collected = self._compress_consecutive_dates(
+                self._collect_tithi_dates(window_start, window_end, targets)
+            )
+            for day in collected:
+                if day < start:
+                    continue
+                if occurrences and (day - occurrences[-1]).days <= 1:
+                    continue
+                occurrences.append(day)
+                if len(occurrences) >= count:
+                    return occurrences
+            window_start = window_end + timedelta(days=1)
+
+        if occurrences:
+            return occurrences
+
+        fallback = self._next_tithi(start, targets=targets)
         return [fallback]
 
     def _tithi_occurs_on_day(self, day: date, wanted: set[int]) -> bool:

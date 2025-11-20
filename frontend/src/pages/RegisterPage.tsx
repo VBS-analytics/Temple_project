@@ -1,12 +1,27 @@
 // RegisterPage.jsx
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import LanguageToggle from '../components/LanguageToggle';
+import { indianCities } from '../data/indianCities';
 import { nakshatraOptions } from '../data/nakshatraOptions';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
+
+const cityOptions = indianCities;
+const cityStateLookup = (() => {
+  const map = new Map<string, string>();
+  cityOptions.forEach((city) => {
+    const key = city.name.trim().toLowerCase();
+    if (!map.has(key) && city.stateName) {
+      map.set(key, city.stateName);
+    }
+  });
+  return map;
+})();
+
+const validNakshatraSet = new Set(nakshatraOptions.map((option) => option.toLowerCase()));
 
 interface FormValues {
   phone_number: string;
@@ -52,7 +67,6 @@ const RegisterPage = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [isStarDropdownOpen, setIsStarDropdownOpen] = useState(false);
-  const [starSearch, setStarSearch] = useState('');
   const starInputRef = useRef<HTMLInputElement | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -66,6 +80,7 @@ const RegisterPage = () => {
     watch,
     trigger,
     setError,
+    setValue,
   } = useForm<FormValues>({
     defaultValues: {
       phone_number: '',
@@ -89,6 +104,18 @@ const RegisterPage = () => {
   });
 
   const familySelection = watch('family_selection');
+  const cityValue = watch('city');
+  const stateValue = watch('state');
+
+  useEffect(() => {
+    if (!cityValue) return;
+    const normalizedCity = cityValue.trim().toLowerCase();
+    const matchedState = cityStateLookup.get(normalizedCity);
+    if (matchedState && matchedState !== stateValue) {
+      setValue('state', matchedState, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [cityValue, stateValue, setValue]);
+
   const fieldStepMap: Record<keyof FormValues, number> = {
     phone_number: 1,
     name: 1,
@@ -858,6 +885,7 @@ const RegisterPage = () => {
                                 </div>
                                 <input
                                   type="text"
+                                  list="city-options-list"
                                   className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
                                     isFocused === 'city' || errors.city ? 'border-amber-500 shadow-sm' : 'border-gray-300'
                                   }`}
@@ -880,6 +908,15 @@ const RegisterPage = () => {
                                     }
                                   }}
                                 />
+                                <datalist id="city-options-list">
+                                  {cityOptions.map((city) => (
+                                    <option
+                                      key={`${city.name}-${city.stateCode}`}
+                                      value={city.name}
+                                      label={city.stateName ? `${city.name}, ${city.stateName}` : city.name}
+                                    />
+                                  ))}
+                                </datalist>
                               </div>
                               {errors.city && (
                                 <p className="mt-1 text-xs text-red-600 flex items-center">
@@ -1040,134 +1077,96 @@ const RegisterPage = () => {
                               rules={{
                                 required: 'Star is required',
                                 validate: (value) =>
-                                  value && nakshatraOptions.includes(value)
+                                  value && validNakshatraSet.has(value.trim().toLowerCase())
                                     ? true
                                     : 'Please select a star from the list',
                               }}
-                              render={({ field }) => {
-                                const normalizedSearch = starSearch.trim().toLowerCase();
-                                const filteredStars = nakshatraOptions.filter((option) =>
-                                  option.toLowerCase().includes(normalizedSearch)
-                                );
-
-                                return (
-                                  <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                      <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                      </svg>
-                                    </div>
-                                    <input
-                                      ref={starInputRef}
-                                      type="text"
-                                      value={isStarDropdownOpen ? starSearch : field.value ?? ''}
-                                      className={`w-full rounded-xl border pl-10 pr-12 py-3 capitalize focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                        isFocused === 'tamil_star' || errors.tamil_star ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                      }`}
-                                      placeholder="Search Nakshatra"
-                                      onFocus={() => {
-                                        handleFocus('tamil_star');
-                                        setStarSearch(field.value ?? '');
+                              render={({ field }) => (
+                                <div className="relative">
+                                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    </svg>
+                                  </div>
+                                  <input
+                                    ref={starInputRef}
+                                    type="text"
+                                    readOnly
+                                    value={field.value ?? ''}
+                                    className={`w-full rounded-xl border pl-10 pr-12 py-3 capitalize cursor-pointer focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                      isFocused === 'tamil_star' || errors.tamil_star ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                    }`}
+                                    placeholder="Select Nakshatra"
+                                    onFocus={() => {
+                                      handleFocus('tamil_star');
+                                      setIsStarDropdownOpen(true);
+                                    }}
+                                    onBlur={() => {
+                                      setTimeout(() => {
+                                        setIsStarDropdownOpen(false);
+                                        handleBlur();
+                                        field.onBlur();
+                                      }, 120);
+                                    }}
+                                    onClick={() => {
+                                      if (!isStarDropdownOpen) {
                                         setIsStarDropdownOpen(true);
-                                      }}
-                                      onBlur={() => {
-                                        setTimeout(() => {
-                                          setIsStarDropdownOpen(false);
-                                          handleBlur();
-                                          field.onBlur();
-                                        }, 120);
-                                      }}
-                                      onChange={(event) => {
-                                        const value = event.target.value;
-                                        setStarSearch(value);
-                                        if (!isStarDropdownOpen) {
-                                          setIsStarDropdownOpen(true);
-                                        }
-                                        if (value === '') {
-                                          field.onChange('');
-                                        }
-                                      }}
-                                      onKeyDown={(event) => {
-                                        if (event.key === 'Enter') {
-                                          event.preventDefault();
-                                          const exactMatch = nakshatraOptions.find(
-                                            (option) => option.toLowerCase() === normalizedSearch
-                                          );
-                                          const selection = exactMatch ?? filteredStars[0];
-                                          if (selection) {
-                                            field.onChange(selection);
-                                            setStarSearch(selection);
+                                      }
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key !== 'Tab') {
+                                        event.preventDefault();
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      if (isStarDropdownOpen) {
+                                        setIsStarDropdownOpen(false);
+                                        requestAnimationFrame(() => {
+                                          starInputRef.current?.blur();
+                                        });
+                                      } else {
+                                        setIsStarDropdownOpen(true);
+                                        requestAnimationFrame(() => {
+                                          starInputRef.current?.focus();
+                                        });
+                                      }
+                                    }}
+                                    aria-label="Toggle Nakshatra options"
+                                  >
+                                    <svg className={`h-5 w-5 transition-transform ${isStarDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </button>
+                                  {isStarDropdownOpen && (
+                                    <ul
+                                      className="absolute z-20 mt-2 max-h-48 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"
+                                      role="listbox"
+                                    >
+                                      {nakshatraOptions.map((option) => (
+                                        <li
+                                          key={option}
+                                          className="cursor-pointer px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 capitalize"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            field.onChange(option);
                                             setIsStarDropdownOpen(false);
                                             requestAnimationFrame(() => {
                                               starInputRef.current?.blur();
                                             });
-                                          }
-                                        }
-                                        if (event.key === 'Escape') {
-                                          setIsStarDropdownOpen(false);
-                                          requestAnimationFrame(() => {
-                                            starInputRef.current?.blur();
-                                          });
-                                        }
-                                      }}
-                                    />
-                                    <button
-                                      type="button"
-                                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        if (isStarDropdownOpen) {
-                                          setIsStarDropdownOpen(false);
-                                          requestAnimationFrame(() => {
-                                            starInputRef.current?.blur();
-                                          });
-                                        } else {
-                                          setStarSearch(field.value ?? '');
-                                          setIsStarDropdownOpen(true);
-                                          requestAnimationFrame(() => {
-                                            starInputRef.current?.focus();
-                                          });
-                                        }
-                                      }}
-                                      aria-label="Toggle Nakshatra options"
-                                    >
-                                      <svg className={`h-5 w-5 transition-transform ${isStarDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                      </svg>
-                                    </button>
-                                    {isStarDropdownOpen && (
-                                      <ul
-                                        className="absolute z-20 mt-2 max-h-48 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"
-                                        role="listbox"
-                                      >
-                                        {filteredStars.length > 0 ? (
-                                          filteredStars.map((option) => (
-                                            <li
-                                              key={option}
-                                              className="cursor-pointer px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 capitalize"
-                                              onMouseDown={(event) => {
-                                                event.preventDefault();
-                                                field.onChange(option);
-                                                setStarSearch(option);
-                                                setIsStarDropdownOpen(false);
-                                                requestAnimationFrame(() => {
-                                                  starInputRef.current?.blur();
-                                                });
-                                              }}
-                                            >
-                                              {option}
-                                            </li>
-                                          ))
-                                        ) : (
-                                          <li className="px-4 py-2 text-sm text-gray-500">
-                                            No matches found
-                                          </li>
-                                        )}
-                                      </ul>
-                                    )}
-                                  </div>
-                                );
-                              }}
+                                          }}
+                                        >
+                                          {option}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              )}
                             />
                             {errors.tamil_star && (
                               <p className="mt-1 text-xs text-red-600 flex items-center">
@@ -1249,8 +1248,6 @@ const RegisterPage = () => {
                                   <option value="">Select gender</option>
                                   <option value="male">Male</option>
                                   <option value="female">Female</option>
-                                  <option value="non_binary">Non-binary</option>
-                                  <option value="prefer_not_to_say">Prefer not to say</option>
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                                   <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
