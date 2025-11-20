@@ -511,11 +511,23 @@ const buildAddress = (profile?: ProfilePayload['profile']) => {
 
 const formatDisplayDate = (value?: string | null) => {
   if (!value) return '';
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}/${month}/${year}`;
+  }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
   return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const toLocalIsoDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const formatCurrency = (value?: string | null) => {
@@ -557,6 +569,152 @@ const describePoojaRate = (pooja: PoojaOption) => {
   if (maxLabel) return `Max ${maxLabel}`;
   if (pooja.description) return pooja.description;
   return '--';
+};
+
+const FIRST_DAY_ENGLISH_MONTH_POOJA_NAMES = [
+  'gau samrakshana seva',
+  'nitya neivedhyam',
+  'til oil for lamps',
+  'till oil for lamps',
+];
+const FOUR_SATURDAY_NAVAGRAHA_POOJA_NAME = '4 saturday navagraha pooja per month';
+const FIRST_DAY_ENGLISH_MONTH_POOJAS = new Set(FIRST_DAY_ENGLISH_MONTH_POOJA_NAMES);
+const DAY_OPTION_DISABLED_POOJAS = new Set([...FIRST_DAY_ENGLISH_MONTH_POOJA_NAMES, FOUR_SATURDAY_NAVAGRAHA_POOJA_NAME]);
+const FIRST_DAY_NOTE_MESSAGE = 'First day of the English month';
+const FOUR_SATURDAY_NAVAGRAHA_NOTE = 'Temple performs this pooja on every Saturday. Dates are automatically listed for the current month, or the next month if no Saturdays remain.';
+const FOUR_SATURDAY_OCCURRENCE_KEY = 'special:navagraha-four-saturday';
+const FOUR_SATURDAY_NOTE_DISPLAY = 'Every Saturday — auto-scheduled';
+
+const normalizePoojaName = (value?: string | null) => {
+  if (!value) return '';
+  const replaced = value.replace(/—|–/g, '-');
+  const [primary] = replaced.split(' - ');
+  return primary.trim().toLowerCase();
+};
+
+const DEFAULT_DAY_OPTION_CODES_BY_POOJA: Record<string, string> = {
+  [normalizePoojaName('Kalabhairavar archana on 2 Ashtami')]: 'AST',
+  [normalizePoojaName('2 Pradosha Pooja per month')]: 'PRD',
+};
+
+const RESTRICTED_DAY_OPTION_CODES_BY_POOJA: Record<string, string[]> = {
+  [normalizePoojaName('Kalabhairavar archana on 2 Ashtami')]: ['AST'],
+  [normalizePoojaName('2 Pradosha Pooja per month')]: ['PRD'],
+};
+
+const isFirstDayEnglishMonthPooja = (names: { name?: string | null; displayName?: string | null; uiLabel?: string | null }) => {
+  return [names.name, names.displayName, names.uiLabel].some((entry) =>
+    FIRST_DAY_ENGLISH_MONTH_POOJAS.has(normalizePoojaName(entry)),
+  );
+};
+
+const isFourSaturdayNavagrahaPooja = (names: { name?: string | null; displayName?: string | null; uiLabel?: string | null }) => {
+  return [names.name, names.displayName, names.uiLabel].some(
+    (entry) => normalizePoojaName(entry) === FOUR_SATURDAY_NAVAGRAHA_POOJA_NAME,
+  );
+};
+
+const isDayOptionDisabledPooja = (names: { name?: string | null; displayName?: string | null; uiLabel?: string | null }) => {
+  return [names.name, names.displayName, names.uiLabel].some((entry) =>
+    DAY_OPTION_DISABLED_POOJAS.has(normalizePoojaName(entry)),
+  );
+};
+
+const resolveDefaultDayOptionCode = (names: { name?: string | null; displayName?: string | null; uiLabel?: string | null }) => {
+  for (const entry of [names.name, names.displayName, names.uiLabel]) {
+    const normalized = normalizePoojaName(entry);
+    if (normalized && DEFAULT_DAY_OPTION_CODES_BY_POOJA[normalized]) {
+      return DEFAULT_DAY_OPTION_CODES_BY_POOJA[normalized];
+    }
+  }
+  return null;
+};
+
+const resolveRestrictedDayOptionCodes = (names: {
+  name?: string | null;
+  displayName?: string | null;
+  uiLabel?: string | null;
+}): Set<string> | null => {
+  for (const entry of [names.name, names.displayName, names.uiLabel]) {
+    const normalized = normalizePoojaName(entry);
+    if (normalized && RESTRICTED_DAY_OPTION_CODES_BY_POOJA[normalized]) {
+      const rawCodes = RESTRICTED_DAY_OPTION_CODES_BY_POOJA[normalized];
+      const normalizedCodes = rawCodes
+        .map((code) => code?.trim()?.toUpperCase())
+        .filter((code): code is string => Boolean(code));
+      if (normalizedCodes.length > 0) {
+        return new Set(normalizedCodes);
+      }
+    }
+  }
+  return null;
+};
+
+const computeNextEnglishMonthFirstDay = (todayIso: string) => {
+  const base = new Date(todayIso);
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+  const shouldUseCurrentMonth = base.getDate() <= 1;
+  const target = new Date(base.getFullYear(), base.getMonth() + (shouldUseCurrentMonth ? 0 : 1), 1);
+  const iso = toLocalIsoDate(target);
+  return {
+    date: iso,
+    label: formatDisplayDate(iso),
+  };
+};
+
+const computeUpcomingSaturdayOccurrences = (todayIso: string): UpcomingOccurrence[] => {
+  const base = new Date(todayIso);
+  if (Number.isNaN(base.getTime())) {
+    return [];
+  }
+
+  const collectForMonth = (start: Date) => {
+    if (Number.isNaN(start.getTime())) {
+      return [];
+    }
+    const cursor = new Date(start);
+    const targetMonth = cursor.getMonth();
+    const occurrences: UpcomingOccurrence[] = [];
+    while (cursor.getMonth() === targetMonth) {
+      if (cursor.getDay() === 6) {
+        occurrences.push({
+          date: toLocalIsoDate(cursor),
+          label: 'Saturday',
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return occurrences;
+  };
+
+  const currentMonthOccurrences = collectForMonth(new Date(base.getFullYear(), base.getMonth(), base.getDate()));
+  if (currentMonthOccurrences.length > 0) {
+    return currentMonthOccurrences;
+  }
+
+  const nextMonthStart = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  return collectForMonth(nextMonthStart);
+};
+
+const getOccurrenceNotePresentation = (note: string) => {
+  if (note === FOUR_SATURDAY_NAVAGRAHA_NOTE) {
+    return {
+      text: FOUR_SATURDAY_NOTE_DISPLAY,
+      tooltip: FOUR_SATURDAY_NAVAGRAHA_NOTE,
+    };
+  }
+  return { text: note, tooltip: null };
+};
+
+const renderOccurrenceNote = (note: string) => {
+  const { text, tooltip } = getOccurrenceNotePresentation(note);
+  return (
+    <span className="block text-xs text-gray-500" title={tooltip ?? undefined}>
+      {text}
+    </span>
+  );
 };
 
 const deriveAmountValue = (pooja: PoojaOption): string | null => {
@@ -601,6 +759,16 @@ const buildOccurrenceKey = (dayOptionId: number | null, tamilStarId: string | nu
   if (!dayOptionId) return 'none';
   const starPart = tamilStarId ? tamilStarId : 'na';
   return `${dayOptionId}:${starPart}`;
+};
+
+const areOccurrencesEqual = (a?: UpcomingOccurrence[], b?: UpcomingOccurrence[]) => {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  return a.every((entry, index) => {
+    const other = b[index];
+    return entry.date === other.date && (entry.label ?? '') === (other.label ?? '');
+  });
 };
 
 const getOccurrenceMessage = (state?: DayOccurrenceState): string | undefined => {
@@ -648,11 +816,9 @@ const PoojaRegistrationPage = () => {
   const addToCart = useCartStore((state) => state.addItem);
   const removeFromCart = useCartStore((state) => state.removeItem);
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
-  const registrationDateLabel = useMemo(() => formatDisplayDate(new Date().toISOString()), []);
-  const todayIso = useMemo(() => {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
-  }, []);
+  const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
+  const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
+  const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
 
   useEffect(() => {
     setDaySelectionMap((prev) => {
@@ -935,6 +1101,16 @@ const PoojaRegistrationPage = () => {
     return map;
   }, [dayOptions]);
 
+  const dayOptionCodeMap = useMemo(() => {
+    const map = new Map<string, DayOption>();
+    dayOptions.forEach((option) => {
+      if (option.code) {
+        map.set(option.code.trim().toUpperCase(), option);
+      }
+    });
+    return map;
+  }, [dayOptions]);
+
   const dayOptionChoices = useMemo(() => {
     return dayOptions
       .filter((option) => option.category !== 'tamil_star')
@@ -946,6 +1122,23 @@ const PoojaRegistrationPage = () => {
         return a.description.localeCompare(b.description);
       });
   }, [dayOptions]);
+
+  const filterDayOptionsForNames = useCallback(
+    (names: { name?: string | null; displayName?: string | null; uiLabel?: string | null }) => {
+      const restriction = resolveRestrictedDayOptionCodes(names);
+      if (!restriction) {
+        return dayOptionChoices;
+      }
+      return dayOptionChoices.filter((option) => {
+        const code = option.code?.trim()?.toUpperCase() ?? '';
+        if (!code) {
+          return false;
+        }
+        return restriction.has(code);
+      });
+    },
+    [dayOptionChoices],
+  );
 
   // Filter Tamil star options
   const tamilStarOptions = useMemo(() => {
@@ -1032,6 +1225,61 @@ const PoojaRegistrationPage = () => {
 
     return rows;
   }, [poojaOptions]);
+
+  useEffect(() => {
+    if (masterRows.length === 0 || dayOptionCodeMap.size === 0) {
+      return;
+    }
+    setDaySelectionMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      masterRows.forEach((row) => {
+        const names = {
+          name: row.pooja.name,
+          displayName: row.displayName,
+          uiLabel: row.uiLabel,
+        };
+        const restriction = resolveRestrictedDayOptionCodes(names);
+        const prevHasValue = Object.prototype.hasOwnProperty.call(prev, row.pooja.id);
+        const previousValue = prevHasValue ? prev[row.pooja.id] ?? null : null;
+        let currentValue = prevHasValue ? prev[row.pooja.id] ?? null : null;
+
+        if (restriction && currentValue) {
+          const option = dayOptionMap.get(currentValue);
+          const code = option?.code ? option.code.toUpperCase() : '';
+          if (!code || !restriction.has(code)) {
+            currentValue = null;
+          }
+        }
+
+        if (!currentValue) {
+          const defaultCode = resolveDefaultDayOptionCode(names);
+          if (defaultCode) {
+            const defaultOption = dayOptionCodeMap.get(defaultCode.trim().toUpperCase());
+            if (defaultOption) {
+              currentValue = defaultOption.id;
+            }
+          }
+        }
+
+        if (!currentValue && restriction) {
+          for (const code of restriction.values()) {
+            const option = dayOptionCodeMap.get(code);
+            if (option) {
+              currentValue = option.id;
+              break;
+            }
+          }
+        }
+
+        if ((prevHasValue && currentValue !== previousValue) || (!prevHasValue && currentValue !== null && currentValue !== undefined)) {
+          next[row.pooja.id] = currentValue;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [masterRows, dayOptionCodeMap, dayOptionMap]);
 
   const baseName = profile?.user?.name ?? '';
   const baseEmail = profile?.user?.email ?? '';
@@ -1371,6 +1619,14 @@ const PoojaRegistrationPage = () => {
 
   useEffect(() => {
     masterRows.forEach((row) => {
+      const dayOptionDisabled = isDayOptionDisabledPooja({
+        name: row.pooja.name,
+        displayName: row.displayName,
+        uiLabel: row.uiLabel,
+      });
+      if (dayOptionDisabled) {
+        return;
+      }
       const selectedDayId = resolveSelectedDayId(row.pooja.id);
       if (!selectedDayId) {
         return;
@@ -1384,6 +1640,63 @@ const PoojaRegistrationPage = () => {
       fetchOccurrenceForRow(row.pooja.id, option, { tamilStarId });
     });
   }, [masterRows, dayOptionMap, fetchOccurrenceForRow, tamilStarSelectionMap, resolveSelectedDayId]);
+
+  useEffect(() => {
+    const saturdayOccurrences = computeUpcomingSaturdayOccurrences(todayIso);
+    setDayOccurrenceMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      const navagrahaIds = new Set<number>();
+
+      masterRows.forEach((row) => {
+        const isNavagraha = isFourSaturdayNavagrahaPooja({
+          name: row.pooja.name,
+          displayName: row.displayName,
+          uiLabel: row.uiLabel,
+        });
+        if (!isNavagraha) {
+          return;
+        }
+        navagrahaIds.add(row.pooja.id);
+        const primaryOccurrence = saturdayOccurrences[0]?.date ?? '';
+        const nextState: DayOccurrenceState = {
+          status: 'ready',
+          key: FOUR_SATURDAY_OCCURRENCE_KEY,
+          date: primaryOccurrence,
+          label: saturdayOccurrences[0]?.label ?? 'Saturday',
+          note: FOUR_SATURDAY_NAVAGRAHA_NOTE,
+          occurrences: saturdayOccurrences,
+        };
+        const current = next[row.pooja.id];
+        if (
+          !current ||
+          current.key !== FOUR_SATURDAY_OCCURRENCE_KEY ||
+          current.status !== 'ready' ||
+          current.date !== nextState.date ||
+          current.label !== nextState.label ||
+          current.note !== nextState.note ||
+          !areOccurrencesEqual(current.occurrences, nextState.occurrences)
+        ) {
+          next[row.pooja.id] = nextState;
+          changed = true;
+        }
+      });
+
+      Object.keys(next).forEach((idKey) => {
+        const id = Number(idKey);
+        if (Number.isNaN(id) || navagrahaIds.has(id)) {
+          return;
+        }
+        const state = next[id];
+        if (state && state.key === FOUR_SATURDAY_OCCURRENCE_KEY) {
+          delete next[id];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [masterRows, todayIso]);
 
   const handleDaySelectionChange = (poojaId: number, value: string) => {
     const optionId = value ? Number(value) : null;
@@ -1464,7 +1777,13 @@ const PoojaRegistrationPage = () => {
   const toggleMemberSelectionForRow = (row: MasterRow, value: string) => {
     setTableMessage(null);
     const selectedDayId = resolveSelectedDayId(row.pooja.id);
-    const matchingItem = findMatchingCartItem(row, selectedDayId);
+    const dayOptionDisabled = isDayOptionDisabledPooja({
+      name: row.pooja.name,
+      displayName: row.displayName,
+      uiLabel: row.uiLabel,
+    });
+    const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
+    const matchingItem = findMatchingCartItem(row, effectiveDayId);
     const currentKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
     let next = [...currentKeys];
     const hasValue = next.includes(value);
@@ -1578,7 +1897,13 @@ const PoojaRegistrationPage = () => {
   };
 
   const findMatchingCartItem = (row: MasterRow, dayId?: number | null): CartItem | undefined => {
-    const effectiveDayId = dayId !== undefined ? dayId : resolveSelectedDayId(row.pooja.id);
+    const dayOptionDisabled = isDayOptionDisabledPooja({
+      name: row.pooja.name,
+      displayName: row.displayName,
+      uiLabel: row.uiLabel,
+    });
+    const baseDayId = dayId !== undefined ? dayId : resolveSelectedDayId(row.pooja.id);
+    const effectiveDayId = dayOptionDisabled ? null : baseDayId;
     return cartItems.find(
       (item) =>
         item.poojaId === row.pooja.id &&
@@ -1703,30 +2028,60 @@ const PoojaRegistrationPage = () => {
         ? explicit
         : []);
     setSelectedMemberIds(defaultMembers.length > 0 ? Array.from(new Set(defaultMembers)) : ['self']);
+    const disableDayOption = isDayOptionDisabledPooja({
+      name: pooja.name,
+      displayName: pooja.displayName,
+      uiLabel: pooja.displayName,
+    });
+    const resolvedDayOptionId = disableDayOption ? null : dayOptionId ?? null;
     setSelectedPooja(pooja);
     setBookingMode(mode);
     setDateValue('');
-    setSelectedTamilStar(tamilStarSelectionMap[pooja.id] ?? null);
-    setSelectedDayOptionId(dayOptionId ?? null);
-    ensureChartDetailState(pooja.id, dayOptionId ?? null);
+    setSelectedTamilStar(disableDayOption ? null : tamilStarSelectionMap[pooja.id] ?? null);
+    setSelectedDayOptionId(resolvedDayOptionId);
+    ensureChartDetailState(pooja.id, resolvedDayOptionId);
   };
 
   const handleMasterRowAction = (row: MasterRow, mode: BookingMode) => {
     setTableMessage(null);
     const selectedDay = resolveSelectedDayId(row.pooja.id);
-    const matchingItem = findMatchingCartItem(row, selectedDay);
+    const dayOptionDisabled = isDayOptionDisabledPooja({
+      name: row.pooja.name,
+      displayName: row.displayName,
+      uiLabel: row.uiLabel,
+    });
+    const effectiveDay = dayOptionDisabled ? null : selectedDay;
+    const matchingItem = findMatchingCartItem(row, effectiveDay);
     const presetMembers = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
     const currentPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
     setPrasadamSelectionMap((prev) => ({
       ...prev,
       [row.pooja.id]: currentPrasadam,
     }));
-    openBookingModal(convertMasterToBooking(row), selectedDay ?? null, mode, presetMembers);
+    openBookingModal(convertMasterToBooking(row), effectiveDay ?? null, mode, presetMembers);
   };
 
   const toggleCartItem = (row: MasterRow) => {
     const selectedDayId = resolveSelectedDayId(row.pooja.id);
-    const matchingItem = findMatchingCartItem(row, selectedDayId);
+    const dayOptionDisabled = isDayOptionDisabledPooja({
+      name: row.pooja.name,
+      displayName: row.displayName,
+      uiLabel: row.uiLabel,
+    });
+    const availableDayOptions = filterDayOptionsForNames({
+      name: row.pooja.name,
+      displayName: row.displayName,
+      uiLabel: row.uiLabel,
+    });
+    const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
+    const matchingItem = findMatchingCartItem(row, effectiveDayId);
+    const isFirstDayPooja = isFirstDayEnglishMonthPooja({
+      name: row.pooja.name,
+      displayName: row.displayName,
+      uiLabel: row.uiLabel,
+    });
+    const defaultFirstDayDate =
+      dayOptionDisabled && isFirstDayPooja && nextFirstDayOccurrence ? nextFirstDayOccurrence.date : null;
 
     if (matchingItem) {
       removeFromCart(cartKey, matchingItem.cartId);
@@ -1734,13 +2089,13 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    if (dayOptionChoices.length > 0 && !selectedDayId) {
+    if (!dayOptionDisabled && availableDayOptions.length > 0 && !selectedDayId) {
       setTableMessage({ status: 'error', text: 'Please select a day option before adding this pooja.' });
       return;
     }
 
-    const chosenDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
-    const requiresChartDetails = isChartDayOption(chosenDayOption);
+    const chosenDayOption = !dayOptionDisabled && selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
+    const requiresChartDetails = !dayOptionDisabled && isChartDayOption(chosenDayOption);
     const chartDetails = chartDetailsMap[row.pooja.id];
     const selectedStarForRow = tamilStarSelectionMap[row.pooja.id] ?? selectedTamilStar;
     const selectedTamilStarOption =
@@ -1764,11 +2119,14 @@ const PoojaRegistrationPage = () => {
     let resolvedBookingDate = '';
     if (requiresChartDetails) {
       resolvedBookingDate = chartDetails?.date ?? '';
+    } else if (defaultFirstDayDate) {
+      resolvedBookingDate = defaultFirstDayDate;
     } else if (occurrenceState?.status === 'ready' && occurrenceState.date) {
       resolvedBookingDate = occurrenceState.date;
     } else {
-      const fallbackMessage =
-        occurrenceState?.status === 'loading'
+      const fallbackMessage = dayOptionDisabled
+        ? 'Next occurrence could not be determined for this pooja. Please contact the temple for assistance.'
+        : occurrenceState?.status === 'loading'
           ? 'Fetching the next occurrence. Please try again in a moment.'
           : (getOccurrenceMessage(occurrenceState) ??
             'Select a day option and wait for the next occurrence before adding this pooja to the cart.');
@@ -1887,12 +2245,18 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    if (selectedPooja.source === 'master' && dayOptionChoices.length > 0 && !selectedDayOptionId) {
+    if (
+      selectedPooja.source === 'master' &&
+      selectedPoojaDayOptions.length > 0 &&
+      !selectedPoojaDayOptionDisabled &&
+      !selectedDayOptionId
+    ) {
       setFormError('Please choose a day option to proceed.');
       return;
     }
 
-    const chosenDayOption = selectedDayOptionId ? dayOptionMap.get(selectedDayOptionId) : undefined;
+    const chosenDayOption =
+      !selectedPoojaDayOptionDisabled && selectedDayOptionId ? dayOptionMap.get(selectedDayOptionId) : undefined;
     const requiresChartDetails = isChartDayOption(chosenDayOption);
     const chartDetails = chartDetailsMap[selectedPooja.id];
     const postPrasadam = prasadamSelectionMap[selectedPooja.id] ?? false;
@@ -1970,8 +2334,26 @@ const PoojaRegistrationPage = () => {
     handleCloseModal();
   };
 
+  const selectedPoojaDayOptionDisabled = selectedPooja
+    ? isDayOptionDisabledPooja({
+        name: selectedPooja.name,
+        displayName: selectedPooja.displayName,
+        uiLabel: selectedPooja.displayName ?? selectedPooja.name,
+      })
+    : false;
+
+  const selectedPoojaDayOptions = selectedPooja
+    ? filterDayOptionsForNames({
+        name: selectedPooja.name,
+        displayName: selectedPooja.displayName,
+        uiLabel: selectedPooja.displayName ?? selectedPooja.name,
+      })
+    : dayOptionChoices;
+
   const modalRequiresChartDetails =
-    selectedPooja && selectedDayOptionId ? isChartDayOption(dayOptionMap.get(selectedDayOptionId)) : false;
+    selectedPooja && !selectedPoojaDayOptionDisabled && selectedDayOptionId
+      ? isChartDayOption(dayOptionMap.get(selectedDayOptionId))
+      : false;
   const modalChartDetails = selectedPooja ? chartDetailsMap[selectedPooja.id] ?? { date: '', note: '' } : { date: '', note: '' };
 
   return (
@@ -2064,9 +2446,20 @@ const PoojaRegistrationPage = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {masterRows.map((row) => {
                         const selectedDayId = resolveSelectedDayId(row.pooja.id);
-                        const matchingItem = findMatchingCartItem(row, selectedDayId);
+                        const dayOptionDisabled = isDayOptionDisabledPooja({
+                          name: row.pooja.name,
+                          displayName: row.displayName,
+                          uiLabel: row.uiLabel,
+                        });
+                        const availableDayOptions = filterDayOptionsForNames({
+                          name: row.pooja.name,
+                          displayName: row.displayName,
+                          uiLabel: row.uiLabel,
+                        });
+                        const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
+                        const matchingItem = findMatchingCartItem(row, effectiveDayId);
                         const inCart = Boolean(matchingItem);
-                        const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
+                        const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
                         const requiresChartDetails = isChartDayOption(selectedDayOption);
                         const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
                         const occurrenceState = dayOccurrenceMap[row.pooja.id];
@@ -2090,6 +2483,13 @@ const PoojaRegistrationPage = () => {
                           '';
                         const amountInputError =
                           hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
+                        const isFirstDayPooja = isFirstDayEnglishMonthPooja({
+                          name: row.pooja.name,
+                          displayName: row.displayName,
+                          uiLabel: row.uiLabel,
+                        });
+                        const showDefaultFirstDay =
+                          Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
                         
                         return (
                           <tr key={row.pooja.id} className="hover:bg-gray-50 transition-colors">
@@ -2100,14 +2500,17 @@ const PoojaRegistrationPage = () => {
                               {row.uiLabel}
                             </td>
                             <td className="px-4 py-3 text-sm overflow-visible">
-                              {dayOptionChoices.length > 0 ? (
+                              {availableDayOptions.length > 0 ? (
+                                dayOptionDisabled ? (
+                                  <span className="text-xs text-gray-500">Day option not required for this pooja</span>
+                                ) : (
                                 <div className="space-y-3">
                                   <SearchableSelect
-                                    options={dayOptionChoices.map((option) => ({
+                                    options={availableDayOptions.map((option) => ({
                                       value: String(option.id),
                                       label: formatDayOptionLabel(option),
                                     }))}
-                                    value={selectedDayId !== null ? String(selectedDayId) : ''}
+                                    value={effectiveDayId !== null ? String(effectiveDayId) : ''}
                                     onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
                                     placeholder="Select day option"
                                     className="w-64"
@@ -2155,6 +2558,7 @@ const PoojaRegistrationPage = () => {
                                     </div>
                                   )}
                                 </div>
+                              )
                               ) : (
                                 <span className="text-xs text-gray-500">Not configured</span>
                               )}
@@ -2169,7 +2573,14 @@ const PoojaRegistrationPage = () => {
                               />
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-700">
-                              {selectedDayId === null ? (
+                              {showDefaultFirstDay ? (
+                                <div className="space-y-1">
+                                  <span className="font-medium text-gray-900">
+                                    {nextFirstDayOccurrence?.label}
+                                  </span>
+                                  <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
+                                </div>
+                              ) : (!dayOptionDisabled && effectiveDayId === null) ? (
                                 <span className="text-xs text-gray-500">Select a day option</span>
                               ) : !occurrenceState ? (
                                 <span className="text-xs text-gray-500">Select a day option</span>
@@ -2193,9 +2604,7 @@ const PoojaRegistrationPage = () => {
                                       )}
                                     </div>
                                   ))}
-                                  {occurrenceState.note && (
-                                    <span className="block text-xs text-gray-500">{occurrenceState.note}</span>
-                                  )}
+                                  {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
                                 </div>
                               ) : occurrenceState.status === 'manual' ||
                                 occurrenceState.status === 'needsStar' ||
@@ -2292,9 +2701,20 @@ const PoojaRegistrationPage = () => {
                 <div className="lg:hidden space-y-4">
                   {masterRows.map((row) => {
                     const selectedDayId = resolveSelectedDayId(row.pooja.id);
-                    const matchingItem = findMatchingCartItem(row, selectedDayId);
+                    const dayOptionDisabled = isDayOptionDisabledPooja({
+                      name: row.pooja.name,
+                      displayName: row.displayName,
+                      uiLabel: row.uiLabel,
+                    });
+                    const availableDayOptions = filterDayOptionsForNames({
+                      name: row.pooja.name,
+                      displayName: row.displayName,
+                      uiLabel: row.uiLabel,
+                    });
+                    const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
+                    const matchingItem = findMatchingCartItem(row, effectiveDayId);
                     const inCart = Boolean(matchingItem);
-                    const selectedDayOption = selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
+                    const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
                     const requiresChartDetails = isChartDayOption(selectedDayOption);
                     const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
                     const occurrenceState = dayOccurrenceMap[row.pooja.id];
@@ -2318,6 +2738,13 @@ const PoojaRegistrationPage = () => {
                       '';
                     const amountInputError =
                       hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
+                    const isFirstDayPooja = isFirstDayEnglishMonthPooja({
+                      name: row.pooja.name,
+                      displayName: row.displayName,
+                      uiLabel: row.uiLabel,
+                    });
+                    const showDefaultFirstDay =
+                      Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
 
                     return (
                       <div key={row.pooja.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
@@ -2344,14 +2771,17 @@ const PoojaRegistrationPage = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Day Option
                             </label>
-                            {dayOptionChoices.length > 0 ? (
+                            {availableDayOptions.length > 0 ? (
+                              dayOptionDisabled ? (
+                                <span className="text-xs text-gray-500">Day option not required for this pooja</span>
+                              ) : (
                               <div className="space-y-3">
                                 <SearchableSelect
-                                  options={dayOptionChoices.map((option) => ({
+                                  options={availableDayOptions.map((option) => ({
                                     value: String(option.id),
                                     label: formatDayOptionLabel(option),
                                   }))}
-                                  value={selectedDayId !== null ? String(selectedDayId) : ''}
+                                  value={effectiveDayId !== null ? String(effectiveDayId) : ''}
                                   onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
                                   placeholder="Select day option"
                                   className="w-full"
@@ -2399,6 +2829,7 @@ const PoojaRegistrationPage = () => {
                                   </div>
                                 )}
                               </div>
+                            )
                             ) : (
                               <span className="text-xs text-gray-500">Not configured</span>
                             )}
@@ -2423,7 +2854,14 @@ const PoojaRegistrationPage = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Next Occurrence
                             </label>
-                            {selectedDayId === null ? (
+                            {showDefaultFirstDay ? (
+                              <div className="space-y-1">
+                                <span className="font-medium text-gray-900">
+                                  {nextFirstDayOccurrence?.label}
+                                </span>
+                                <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
+                              </div>
+                            ) : (!dayOptionDisabled && effectiveDayId === null) ? (
                               <span className="text-xs text-gray-500">Select a day option</span>
                             ) : !occurrenceState ? (
                               <span className="text-xs text-gray-500">Select a day option</span>
@@ -2447,9 +2885,7 @@ const PoojaRegistrationPage = () => {
                                     )}
                                   </div>
                                 ))}
-                                {occurrenceState.note && (
-                                  <span className="block text-xs text-gray-500">{occurrenceState.note}</span>
-                                )}
+                                {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
                               </div>
                             ) : occurrenceState.status === 'manual' ||
                               occurrenceState.status === 'needsStar' ||
@@ -2657,55 +3093,63 @@ const PoojaRegistrationPage = () => {
                   </div>
                 )}
 
-                {bookingMode === 'full' && dayOptionChoices.length > 0 && (
+                {bookingMode === 'full' && selectedPoojaDayOptions.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Day Option
                     </label>
-                    <SearchableSelect
-                      options={dayOptionChoices.map((option) => ({
-                        value: String(option.id),
-                        label: formatDayOptionLabel(option),
-                      }))}
-                      value={selectedDayOptionId ? String(selectedDayOptionId) : ''}
-                      onChange={(val) => {
-                        const valueNum = val ? Number(val) : null;
-                        if (selectedPooja) {
-                          handleDaySelectionChange(selectedPooja.id, val);
-                        }
-                        setSelectedDayOptionId(valueNum);
-                        setFormError('');
-                      }}
-                      placeholder="Select day option"
-                      className="w-full"
-                    />
-                    {modalRequiresChartDetails && (
-                      <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                        <div className="space-y-1">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Preferred Date
-                          </label>
-                          <input
-                            type="date"
-                            min={new Date().toISOString().split('T')[0]}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                            value={modalChartDetails.date}
-                            onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Donor Instructions
-                          </label>
-                          <textarea
-                            rows={3}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                            value={modalChartDetails.note}
-                            onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
-                            placeholder="Add donor instructions"
-                          />
-                        </div>
+                    {selectedPoojaDayOptionDisabled ? (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                        Day option selection is not required for this pooja.
                       </div>
+                    ) : (
+                      <>
+                        <SearchableSelect
+                          options={selectedPoojaDayOptions.map((option) => ({
+                            value: String(option.id),
+                            label: formatDayOptionLabel(option),
+                          }))}
+                          value={selectedDayOptionId ? String(selectedDayOptionId) : ''}
+                          onChange={(val) => {
+                            const valueNum = val ? Number(val) : null;
+                            if (selectedPooja) {
+                              handleDaySelectionChange(selectedPooja.id, val);
+                            }
+                            setSelectedDayOptionId(valueNum);
+                            setFormError('');
+                          }}
+                          placeholder="Select day option"
+                          className="w-full"
+                        />
+                        {modalRequiresChartDetails && (
+                          <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                            <div className="space-y-1">
+                              <label className="block text-sm font-medium text-gray-700">
+                                Preferred Date
+                              </label>
+                              <input
+                                type="date"
+                                min={new Date().toISOString().split('T')[0]}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                value={modalChartDetails.date}
+                                onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-sm font-medium text-gray-700">
+                                Donor Instructions
+                              </label>
+                              <textarea
+                                rows={3}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                value={modalChartDetails.note}
+                                onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
+                                placeholder="Add donor instructions"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

@@ -118,3 +118,39 @@ class TithiSearchBehaviourTests(SimpleTestCase):
 
         result = TempleCalendarService._next_tithi(service, date(2025, 10, 17), (19,))
         self.assertEqual(result, date(2025, 11, 8))
+
+
+class PradoshamOccurrenceTests(SimpleTestCase):
+    @patch.object(TempleCalendarService, "_upcoming_pradosham_occurrences")
+    def test_pradosham_branch_returns_upcoming_dates(self, mock_helper):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_helper.return_value = [date(2025, 1, 2), date(2025, 1, 17)]
+
+        result = TempleCalendarService.next_occurrence(service, "PRD", date(2024, 12, 31))
+
+        self.assertEqual(result.date, date(2025, 1, 2))
+        self.assertEqual(result.meta.get("note"), "Pradosham (Trayodashi) schedule")
+        self.assertEqual(
+            result.meta.get("upcoming_occurrences"),
+            [
+                {"date": "2025-01-02", "label": "Thursday, 02 Jan 2025"},
+                {"date": "2025-01-17", "label": "Friday, 17 Jan 2025"},
+            ],
+        )
+
+
+class PradoshamHelperTests(SimpleTestCase):
+    def test_helper_skips_duplicate_days(self):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+
+        def fake_collect(self, window_start, window_end, targets):
+            if window_start.month == 1:
+                return [date(2025, 1, 15), date(2025, 1, 16)]
+            if window_start.month == 2:
+                return [date(2025, 2, 1), date(2025, 2, 15)]
+            return []
+
+        with patch.object(TempleCalendarService, "_collect_tithi_dates", fake_collect):
+            occurrences = TempleCalendarService._upcoming_pradosham_occurrences(service, date(2025, 1, 10))
+
+        self.assertEqual(occurrences, [date(2025, 1, 15), date(2025, 2, 1)])
