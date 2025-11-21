@@ -569,6 +569,10 @@ class TempleCalendarService:
         return (sun_lon - ayanamsa) % 360.0, (moon_lon - ayanamsa) % 360.0
 
     def _sun_moon_longitudes(self, day: date, hour: int = 6, minute: int = 0) -> tuple[float, float]:
+        return self._sun_moon_longitudes_cached(day, hour, minute)
+
+    @lru_cache(maxsize=4096)
+    def _sun_moon_longitudes_cached(self, day: date, hour: int = 6, minute: int = 0) -> tuple[float, float]:
         instant = datetime.combine(day, time(hour=hour, minute=minute), tzinfo=self.location.tz)
         ts = self._timescale
         utc_dt = instant.astimezone(_utc_zone())
@@ -585,6 +589,7 @@ class TempleCalendarService:
         moon_lon = obs.observe(self._moon).apparent().ecliptic_latlon()[1].degrees % 360.0
         return sun_lon, moon_lon
 
+    @lru_cache(maxsize=4096)
     def _ayanamsa(self, day: date) -> float:
         """Approximate Lahiri ayanamsa in degrees."""
         instant = datetime.combine(day, time(6, 0), tzinfo=self.location.tz).astimezone(_utc_zone())
