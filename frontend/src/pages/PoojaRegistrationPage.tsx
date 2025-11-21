@@ -802,7 +802,7 @@ const PoojaRegistrationPage = () => {
   const [donorRecords, setDonorRecords] = useState<DonorListEntry[]>([]);
   const [dateValue, setDateValue] = useState('');
   const [formError, setFormError] = useState('');
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(['self']);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [contactDetails, setContactDetails] = useState({ phoneNumber: '', address: '' });
   const [daySelectionMap, setDaySelectionMap] = useState<Record<number, number | null>>({});
   const [memberSelectionMap, setMemberSelectionMap] = useState<Record<number, string[]>>({});
@@ -812,6 +812,7 @@ const PoojaRegistrationPage = () => {
   const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
   const [bookingMode, setBookingMode] = useState<BookingMode>('full');
   const [tableMessage, setTableMessage] = useState<{ status: 'info' | 'error'; text: string } | null>(null);
+  const adminDefaultClearedRef = useRef(false);
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
   const addToCart = useCartStore((state) => state.addItem);
@@ -820,6 +821,19 @@ const PoojaRegistrationPage = () => {
   const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
+  const isAdminUser = (profile?.user?.role ?? user?.role) === 'admin';
+  const requiresMemberSelection = !isAdminUser;
+  const fallbackMemberSelection = useMemo(
+    () => (requiresMemberSelection ? ['self'] : []),
+    [requiresMemberSelection],
+  );
+  const normalizeMemberSelection = useCallback(
+    (members: string[]) => {
+      const unique = Array.from(new Set(members));
+      return unique.length > 0 ? unique : fallbackMemberSelection;
+    },
+    [fallbackMemberSelection],
+  );
 
   useEffect(() => {
     setDaySelectionMap((prev) => {
@@ -870,6 +884,27 @@ const PoojaRegistrationPage = () => {
     });
   }, [cartItems]);
 
+  useEffect(() => {
+    if (requiresMemberSelection && selectedMemberIds.length === 0) {
+      setSelectedMemberIds(['self']);
+    }
+  }, [requiresMemberSelection, selectedMemberIds.length]);
+
+  useEffect(() => {
+    if (requiresMemberSelection) {
+      adminDefaultClearedRef.current = false;
+      return;
+    }
+    if (
+      !adminDefaultClearedRef.current &&
+      selectedMemberIds.length === 1 &&
+      selectedMemberIds[0] === 'self'
+    ) {
+      setSelectedMemberIds([]);
+      adminDefaultClearedRef.current = true;
+    }
+  }, [requiresMemberSelection, selectedMemberIds]);
+
   const memberDirectory = useMemo(() => {
     const options: Array<{ value: string; label: string }> = [];
     const lookup = new Map<string, MemberDirectoryEntry>();
@@ -879,8 +914,7 @@ const PoojaRegistrationPage = () => {
       if (lookup.has(entry.key)) {
         return;
       }
-      // Skip Temple Admin (Self) if the user is an admin
-      if (profile?.user?.role === 'admin' && entry.source === 'self') {
+      if (isAdminUser && entry.source === 'self') {
         return;
       }
       options.push({ value: entry.key, label });
@@ -911,8 +945,7 @@ const PoojaRegistrationPage = () => {
       donorName: baseName || 'Self',
       donorPhone: basePhone || undefined,
     };
-    // Register self entry only if user is not an admin
-    if (profile?.user?.role !== 'admin') {
+    if (!isAdminUser) {
       register(selfEntry, baseName ? `${baseName} (Self)` : 'Self');
     }
 
@@ -1004,16 +1037,20 @@ const PoojaRegistrationPage = () => {
     });
 
     return { options, lookup, idLookup };
-  }, [profile, donorRecords]);
+  }, [profile, donorRecords, isAdminUser]);
 
   const memberOptions = memberDirectory.options;
   const memberLookup = memberDirectory.lookup;
   const memberIdLookup = memberDirectory.idLookup;
 
-  const primaryMemberKey = selectedMemberIds[0] ?? 'self';
+  const primaryMemberKey: string | null =
+    selectedMemberIds[0] ?? (requiresMemberSelection ? 'self' : null);
 
   const primaryMember = useMemo(() => {
-    return memberLookup.get(primaryMemberKey);
+    if (!primaryMemberKey) {
+      return null;
+    }
+    return memberLookup.get(primaryMemberKey) ?? null;
   }, [memberLookup, primaryMemberKey]);
 
   const selectedMemberEntries = useMemo<MemberDirectoryEntry[]>(() => {
@@ -1418,10 +1455,13 @@ const PoojaRegistrationPage = () => {
   }, [profile?.user?.role]);
 
   useEffect(() => {
-    if (!memberLookup.has(primaryMemberKey)) {
-      setSelectedMemberIds(['self']);
+    if (!primaryMemberKey) {
+      return;
     }
-  }, [memberLookup, primaryMemberKey]);
+    if (!memberLookup.has(primaryMemberKey)) {
+      setSelectedMemberIds(normalizeMemberSelection([]));
+    }
+  }, [memberLookup, primaryMemberKey, normalizeMemberSelection]);
 
   useEffect(() => {
     if (!selectedPooja || bookingMode !== 'full') return;
@@ -1754,37 +1794,32 @@ const PoojaRegistrationPage = () => {
     fetchOccurrenceForRow(poojaId, option, { tamilStarId: value || null });
   };
 
-  const toggleMemberSelection = (value: string) => {
-    setSelectedMemberIds((prev) => {
-      let next = [...prev];
-      const hasValue = next.includes(value);
+  const applySelectionToggle = (current: string[], value: string): string[] => {
+    let next = [...current];
+    const hasValue = next.includes(value);
 
-      if (value === 'self') {
-        if (hasValue) {
-          next = next.filter((id) => id !== 'self');
-          if (next.length === 0) {
-            next = ['self'];
-          }
-        } else {
-          next = ['self', ...next.filter((id) => id !== 'self')];
-        }
-      } else {
-        if (hasValue) {
-          next = next.filter((id) => id !== value);
-          if (next.length === 0) {
-            next = ['self'];
-          }
-        } else {
-          next = [...next.filter((id) => id !== value), value];
-          if (next.length > 1 && next.includes('self')) {
-            next = next.filter((id) => id !== 'self');
-          }
-        }
+    if (value === 'self') {
+      next = hasValue ? next.filter((id) => id !== 'self') : ['self'];
+    } else {
+      next = hasValue
+        ? next.filter((id) => id !== value)
+        : [...next.filter((id) => id !== value), value];
+      if (next.length > 1 && next.includes('self')) {
+        next = next.filter((id) => id !== 'self');
       }
+    }
 
-      return Array.from(new Set(next.length > 0 ? next : ['self']));
-    });
+    if (requiresMemberSelection && next.length === 0) {
+      next = ['self'];
+    }
+
+    return Array.from(new Set(next));
   };
+
+  const toggleMemberSelection = (value: string) => {
+    setSelectedMemberIds((prev) => applySelectionToggle(prev, value));
+  };
+
   const toggleMemberSelectionForRow = (row: MasterRow, value: string) => {
     setTableMessage(null);
     const selectedDayId = resolveSelectedDayId(row.pooja.id);
@@ -1796,33 +1831,7 @@ const PoojaRegistrationPage = () => {
     const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
     const matchingItem = findMatchingCartItem(row, effectiveDayId);
     const currentKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
-    let next = [...currentKeys];
-    const hasValue = next.includes(value);
-
-    if (value === 'self') {
-      if (hasValue) {
-        next = next.filter((id) => id !== 'self');
-        if (next.length === 0) {
-          next = ['self'];
-        }
-      } else {
-        next = ['self', ...next.filter((id) => id !== 'self')];
-      }
-    } else {
-      if (hasValue) {
-        next = next.filter((id) => id !== value);
-        if (next.length === 0) {
-          next = ['self'];
-        }
-      } else {
-        next = [...next.filter((id) => id !== value), value];
-        if (next.length > 1 && next.includes('self')) {
-          next = next.filter((id) => id !== 'self');
-        }
-      }
-    }
-
-    const normalized = Array.from(new Set(next.length > 0 ? next : ['self']));
+    const normalized = applySelectionToggle(currentKeys, value);
 
     setMemberSelectionMap((prev) => ({
       ...prev,
@@ -2038,7 +2047,7 @@ const PoojaRegistrationPage = () => {
       : explicit && explicit.length > 0
         ? explicit
         : []);
-    setSelectedMemberIds(defaultMembers.length > 0 ? Array.from(new Set(defaultMembers)) : ['self']);
+    setSelectedMemberIds(normalizeMemberSelection(defaultMembers));
     const disableDayOption = isDayOptionDisabledPooja({
       name: pooja.name,
       displayName: pooja.displayName,
@@ -2156,12 +2165,16 @@ const PoojaRegistrationPage = () => {
       return;
     }
     const mapSelection = memberSelectionMap[row.pooja.id];
-    const selectedMemberKeysRaw = mapSelection && mapSelection.length > 0
-      ? mapSelection
-      : selectedMemberIds.length > 0
-        ? selectedMemberIds
-        : ['self'];
+    const selectedMemberKeysRaw =
+      mapSelection && mapSelection.length > 0 ? mapSelection : selectedMemberIds;
     const selectedMemberKeys = Array.from(new Set(selectedMemberKeysRaw));
+    if (selectedMemberKeys.length === 0) {
+      setTableMessage({
+        status: 'error',
+        text: 'Please select at least one devotee before adding this pooja.',
+      });
+      return;
+    }
 
     const membersPayload = selectedMemberKeys.map((memberKey, index) => {
       const fallbackName =
@@ -2233,7 +2246,7 @@ const PoojaRegistrationPage = () => {
     setFormError('');
     setSelectedDayOptionId(null);
     setBookingMode('full');
-    setSelectedMemberIds(['self']);
+    setSelectedMemberIds(fallbackMemberSelection);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -2241,11 +2254,16 @@ const PoojaRegistrationPage = () => {
     setTableMessage(null);
     if (!selectedPooja) return;
 
+    const normalizedSelectedMembers = Array.from(new Set(selectedMemberIds));
+    if (normalizedSelectedMembers.length === 0) {
+      setFormError('Please select at least one devotee to proceed.');
+      return;
+    }
+
     if (bookingMode === 'memberOnly') {
-      const memberKeys = Array.from(new Set(selectedMemberIds.length > 0 ? selectedMemberIds : ['self']));
       setMemberSelectionMap((prev) => ({
         ...prev,
-        [selectedPooja.id]: memberKeys,
+        [selectedPooja.id]: normalizedSelectedMembers,
       }));
       handleCloseModal();
       return;
@@ -2283,8 +2301,7 @@ const PoojaRegistrationPage = () => {
       }
     }
 
-    const memberKeysRaw = selectedMemberIds.length > 0 ? selectedMemberIds : ['self'];
-    const memberKeys = Array.from(new Set(memberKeysRaw));
+    const memberKeys = normalizedSelectedMembers;
     const membersPayload = memberKeys.map((key, index) =>
       buildMemberPayloadFromKey(key, index === 0 ? resolvedName : undefined),
     );
@@ -2578,7 +2595,9 @@ const PoojaRegistrationPage = () => {
                               <MemberMultiSelect
                                 label={memberButtonLabel}
                                 options={memberOptions}
-                                selectedValues={resolvedMemberKeys.length > 0 ? resolvedMemberKeys : ['self']}
+                                selectedValues={
+                                  resolvedMemberKeys.length > 0 ? resolvedMemberKeys : fallbackMemberSelection
+                                }
                                 onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
                                 disabled={memberOptions.length === 0}
                               />
@@ -2854,7 +2873,9 @@ const PoojaRegistrationPage = () => {
                             <MemberMultiSelect
                               label={memberButtonLabel}
                               options={memberOptions}
-                              selectedValues={resolvedMemberKeys.length > 0 ? resolvedMemberKeys : ['self']}
+                              selectedValues={
+                                resolvedMemberKeys.length > 0 ? resolvedMemberKeys : fallbackMemberSelection
+                              }
                               onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
                               disabled={memberOptions.length === 0}
                             />

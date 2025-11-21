@@ -613,6 +613,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     { label: 'Donor ID', value: resolveText(profile?.donor_id ?? '') },
     { label: 'Family Name', value: resolveText(profile?.family_name) },
     { label: 'Donor Name', value: resolveText(user?.name ?? '') },
+    { label: 'Donor Header Text', value: resolveText(profile?.notes) },
     { label: 'Gender', value: formatGender(profile?.gender) },
     { label: 'Date of Birth', value: formatDate(profile?.date_of_birth) },
     { label: 'Gothra', value: resolveText(profile?.gothra) },

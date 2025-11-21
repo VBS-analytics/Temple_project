@@ -3,6 +3,7 @@
 from django.urls import path
 
 from .views import (
+    DonorDetailView,
     DonorListView,
     DashboardMetricsView,
     FamilyMemberDetailView,
@@ -25,5 +26,6 @@ urlpatterns = [
     path('family-members/', FamilyMemberView.as_view(), name='family-members'),
     path('family-members/<int:pk>/', FamilyMemberDetailView.as_view(), name='family-member-detail'),
     path('donors/', DonorListView.as_view(), name='donor-list'),
+    path('donors/<int:pk>/', DonorDetailView.as_view(), name='donor-detail'),
     path('dashboard-metrics/', DashboardMetricsView.as_view(), name='dashboard-metrics'),
 ]

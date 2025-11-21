@@ -81,6 +81,17 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "role")
 
 
+class AdminDonorUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("name", "phone_number", "email")
+        extra_kwargs = {
+            "name": {"required": False, "allow_blank": True},
+            "phone_number": {"required": False},
+            "email": {"required": False, "allow_blank": True},
+        }
+
+
 class TokenSerializer(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()

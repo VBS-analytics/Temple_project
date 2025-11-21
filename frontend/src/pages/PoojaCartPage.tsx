@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import api from '../lib/api';
 import { useCartStore } from '../store/cart';
 import type { CartItem } from '../store/cart';
 import { useAuthStore } from '../store/auth';
 import { useRegistrationStore } from '../store/registrations';
+import { usePaymentStore } from '../store/payments';
 
 const formatCurrency = (value?: string | null) => {
   if (!value) return '';
@@ -33,11 +34,13 @@ const DAY_CATEGORY_LABELS: Record<string, string> = {
 
 const PoojaCartPage = () => {
   const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   const cartKey = user ? String(user.id) : 'guest';
   const items = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const removeItem = useCartStore((state) => state.removeItem);
   const clearCart = useCartStore((state) => state.clear);
   const addRegistrations = useRegistrationStore((state) => state.addRegistrations);
+  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
 
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -140,6 +143,12 @@ const PoojaCartPage = () => {
     };
   };
 
+  const cloneItemsForSnapshot = (cartItems: CartItem[]): CartItem[] =>
+    cartItems.map((item) => ({
+      ...item,
+      members: item.members ? item.members.map((member) => ({ ...member })) : [],
+    }));
+
   const handleCheckout = async () => {
     if (items.length === 0 || processing) {
       return;
@@ -155,9 +164,15 @@ const PoojaCartPage = () => {
         await api.post('pooja/registrations/', payload);
       }
 
+      const snapshot = cloneItemsForSnapshot(items);
       addRegistrations(cartKey, items);
       clearCart(cartKey);
+      setGeneralPayment({
+        items: snapshot,
+        totalAmount,
+      });
       setPaymentStatus('Pooja registrations recorded successfully.');
+      navigate('/payments/general');
     } catch (err: any) {
       const detail = err?.response?.data?.detail ?? err?.response?.data ?? err?.message ?? 'Unable to record registrations.';
       setPaymentError(typeof detail === 'string' ? detail : 'Unable to record registrations.');
@@ -520,7 +535,7 @@ const PoojaCartPage = () => {
                     : 'bg-orange-700 hover:bg-orange-800'
                 }`}
               >
-                {processing ? 'Processing…' : `Pay ₹${formatCurrency(totalAmount.toString())}`}
+                {processing ? 'Processing…' : `Save ₹${formatCurrency(totalAmount.toString())}`}
               </button>
 
               <button

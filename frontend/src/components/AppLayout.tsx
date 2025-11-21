@@ -62,7 +62,9 @@ const AppLayout = () => {
       label: 'Cart',
       show: true,
       badge: cartCount > 0 ? String(cartCount) : undefined
-    }
+    },
+    { to: '/payments/general', label: 'General Payment', show: true },
+    { to: '/payments/combine', label: 'Combine Payment', show: true }
   ];
 
   return (
