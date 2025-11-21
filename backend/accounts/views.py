@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from .models import DonorProfile, FamilyMember, User, UserRole
 from .serializers import (
+    AdminDonorUserUpdateSerializer,
     DonorProfileSerializer,
     FamilyMemberSerializer,
     LoginSerializer,
@@ -178,6 +179,52 @@ class DonorListView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class DonorDetailView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_object(self, pk: int) -> User:
+        try:
+            return User.objects.select_related("profile").get(pk=pk, role=UserRole.DONOR)
+        except User.DoesNotExist as exc:  # pragma: no cover - user mis-id
+            raise NotFound("Donor not found") from exc
+
+    def put(self, request, pk: int):
+        if request.user.role != UserRole.ADMIN:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        donor = self.get_object(pk)
+        profile, _ = DonorProfile.objects.get_or_create(user=donor)
+
+        user_data = request.data.get("user") or {}
+        profile_data = request.data.get("profile") or {}
+
+        if not user_data and not profile_data:
+            return Response({"detail": "No fields provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if user_data:
+            user_serializer = AdminDonorUserUpdateSerializer(instance=donor, data=user_data, partial=True)
+            user_serializer.is_valid(raise_exception=True)
+            user_serializer.save()
+
+        if profile_data:
+            profile_serializer = ProfileUpdateSerializer(instance=profile, data=profile_data, partial=True)
+            profile_serializer.is_valid(raise_exception=True)
+            profile_serializer.save()
+
+        donor.refresh_from_db()
+        profile.refresh_from_db()
+
+        return Response(
+            {
+                "user": UserSerializer(donor).data,
+                "profile": DonorProfileSerializer(profile).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    patch = put
 
 
 class DashboardMetricsView(APIView):

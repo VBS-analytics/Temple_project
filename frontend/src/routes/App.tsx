@@ -19,6 +19,8 @@ import Events from '../pages/Events';
 import Projects from '../pages/Projects';
 import About from '../pages/About';
 import DonorProfile from '../pages/DonorProfile';
+import GeneralPaymentPage from '../pages/payments/GeneralPaymentPage';
+import CombinePaymentPage from '../pages/payments/CombinePaymentPage';
 import { useAuthStore } from '../store/auth';
 
 const HomeRoute = () => {
@@ -63,6 +65,8 @@ const App = () => (
         <Route path="/profile" element={<DonorProfile />} />
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
         <Route path="/pooja/cart" element={<PoojaCartPage />} />
+        <Route path="/payments/general" element={<GeneralPaymentPage />} />
+        <Route path="/payments/combine" element={<CombinePaymentPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>

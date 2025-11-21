@@ -16,6 +16,7 @@ interface DonorProfile {
   date_of_birth?: string | null;
   family_name?: string;
   gender?: string;
+  notes?: string | null;
 }
 
 interface DonorUser {
@@ -42,6 +43,42 @@ interface DonorRecord {
   profile: DonorProfile;
   members: DonorMember[];
 }
+
+type DonorEditFormState = {
+  name: string;
+  phone_number: string;
+  email: string;
+  gender: string;
+  date_of_birth: string;
+  tamil_star: string;
+  gothra: string;
+  family_name: string;
+  notes: string;
+  address_line1: string;
+  address_line2: string;
+  address_line3: string;
+  city: string;
+  state: string;
+  postal_code: string;
+};
+
+const createEmptyDonorEditForm = (): DonorEditFormState => ({
+  name: '',
+  phone_number: '',
+  email: '',
+  gender: '',
+  date_of_birth: '',
+  tamil_star: '',
+  gothra: '',
+  family_name: '',
+  notes: '',
+  address_line1: '',
+  address_line2: '',
+  address_line3: '',
+  city: '',
+  state: '',
+  postal_code: '',
+});
 
 interface RegistrationMember {
   id: number;
@@ -125,6 +162,14 @@ const formatCurrency = (value?: string | null) => {
 const normalizePhone = (value?: string | null) => (value ? value.replace(/\D/g, '') : '');
 
 const formatNumber = (value: number) => value.toLocaleString('en-IN');
+
+const resolveText = (value?: string | null, fallback = 'Not provided') => {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+};
 
 const extractRegistrationResults = (payload: any): RegistrationRecord[] => {
   if (Array.isArray(payload)) {
@@ -257,7 +302,7 @@ const DonorDetailsPage = () => {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<
-    Record<number, { members: boolean; registrations: boolean }>
+    Record<number, { members: boolean; registrations: boolean; details: boolean }>
   >({});
   const [memberFormVisible, setMemberFormVisible] = useState(false);
   const [memberForm, setMemberForm] = useState({
@@ -300,6 +345,10 @@ const DonorDetailsPage = () => {
   const [adminMemberDeleteError, setAdminMemberDeleteError] = useState('');
   const [adminMemberDeleteSubmitting, setAdminMemberDeleteSubmitting] = useState(false);
   const [adminMemberDeleteId, setAdminMemberDeleteId] = useState<number | null>(null);
+  const [editingDonorId, setEditingDonorId] = useState<number | null>(null);
+  const [donorEditForm, setDonorEditForm] = useState<DonorEditFormState>(createEmptyDonorEditForm);
+  const [donorEditError, setDonorEditError] = useState('');
+  const [donorEditSubmitting, setDonorEditSubmitting] = useState(false);
 
   const loadAdminMembers = useCallback(async () => {
     setAdminMembersLoading(true);
@@ -445,6 +494,104 @@ const DonorDetailsPage = () => {
     resetAdminMemberEditForm();
   };
 
+  const startDonorEdit = (record: DonorRecord) => {
+    setEditingDonorId(record.user.id);
+    setDonorEditError('');
+    setDonorEditForm({
+      name: record.user.name ?? '',
+      phone_number: record.user.phone_number ?? '',
+      email: record.user.email ?? '',
+      gender: record.profile.gender ?? '',
+      date_of_birth: record.profile.date_of_birth ?? '',
+      tamil_star: record.profile.tamil_star ?? '',
+      gothra: record.profile.gothra ?? '',
+      family_name: record.profile.family_name ?? '',
+      notes: record.profile.notes ?? '',
+      address_line1: record.profile.address_line1 ?? '',
+      address_line2: record.profile.address_line2 ?? '',
+      address_line3: record.profile.address_line3 ?? '',
+      city: record.profile.city ?? '',
+      state: record.profile.state ?? '',
+      postal_code: record.profile.postal_code ?? '',
+    });
+    setExpandedSections((prev) => {
+      const current = prev[record.user.id] ?? { members: false, registrations: false, details: true };
+      return { ...prev, [record.user.id]: { ...current, details: true } };
+    });
+  };
+
+  const cancelDonorEdit = () => {
+    setEditingDonorId(null);
+    setDonorEditError('');
+    setDonorEditForm(createEmptyDonorEditForm());
+  };
+
+  const handleDonorEditChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = event.target;
+    setDonorEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleDonorEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingDonorId) {
+      return;
+    }
+    if (!donorEditForm.name.trim()) {
+      setDonorEditError('Name is required.');
+      return;
+    }
+    if (!donorEditForm.phone_number.trim()) {
+      setDonorEditError('Phone number is required.');
+      return;
+    }
+    setDonorEditError('');
+    setDonorEditSubmitting(true);
+    const payload = {
+      user: {
+        name: donorEditForm.name.trim(),
+        phone_number: donorEditForm.phone_number.trim(),
+        email: donorEditForm.email.trim(),
+      },
+      profile: {
+        gender: donorEditForm.gender,
+        date_of_birth: donorEditForm.date_of_birth ? donorEditForm.date_of_birth : null,
+        tamil_star: donorEditForm.tamil_star,
+        gothra: donorEditForm.gothra,
+        family_name: donorEditForm.family_name,
+        notes: donorEditForm.notes,
+        address_line1: donorEditForm.address_line1,
+        address_line2: donorEditForm.address_line2,
+        address_line3: donorEditForm.address_line3,
+        city: donorEditForm.city,
+        state: donorEditForm.state,
+        postal_code: donorEditForm.postal_code,
+      },
+    };
+
+    try {
+      const response = await api.put(`auth/donors/${editingDonorId}/`, payload);
+      const updatedUser = response.data?.user;
+      const updatedProfile = response.data?.profile;
+      if (updatedUser && updatedProfile) {
+        setDonors((prev) =>
+          prev.map((record) => (record.user.id === editingDonorId ? { ...record, user: updatedUser, profile: updatedProfile } : record)),
+        );
+      }
+      cancelDonorEdit();
+    } catch (err: any) {
+      const detail =
+        err?.response?.data?.detail ??
+        err?.response?.data?.message ??
+        err?.message ??
+        'Unable to update donor details';
+      setDonorEditError(typeof detail === 'string' ? detail : 'Unable to update donor details');
+    } finally {
+      setDonorEditSubmitting(false);
+    }
+  };
+
   const handleAdminMemberEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (editingAdminMemberId === null) {
@@ -584,7 +731,7 @@ const DonorDetailsPage = () => {
         setExpandedSections((prev) => {
           const next: Record<number, { members: boolean; registrations: boolean }> = {};
           donorData.forEach((donor) => {
-            next[donor.user.id] = prev[donor.user.id] ?? { members: false, registrations: false };
+            next[donor.user.id] = prev[donor.user.id] ?? { members: false, registrations: false, details: true };
           });
           return next;
         });
@@ -652,9 +799,9 @@ const DonorDetailsPage = () => {
     return { byId, byPhone, byName };
   }, [registrationGroups]);
 
-  const toggleSection = (donorId: number, section: 'members' | 'registrations') => {
+  const toggleSection = (donorId: number, section: 'members' | 'registrations' | 'details') => {
     setExpandedSections((prev) => {
-      const current = prev[donorId] ?? { members: false, registrations: false };
+      const current = prev[donorId] ?? { members: false, registrations: false, details: true };
       return { ...prev, [donorId]: { ...current, [section]: !current[section] } };
     });
   };
@@ -1213,15 +1360,144 @@ const DonorDetailsPage = () => {
               registrationIndex.byName.get(user.name.trim().toLowerCase());
             const registrations = registrationGroup?.registrations ?? [];
 
-            const profileAddress = [profile.address_line1, profile.address_line2, profile.address_line3]
-              .filter(Boolean)
-              .join(', ');
+            const profileAddressLines = [profile.address_line1, profile.address_line2, profile.address_line3].map((line) =>
+              typeof line === 'string' ? line.trim() : '',
+            );
+            const profileAddress = profileAddressLines.filter(Boolean).join(', ');
             const profileLocation = [profile.city, profile.state, profile.postal_code].filter(Boolean).join(', ');
             const memberCount = Array.isArray(members) ? members.length : 0;
             const locationLabel = profileLocation || 'Location not provided';
             const rawGender = (profile.gender ?? '').trim();
             const genderLabel = rawGender ? `${rawGender.charAt(0).toUpperCase()}${rawGender.slice(1)}` : 'Gender not provided';
-            const hasProfileMeta = Boolean(profile.tamil_star || profile.gothra || profile.family_name);
+            const emailLabel = resolveText(user.email, 'Not provided');
+            const roleLabel = resolveText(user.role, 'Not provided');
+            const fullAddress = profileAddress || 'Not provided';
+
+            const basicDetails = [
+              {
+                label: 'Donor ID',
+                value: resolveText(profile.donor_id, 'Not provided'),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m0 0l3-3m-3 3l-3-3" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Phone Number',
+                value: user.phone_number || 'Not provided',
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M2.25 6.75C2.25 5.784 3.034 5 4 5h3c.966 0 1.75.784 1.75 1.75v.5c0 .495-.23.961-.62 1.262l-1.352 1.03a.75.75 0 00-.263.857A12 12 0 0014.6 20.485a.75.75 0 00.857-.262l1.03-1.353a1.5 1.5 0 011.262-.62h.5c.966 0 1.75.784 1.75 1.75V21c0 .966-.784 1.75-1.75 1.75H19C9.874 22.75 2.25 15.126 2.25 6.75z"
+                    />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Email',
+                value: emailLabel,
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 6.75l9.75 7.5 9.75-7.5" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M3.75 5.25h16.5A1.5 1.5 0 0121.75 6.75v10.5a1.5 1.5 0 01-1.5 1.5H3.75a1.5 1.5 0 01-1.5-1.5V6.75a1.5 1.5 0 011.5-1.5z"
+                    />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Gender',
+                value: genderLabel,
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25a4.5 4.5 0 100-9 4.5 4.5 0 000 9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14.25v6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 20.25h4.5" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Date of Birth',
+                value: formatDonorDate(profile.date_of_birth),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75v-1.5a1.5 1.5 0 011.5-1.5h4.5a1.5 1.5 0 011.5 1.5v1.5" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 9h16.5M6 12h.008v.008H6V12zM8.25 12h.008v.008H8.25V12zM10.5 12h.008v.008H10.5V12z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 5.25h10.5A1.5 1.5 0 0118.75 6.75v11.5a1.5 1.5 0 01-1.5 1.5H6.75a1.5 1.5 0 01-1.5-1.5V6.75a1.5 1.5 0 011.5-1.5z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Account Role',
+                value: roleLabel,
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19a3 3 0 10-6 0m9-11a3 3 0 11-6 0m0 0a3 3 0 11-6 0m6 0v2m0 10v-2m0-8v-2" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Donor Header Text',
+                value: resolveText(profile.notes),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M7.5 8.25h9m-9 3h5.25M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-6 4.5l4.5 4.5"
+                    />
+                  </svg>
+                ),
+              },
+            ];
+
+            const residentialDetails = [
+              { label: 'Full Address', value: fullAddress },
+              { label: 'Address Line 1', value: resolveText(profile.address_line1) },
+              { label: 'Address Line 2', value: resolveText(profile.address_line2) },
+              { label: 'Address Line 3', value: resolveText(profile.address_line3) },
+              { label: 'City', value: resolveText(profile.city) },
+              { label: 'State', value: resolveText(profile.state) },
+              { label: 'Postal Code', value: resolveText(profile.postal_code) },
+            ];
+
+            const spiritualDetails = [
+              {
+                label: 'Family Name',
+                value: resolveText(profile.family_name),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5l7.5 6-7.5 6-7.5-6z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Tamil Star',
+                value: resolveText(profile.tamil_star),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l2.09 6.26H20.5l-5.18 3.76 1.98 6.1L12 15.75l-5.3 3.37 1.98-6.1L3.5 9.26h6.41L12 3z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Gothra',
+                value: resolveText(profile.gothra),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 19.5l7.5-15 7.5 15M9 19.5h6" />
+                  </svg>
+                ),
+              },
+            ];
 
             return (
               <section
@@ -1317,6 +1593,419 @@ const DonorDetailsPage = () => {
 
                 {/* Donor Details Sections */}
                 <div className="divide-y divide-slate-100">
+                  <div className="p-4 sm:p-6 bg-slate-50/70">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(user.id, 'details')}
+                        className="flex w-full items-center justify-between gap-2 text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.5}
+                                d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM18.75 8.25A2.25 2.25 0 1119 3.75a2.25 2.25 0 01-.25 4.5zM19.5 21a6 6 0 00-12 0m14.25-.75a3.75 3.75 0 00-6.754-2.41"
+                              />
+                            </svg>
+                          </div>
+                          <span className="font-semibold text-slate-800">Donor Information</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-500">{sectionState.details ? 'Hide' : 'Show'}</span>
+                          <svg
+                            className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${sectionState.details ? 'rotate-180' : ''}`}
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        {editingDonorId === user.id ? (
+                          <button
+                            type="button"
+                            onClick={cancelDonorEdit}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500 disabled:cursor-not-allowed disabled:opacity-70"
+                            disabled={donorEditSubmitting}
+                          >
+                            Cancel Edit
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startDonorEdit(donor)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit Details
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {sectionState.details && (
+                      <>
+                        {editingDonorId === user.id ? (
+                          <form onSubmit={handleDonorEditSubmit} className="mt-4 space-y-5">
+                            {donorEditError && (
+                              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                {donorEditError}
+                              </div>
+                            )}
+                            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                              <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                  <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM18.75 8.25A2.25 2.25 0 1119 3.75a2.25 2.25 0 01-.25 4.5zM19.5 21a6 6 0 00-12 0m14.25-.75a3.75 3.75 0 00-6.754-2.41" />
+                                    </svg>
+                                  </div>
+                                  Basic Information
+                                </div>
+                                <div className="mt-4 space-y-3">
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`donor-name-${user.id}`}>
+                                      Donor Name
+                                    </label>
+                                    <input
+                                      id={`donor-name-${user.id}`}
+                                      name="name"
+                                      type="text"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.name}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`donor-phone-${user.id}`}>
+                                      Phone Number
+                                    </label>
+                                    <input
+                                      id={`donor-phone-${user.id}`}
+                                      name="phone_number"
+                                      type="text"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.phone_number}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`donor-email-${user.id}`}>
+                                      Email
+                                    </label>
+                                    <input
+                                      id={`donor-email-${user.id}`}
+                                      name="email"
+                                      type="email"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.email}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`donor-gender-${user.id}`}>
+                                        Gender
+                                      </label>
+                                      <select
+                                        id={`donor-gender-${user.id}`}
+                                        name="gender"
+                                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                        value={donorEditForm.gender}
+                                        onChange={handleDonorEditChange}
+                                        disabled={donorEditSubmitting}
+                                      >
+                                        <option value="">Select gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`donor-dob-${user.id}`}>
+                                        Date of Birth
+                                      </label>
+                                      <input
+                                        id={`donor-dob-${user.id}`}
+                                        name="date_of_birth"
+                                        type="date"
+                                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                        value={donorEditForm.date_of_birth}
+                                        onChange={handleDonorEditChange}
+                                        disabled={donorEditSubmitting}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`donor-notes-${user.id}`}>
+                                      Donor Header Text
+                                    </label>
+                                    <textarea
+                                      id={`donor-notes-${user.id}`}
+                                      name="notes"
+                                      rows={3}
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.notes}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    ></textarea>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                  <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7.5l9-5.25L21 7.5v9l-9 5.25L3 16.5v-9z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7.5l9 5.25L21 7.5" />
+                                    </svg>
+                                  </div>
+                                  Residential Details
+                                </div>
+                                <div className="mt-4 space-y-3">
+                                  {[
+                                    { name: 'address_line1' as const, label: 'Address Line 1' },
+                                    { name: 'address_line2' as const, label: 'Address Line 2' },
+                                    { name: 'address_line3' as const, label: 'Address Line 3' },
+                                  ].map((field) => (
+                                    <div key={field.name}>
+                                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`${field.name}-${user.id}`}>
+                                        {field.label}
+                                      </label>
+                                      <input
+                                        id={`${field.name}-${user.id}`}
+                                        name={field.name}
+                                        type="text"
+                                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                        value={donorEditForm[field.name]}
+                                        onChange={handleDonorEditChange}
+                                        disabled={donorEditSubmitting}
+                                      />
+                                    </div>
+                                  ))}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`city-${user.id}`}>
+                                        City
+                                      </label>
+                                      <input
+                                        id={`city-${user.id}`}
+                                        name="city"
+                                        type="text"
+                                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                        value={donorEditForm.city}
+                                        onChange={handleDonorEditChange}
+                                        disabled={donorEditSubmitting}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`state-${user.id}`}>
+                                        State
+                                      </label>
+                                      <input
+                                        id={`state-${user.id}`}
+                                        name="state"
+                                        type="text"
+                                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                        value={donorEditForm.state}
+                                        onChange={handleDonorEditChange}
+                                        disabled={donorEditSubmitting}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`postal-${user.id}`}>
+                                      Postal Code
+                                    </label>
+                                    <input
+                                      id={`postal-${user.id}`}
+                                      name="postal_code"
+                                      type="text"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.postal_code}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                  <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l2.09 6.26H20.5l-5.18 3.76 1.98 6.1L12 15.75l-5.3 3.37 1.98-6.1L3.5 9.26h6.41L12 3z" />
+                                    </svg>
+                                  </div>
+                                  Spiritual Details
+                                </div>
+                                <div className="mt-4 space-y-3">
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`family-name-${user.id}`}>
+                                      Family Name
+                                    </label>
+                                    <input
+                                      id={`family-name-${user.id}`}
+                                      name="family_name"
+                                      type="text"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.family_name}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`tamil-star-${user.id}`}>
+                                      Tamil Star
+                                    </label>
+                                    <input
+                                      id={`tamil-star-${user.id}`}
+                                      name="tamil_star"
+                                      type="text"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.tamil_star}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`gothra-${user.id}`}>
+                                      Gothra
+                                    </label>
+                                    <input
+                                      id={`gothra-${user.id}`}
+                                      name="gothra"
+                                      type="text"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.gothra}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-3">
+                              <button
+                                type="submit"
+                                className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                disabled={donorEditSubmitting}
+                              >
+                                {donorEditSubmitting ? (
+                                  <>
+                                    <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Saving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Save Changes
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelDonorEdit}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500 disabled:cursor-not-allowed disabled:opacity-70"
+                                disabled={donorEditSubmitting}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM18.75 8.25A2.25 2.25 0 1119 3.75a2.25 2.25 0 01-.25 4.5zM19.5 21a6 6 0 00-12 0m14.25-.75a3.75 3.75 0 00-6.754-2.41" />
+                                  </svg>
+                                </div>
+                                Basic Information
+                              </div>
+                              <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {basicDetails.map((detail) => (
+                                  <div key={detail.label} className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                    <div className="w-9 h-9 rounded-xl bg-white text-orange-500 flex items-center justify-center shadow-md shadow-orange-100/60">
+                                      {detail.icon}
+                                    </div>
+                                    <div>
+                                      <dt className="text-xs uppercase tracking-wide text-slate-500">{detail.label}</dt>
+                                      <dd className="text-sm font-semibold text-slate-800 mt-0.5 break-words">{detail.value}</dd>
+                                    </div>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7.5l9-5.25L21 7.5v9l-9 5.25L3 16.5v-9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7.5l9 5.25L21 7.5" />
+                                  </svg>
+                                </div>
+                                Residential Details
+                              </div>
+                              <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {residentialDetails.map((detail) => (
+                                  <div key={detail.label} className="rounded-2xl bg-slate-50 px-3 py-3 border border-slate-100">
+                                    <dt className="text-xs uppercase tracking-wide text-slate-500">{detail.label}</dt>
+                                    <dd className="text-sm font-semibold text-slate-800 mt-1 break-words">{detail.value}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l2.09 6.26H20.5l-5.18 3.76 1.98 6.1L12 15.75l-5.3 3.37 1.98-6.1L3.5 9.26h6.41L12 3z" />
+                                  </svg>
+                                </div>
+                                Spiritual Details
+                              </div>
+                              <dl className="mt-4 grid grid-cols-1 gap-3">
+                                {spiritualDetails.map((detail) => (
+                                  <div key={detail.label} className="rounded-2xl border border-slate-100 p-3 flex items-start gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+                                      {detail.icon}
+                                    </div>
+                                    <div>
+                                      <dt className="text-xs uppercase tracking-wide text-slate-500">{detail.label}</dt>
+                                      <dd className="text-sm font-semibold text-slate-800 mt-0.5">{detail.value}</dd>
+                                    </div>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
                   {/* Family Members Section */}
                   <div className="p-4 sm:p-6">
                     <button
@@ -1596,7 +2285,7 @@ const DonorDetailsPage = () => {
                 <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base">Add new members using the "Add Member" button at the top of the page.</p>
               </div>
             ) : (
-              <>
+              <div>
                 {adminMemberDeleteError && (
                   <div className="mb-4">
                     <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
@@ -1867,7 +2556,7 @@ const DonorDetailsPage = () => {
                   );
                 })}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </section>

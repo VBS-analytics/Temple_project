@@ -38,6 +38,7 @@ interface FormValues {
   gender: string;
   family_name: string;
   family_selection: string;
+  notes: string;
   password: string;
   confirm_password: string;
   otp_code: string;
@@ -97,6 +98,7 @@ const RegisterPage = () => {
       gender: '',
       family_name: '',
       family_selection: '',
+      notes: '',
       password: '',
       confirm_password: '',
       otp_code: '',
@@ -104,6 +106,9 @@ const RegisterPage = () => {
   });
 
   const familySelection = watch('family_selection');
+  const donorHeaderText = watch('notes') ?? '';
+  const donorHeaderCharCount = donorHeaderText.length;
+  const donorHeaderWordCount = donorHeaderText.trim() ? donorHeaderText.trim().split(/\s+/).length : 0;
   const cityValue = watch('city');
   const stateValue = watch('state');
 
@@ -134,6 +139,7 @@ const RegisterPage = () => {
     gender: 3,
     family_selection: 3,
     family_name: 3,
+    notes: 3,
   };
 
   const requestOtp = async () => {
@@ -162,7 +168,7 @@ const RegisterPage = () => {
     } else if (currentStep === 2) {
       isValid = await trigger(['address_line1', 'address_line2', 'address_line3', 'city', 'state', 'postal_code']);
     } else if (currentStep === 3) {
-      isValid = await trigger(['date_of_birth', 'tamil_star', 'gothra', 'gender', 'family_selection']);
+      isValid = await trigger(['tamil_star', 'gothra', 'gender', 'family_selection']);
       if (familySelection === 'other') {
         isValid = isValid && await trigger(['family_name']);
       }
@@ -202,6 +208,7 @@ const RegisterPage = () => {
 
     if (!values.date_of_birth) delete payload.date_of_birth;
     if (!payload.family_name) delete payload.family_name;
+    if (!payload.notes) delete payload.notes;
     if (gender) {
       payload.gender = gender;
     }
@@ -1036,7 +1043,34 @@ const RegisterPage = () => {
                         <div className="grid grid-cols-1 gap-4 sm:gap-6">
                           <div className="relative">
                             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                              Date of Birth <span className="text-rose-500 ml-1">*</span>
+                              Donor Header text <span className="text-gray-400 text-xs font-normal ml-2">(Optional)</span>
+                            </label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-start pt-3 pointer-events-none">
+                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h8m-8 4h6M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                                </svg>
+                              </div>
+                              <textarea
+                                rows={3}
+                                className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                  isFocused === 'notes' || errors.notes ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                }`}
+                                placeholder="Share a short donor header or greeting"
+                                {...register('notes')}
+                                onFocus={() => handleFocus('notes')}
+                                onBlur={handleBlur}
+                              />
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 flex flex-wrap gap-2 justify-between">
+                              <span>{donorHeaderCharCount} characters</span>
+                              <span>{donorHeaderWordCount} words</span>
+                            </div>
+                          </div>
+
+                          <div className="relative">
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                              Date of Birth <span className="text-gray-400 text-xs font-normal ml-2">(Optional)</span>
                             </label>
                             <div className="relative">
                               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1049,9 +1083,7 @@ const RegisterPage = () => {
                                 className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
                                   isFocused === 'date_of_birth' || errors.date_of_birth ? 'border-amber-500 shadow-sm' : 'border-gray-300'
                                 }`}
-                                {...register('date_of_birth', {
-                                  required: 'Date of birth is required'
-                                })}
+                                {...register('date_of_birth')}
                                 onFocus={() => handleFocus('date_of_birth')}
                                 onBlur={handleBlur}
                               />
@@ -1363,6 +1395,7 @@ const RegisterPage = () => {
                             )}
                           </div>
                         )}
+
                       </div>
                     )}
 

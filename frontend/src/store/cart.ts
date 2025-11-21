@@ -52,6 +52,7 @@ interface CartState {
   addItem: (userKey: string, item: CartItem) => void;
   removeItem: (userKey: string, cartId: string) => void;
   clear: (userKey: string) => void;
+  setItemsForUser: (userKey: string, items: CartItem[]) => void;
 }
 
 const generateId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -87,6 +88,16 @@ export const useCartStore = create<CartState>()(
           delete next[userKey];
           return { itemsByUser: next };
         }),
+      setItemsForUser: (userKey, items) =>
+        set((state) => ({
+          itemsByUser: {
+            ...state.itemsByUser,
+            [userKey]: items.map((item) => ({
+              ...item,
+              members: item.members ? item.members.map((member) => ({ ...member })) : [],
+            })),
+          },
+        })),
     }),
     {
       name: 'pooja-cart',
