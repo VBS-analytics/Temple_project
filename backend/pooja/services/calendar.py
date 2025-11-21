@@ -479,28 +479,17 @@ class TempleCalendarService:
         """Return upcoming Pradosham dates (Trayodashi tithi) from start."""
         targets = (13, 28)  # Shukla and Krishna Trayodashi
         occurrences: list[date] = []
-        window_start = start
+        cursor = start
 
-        for _ in range(0, 6):  # look ahead up to ~6 months
-            window_end = self._month_end(window_start)
-            collected = self._compress_consecutive_dates(
-                self._collect_tithi_dates(window_start, window_end, targets)
-            )
-            for day in collected:
-                if day < start:
-                    continue
-                if occurrences and (day - occurrences[-1]).days <= 1:
-                    continue
-                occurrences.append(day)
-                if len(occurrences) >= count:
-                    return occurrences
-            window_start = window_end + timedelta(days=1)
+        while len(occurrences) < count:
+            next_day = self._next_tithi(cursor, targets)
+            if occurrences and (next_day - occurrences[-1]).days <= 1:
+                cursor = next_day + timedelta(days=1)
+                continue
+            occurrences.append(next_day)
+            cursor = next_day + timedelta(days=1)
 
-        if occurrences:
-            return occurrences
-
-        fallback = self._next_tithi(start, targets=targets)
-        return [fallback]
+        return occurrences
 
     def _tithi_occurs_on_day(self, day: date, wanted: set[int]) -> bool:
         for minute_offset in range(0, 24 * 60, 30):
