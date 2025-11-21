@@ -142,15 +142,15 @@ class PradoshamOccurrenceTests(SimpleTestCase):
 class PradoshamHelperTests(SimpleTestCase):
     def test_helper_skips_duplicate_days(self):
         service = TempleCalendarService.__new__(TempleCalendarService)
+        sequence = iter([date(2025, 1, 15), date(2025, 1, 16), date(2025, 2, 1)])
 
-        def fake_collect(self, window_start, window_end, targets):
-            if window_start.month == 1:
-                return [date(2025, 1, 15), date(2025, 1, 16)]
-            if window_start.month == 2:
-                return [date(2025, 2, 1), date(2025, 2, 15)]
-            return []
+        def fake_next_tithi(self, start, targets):
+            try:
+                return next(sequence)
+            except StopIteration:
+                self.fail("Unexpected extra call to _next_tithi")
 
-        with patch.object(TempleCalendarService, "_collect_tithi_dates", fake_collect):
+        with patch.object(TempleCalendarService, "_next_tithi", fake_next_tithi):
             occurrences = TempleCalendarService._upcoming_pradosham_occurrences(service, date(2025, 1, 10))
 
         self.assertEqual(occurrences, [date(2025, 1, 15), date(2025, 2, 1)])
