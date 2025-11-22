@@ -21,3 +21,40 @@ body {
 a {
   @apply text-brand-600 hover:text-brand-700;
 }
+
+.flower-petal {
+  position: absolute;
+  top: -40px;
+  width: 18px;
+  height: 12px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.95),
+    hsl(var(--petal-hue, 22), 80%, 72%)
+  );
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.65);
+  opacity: 0;
+  animation-name: petal-fall;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
+  transform-origin: center;
+  transform: scale(var(--petal-scale, 1));
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.05));
+}
+
+@keyframes petal-fall {
+  0% {
+    transform: translate3d(0, -20px, 0) rotate(0deg) scale(var(--petal-scale, 1));
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate3d(var(--petal-horizontal, 0px), 110vh, 0)
+      rotate(360deg)
+      scale(calc(var(--petal-scale, 1) * 0.85));
+    opacity: 0;
+  }
+}
