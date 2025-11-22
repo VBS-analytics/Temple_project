@@ -157,3 +157,19 @@ class FeaturedPooja(models.Model):
 
     def __str__(self):  # pragma: no cover - human readable repr
         return self.name
+
+
+class PoojaCartSnapshot(models.Model):
+    donor = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="pooja_cart_snapshot",
+    )
+    items = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+
+    def __str__(self):
+        return f"Cart snapshot for {self.donor} ({len(self.items)} items)"

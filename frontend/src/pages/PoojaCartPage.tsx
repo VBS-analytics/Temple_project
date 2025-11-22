@@ -170,6 +170,7 @@ const PoojaCartPage = () => {
       setGeneralPayment({
         items: snapshot,
         totalAmount,
+        userKey: cartKey,
       });
       setPaymentStatus('Pooja registrations recorded successfully.');
       navigate('/payments/general');

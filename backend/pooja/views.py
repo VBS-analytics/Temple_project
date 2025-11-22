@@ -11,12 +11,13 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import UserRole
+from accounts.models import User, UserRole
 
 from .models import (
     DailyMessage,
     DonorMessageTemplate,
     FeaturedPooja,
+    PoojaCartSnapshot,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -26,6 +27,7 @@ from .serializers import (
     DailyMessageSerializer,
     DonorMessageTemplateSerializer,
     FeaturedPoojaSerializer,
+    PoojaCartSnapshotSerializer,
     PoojaDayOptionSerializer,
     PoojaOptionSerializer,
     PoojaRegistrationSerializer,
@@ -268,6 +270,88 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
         results.sort(key=lambda item: (item["donor_name"] or "").lower())
         return Response({"count": len(results), "results": results})
+
+    @action(detail=False, methods=["get"], url_path="donor-directory")
+    def donor_directory(self, request):
+        qs = User.objects.filter(role=UserRole.DONOR)
+        if request.user.is_authenticated and request.user.role == UserRole.DONOR:
+            qs = qs.exclude(id=request.user.id)
+        donors = qs.order_by("name", "id").values("id", "name", "phone_number")
+        payload = [
+            {
+                "id": entry["id"],
+                "name": entry["name"] or "",
+                "phone_number": entry["phone_number"] or "",
+            }
+            for entry in donors
+        ]
+        return Response(payload)
+
+
+class PoojaCartSnapshotView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def _ensure_donor(self, request):
+        if request.user.role != UserRole.DONOR:
+            raise PermissionDenied("Only donor accounts can manage cart snapshots.")
+
+    def get(self, request):
+        self._ensure_donor(request)
+        snapshot, _ = PoojaCartSnapshot.objects.get_or_create(donor=request.user)
+        serializer = PoojaCartSnapshotSerializer(snapshot)
+        return Response(serializer.data)
+
+    def put(self, request):
+        self._ensure_donor(request)
+        snapshot, _ = PoojaCartSnapshot.objects.get_or_create(donor=request.user)
+        serializer = PoojaCartSnapshotSerializer(instance=snapshot, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class CombinePaymentLookupView(APIView):
+    """Fetch cart selections for a donor to support group / combined payments."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        donor_id_raw = request.query_params.get("donor_id")
+        donor_phone_raw = request.query_params.get("phone")
+
+        if not donor_id_raw and not donor_phone_raw:
+            return Response(
+                {"detail": "Provide a donor_id or phone query parameter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        donor_user = None
+
+        if donor_id_raw:
+            try:
+                donor_id = int(donor_id_raw)
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid donor_id provided."}, status=status.HTTP_400_BAD_REQUEST)
+            donor_user = User.objects.filter(id=donor_id, role=UserRole.DONOR).first()
+        else:
+            donor_phone = (donor_phone_raw or "").strip()
+            if not donor_phone:
+                return Response({"detail": "Provide a donor phone number."}, status=status.HTTP_400_BAD_REQUEST)
+            donor_user = User.objects.filter(phone_number__iexact=donor_phone, role=UserRole.DONOR).first()
+
+        if donor_user is None:
+            return Response({"detail": "Donor not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        snapshot = PoojaCartSnapshot.objects.filter(donor=donor_user).first()
+        items = snapshot.items if snapshot else []
+
+        payload = {
+            "donor_id": donor_user.id,
+            "donor_name": donor_user.name,
+            "donor_phone": donor_user.phone_number,
+            "items": items,
+        }
+        return Response(payload)
 
 
 class RecentPoojaRegistrationsView(APIView):

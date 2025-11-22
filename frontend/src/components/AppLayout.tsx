@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import LanguageToggle from './LanguageToggle';
+import useCartSync from '../hooks/useCartSync';
 import { isAdmin, useAuthStore } from '../store/auth';
 import { useCartStore } from '../store/cart';
 
@@ -17,6 +18,7 @@ const AppLayout = () => {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
+  useCartSync();
 
   const cartKey = user ? String(user.id) : 'guest';
   const cartCount =

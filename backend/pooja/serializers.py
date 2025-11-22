@@ -7,6 +7,7 @@ from .models import (
     DailyMessage,
     DonorMessageTemplate,
     FeaturedPooja,
+    PoojaCartSnapshot,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -201,11 +202,11 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
         instance.save()
         if members is not None:
             instance.members.all().delete()
-            self._sync_members(instance, members)
+        self._sync_members(instance, members)
         return instance
 
     def _sync_members(self, registration, members_payload):
-        for member_data in members_payload:
+        for member_data in members_payload or []:
             PoojaRegistrationMember.objects.create(registration=registration, **member_data)
 
     def get_donor_name(self, obj):  # pragma: no cover - simple property mapping
@@ -228,6 +229,18 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
 
     def get_pooja_reg_id(self, obj):
         return obj.pooja_reg_id
+
+
+class PoojaCartSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PoojaCartSnapshot
+        fields = ("items", "updated_at")
+        read_only_fields = ("updated_at",)
+
+    def validate_items(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Items must be a list.")
+        return value
 
 
 class PublicTodayRegistrationMemberSerializer(serializers.ModelSerializer):

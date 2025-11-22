@@ -4,9 +4,11 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CombinePaymentLookupView,
     DailyMessageViewSet,
     DonorMessageTemplateViewSet,
     FeaturedPoojaViewSet,
+    PoojaCartSnapshotView,
     PoojaDayOptionViewSet,
     PoojaOptionViewSet,
     PoojaRegistrationViewSet,
@@ -23,6 +25,8 @@ router.register('registrations', PoojaRegistrationViewSet, basename='pooja-regis
 router.register('featured-poojas', FeaturedPoojaViewSet, basename='featured-poojas')
 
 urlpatterns = [
+    path('cart-snapshots/', PoojaCartSnapshotView.as_view(), name='pooja-cart-snapshots'),
+    path('registrations/combine-lookup/', CombinePaymentLookupView.as_view(), name='pooja-registrations-combine-lookup'),
     path('registrations/recent-public/', RecentPoojaRegistrationsView.as_view(), name='pooja-registrations-recent-public'),
     path('registrations/today-public/', TodayPoojaRegistrationsPublicView.as_view(), name='pooja-registrations-today-public'),
     *router.urls,
