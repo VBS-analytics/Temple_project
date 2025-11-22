@@ -173,13 +173,6 @@ class DonorListView(APIView):
             )
         return Response(payload)
 
-    def patch(self, request, pk: int):
-        member = self.get_object(request, pk)
-        serializer = FamilyMemberSerializer(instance=member, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
 
 class DonorDetailView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
