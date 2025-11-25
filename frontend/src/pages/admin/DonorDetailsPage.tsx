@@ -13,6 +13,7 @@ interface DonorProfile {
   postal_code?: string;
   tamil_star?: string;
   gothra?: string;
+  rasi?: string;
   date_of_birth?: string | null;
   family_name?: string;
   gender?: string;
@@ -729,7 +730,7 @@ const DonorDetailsPage = () => {
         setDonors(donorData);
         setRegistrationGroups(registrations);
         setExpandedSections((prev) => {
-          const next: Record<number, { members: boolean; registrations: boolean }> = {};
+          const next: Record<number, { members: boolean; registrations: boolean; details: boolean }> = {};
           donorData.forEach((donor) => {
             next[donor.user.id] = prev[donor.user.id] ?? { members: false, registrations: false, details: true };
           });
@@ -1243,14 +1244,16 @@ const DonorDetailsPage = () => {
                     onChange={handleMemberChange}
                   >
                     <option value="">Select Gothram</option>
-                    <option value="Atri">Atri</option>
-                    <option value="Bharadvaja">Bharadvaja</option>
-                    <option value="Gautama">Gautama</option>
-                    <option value="Jamadagni">Jamadagni</option>
-                    <option value="Kashyapa">Kashyapa</option>
-                    <option value="Vasishta">Vasishta</option>
-                    <option value="Vishvamitra">Vishvamitra</option>
-                    <option value="Agastya">Agastya</option>
+                      <option value="ஆத்ரேயா">ஆத்ரேயா</option>
+                      <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
+                      <option value="கார்கேயா">கார்கேயா</option>
+                      <option value="கவுண்டின்யா">கவுண்டின்யா</option>
+                      <option value="கெளஷிகா">கெளஷிகா</option>
+                      <option value="கெளதமர்">கெளதமர்</option>
+                      <option value="பரத்வாஜா">பரத்வாஜா</option>
+                      <option value="ஹரிதா">ஹரிதா</option>
+                      <option value="செளநகா">செளநகா</option>
+                      <option value="சாண்டில்யர்">சாண்டில்யர்</option>
                   </select>
                 </div>
 
@@ -1353,7 +1356,7 @@ const DonorDetailsPage = () => {
           
           {filteredDonors.map((donor) => {
             const { user, profile, members } = donor;
-            const sectionState = expandedSections[user.id] ?? { members: false, registrations: false };
+            const sectionState = expandedSections[user.id] ?? { members: false, registrations: false, details: false };
             const registrationGroup =
               registrationIndex.byId.get(user.id) ||
               registrationIndex.byPhone.get(normalizePhone(user.phone_number)) ||
@@ -1494,6 +1497,15 @@ const DonorDetailsPage = () => {
                 icon: (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 19.5l7.5-15 7.5 15M9 19.5h6" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Rasi',
+                value: resolveText(profile.rasi),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v18m-6-6h12" />
                   </svg>
                 ),
               },
@@ -2404,14 +2416,16 @@ const DonorDetailsPage = () => {
                                 disabled={adminMemberEditSubmitting || isDeleting}
                               >
                                 <option value="">Select Gothram</option>
-                                <option value="Atri">Atri</option>
-                                <option value="Bharadvaja">Bharadvaja</option>
-                                <option value="Gautama">Gautama</option>
-                                <option value="Jamadagni">Jamadagni</option>
-                                <option value="Kashyapa">Kashyapa</option>
-                                <option value="Vasishta">Vasishta</option>
-                                <option value="Vishvamitra">Vishvamitra</option>
-                                <option value="Agastya">Agastya</option>
+                                  <option value="ஆத்ரேயா">ஆத்ரேயா</option>
+                                  <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
+                                  <option value="கார்கேயா">கார்கேயா</option>
+                                  <option value="கவுண்டின்யா">கவுண்டின்யா</option>
+                                  <option value="கெளஷிகா">கெளஷிகா</option>
+                                  <option value="கெளதமர்">கெளதமர்</option>
+                                  <option value="பரத்வாஜா">பரத்வாஜா</option>
+                                  <option value="ஹரிதா">ஹரிதா</option>
+                                  <option value="செளநகா">செளநகா</option>
+                                  <option value="சாண்டில்யர்">சாண்டில்யர்</option>
                               </select>
                             </div>
 
@@ -2425,21 +2439,6 @@ const DonorDetailsPage = () => {
                                 type="text"
                                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
                                 value={adminMemberEditForm.family_name}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-relationship-${member.id}`}>
-                                Relationship
-                              </label>
-                              <input
-                                id={`admin-member-relationship-${member.id}`}
-                                name="relationship"
-                                type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.relationship}
                                 onChange={handleAdminMemberEditChange}
                                 disabled={adminMemberEditSubmitting || isDeleting}
                               />

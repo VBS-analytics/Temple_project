@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import { Link } from 'react-router-dom';
 
 import { usePaymentStore } from '../../store/payments';
 import type { CartItem } from '../../store/cart';
 import { useCartStore } from '../../store/cart';
 import { useAuthStore } from '../../store/auth';
+import { loadPdfMake } from '../../lib/pdfMakeLoader';
 
 const formatCurrency = (value?: number | string | null) => {
   if (value === null || value === undefined) {
@@ -144,6 +146,13 @@ const GeneralPaymentPage = () => {
     () => buildHistoryMonthOptions(userHistory, (entry) => entry.completedAt || entry.createdAt),
     [userHistory],
   );
+  const filteredHistory = useMemo(
+    () =>
+      historyMonth
+        ? userHistory.filter((entry) => formatMonthKey(entry.completedAt || entry.createdAt) === historyMonth)
+        : [],
+    [historyMonth, userHistory],
+  );
 
   useEffect(() => {
     if (paymentSnapshot) {
@@ -209,6 +218,101 @@ const GeneralPaymentPage = () => {
     celebrationTimeoutRef.current = setTimeout(() => {
       handleClearSummary();
     }, 1800);
+  };
+
+  const handleDownloadPaymentHistory = async () => {
+    if (!historyMonth || filteredHistory.length === 0) {
+      return;
+    }
+
+    const selectedMonthLabel = formatMonthLabel(historyMonth);
+    const generatedOnLabel = formatDateTime(new Date().toISOString());
+    const content: TDocumentDefinitions['content'] = [
+      { text: 'General Payment History', style: 'pdfTitle' },
+      { text: selectedMonthLabel, style: 'pdfSubtitle' },
+      { text: `Generated on ${generatedOnLabel}`, style: 'pdfMeta' },
+    ];
+
+    filteredHistory.forEach((entry, index) => {
+      const completionLabel = formatDateTime(entry.completedAt || entry.createdAt);
+      content.push(
+        {
+          text: `Payment ${index + 1} • ₹ ${formatCurrency(entry.totalAmount)} • ${completionLabel}`,
+          style: 'pdfEntryTitle',
+        },
+        {
+          text: `Saved on ${formatDate(entry.createdAt)}`,
+          style: 'pdfEntryMeta',
+        },
+      );
+
+      if (entry.items.length > 0) {
+        const tableBody = [
+          [
+            { text: 'Pooja', style: 'pdfTableHeader' },
+            { text: 'Service Date', style: 'pdfTableHeader' },
+            { text: 'Qty', style: 'pdfTableHeader' },
+            { text: 'Amount', style: 'pdfTableHeader' },
+            { text: 'Members', style: 'pdfTableHeader' },
+          ],
+          ...entry.items.map((item) => {
+            const selectedDate = item.customDayDate || item.bookingDate;
+            const quantity =
+              item.members && item.members.length > 0 ? item.members.length : 1;
+            const membersLabel = buildMembersLabel(item.members) ?? '—';
+            return [
+              item.poojaName || 'Pooja',
+              formatDate(selectedDate),
+              quantity.toString(),
+              `₹ ${formatCurrency(item.amount)}`,
+              membersLabel,
+            ];
+          }),
+        ];
+
+        content.push({
+          margin: [0, 0, 0, 8],
+          table: {
+            widths: ['*', 90, 40, 70, '*'],
+            body: tableBody,
+          },
+          layout: 'lightHorizontalLines',
+        });
+      } else {
+        content.push({
+          text: 'No pooja details recorded for this payment.',
+          italics: true,
+          margin: [0, 0, 0, 8],
+        });
+      }
+    });
+
+    const docDefinition: TDocumentDefinitions = {
+      pageSize: 'A4',
+      pageMargins: [40, 40, 40, 40],
+      info: {
+        title: `General Payment History • ${selectedMonthLabel}`,
+      },
+      content,
+      styles: {
+        pdfTitle: { fontSize: 20, bold: true },
+        pdfSubtitle: { fontSize: 12, color: '#475569', margin: [0, 0, 0, 6] },
+        pdfMeta: { fontSize: 10, color: '#6b7280', margin: [0, 0, 0, 12] },
+        pdfEntryTitle: { fontSize: 14, bold: true, margin: [0, 12, 0, 4] },
+        pdfEntryMeta: { fontSize: 10, color: '#475569', margin: [0, 0, 0, 6] },
+        pdfTableHeader: { bold: true, fillColor: '#f3f4f6' },
+      },
+      defaultStyle: {
+        fontSize: 11,
+      },
+    };
+
+    try {
+      const pdfMakeInstance = await loadPdfMake();
+      pdfMakeInstance.createPdf(docDefinition).download(`general-payment-history-${historyMonth}.pdf`);
+    } catch (error) {
+      console.error('Failed to generate payment history PDF', error);
+    }
   };
 
   const renderSummaryContent = () => {
@@ -386,10 +490,6 @@ const GeneralPaymentPage = () => {
 
   const renderHistoryContent = () => {
     const selectedMonthLabel = historyMonth ? formatMonthLabel(historyMonth) : 'Selected month';
-    const filteredHistory = userHistory.filter((entry) => {
-      const key = formatMonthKey(entry.completedAt || entry.createdAt);
-      return key === historyMonth;
-    });
 
     return (
       <div className="space-y-5">
@@ -419,17 +519,29 @@ const GeneralPaymentPage = () => {
             <button
               type="button"
               onClick={() => clearGeneralPaymentHistory(cartKey)}
-            disabled={userHistory.length === 0}
-            className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-              userHistory.length === 0
-                ? 'border-slate-200 text-slate-400'
-                : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Clear History
-          </button>
+              disabled={userHistory.length === 0}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                userHistory.length === 0
+                  ? 'border-slate-200 text-slate-400'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Clear History
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadPaymentHistory}
+              disabled={filteredHistory.length === 0}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                filteredHistory.length === 0
+                  ? 'border-slate-200 text-slate-400'
+                  : 'border-orange-300 text-orange-700 hover:bg-orange-50'
+              }`}
+            >
+              Download Payment History
+            </button>
+          </div>
         </div>
-      </div>
 
         {userHistory.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">

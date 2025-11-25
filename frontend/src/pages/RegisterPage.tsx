@@ -1,5 +1,5 @@
 // RegisterPage.jsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -22,6 +22,20 @@ const cityStateLookup = (() => {
 })();
 
 const validNakshatraSet = new Set(nakshatraOptions.map((option) => option.toLowerCase()));
+const rasiOptions = [
+  'மேஷம்',
+  'ரிஷபம்',
+  'மிதுனம்',
+  'கடகம்',
+  'சிம்மம்',
+  'கன்னி',
+  'துலாம்',
+  'விருச்சிகம்',
+  'தனுசு',
+  'மகரம்',
+  'கும்பம்',
+  'மீனம்',
+] as const;
 
 interface FormValues {
   phone_number: string;
@@ -35,6 +49,7 @@ interface FormValues {
   date_of_birth: string;
   tamil_star: string;
   gothra: string;
+  rasi: string;
   gender: string;
   family_name: string;
   family_selection: string;
@@ -67,8 +82,6 @@ const RegisterPage = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isFocused, setIsFocused] = useState<string | null>(null);
-  const [isStarDropdownOpen, setIsStarDropdownOpen] = useState(false);
-  const starInputRef = useRef<HTMLInputElement | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -83,21 +96,22 @@ const RegisterPage = () => {
     setError,
     setValue,
   } = useForm<FormValues>({
-    defaultValues: {
-      phone_number: '',
-      name: '',
-      address_line1: '',
-      address_line2: '',
-      address_line3: '',
-      city: '',
-      state: '',
-      postal_code: '',
-      date_of_birth: '',
-      tamil_star: '',
-      gothra: '',
-      gender: '',
-      family_name: '',
-      family_selection: '',
+      defaultValues: {
+        phone_number: '',
+        name: '',
+        address_line1: '',
+        address_line2: '',
+        address_line3: '',
+        city: '',
+        state: '',
+        postal_code: '',
+        date_of_birth: '',
+        tamil_star: '',
+        gothra: '',
+        rasi: '',
+        gender: '',
+        family_name: '',
+        family_selection: '',
       notes: '',
       password: '',
       confirm_password: '',
@@ -136,6 +150,7 @@ const RegisterPage = () => {
     date_of_birth: 3,
     tamil_star: 3,
     gothra: 3,
+    rasi: 3,
     gender: 3,
     family_selection: 3,
     family_name: 3,
@@ -1098,108 +1113,51 @@ const RegisterPage = () => {
                             )}
                           </div>
 
-                          <div className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                              Star (Nakshatra) <span className="text-rose-500 ml-1">*</span>
-                            </label>
-                            <Controller
-                              name="tamil_star"
-                              control={control}
-                              defaultValue=""
-                              rules={{
-                                required: 'Star is required',
-                                validate: (value) =>
-                                  value && validNakshatraSet.has(value.trim().toLowerCase())
-                                    ? true
-                                    : 'Please select a star from the list',
-                              }}
-                              render={({ field }) => (
-                                <div className="relative">
-                                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                    </svg>
-                                  </div>
-                                  <input
-                                    ref={starInputRef}
-                                    type="text"
-                                    readOnly
-                                    value={field.value ?? ''}
-                                    className={`w-full rounded-xl border pl-10 pr-12 py-3 capitalize cursor-pointer focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                      isFocused === 'tamil_star' || errors.tamil_star ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                    }`}
-                                    placeholder="Select Nakshatra"
-                                    onFocus={() => {
-                                      handleFocus('tamil_star');
-                                      setIsStarDropdownOpen(true);
-                                    }}
-                                    onBlur={() => {
-                                      setTimeout(() => {
-                                        setIsStarDropdownOpen(false);
-                                        handleBlur();
-                                        field.onBlur();
-                                      }, 120);
-                                    }}
-                                    onClick={() => {
-                                      if (!isStarDropdownOpen) {
-                                        setIsStarDropdownOpen(true);
-                                      }
-                                    }}
-                                    onKeyDown={(event) => {
-                                      if (event.key !== 'Tab') {
-                                        event.preventDefault();
-                                      }
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      if (isStarDropdownOpen) {
-                                        setIsStarDropdownOpen(false);
-                                        requestAnimationFrame(() => {
-                                          starInputRef.current?.blur();
-                                        });
-                                      } else {
-                                        setIsStarDropdownOpen(true);
-                                        requestAnimationFrame(() => {
-                                          starInputRef.current?.focus();
-                                        });
-                                      }
-                                    }}
-                                    aria-label="Toggle Nakshatra options"
-                                  >
-                                    <svg className={`h-5 w-5 transition-transform ${isStarDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                  </button>
-                                  {isStarDropdownOpen && (
-                                    <ul
-                                      className="absolute z-20 mt-2 max-h-48 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"
-                                      role="listbox"
+                            <div className="relative">
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                Star (Nakshatra) <span className="text-rose-500 ml-1">*</span>
+                              </label>
+                              <Controller
+                                name="tamil_star"
+                                control={control}
+                                defaultValue=""
+                                rules={{
+                                  required: 'Star is required',
+                                  validate: (value) =>
+                                    value && validNakshatraSet.has(value.trim().toLowerCase())
+                                      ? true
+                                      : 'Please select a star from the list',
+                                }}
+                                render={({ field }) => (
+                                  <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                      <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                      </svg>
+                                    </div>
+                                    <select
+                                      {...field}
+                                      className={`w-full rounded-xl border pl-10 pr-10 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 appearance-none ${
+                                        isFocused === 'tamil_star' || errors.tamil_star ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                      }`}
+                                      onFocus={() => handleFocus('tamil_star')}
+                                      onBlurCapture={handleBlur}
                                     >
+                                      <option value="">Select Nakshatra</option>
                                       {nakshatraOptions.map((option) => (
-                                        <li
-                                          key={option}
-                                          className="cursor-pointer px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 capitalize"
-                                          onMouseDown={(event) => {
-                                            event.preventDefault();
-                                            field.onChange(option);
-                                            setIsStarDropdownOpen(false);
-                                            requestAnimationFrame(() => {
-                                              starInputRef.current?.blur();
-                                            });
-                                          }}
-                                        >
+                                        <option key={option} value={option}>
                                           {option}
-                                        </li>
+                                        </option>
                                       ))}
-                                    </ul>
-                                  )}
-                                </div>
-                              )}
-                            />
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                      <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                )}
+                              />
                             {errors.tamil_star && (
                               <p className="mt-1 text-xs text-red-600 flex items-center">
                                 <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -1210,7 +1168,7 @@ const RegisterPage = () => {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="relative">
                               <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                                 Gothram <span className="text-rose-500 ml-1">*</span>
@@ -1232,14 +1190,16 @@ const RegisterPage = () => {
                                   onBlur={handleBlur}
                                 >
                                   <option value="">Select Gothram</option>
-                                  <option value="Atri">Atri</option>
-                                  <option value="Bharadvaja">Bharadvaja</option>
-                                  <option value="Gautama">Gautama</option>
-                                  <option value="Jamadagni">Jamadagni</option>
-                                  <option value="Kashyapa">Kashyapa</option>
-                                  <option value="Vasishta">Vasishta</option>
-                                  <option value="Vishvamitra">Vishvamitra</option>
-                                  <option value="Agastya">Agastya</option>
+                                  <option value="ஆத்ரேயா">ஆத்ரேயா</option>
+                                  <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
+                                  <option value="கார்கேயா">கார்கேயா</option>
+                                  <option value="கவுண்டின்யா">கவுண்டின்யா</option>
+                                  <option value="கெளஷிகா">கெளஷிகா</option>
+                                  <option value="கெளதமர்">கெளதமர்</option>
+                                  <option value="பரத்வாஜா">பரத்வாஜா</option>
+                                  <option value="ஹரிதா">ஹரிதா</option>
+                                  <option value="செளநகா">செளநகா</option>
+                                  <option value="சாண்டில்யர்">சாண்டில்யர்</option>
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                                   <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1253,6 +1213,47 @@ const RegisterPage = () => {
                                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                   </svg>
                                   {errors.gothra.message}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="relative">
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                Rasi <span className="text-rose-500 ml-1">*</span>
+                              </label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                </div>
+                                <select
+                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 appearance-none ${
+                                    isFocused === 'rasi' || errors.rasi ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                  }`}
+                                {...register('rasi')}
+                                  onFocus={() => handleFocus('rasi')}
+                                  onBlur={handleBlur}
+                                >
+                                  <option value="">Select Rasi</option>
+                                  {rasiOptions.map((rasi) => (
+                                    <option key={rasi} value={rasi}>
+                                      {rasi}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
+                              {errors.rasi && (
+                                <p className="mt-1 text-xs text-red-600 flex items-center">
+                                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {errors.rasi.message}
                                 </p>
                               )}
                             </div>
