@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { ChangeEvent } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import api, { extractResults } from '../lib/api';
 
@@ -23,6 +23,7 @@ interface ApiDonorProfile {
   postal_code?: string | null;
   gothra?: string | null;
   tamil_star?: string | null;
+  rasi?: string | null;
   gender?: string | null;
   date_of_birth?: string | null;
   family_name?: string | null;
@@ -37,6 +38,7 @@ interface FamilyMember {
   date_of_birth?: string | null;
   tamil_star?: string | null;
   gothra?: string | null;
+  rasi?: string | null;
   family_name?: string | null;
 }
 
@@ -54,8 +56,25 @@ interface FamilyMemberFormState {
   date_of_birth: string;
   tamil_star: string;
   gothra: string;
+  rasi: string;
   family_name: string;
   family_selection: string;
+}
+
+interface DonorProfileFormState {
+  family_name: string;
+  notes: string;
+  gender: string;
+  date_of_birth: string;
+  gothra: string;
+  tamil_star: string;
+  rasi: string;
+  address_line1: string;
+  address_line2: string;
+  address_line3: string;
+  city: string;
+  state: string;
+  postal_code: string;
 }
 
 interface RegistrationMember {
@@ -262,128 +281,62 @@ const DonorProfile = () => {
   ];
 
   const GOTHRA_OPTIONS = [
-    'Atri',
-    'Bharadvaja',
-    'Gautama',
-    'Jamadagni',
-    'Kashyapa',
-    'Vasishta',
-    'Vishvamitra',
-    'Agastya',
+    'ஆத்ரேயா',
+    'நைத்திருவ காட்ச்யபம்',
+    'கார்கேயா',
+    'கவுண்டின்யா',
+    'கெளஷிகா',
+    'கெளதமர்',
+    'பரத்வாஜா',
+    'ஹரிதா',
+    'செளநகா',
+    'சாண்டில்யர்',
   ];
 
   const TAMIL_STAR_OPTIONS = [
-    'aswini',
-    'bharani',
-    'karthigai',
-    'rohini',
-    'mrigsheersham',
-    'tiruvadarai',
-    'punarpoosam',
-    'poosam',
-    'aayilyam',
-    'magam',
-    'pooram',
-    'uttiram',
-    'chitrai',
-    'swathi',
-    'visakam',
-    'anusham',
-    'kettai',
-    'moolam',
-    'pooradam',
-    'uttiradam',
-    'thirivonam',
-    'avittam',
-    'sadayam',
-    'poorattathi',
-    'uttrattathi',
-    'revathi',
+    'அசுவினி',
+    'பரணி',
+    'கிருத்திகை',
+    'ரோகிணி',
+    'மிருகசீரிடம்',
+    'திருவாதிரை',
+    'புனர்பூசம்',
+    'பூசம்',
+    'ஆயில்யம்',
+    'மகம்',
+    'பூரம்',
+    'உத்தரம்',
+    'அஸ்தம்',
+    'சித்திரை',
+    'சுவாதி',
+    'விசாகம்',
+    'அனுஷம்',
+    'கேட்டை',
+    'மூலம்',
+    'பூராடம்',
+    'உத்திராடம்',
+    'திருவோணம்',
+    'அவிட்டம்',
+    'சதயம்',
+    'பூரட்டாதி',
+    'உத்திரட்டாதி',
+    'ரேவதி',
   ];
 
-interface SearchableSelectProps {
-  options: readonly string[];
-  value: string;
-  placeholder?: string;
-  onChange: (value: string) => void;
-}
-
-const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableSelectProps) => {
-  const [query, setQuery] = useState<string>(value);
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setQuery(value);
-  }, [value]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!containerRef.current) {
-        return;
-      }
-      if (!containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const filteredOptions = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
-    if (!trimmed) {
-      return options;
-    }
-    return options.filter((option) => option.toLowerCase().includes(trimmed));
-  }, [options, query]);
-
-  return (
-    <div className="relative w-full" ref={containerRef}>
-      <input
-        type="text"
-        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        value={query}
-        placeholder={placeholder}
-        onFocus={() => setIsOpen(true)}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setQuery(nextValue);
-          onChange(nextValue);
-          setIsOpen(true);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            setIsOpen(false);
-          }
-          if (event.key === 'Escape') {
-            setIsOpen(false);
-          }
-        }}
-      />
-      {isOpen && filteredOptions.length > 0 && (
-        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded border border-slate-300 bg-white text-sm shadow-lg">
-          {filteredOptions.map((option) => (
-            <li
-              key={option}
-              className="cursor-pointer px-3 py-2 hover:bg-slate-100"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                setQuery(option);
-                onChange(option);
-                setIsOpen(false);
-              }}
-            >
-              {option}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
+  const RASI_OPTIONS = [
+    'மேஷம்',
+    'ரிஷபம்',
+    'மிதுனம்',
+    'கடகம்',
+    'சிம்மம்',
+    'கன்னி',
+    'துலாம்',
+    'விருச்சிகம்',
+    'தனுசு',
+    'மகரம்',
+    'கும்பம்',
+    'மீனம்',
+  ];
 
   const createInitialFormState = (profileData?: ApiDonorProfile): FamilyMemberFormState => ({
     name: '',
@@ -392,6 +345,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     date_of_birth: '',
     tamil_star: '',
     gothra: '',
+    rasi: '',
     family_name: (profileData?.family_name ?? '').trim(),
     family_selection: (() => {
       const family = (profileData?.family_name ?? '').trim();
@@ -400,11 +354,34 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     })(),
   });
 
+  const createDonorProfileFormState = (profileData?: ApiDonorProfile): DonorProfileFormState => ({
+    family_name: (profileData?.family_name ?? '').trim(),
+    notes: (profileData?.notes ?? '').trim(),
+    gender: (profileData?.gender ?? '').trim(),
+    date_of_birth: profileData?.date_of_birth ?? '',
+    gothra: (profileData?.gothra ?? '').trim(),
+    tamil_star: (profileData?.tamil_star ?? '').trim(),
+    rasi: (profileData?.rasi ?? '').trim(),
+    address_line1: (profileData?.address_line1 ?? '').trim(),
+    address_line2: (profileData?.address_line2 ?? '').trim(),
+    address_line3: (profileData?.address_line3 ?? '').trim(),
+    city: (profileData?.city ?? '').trim(),
+    state: (profileData?.state ?? '').trim(),
+    postal_code: (profileData?.postal_code ?? '').trim(),
+  });
+
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
   const [formData, setFormData] = useState<FamilyMemberFormState>(() => createInitialFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileFormData, setProfileFormData] = useState<DonorProfileFormState>(() =>
+    createDonorProfileFormState()
+  );
+  const [profileFormError, setProfileFormError] = useState<string | null>(null);
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -463,6 +440,12 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     };
   }, []);
 
+  useEffect(() => {
+    if (!isEditingProfile) {
+      setProfileFormData(createDonorProfileFormState(profile ?? undefined));
+    }
+  }, [profile, isEditingProfile]);
+
   const startAddingNew = () => {
     setFormData(createInitialFormState(profile ?? undefined));
     setFormError(null);
@@ -476,6 +459,64 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     setIsAddingNew(false);
     setFormError(null);
     setFormData(createInitialFormState(profile ?? undefined));
+  };
+
+  const startEditingProfile = () => {
+    setProfileFormData(createDonorProfileFormState(profile ?? undefined));
+    setIsEditingProfile(true);
+    setProfileFormError(null);
+  };
+
+  const cancelProfileEditing = () => {
+    if (profileSubmitting) {
+      return;
+    }
+    setIsEditingProfile(false);
+    setProfileFormError(null);
+    setProfileFormData(createDonorProfileFormState(profile ?? undefined));
+  };
+
+  const handleProfileInputChange =
+    (field: keyof DonorProfileFormState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { value } = event.target;
+      setProfileFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    };
+
+  const submitProfileForm = async () => {
+    setProfileSubmitting(true);
+    setProfileFormError(null);
+    try {
+      const payload = {
+        family_name: profileFormData.family_name.trim(),
+        notes: profileFormData.notes.trim(),
+        gender: profileFormData.gender.trim(),
+        date_of_birth: profileFormData.date_of_birth || null,
+        gothra: profileFormData.gothra.trim(),
+        tamil_star: profileFormData.tamil_star.trim(),
+        rasi: profileFormData.rasi.trim(),
+        address_line1: profileFormData.address_line1.trim(),
+        address_line2: profileFormData.address_line2.trim(),
+        address_line3: profileFormData.address_line3.trim(),
+        city: profileFormData.city.trim(),
+        state: profileFormData.state.trim(),
+        postal_code: profileFormData.postal_code.trim(),
+      };
+      const response = await api.put<ApiDonorProfile>('auth/profile/', payload);
+      const updatedProfile = {
+        ...response.data,
+        rasi: response.data.rasi?.trim() || payload.rasi,
+      };
+      setProfile(updatedProfile);
+      setIsEditingProfile(false);
+      setProfileFormData(createDonorProfileFormState(updatedProfile));
+    } catch (err) {
+      setProfileFormError(extractErrorMessage(err));
+    } finally {
+      setProfileSubmitting(false);
+    }
   };
 
   const handleInputChange =
@@ -495,6 +536,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
       date_of_birth: member.date_of_birth || '',
       tamil_star: member.tamil_star || '',
       gothra: member.gothra || '',
+      rasi: member.rasi || '',
       family_name: member.family_name || profile?.family_name || '',
       family_selection: (() => {
         const fam = (member.family_name || profile?.family_name || '').trim();
@@ -572,6 +614,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
         date_of_birth: formData.date_of_birth || null,
         tamil_star: formData.tamil_star.trim(),
         gothra: formData.gothra.trim(),
+        rasi: formData.rasi.trim(),
         family_name: formData.family_name.trim(),
       };
 
@@ -618,6 +661,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
     { label: 'Date of Birth', value: formatDate(profile?.date_of_birth) },
     { label: 'Gothra', value: resolveText(profile?.gothra) },
     { label: 'Tamil Star', value: resolveText(profile?.tamil_star) },
+    { label: 'Rasi', value: resolveText(profile?.rasi) },
     { label: 'Phone No', value: resolveText(user?.phone_number ?? '') },
     { label: 'Address', value: profileAddress(), span: 'sm:col-span-2 lg:col-span-3' },
   ];
@@ -642,18 +686,195 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
       ) : (
         <div className="mt-6 space-y-8">
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full">
-            <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Donor Details</h2>
-            <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {donorDetails.map(({ label, value, span }) => (
-                <div
-                  key={label}
-                  className={`flex flex-col rounded-lg border border-slate-100 bg-slate-50/60 p-4 ${span ?? ''}`}
-                >
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-                  <dd className="mt-2 text-sm font-semibold text-slate-800 break-words">{value}</dd>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Donor Details</h2>
+                <p className="text-sm text-slate-500">Review and update the information we have on file for you.</p>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                {isEditingProfile ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={cancelProfileEditing}
+                      className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                      disabled={profileSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={submitProfileForm}
+                      className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
+                      disabled={profileSubmitting}
+                    >
+                      {profileSubmitting ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startEditingProfile}
+                    className="rounded border border-orange-600 px-3 py-1 text-sm font-semibold text-orange-600 transition hover:bg-orange-50"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            {profileFormError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {profileFormError}
+              </div>
+            )}
+            {isEditingProfile ? (
+              <div className="mt-6 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Family Name</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.family_name}
+                      onChange={handleProfileInputChange('family_name')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Gender</label>
+                    <select
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.gender}
+                      onChange={handleProfileInputChange('gender')}
+                    >
+                      <option value="">Select</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.date_of_birth}
+                      onChange={handleProfileInputChange('date_of_birth')}
+                    />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Donor Header Text</label>
+                    <textarea
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      rows={2}
+                      value={profileFormData.notes}
+                      onChange={handleProfileInputChange('notes')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Gothra</label>
+                    <select
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.gothra}
+                      onChange={handleProfileInputChange('gothra')}
+                    >
+                      <option value="">Select Gothra</option>
+                      {GOTHRA_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
+                    <select
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.tamil_star}
+                      onChange={handleProfileInputChange('tamil_star')}
+                    >
+                      <option value="">Select Tamil star</option>
+                      {TAMIL_STAR_OPTIONS.map((star) => (
+                        <option key={star} value={star}>
+                          {star}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Rasi</label>
+                    <select
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.rasi}
+                      onChange={handleProfileInputChange('rasi')}
+                    >
+                      <option value="">Select Rasi</option>
+                      {RASI_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Address Line 1</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.address_line1}
+                      onChange={handleProfileInputChange('address_line1')}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Address Line 2</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.address_line2}
+                      onChange={handleProfileInputChange('address_line2')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.city}
+                      onChange={handleProfileInputChange('city')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">State</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.state}
+                      onChange={handleProfileInputChange('state')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Postal Code</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.postal_code}
+                      onChange={handleProfileInputChange('postal_code')}
+                    />
+                  </div>
                 </div>
-              ))}
-            </dl>
+              </div>
+            ) : (
+              <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {donorDetails.map(({ label, value, span }) => (
+                  <div
+                    key={label}
+                    className={`flex flex-col rounded-lg border border-slate-100 bg-slate-50/60 p-4 ${span ?? ''}`}
+                  >
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
+                    <dd className="mt-2 text-sm font-semibold text-slate-800 break-words">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full">
@@ -732,18 +953,44 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
-                          <SearchableSelect
-                            options={TAMIL_STAR_OPTIONS}
-                            value={formData.tamil_star}
-                            placeholder="Select Tamil star"
-                            onChange={(value) =>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Rasi</label>
+                          <select
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.rasi}
+                            onChange={(event) =>
                               setFormData((prev) => ({
                                 ...prev,
-                                tamil_star: value,
+                                rasi: event.target.value,
                               }))
                             }
-                          />
+                          >
+                            <option value="">Select Rasi</option>
+                            {RASI_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
+                          <select
+                            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            value={formData.tamil_star}
+                            onChange={(event) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                tamil_star: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Select Tamil star</option>
+                            {TAMIL_STAR_OPTIONS.map((star) => (
+                              <option key={star} value={star}>
+                                {star}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-700 mb-1">Gothra</label>
@@ -860,18 +1107,44 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
-                            <SearchableSelect
-                              options={TAMIL_STAR_OPTIONS}
-                              value={formData.tamil_star}
-                              placeholder="Select Tamil star"
-                              onChange={(value) =>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Rasi</label>
+                            <select
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                              value={formData.rasi}
+                              onChange={(event) =>
                                 setFormData((prev) => ({
                                   ...prev,
-                                  tamil_star: value,
+                                  rasi: event.target.value,
                                 }))
                               }
-                            />
+                            >
+                              <option value="">Select Rasi</option>
+                              {RASI_OPTIONS.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Star</label>
+                            <select
+                              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                              value={formData.tamil_star}
+                              onChange={(event) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  tamil_star: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Select Tamil star</option>
+                              {TAMIL_STAR_OPTIONS.map((star) => (
+                                <option key={star} value={star}>
+                                  {star}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-700 mb-1">Gothra</label>
@@ -964,6 +1237,10 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                               <dd className="text-slate-700">{formatDate(member.date_of_birth)}</dd>
                             </div>
                             <div>
+                              <dt className="text-xs text-slate-500">Rasi</dt>
+                              <dd className="text-slate-700">{resolveText(member.rasi)}</dd>
+                            </div>
+                            <div>
                               <dt className="text-xs text-slate-500">Tamil Star</dt>
                               <dd className="text-slate-700">{resolveText(member.tamil_star)}</dd>
                             </div>
@@ -985,23 +1262,26 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                 {/* Desktop Table View */}
                 <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <table className="w-full min-w-[1600px] divide-y divide-slate-200 text-sm">
                       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                         <tr>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[160px]">Name</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[160px]">Relationship</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[120px]">Gender</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[140px]">Date of Birth</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[180px]">Tamil Star</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[150px]">Gothra</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[220px]">Family Name</th>
-                          <th scope="col" className="px-4 py-3 text-right font-semibold min-w-[140px]">Actions</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[280px]">Name</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[240px]">Relationship</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[180px]">Gender</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[180px]">
+                            Date of Birth
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[200px]">Rasi</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[240px]">Tamil Star</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[220px]">Gothra</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold min-w-[320px]">Family Name</th>
+                          <th scope="col" className="px-4 py-3 text-right font-semibold min-w-[180px]">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {isAddingNew && (
                           <tr className="bg-slate-50/70">
-                            <td className="px-4 py-3 align-top min-w-[160px]">
+                            <td className="px-4 py-3 align-top min-w-[280px]">
                               <input
                                 type="text"
                                 className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
@@ -1010,7 +1290,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 placeholder="Enter full name"
                               />
                             </td>
-                            <td className="px-4 py-3 align-top min-w-[160px]">
+                              <td className="px-4 py-3 align-top min-w-[240px]">
                               <input
                                 type="text"
                                 className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
@@ -1019,9 +1299,9 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 placeholder="e.g., Son, Daughter"
                               />
                             </td>
-                            <td className="px-4 py-3 align-top min-w-[120px]">
+                            <td className="px-4 py-3 align-top min-w-[180px]">
                               <select
-                                className="w-full min-w-[120px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                className="w-full min-w-[180px] rounded border border-slate-300 px-2 py-1 text-sm"
                                 value={formData.gender}
                                 onChange={handleInputChange('gender')}
                               >
@@ -1031,7 +1311,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 <option value="Other">Other</option>
                               </select>
                             </td>
-                            <td className="px-4 py-3 align-top min-w-[140px]">
+                            <td className="px-4 py-3 align-top min-w-[180px]">
                               <input
                                 type="date"
                                 className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
@@ -1039,22 +1319,47 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 onChange={handleInputChange('date_of_birth')}
                               />
                             </td>
-                            <td className="px-4 py-3 align-top min-w-[180px]">
-                              <SearchableSelect
-                                options={TAMIL_STAR_OPTIONS}
-                                value={formData.tamil_star}
-                                placeholder="Select Tamil star"
-                                onChange={(value) =>
+                            <td className="px-4 py-3 align-top min-w-[200px]">
+                              <select
+                                className="w-full min-w-[200px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.rasi}
+                                onChange={(event) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    tamil_star: value,
+                                    rasi: event.target.value,
                                   }))
                                 }
-                              />
+                              >
+                                <option value="">Select Rasi</option>
+                                {RASI_OPTIONS.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
-                            <td className="px-4 py-3 align-top min-w-[150px]">
+                            <td className="px-4 py-3 align-top min-w-[240px]">
                               <select
-                                className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                className="w-full min-w-[240px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={formData.tamil_star}
+                                onChange={(event) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    tamil_star: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Select Tamil star</option>
+                                {TAMIL_STAR_OPTIONS.map((star) => (
+                                  <option key={star} value={star}>
+                                    {star}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 align-top min-w-[220px]">
+                              <select
+                                className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
                                 value={formData.gothra}
                                 onChange={handleInputChange('gothra')}
                               >
@@ -1066,12 +1371,12 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 ))}
                               </select>
                             </td>
-                            <td className="px-4 py-3 align-top min-w-[220px]">
+                            <td className="px-4 py-3 align-top min-w-[320px]">
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-                                <div className="w-full sm:min-w-[220px]">
+                                <div className="w-full sm:min-w-[320px]">
                                   <label className="sr-only">Family</label>
                                   <select
-                                    className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    className="w-full min-w-[320px] rounded border border-slate-300 px-2 py-1 text-sm"
                                     value={formData.family_selection}
                                     onChange={(e) => {
                                       const val = e.target.value;
@@ -1101,7 +1406,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3 align-top text-right min-w-[140px]">
+                            <td className="px-4 py-3 align-top text-right min-w-[180px]">
                               <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
                                 <button
                                   type="button"
@@ -1127,7 +1432,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                           <tr key={member.id} className="hover:bg-slate-50">
                             {editingMemberId === member.id ? (
                               <>
-                                <td className="px-4 py-3 align-top min-w-[160px]">
+                                <td className="px-4 py-3 align-top min-w-[280px]">
                                   <input
                                     type="text"
                                     className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
@@ -1136,7 +1441,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                     placeholder="Enter full name"
                                   />
                                 </td>
-                                <td className="px-4 py-3 align-top min-w-[160px]">
+                                <td className="px-4 py-3 align-top min-w-[240px]">
                                   <input
                                     type="text"
                                     className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
@@ -1145,9 +1450,9 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                     placeholder="e.g., Son, Daughter"
                                   />
                                 </td>
-                                <td className="px-4 py-3 align-top min-w-[120px]">
+                                <td className="px-4 py-3 align-top min-w-[180px]">
                                   <select
-                                    className="w-full min-w-[120px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    className="w-full min-w-[180px] rounded border border-slate-300 px-2 py-1 text-sm"
                                     value={formData.gender}
                                     onChange={handleInputChange('gender')}
                                   >
@@ -1157,7 +1462,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                     <option value="Other">Other</option>
                                   </select>
                                 </td>
-                                <td className="px-4 py-3 align-top min-w-[140px]">
+                                <td className="px-4 py-3 align-top min-w-[180px]">
                                   <input
                                     type="date"
                                     className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
@@ -1165,22 +1470,47 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                     onChange={handleInputChange('date_of_birth')}
                                   />
                                 </td>
-                                <td className="px-4 py-3 align-top min-w-[180px]">
-                                  <SearchableSelect
-                                    options={TAMIL_STAR_OPTIONS}
-                                    value={formData.tamil_star}
-                                    placeholder="Select Tamil star"
-                                    onChange={(value) =>
+                                <td className="px-4 py-3 align-top min-w-[200px]">
+                                  <select
+                                    className="w-full min-w-[200px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.rasi}
+                                    onChange={(event) =>
                                       setFormData((prev) => ({
                                         ...prev,
-                                        tamil_star: value,
+                                        rasi: event.target.value,
                                       }))
                                     }
-                                  />
+                                  >
+                                    <option value="">Select Rasi</option>
+                                    {RASI_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </td>
-                                <td className="px-4 py-3 align-top min-w-[150px]">
+                                <td className="px-4 py-3 align-top min-w-[240px]">
                                   <select
-                                    className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    className="w-full min-w-[240px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                    value={formData.tamil_star}
+                                    onChange={(event) =>
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        tamil_star: event.target.value,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">Select Tamil star</option>
+                                    {TAMIL_STAR_OPTIONS.map((star) => (
+                                      <option key={star} value={star}>
+                                        {star}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3 align-top min-w-[220px]">
+                                  <select
+                                    className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
                                     value={formData.gothra}
                                     onChange={handleInputChange('gothra')}
                                   >
@@ -1192,12 +1522,12 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                     ))}
                                   </select>
                                 </td>
-                                <td className="px-4 py-3 align-top min-w-[220px]">
+                                <td className="px-4 py-3 align-top min-w-[320px]">
                                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-                                    <div className="w-full sm:min-w-[220px]">
+                                    <div className="w-full sm:min-w-[320px]">
                                       <label className="sr-only">Family</label>
                                       <select
-                                        className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm"
+                                        className="w-full min-w-[320px] rounded border border-slate-300 px-2 py-1 text-sm"
                                         value={formData.family_selection}
                                         onChange={(e) => {
                                           const val = e.target.value;
@@ -1227,7 +1557,7 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 align-top text-right min-w-[140px]">
+                                <td className="px-4 py-3 align-top text-right min-w-[180px]">
                                   <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
                                     <button
                                       type="button"
@@ -1250,20 +1580,21 @@ const SearchableSelect = ({ options, value, placeholder, onChange }: SearchableS
                               </>
                             ) : (
                               <>
-                                <td className="px-4 py-3 text-slate-700 min-w-[160px]">{resolveText(member.name)}</td>
-                                <td className="px-4 py-3 text-slate-600 min-w-[160px]">
+                                <td className="px-4 py-3 text-slate-700 min-w-[280px]">{resolveText(member.name)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[240px]">
                                   {resolveText(member.relationship)}
                                 </td>
-                                <td className="px-4 py-3 text-slate-600 min-w-[120px]">{resolveText(member.gender)}</td>
-                                <td className="px-4 py-3 text-slate-600 min-w-[140px]">
+                                <td className="px-4 py-3 text-slate-600 min-w-[180px]">{resolveText(member.gender)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[180px]">
                                   {formatDate(member.date_of_birth)}
                                 </td>
-                                <td className="px-4 py-3 text-slate-600 min-w-[180px]">{resolveText(member.tamil_star)}</td>
-                                <td className="px-4 py-3 text-slate-600 min-w-[150px]">{resolveText(member.gothra)}</td>
-                                <td className="px-4 py-3 text-slate-600 min-w-[220px]">
+                                <td className="px-4 py-3 text-slate-600 min-w-[200px]">{resolveText(member.rasi)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[240px]">{resolveText(member.tamil_star)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[220px]">{resolveText(member.gothra)}</td>
+                                <td className="px-4 py-3 text-slate-600 min-w-[320px]">
                                   {resolveText(member.family_name ?? profile?.family_name ?? '')}
                                 </td>
-                                <td className="px-4 py-3 text-right min-w-[140px]">
+                                <td className="px-4 py-3 text-right min-w-[180px]">
                                   <button
                                     type="button"
                                     onClick={() => startEditing(member)}

@@ -27,6 +27,7 @@ export interface CartItem {
   memberRelationship?: string;
   memberGender?: string;
   memberTamilStar?: string;
+  memberRasi?: string;
   memberGothra?: string;
   memberDob?: string | null;
   memberFamilyName?: string | null;
@@ -37,6 +38,7 @@ export interface CartItem {
     gender?: string | null;
     tamilStar?: string | null;
     gothra?: string | null;
+    rasi?: string | null;
     dob?: string | null;
     familyName?: string | null;
     selectionKey?: string | null;

@@ -207,6 +207,7 @@ const PoojaCartPage = () => {
           gender: item.memberGender ?? undefined,
           tamilStar: item.memberTamilStar ?? undefined,
           gothra: item.memberGothra ?? undefined,
+          rasi: item.memberRasi ?? undefined,
           dob: item.memberDob ?? undefined,
         },
       ];
@@ -226,6 +227,11 @@ const PoojaCartPage = () => {
         (member && typeof (member as any).gothram === 'string'
           ? (member as any).gothram.trim()
           : undefined);
+      const rasi =
+        (member?.rasi as string | undefined)?.toString().trim() ||
+        (member && typeof (member as any).rasi === 'string'
+          ? (member as any).rasi.trim()
+          : undefined);
       const familyName =
         (member?.familyName as string | undefined)?.toString().trim() ||
         (member && typeof (member as any).family_name === 'string'
@@ -242,6 +248,7 @@ const PoojaCartPage = () => {
         gender,
         tamilStar,
         gothra,
+        rasi,
         familyName,
         dob: dobRaw,
       };
@@ -304,6 +311,9 @@ const PoojaCartPage = () => {
                 )}
                 {member.tamilStar && (
                   <div className="text-xs text-slate-500">Tamil star: {member.tamilStar}</div>
+                )}
+                {member.rasi && (
+                  <div className="text-xs text-slate-500">Rasi: {member.rasi}</div>
                 )}
                 {member.gothra && (
                   <div className="text-xs text-slate-500">Gothra: {member.gothra}</div>
@@ -381,6 +391,7 @@ const PoojaCartPage = () => {
                       gender: item.memberGender ?? undefined,
                       tamilStar: item.memberTamilStar ?? undefined,
                       gothra: item.memberGothra ?? undefined,
+                      rasi: item.memberRasi ?? undefined,
                       dob: item.memberDob ?? undefined,
                     },
                   ];
@@ -400,6 +411,11 @@ const PoojaCartPage = () => {
                     (member && typeof (member as any).gothram === 'string'
                       ? (member as any).gothram.trim()
                       : undefined);
+                  const rasi =
+                    (member?.rasi as string | undefined)?.toString().trim() ||
+                    (member && typeof (member as any).rasi === 'string'
+                      ? (member as any).rasi.trim()
+                      : undefined);
                   const familyName =
                     (member?.familyName as string | undefined)?.toString().trim() ||
                     (member && typeof (member as any).family_name === 'string'
@@ -416,6 +432,7 @@ const PoojaCartPage = () => {
                     gender,
                     tamilStar,
                     gothra,
+                    rasi,
                     familyName,
                     dob: dobRaw,
                   };
@@ -473,6 +490,9 @@ const PoojaCartPage = () => {
                             )}
                             {member.tamilStar && (
                               <div className="text-xs text-slate-500">Tamil star: {member.tamilStar}</div>
+                            )}
+                            {member.rasi && (
+                              <div className="text-xs text-slate-500">Rasi: {member.rasi}</div>
                             )}
                             {member.gothra && (
                               <div className="text-xs text-slate-500">Gothra: {member.gothra}</div>

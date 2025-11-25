@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
 import api from '../../lib/api';
+import { loadPdfMake } from '../../lib/pdfMakeLoader';
 import { useCartStore, type CartItem } from '../../store/cart';
 import { useAuthStore } from '../../store/auth';
 import { usePaymentStore } from '../../store/payments';
@@ -18,6 +20,19 @@ interface CombineLookupPayload {
   donor_phone?: string | null;
   items: CartItem[];
 }
+
+const buildMembersLabel = (members?: CartItem['members']) => {
+  if (!members || members.length === 0) {
+    return null;
+  }
+  const names = members
+    .map((member) => member?.name?.toString().trim())
+    .filter((name): name is string => Boolean(name && name.length > 0));
+  if (names.length === 0) {
+    return null;
+  }
+  return names.join(', ');
+};
 
 const formatCurrency = (value?: number | string | null) => {
   if (value === null || value === undefined) {
@@ -171,6 +186,113 @@ const CombinePaymentPage = () => {
     () => buildHistoryMonthOptions(combinePaymentHistory, (entry) => entry.completedAt),
     [combinePaymentHistory],
   );
+  const filteredHistory = useMemo(
+    () =>
+      historyMonth
+        ? combinePaymentHistory.filter((entry) => formatMonthKey(entry.completedAt) === historyMonth)
+        : [],
+    [combinePaymentHistory, historyMonth],
+  );
+
+  const handleDownloadPaymentHistory = async () => {
+    if (!historyMonth || filteredHistory.length === 0) {
+      return;
+    }
+
+    const selectedMonthLabel = formatMonthLabel(historyMonth);
+    const generatedOnLabel = formatDateTime(new Date().toISOString());
+    const content: TDocumentDefinitions['content'] = [
+      { text: 'Combine Payment History', style: 'pdfTitle' },
+      { text: selectedMonthLabel, style: 'pdfSubtitle' },
+      { text: `Generated on ${generatedOnLabel}`, style: 'pdfMeta' },
+    ];
+
+    filteredHistory.forEach((entry, index) => {
+      const completionLabel = formatDateTime(entry.completedAt);
+      content.push(
+        {
+          text: `Payment ${index + 1} • ₹ ${formatCurrency(entry.combinedTotal)} • ${completionLabel}`,
+          style: 'pdfEntryTitle',
+        },
+        {
+          text: `Your share ₹ ${formatCurrency(entry.yourTotal)} • Donor share ₹ ${formatCurrency(
+            entry.donor?.totalAmount ?? 0,
+          )}`,
+          style: 'pdfEntryMeta',
+        },
+      );
+
+      const tableBody = [
+        [
+          { text: 'Owner', style: 'pdfTableHeader' },
+          { text: 'Pooja', style: 'pdfTableHeader' },
+          { text: 'Service Date', style: 'pdfTableHeader' },
+          { text: 'Amount', style: 'pdfTableHeader' },
+          { text: 'Members', style: 'pdfTableHeader' },
+        ],
+        ...entry.yourItems.map((item) => [
+          'You',
+          item.poojaName || 'Pooja',
+          formatDate(item.customDayDate || item.bookingDate),
+          `₹ ${formatCurrency(item.amount)}`,
+          buildMembersLabel(item.members) ?? '—',
+        ]),
+        ...(entry.donor?.items || []).map((item) => [
+          entry.donor?.name ?? 'Donor',
+          item.poojaName || 'Pooja',
+          formatDate(item.customDayDate || item.bookingDate),
+          `₹ ${formatCurrency(item.amount)}`,
+          buildMembersLabel(item.members) ?? '—',
+        ]),
+      ];
+
+      if (tableBody.length > 1) {
+        content.push({
+          margin: [0, 0, 0, 8],
+          table: {
+            widths: ['auto', '*', 90, 70, '*'],
+            body: tableBody,
+          },
+          layout: 'lightHorizontalLines',
+        });
+      } else {
+        content.push({
+          text: 'No items recorded for this combined payment.',
+          italics: true,
+          margin: [0, 0, 0, 8],
+        });
+      }
+    });
+
+    const docDefinition: TDocumentDefinitions = {
+      pageSize: 'A4',
+      pageMargins: [40, 40, 40, 40],
+      info: {
+        title: `Combine Payment History • ${selectedMonthLabel}`,
+      },
+      content,
+      styles: {
+        pdfTitle: { fontSize: 20, bold: true },
+        pdfSubtitle: { fontSize: 12, color: '#475569', margin: [0, 0, 0, 6] },
+        pdfMeta: { fontSize: 10, color: '#6b7280', margin: [0, 0, 0, 12] },
+        pdfEntryTitle: { fontSize: 14, bold: true, margin: [0, 12, 0, 4] },
+        pdfEntryMeta: { fontSize: 10, color: '#475569', margin: [0, 0, 0, 6] },
+        pdfTableHeader: { bold: true, fillColor: '#f3f4f6' },
+      },
+      defaultStyle: {
+        fontSize: 11,
+      },
+    };
+
+    try {
+      const pdfMakeInstance = await loadPdfMake();
+      pdfMakeInstance
+        .createPdf(docDefinition)
+        .download(`combine-payment-history-${historyMonth}.pdf`);
+    } catch (error) {
+      console.error('Failed to generate combined payment history PDF', error);
+    }
+  };
 
   const resolveDevoteesLabel = (item: CartItem) => {
     if (Array.isArray(item.members) && item.members.length > 0) {
@@ -587,9 +709,6 @@ const CombinePaymentPage = () => {
     };
 
     const selectedMonthLabel = historyMonth ? formatMonthLabel(historyMonth) : 'Selected month';
-    const filteredHistory = combinePaymentHistory.filter(
-      (entry) => formatMonthKey(entry.completedAt) === historyMonth,
-    );
 
     return (
       <div className="space-y-5">
@@ -611,25 +730,37 @@ const CombinePaymentPage = () => {
               onChange={(event) => setHistoryMonth(event.target.value)}
             >
               {historyMonthOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={clearCombinePaymentHistory}
-              disabled={combinePaymentHistory.length === 0}
-              className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                combinePaymentHistory.length === 0
-                  ? 'border-slate-200 text-slate-400'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Clear History
-            </button>
-          </div>
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={clearCombinePaymentHistory}
+            disabled={combinePaymentHistory.length === 0}
+            className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+              combinePaymentHistory.length === 0
+                ? 'border-slate-200 text-slate-400'
+                : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Clear History
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPaymentHistory}
+            disabled={filteredHistory.length === 0}
+            className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+              filteredHistory.length === 0
+                ? 'border-slate-200 text-slate-400'
+                : 'border-orange-300 text-orange-700 hover:bg-orange-50'
+            }`}
+          >
+            Download Payment History
+          </button>
         </div>
+      </div>
 
         {combinePaymentHistory.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">

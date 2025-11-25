@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
@@ -368,6 +369,7 @@ interface ProfileMember {
   tamil_star?: string;
   gothra?: string;
   family_name?: string | null;
+  rasi?: string | null;
 }
 
 interface ProfileDetails {
@@ -381,6 +383,7 @@ interface ProfileDetails {
   gothra?: string;
   date_of_birth?: string | null;
   family_name?: string | null;
+  rasi?: string | null;
 }
 
 interface ProfilePayload {
@@ -421,6 +424,7 @@ interface MemberDirectoryEntry {
   gender?: string;
   tamilStar?: string;
   gothra?: string;
+  rasi?: string | null;
   dob?: string | null;
   familyName?: string | null;
   source: MemberSource;
@@ -812,6 +816,7 @@ const PoojaRegistrationPage = () => {
   const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
   const [bookingMode, setBookingMode] = useState<BookingMode>('full');
   const [tableMessage, setTableMessage] = useState<{ status: 'info' | 'error'; text: string } | null>(null);
+  const [warningPopup, setWarningPopup] = useState<string | null>(null);
   const adminDefaultClearedRef = useRef(false);
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
@@ -834,6 +839,31 @@ const PoojaRegistrationPage = () => {
     },
     [fallbackMemberSelection],
   );
+
+  const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearWarningTimer = useCallback(() => {
+    if (warningTimerRef.current) {
+      clearTimeout(warningTimerRef.current);
+      warningTimerRef.current = null;
+    }
+  }, []);
+  const showWarningPopup = useCallback(
+    (message: string) => {
+      setTableMessage(null);
+      clearWarningTimer();
+      setWarningPopup(message);
+      const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
+      warningTimerRef.current = schedule(() => {
+        setWarningPopup(null);
+        warningTimerRef.current = null;
+      }, 4500);
+    },
+    [clearWarningTimer],
+  );
+  const hideWarningPopup = useCallback(() => {
+    clearWarningTimer();
+    setWarningPopup(null);
+  }, [clearWarningTimer]);
 
   useEffect(() => {
     setDaySelectionMap((prev) => {
@@ -905,6 +935,12 @@ const PoojaRegistrationPage = () => {
     }
   }, [requiresMemberSelection, selectedMemberIds]);
 
+  useEffect(() => {
+    return () => {
+      hideWarningPopup();
+    };
+  }, [hideWarningPopup]);
+
   const memberDirectory = useMemo(() => {
     const options: Array<{ value: string; label: string }> = [];
     const lookup = new Map<string, MemberDirectoryEntry>();
@@ -938,6 +974,7 @@ const PoojaRegistrationPage = () => {
       gender: undefined,
       tamilStar: profile?.profile?.tamil_star,
       gothra: profile?.profile?.gothra,
+      rasi: profile?.profile?.rasi,
       dob: profile?.profile?.date_of_birth ?? null,
       familyName: profile?.profile?.family_name ?? null,
       source: 'self',
@@ -965,6 +1002,7 @@ const PoojaRegistrationPage = () => {
         gender: member.gender,
         tamilStar: member.tamil_star,
         gothra: member.gothra,
+        rasi: member.rasi,
         dob: member.date_of_birth ?? null,
         familyName: member.family_name ?? null,
         source: 'profile_member',
@@ -998,6 +1036,7 @@ const PoojaRegistrationPage = () => {
         gender: undefined,
         tamilStar: donor.profile?.tamil_star,
         gothra: donor.profile?.gothra,
+        rasi: donor.profile?.rasi,
         dob: donor.profile?.date_of_birth ?? null,
         familyName: donor.profile?.family_name ?? null,
         source: 'donor',
@@ -1025,6 +1064,7 @@ const PoojaRegistrationPage = () => {
           gender: member.gender,
           tamilStar: member.tamil_star,
           gothra: member.gothra,
+          rasi: member.rasi,
           dob: member.date_of_birth ?? null,
           familyName: member.family_name ?? null,
           source: 'donor_member',
@@ -1072,6 +1112,7 @@ const PoojaRegistrationPage = () => {
     gender: entry.gender,
     tamilStar: entry.tamilStar,
     gothra: entry.gothra,
+    rasi: entry.rasi,
     dob: entry.dob ?? null,
     familyName: entry.familyName ?? null,
     selectionKey: entry.key,
@@ -1107,6 +1148,7 @@ const PoojaRegistrationPage = () => {
           gender: undefined,
           tamilStar: undefined,
           gothra: undefined,
+          rasi: undefined,
           dob: null,
           familyName: null,
           selectionKey: memberKey,
@@ -1121,6 +1163,7 @@ const PoojaRegistrationPage = () => {
         gender: undefined,
         tamilStar: undefined,
         gothra: undefined,
+        rasi: undefined,
         dob: null,
         familyName: null,
         selectionKey: memberKey,
@@ -2110,7 +2153,7 @@ const PoojaRegistrationPage = () => {
     }
 
     if (!dayOptionDisabled && availableDayOptions.length > 0 && !selectedDayId) {
-      setTableMessage({ status: 'error', text: 'Please select a day option before adding this pooja.' });
+      showWarningPopup('Please select a day option before adding this pooja.');
       return;
     }
 
@@ -2126,11 +2169,11 @@ const PoojaRegistrationPage = () => {
 
     if (requiresChartDetails) {
       if (!chartDetails?.date) {
-        setTableMessage({ status: 'error', text: 'Please pick a date for the donor chart option before adding to the cart.' });
-        return;
-      }
-      if (!chartDetails?.note?.trim()) {
-        setTableMessage({ status: 'error', text: 'Please provide notes for the donor chart option before adding to the cart.' });
+      showWarningPopup('Please pick a date for the donor chart option before adding to the cart.');
+      return;
+    }
+    if (!chartDetails?.note?.trim()) {
+        showWarningPopup('Please provide notes for the donor chart option before adding to the cart.');
         return;
       }
     }
@@ -2150,18 +2193,18 @@ const PoojaRegistrationPage = () => {
           ? 'Fetching the next occurrence. Please try again in a moment.'
           : (getOccurrenceMessage(occurrenceState) ??
             'Select a day option and wait for the next occurrence before adding this pooja to the cart.');
-      setTableMessage({ status: 'error', text: fallbackMessage });
+      showWarningPopup(fallbackMessage);
       return;
     }
 
     if (!resolvedBookingDate) {
-      setTableMessage({ status: 'error', text: 'Choose or confirm a pooja date before adding this item to the cart.' });
+      showWarningPopup('Choose or confirm a pooja date before adding this item to the cart.');
       return;
     }
     const amountForCart = getRowAmount(row);
     const amountValidationMessage = validateRowAmount(row, amountForCart);
     if (amountValidationMessage) {
-      setTableMessage({ status: 'error', text: amountValidationMessage });
+      showWarningPopup(amountValidationMessage);
       return;
     }
     const mapSelection = memberSelectionMap[row.pooja.id];
@@ -2169,10 +2212,7 @@ const PoojaRegistrationPage = () => {
       mapSelection && mapSelection.length > 0 ? mapSelection : selectedMemberIds;
     const selectedMemberKeys = Array.from(new Set(selectedMemberKeysRaw));
     if (selectedMemberKeys.length === 0) {
-      setTableMessage({
-        status: 'error',
-        text: 'Please select at least one devotee before adding this pooja.',
-      });
+      showWarningPopup('Please select at least one devotee before adding this pooja.');
       return;
     }
 
@@ -2220,6 +2260,7 @@ const PoojaRegistrationPage = () => {
       memberRelationship: primaryPayload.relationship ?? undefined,
       memberGender: primaryPayload.gender,
       memberTamilStar: primaryPayload.tamilStar,
+      memberRasi: primaryPayload.rasi,
       memberGothra: primaryPayload.gothra,
       memberDob: primaryPayload.dob ?? null,
       memberFamilyName: primaryPayload.familyName ?? null,
@@ -2343,6 +2384,7 @@ const PoojaRegistrationPage = () => {
       memberRelationship: primaryEntry?.relationship ?? undefined,
       memberGender: primaryEntry?.gender,
       memberTamilStar: primaryEntry?.tamilStar,
+      memberRasi: primaryEntry?.rasi,
       memberGothra: primaryEntry?.gothra,
       memberDob: primaryEntry?.dob ?? null,
       members: membersPayload,
@@ -2386,6 +2428,29 @@ const PoojaRegistrationPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8">
+      {warningPopup && (
+        <div className="fixed bottom-6 right-6 z-50 flex pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-sm xl:max-w-md">
+            <div
+              role="alert"
+              className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-[0_20px_40px_-20px_rgba(15,23,42,0.9)] transition duration-200 hover:shadow-[0_25px_40px_-10px_rgba(15,23,42,0.8)]"
+            >
+              <span className="flex items-center justify-center rounded-full bg-white/20 p-2 text-base">
+                ⚠️
+              </span>
+              <p className="flex-1 leading-snug">{warningPopup}</p>
+              <button
+                type="button"
+                onClick={hideWarningPopup}
+                className="text-white/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                aria-label="Close warning"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 sm:mb-8 md:mb-10">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Pooja Registration</h1>
@@ -2520,7 +2585,15 @@ const PoojaRegistrationPage = () => {
                           Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
                         
                         return (
-                          <tr key={row.pooja.id} className="hover:bg-gray-50 transition-colors">
+                        <tr
+                          key={row.pooja.id}
+                        className={clsx(
+                          'transition-colors',
+                          inCart
+                            ? 'bg-emerald-200 text-emerald-900 hover:bg-emerald-300 ring-1 ring-emerald-400 shadow-inner'
+                            : 'hover:bg-gray-50',
+                        )}
+                        >
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                               {row.code}
                             </td>
@@ -2777,7 +2850,15 @@ const PoojaRegistrationPage = () => {
                       Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
 
                     return (
-                      <div key={row.pooja.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                      <div
+                        key={row.pooja.id}
+                        className={clsx(
+                          'overflow-hidden rounded-lg',
+                          inCart
+                            ? 'bg-emerald-200 border border-emerald-400 shadow-xl text-emerald-900'
+                            : 'bg-white border border-gray-200 shadow-sm',
+                        )}
+                      >
                         <div className="p-4 border-b border-gray-200 bg-gray-50">
                           <div className="flex justify-between items-start">
                             <div>

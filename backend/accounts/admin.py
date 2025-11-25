@@ -43,8 +43,8 @@ class UserAdmin(DjangoUserAdmin):
 
 @admin.register(DonorProfile)
 class DonorProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "city", "tamil_star", "gothra")
-    search_fields = ("user__phone_number", "user__name", "tamil_star", "gothra")
+    list_display = ("user", "city", "tamil_star", "rasi", "gothra")
+    search_fields = ("user__phone_number", "user__name", "tamil_star", "rasi", "gothra")
 
 
 @admin.register(OtpToken)
@@ -56,5 +56,5 @@ class OtpTokenAdmin(admin.ModelAdmin):
 
 @admin.register(FamilyMember)
 class FamilyMemberAdmin(admin.ModelAdmin):
-    list_display = ("user", "name", "relationship", "gender")
-    search_fields = ("name", "relationship", "user__phone_number", "user__name")
+    list_display = ("user", "name", "relationship", "gender", "rasi")
+    search_fields = ("name", "relationship", "user__phone_number", "user__name", "rasi")

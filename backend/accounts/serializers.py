@@ -23,6 +23,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "postal_code",
             "gothra",
             "tamil_star",
+            "rasi",
             "gender",
             "date_of_birth",
             "family_name",
@@ -31,6 +32,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ("donor_id",)
         extra_kwargs = {
             "gender": {"required": False, "allow_blank": True},
+            "rasi": {"required": False, "allow_blank": True},
         }
 
     def get_donor_id(self, obj):
@@ -47,6 +49,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             "relationship",
             "date_of_birth",
             "tamil_star",
+            "rasi",
             "gothra",
             "family_name",
         )
@@ -56,6 +59,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             "relationship": {"required": False, "allow_blank": True},
             "date_of_birth": {"required": False, "allow_null": True},
             "tamil_star": {"required": False, "allow_blank": True},
+            "rasi": {"required": False, "allow_blank": True},
             "gothra": {"required": False, "allow_blank": True},
             "family_name": {"required": False, "allow_blank": True},
         }

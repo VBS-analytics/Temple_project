@@ -80,38 +80,45 @@ def _utc_zone() -> ZoneInfo:
 # --------------------------------------------------------------------------- #
 
 NAKSHATRA_ALIASES = {
-    0: {"aswini", "ashwini", "aswathi", "aswini"},
-    1: {"bharani"},
-    2: {"krittika", "krithigai", "karthigai", "krittika"},
-    3: {"rohini"},
-    4: {"mrigashirsha", "mrigasira", "mirugaseeridam", "mrigaseera"},
-    5: {"ardra", "aarudra", "thiruvathirai"},
-    6: {"punarvasu", "punarpoosam", "punarphalguni"},
-    7: {"pushya", "poosam", "pushyam"},
-    8: {"ashlesha", "ayilyam", "aayilyam", "ashlesham"},
-    9: {"magha", "magam", "makam"},
-    10: {"purva phalguni", "puram", "poorvapalguni", "poorva-phalguni"},
-    11: {"uttara phalguni", "uthiram", "uttara-phalguni"},
-    12: {"hasta"},
-    13: {"chitra", "chithirai"},
-    14: {"swati", "swathi"},
-    15: {"visakha", "visakam", "vishaka", "vishakam"},
-    16: {"anuradha", "anusham", "anuradha"},
-    17: {"jyeshtha", "ketai", "kettai", "jyeshta"},
-    18: {"mula", "moolam", "moola"},
-    19: {"purva ashadha", "pooradam", "poorvashada"},
-    20: {"uttara ashadha", "uthradam", "uttarashada"},
-    21: {"shravana", "thiruvonam", "tiruvonam"},
-    22: {"dhanishta", "avittam", "dhanista"},
-    23: {"shatabhisha", "sadayam", "satabhisha"},
-    24: {"purva bhadrapada", "purattathi", "poorvabhadra"},
-    25: {"uttara bhadrapada", "uthirattathi", "uttarabhadra"},
-    26: {"revati", "revathi"},
+    0: {"aswini", "ashwini", "aswathi", "அசுவினி"},
+    1: {"bharani", "பரணி"},
+    2: {"krittika", "krithigai", "karthigai", "கிருத்திகை"},
+    3: {"rohini", "ரோகிணி"},
+    4: {"mrigashirsha", "mrigasira", "mirugaseeridam", "mrigaseera", "மிருகசீரிடம்"},
+    5: {"ardra", "aarudra", "thiruvathirai", "திருவாதிரை"},
+    6: {"punarvasu", "punarpoosam", "punarphalguni", "புனர்பூசம்"},
+    7: {"pushya", "poosam", "pushyam", "பூசம்"},
+    8: {"ashlesha", "ayilyam", "aayilyam", "ashlesham", "ஆயில்யம்"},
+    9: {"magha", "magam", "makam", "மகம்"},
+    10: {"purva phalguni", "puram", "poorvapalguni", "poorva-phalguni", "பூரம்"},
+    11: {"uttara phalguni", "uthiram", "uttara-phalguni", "உத்தரம்"},
+    12: {"hasta", "அஸ்தம்"},
+    13: {"chitra", "chithirai", "சித்திரை"},
+    14: {"swati", "swathi", "சுவாதி"},
+    15: {"visakha", "visakam", "vishaka", "விசாகம்"},
+    16: {"anuradha", "anusham", "அனுஷம்"},
+    17: {"jyeshtha", "ketai", "kettai", "jyeshta", "கேட்டை"},
+    18: {"mula", "moolam", "moola", "மூலம்"},
+    19: {"purva ashadha", "pooradam", "poorvashada", "பூராடம்"},
+    20: {"uttara ashadha", "uthradam", "uttarashada", "உத்திராடம்"},
+    21: {"shravana", "thiruvonam", "tiruvonam", "திருவோணம்"},
+    22: {"dhanishta", "avittam", "dhanista", "அவிட்டம்"},
+    23: {"shatabhisha", "sadayam", "satabhisha", "சதயம்"},
+    24: {"purva bhadrapada", "purattathi", "poorvabhadra", "பூரட்டாதி"},
+    25: {"uttara bhadrapada", "uthirattathi", "uttarabhadra", "உத்திரட்டாதி"},
+    26: {"revati", "revathi", "ரேவதி"},
 }
 
 
 def _normalize_star_label(label: str) -> str:
-    return "".join(ch for ch in label.lower() if "a" <= ch <= "z" or ch == " ")
+    normalized_chars = []
+    for ch in label.lower():
+        if "a" <= ch <= "z" or ch == " ":
+            normalized_chars.append(ch)
+            continue
+        if "\u0B80" <= ch <= "\u0BFF":
+            normalized_chars.append(ch)
+    return "".join(normalized_chars)
 
 
 def resolve_nakshatra_index(*labels: Optional[str]) -> Optional[int]:
