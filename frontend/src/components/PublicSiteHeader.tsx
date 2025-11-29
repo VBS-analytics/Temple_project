@@ -2,7 +2,6 @@ import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { Link, To, useLocation } from 'react-router-dom';
 
-import LanguageToggle from './LanguageToggle';
 
 type LinkType = 'anchor' | 'route';
 
@@ -72,7 +71,6 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     variant === 'overlay'
       ? 'border-white/40 text-white hover:bg-white/10'
       : 'border-slate-300 text-slate-700 hover:bg-slate-100';
-  const languageTheme = variant === 'overlay' ? 'dark' : 'light';
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -159,54 +157,49 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
           </nav>
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-3">
-          <div className="hidden items-center gap-3 sm:flex">
-            {showAuthCtas && (
-              <>
-                <Link
-                  to="/login"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={clsx(
-                    'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
-                    buttonBase
-                  )}
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={clsx(
-                    'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
-                    buttonBase
-                  )}
-                >
-                  Sign Up
-                </Link>
-              </>
-            )}
-            <LanguageToggle theme={languageTheme} className="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em]" />
+          <div className="flex flex-shrink-0 items-center gap-3">
+            <div className="hidden items-center gap-3 sm:flex">
+              {showAuthCtas && (
+                <>
+                  <Link
+                    to="/login"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={clsx(
+                      'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
+                      buttonBase
+                    )}
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/register"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={clsx(
+                      'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
+                      buttonBase
+                    )}
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className={clsx(
+                'inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition md:hidden',
+                toggleButtonBase
+              )}
+              aria-label="Open menu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
           </div>
-          <LanguageToggle
-            theme={languageTheme}
-            className="inline-flex rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] sm:hidden"
-          />
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className={clsx(
-              'inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition md:hidden',
-              toggleButtonBase
-            )}
-            aria-label="Open menu"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        </div>
       </div>
 
       {mobileMenuOpen && (
@@ -306,9 +299,6 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   </Link>
                 </div>
               )}
-              <div className="mt-6">
-                <LanguageToggle theme={languageTheme} className="w-full justify-center" />
-              </div>
             </nav>
           </div>
         </div>

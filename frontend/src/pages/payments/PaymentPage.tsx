@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
-import { Link } from 'react-router-dom';
 
-import { usePaymentStore } from '../../store/payments';
-import type { CartItem } from '../../store/cart';
-import { useCartStore } from '../../store/cart';
-import { useAuthStore } from '../../store/auth';
+import api from '../../lib/api';
 import { loadPdfMake } from '../../lib/pdfMakeLoader';
+import { useCartStore } from '../../store/cart';
+import { usePaymentStore } from '../../store/payments';
+import { useAuthStore } from '../../store/auth';
+import type { CartItem } from '../../store/cart';
 
 const formatCurrency = (value?: number | string | null) => {
   if (value === null || value === undefined) {
@@ -21,6 +22,33 @@ const formatCurrency = (value?: number | string | null) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+};
+
+const parseAmount = (value?: number | string | null) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isNaN(numeric) ? 0 : numeric;
+};
+
+const formatDisplayDate = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+const DAY_CATEGORY_LABELS: Record<string, string> = {
+  weekday: '',
+  tamil_star: '',
+  code: 'Template Code',
 };
 
 const formatDate = (value?: string | null) => {
@@ -109,26 +137,222 @@ const buildMembersLabel = (members?: CartItem['members']) => {
   return names.join(', ');
 };
 
-const GeneralPaymentPage = () => {
+const normalizeMemberValue = (value?: string | null) =>
+  typeof value === 'string' ? value.trim() : value ?? '';
+
+type RegistrationMemberPayload = {
+  name: string;
+  relationship?: string;
+  phone_number?: string;
+  tamil_star?: string;
+  rasi?: string;
+  gothra?: string;
+  family_name?: string;
+  date_of_birth?: string;
+};
+
+const buildRegistrationMembers = (members?: CartItem['members']) => {
+  if (!Array.isArray(members) || members.length === 0) {
+    return [];
+  }
+  return members.map((member) => {
+    const payload: RegistrationMemberPayload = {
+      name: member?.name?.trim() || 'Member',
+    };
+    const relationship = member?.relationship?.trim();
+    if (relationship) {
+      payload.relationship = relationship;
+    }
+    const phone = member?.donorPhone?.trim();
+    if (phone) {
+      payload.phone_number = phone;
+    }
+    const tamilStar = member?.tamilStar?.trim();
+    if (tamilStar) {
+      payload.tamil_star = tamilStar;
+    }
+    const rasi = member?.rasi?.trim();
+    if (rasi) {
+      payload.rasi = rasi;
+    }
+    const gothra = member?.gothra?.trim();
+    if (gothra) {
+      payload.gothra = gothra;
+    }
+    const familyName = member?.familyName?.trim();
+    if (familyName) {
+      payload.family_name = familyName;
+    }
+    if (member?.dob) {
+      payload.date_of_birth = member.dob;
+    }
+    return payload;
+  });
+};
+
+const sanitizeCartItemForPlan = (item: CartItem) => {
+  const { cartId, ...rest } = item;
+  return rest;
+};
+
+const buildRegistrationPayload = (item: CartItem) => {
+  const members = buildRegistrationMembers(item.members);
+  if (members.length === 0) {
+    const fallbackName = item.fullName?.trim() || 'Member';
+    const fallback: RegistrationMemberPayload = {
+      name: fallbackName,
+    };
+    if (item.memberRelationship) {
+      fallback.relationship = item.memberRelationship.trim();
+    }
+    if (item.memberTamilStar) {
+      fallback.tamil_star = item.memberTamilStar.trim();
+    }
+    if (item.memberRasi) {
+      fallback.rasi = item.memberRasi.trim();
+    }
+    if (item.memberGothra) {
+      fallback.gothra = item.memberGothra.trim();
+    }
+    if (item.memberFamilyName) {
+      fallback.family_name = item.memberFamilyName.trim();
+    }
+    if (item.memberDob) {
+      fallback.date_of_birth = item.memberDob;
+    }
+    members.push(fallback);
+  }
+
+  const quantity = Math.max(members.length, 1);
+  const numericAmount = Number(item.amount);
+  const payload: Record<string, unknown> = {
+    pooja_option: item.poojaId,
+    day_option: item.dayOptionId ?? undefined,
+    start_date: item.bookingDate,
+    quantity,
+    is_group_registration: quantity > 1,
+    post_prasadam: Boolean(item.postPrasadam),
+    additional_notes: item.customDayNote?.trim() ?? '',
+    members,
+    cart_item: sanitizeCartItemForPlan(item),
+  };
+
+  if (Number.isFinite(numericAmount)) {
+    payload.total_amount = numericAmount;
+  }
+  if (item.recurrenceKind) {
+    payload.recurrence_kind = item.recurrenceKind;
+  }
+  if (item.recurrenceFrequency) {
+    payload.recurrence_frequency = item.recurrenceFrequency;
+  }
+  if (item.recurrenceOneTimeDate) {
+    payload.recurrence_one_time_date = item.recurrenceOneTimeDate;
+  }
+
+  return payload;
+};
+
+const recordRegistrations = async (items: CartItem[]) => {
+  for (const item of items) {
+    const payload = buildRegistrationPayload(item);
+    await api.post('pooja/registrations/', payload);
+  }
+};
+
+const buildRegistrationErrorMessage = (error: unknown) => {
+  if (!error) {
+    return 'Unable to register the poojas right now.';
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const err = error as { response?: { data?: any }; message?: string };
+    if (typeof err.response?.data?.detail === 'string' && err.response.data.detail) {
+      return err.response.data.detail;
+    }
+    if (typeof err.message === 'string' && err.message) {
+      return err.message;
+    }
+  }
+  return 'Unable to register the poojas right now.';
+};
+
+const buildMemberSummaries = (item: CartItem): string[] => {
+  const normalizedMembers = Array.isArray(item.members) && item.members.length > 0
+    ? item.members
+    : [
+        {
+          id: null,
+          name: item.fullName?.trim() || 'Member',
+          relationship: item.memberRelationship ?? 'Self',
+          gender: item.memberGender ?? undefined,
+          tamilStar: item.memberTamilStar ?? undefined,
+          gothra: item.memberGothra ?? undefined,
+          rasi: item.memberRasi ?? undefined,
+          dob: item.memberDob ?? undefined,
+          familyName: item.memberFamilyName ?? undefined,
+        },
+      ];
+
+  return normalizedMembers.map((member) => {
+    const name = normalizeMemberValue(member?.name ?? '') || 'Member';
+    const attributes = [
+      normalizeMemberValue(member?.gender ?? ''),
+      normalizeMemberValue(member?.rasi ?? ''),
+      normalizeMemberValue(member?.tamilStar ?? ''),
+      normalizeMemberValue(member?.gothra ?? ''),
+      normalizeMemberValue(member?.familyName ?? ''),
+    ].filter(Boolean);
+    return attributes.length > 0 ? `${name} — ${attributes.join(' • ')}` : name;
+  });
+};
+
+const PaymentPage = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
+  const location = useLocation();
+  const queryTab = useMemo<'summary' | 'history' | null>(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab === 'history') return 'history';
+    if (tab === 'summary') return 'summary';
+    return null;
+  }, [location.search]);
+
+  const setItemsForUser = useCartStore((state) => state.setItemsForUser);
+  const removeCartItem = useCartStore((state) => state.removeItem);
+  const clearCartItems = useCartStore((state) => state.clear);
   const paymentSnapshot = usePaymentStore((state) => state.lastGeneralPaymentByUser[cartKey] ?? null);
   const clearPaymentSnapshot = usePaymentStore((state) => state.clearGeneralPayment);
   const generalPaymentHistory = usePaymentStore((state) => state.generalPaymentHistory);
   const addGeneralPaymentHistory = usePaymentStore((state) => state.addGeneralPaymentHistory);
-  const clearGeneralPaymentHistory = usePaymentStore((state) => state.clearGeneralPaymentHistory);
-  const setItemsForUser = useCartStore((state) => state.setItemsForUser);
+  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
+
   const userHistory = useMemo(
     () => generalPaymentHistory.filter((entry) => entry.userKey === cartKey),
     [generalPaymentHistory, cartKey],
   );
-  const [activeTab, setActiveTab] = useState<'summary' | 'history'>(() =>
-    paymentSnapshot ? 'summary' : userHistory.length > 0 ? 'history' : 'summary'
-  );
+
+  const [activeTab, setActiveTab] = useState<'summary' | 'history'>(() => {
+    if (queryTab) {
+      return queryTab;
+    }
+    return 'summary';
+  });
   const [historyMonth, setHistoryMonth] = useState<string>(() => formatMonthKey(new Date()) ?? '');
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [registrationInProgress, setRegistrationInProgress] = useState(false);
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
+  const [transactionReference, setTransactionReference] = useState('');
   const [petalSeed, setPetalSeed] = useState(0);
+
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const petals = useMemo(
     () =>
@@ -140,12 +364,14 @@ const GeneralPaymentPage = () => {
         scale: 0.8 + Math.random() * 0.6,
         horizontal: (Math.random() - 0.5) * 120,
       })),
-    [petalSeed]
+    [petalSeed],
   );
+
   const historyMonthOptions = useMemo(
     () => buildHistoryMonthOptions(userHistory, (entry) => entry.completedAt || entry.createdAt),
     [userHistory],
   );
+
   const filteredHistory = useMemo(
     () =>
       historyMonth
@@ -167,13 +393,30 @@ const GeneralPaymentPage = () => {
   }, [paymentSnapshot]);
 
   useEffect(() => {
+    if (!paymentSnapshot) {
+      setRegistrationError(null);
+      setTransactionReference('');
+    }
+  }, [paymentSnapshot]);
+
+  useEffect(() => {
     if (historyMonthOptions.length === 0) {
       return;
     }
     if (!historyMonth || !historyMonthOptions.some((option) => option.key === historyMonth)) {
-      setHistoryMonth(historyMonthOptions[0].key);
+      if (historyMonthOptions.length > 0) {
+        setHistoryMonth(historyMonthOptions[0].key);
+      } else {
+        setHistoryMonth('');
+      }
     }
   }, [historyMonth, historyMonthOptions]);
+
+  useEffect(() => {
+    if (queryTab) {
+      setActiveTab(queryTab);
+    }
+  }, [queryTab]);
 
   useEffect(() => {
     return () => {
@@ -183,6 +426,13 @@ const GeneralPaymentPage = () => {
     };
   }, []);
 
+  const scrollToCartSection = () => {
+    const element = document.getElementById('payment-cart-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const handleClearSummary = () => {
     if (celebrationTimeoutRef.current) {
       clearTimeout(celebrationTimeoutRef.current);
@@ -190,6 +440,7 @@ const GeneralPaymentPage = () => {
     }
     setShowCelebration(false);
     setShowPaymentDetails(false);
+    clearCartItems(cartKey);
     clearPaymentSnapshot(cartKey);
   };
 
@@ -203,12 +454,31 @@ const GeneralPaymentPage = () => {
     }
     setItemsForUser(cartKey, paymentSnapshot.items);
     setShowPaymentDetails(false);
+    setActiveTab('summary');
+    scrollToCartSection();
   };
 
-  const handlePaymentCompleted = () => {
-    if (!paymentSnapshot) {
+  const handlePaymentCompleted = async () => {
+    if (!paymentSnapshot || registrationInProgress) {
       return;
     }
+    const trimmedReference = transactionReference.trim();
+    if (!trimmedReference) {
+      setTransactionReferenceError('Transaction ID or UPI ID is required.');
+      return;
+    }
+    setTransactionReferenceError(null);
+    setRegistrationError(null);
+    setRegistrationInProgress(true);
+    try {
+      await recordRegistrations(paymentSnapshot.items);
+    } catch (error) {
+      setRegistrationError(buildRegistrationErrorMessage(error));
+      return;
+    } finally {
+      setRegistrationInProgress(false);
+    }
+
     addGeneralPaymentHistory(paymentSnapshot);
     setPetalSeed((seed) => seed + 1);
     setShowCelebration(true);
@@ -219,6 +489,27 @@ const GeneralPaymentPage = () => {
       handleClearSummary();
     }, 1800);
   };
+
+  const handleRemoveFromSummary = useCallback(
+    (cartId: string) => {
+      if (!paymentSnapshot) {
+        return;
+      }
+      removeCartItem(cartKey, cartId);
+      const remainingItems = paymentSnapshot.items.filter((item) => item.cartId !== cartId);
+      if (remainingItems.length === 0) {
+        clearPaymentSnapshot(cartKey);
+        return;
+      }
+      const nextTotal = remainingItems.reduce((sum, item) => sum + parseAmount(item.amount), 0);
+      setGeneralPayment({
+        userKey: cartKey,
+        items: remainingItems,
+        totalAmount: nextTotal,
+      });
+    },
+    [cartKey, clearPaymentSnapshot, paymentSnapshot, removeCartItem, setGeneralPayment],
+  );
 
   const handleDownloadPaymentHistory = async () => {
     if (!historyMonth || filteredHistory.length === 0) {
@@ -324,37 +615,31 @@ const GeneralPaymentPage = () => {
             here with the payment summary.
           </p>
           <Link
-            to="/pooja/cart"
+            to="/pooja/register"
             className="mt-4 inline-flex items-center justify-center rounded-full bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
           >
-            Go to Pooja Cart
+            Go to Pooja Registration page
           </Link>
         </div>
       );
     }
 
-    const { items, totalAmount, createdAt } = paymentSnapshot;
+    const { items: snapshotItems, totalAmount: snapshotTotal, createdAt } = paymentSnapshot;
 
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Saved</p>
-            <h2 className="text-xl font-semibold text-slate-800">General Payment Summary</h2>
-            <p className="text-sm text-slate-600">
-              Saved on <span className="font-semibold text-slate-800">{formatDate(createdAt)}</span>. Use this summary to
-              complete the donation payment.
-            </p>
           </div>
 
           <div className="rounded-2xl bg-orange-50 px-5 py-3 text-center sm:text-right">
             <p className="text-xs font-medium uppercase tracking-wide text-orange-600">Total Amount</p>
-            <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(totalAmount)}</p>
+            <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(snapshotTotal)}</p>
           </div>
         </div>
 
         <div className="space-y-4">
-          {items.map((item) => {
+          {snapshotItems.map((item) => {
             const amountLabel = item.amount ? `₹ ${formatCurrency(item.amount)}` : '—';
             const membersLabel = buildMembersLabel(item.members);
             const selectedDate = item.customDayDate || item.bookingDate;
@@ -377,6 +662,13 @@ const GeneralPaymentPage = () => {
                   <div className="text-right">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pooja Amount</p>
                     <p className="text-xl font-semibold text-slate-900">{amountLabel}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFromSummary(item.cartId)}
+                      className="mt-2 block text-xs font-semibold uppercase tracking-wide text-red-600 transition hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
 
@@ -397,12 +689,22 @@ const GeneralPaymentPage = () => {
                   </div>
                 </dl>
 
-                {membersLabel && (
-                  <div className="mt-4 rounded-xl bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registered Members</p>
-                    <p className="text-sm font-medium text-slate-800">{membersLabel}</p>
-                  </div>
-                )}
+                {(() => {
+                  const memberLines = buildMemberSummaries(item);
+                  if (memberLines.length === 0) {
+                    return null;
+                  }
+                  return (
+                    <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registered Members</p>
+                      <div className="space-y-1 text-sm font-medium text-slate-800">
+                        {memberLines.map((line, index) => (
+                          <p key={`${snapshotTotal}-${item.cartId}-${index}`}>{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </article>
             );
           })}
@@ -419,7 +721,7 @@ const GeneralPaymentPage = () => {
                   alt="Temple payment QR code"
                   className="h-56 w-56 rounded-lg border border-slate-200 bg-white p-3 object-contain"
                 />
-                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(totalAmount)}</p>
+                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(snapshotTotal)}</p>
               </div>
               <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
                 <div>
@@ -440,6 +742,27 @@ const GeneralPaymentPage = () => {
                 </div>
               </div>
             </div>
+            <div className="mt-6">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="transaction-reference">
+                Transaction ID or UPI ID
+              </label>
+              <input
+                id="transaction-reference"
+                type="text"
+                value={transactionReference}
+                onChange={(event) => {
+                  setTransactionReference(event.target.value);
+                  if (transactionReferenceError) {
+                    setTransactionReferenceError(null);
+                  }
+                }}
+                placeholder="Enter the transaction reference or UPI ID used"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+              {transactionReferenceError && (
+                <p className="mt-2 text-sm text-rose-600">{transactionReferenceError}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -450,13 +773,6 @@ const GeneralPaymentPage = () => {
           </div>
           {!showPaymentDetails ? (
             <div className="flex flex-wrap gap-3">
-              <Link
-                to="/pooja/cart"
-                onClick={restoreCartFromSnapshot}
-                className="inline-flex items-center justify-center rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
-                Update Cart
-              </Link>
               <button
                 type="button"
                 onClick={triggerPaymentDetails}
@@ -477,10 +793,14 @@ const GeneralPaymentPage = () => {
               <button
                 type="button"
                 onClick={handlePaymentCompleted}
-                className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                disabled={registrationInProgress}
+                className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60"
               >
-                Payment Completed
+                {registrationInProgress ? 'Saving...' : 'Payment Completed'}
               </button>
+              {registrationError && (
+                <p className="mt-2 text-sm text-rose-600">{registrationError}</p>
+              )}
             </div>
           )}
         </div>
@@ -516,18 +836,6 @@ const GeneralPaymentPage = () => {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => clearGeneralPaymentHistory(cartKey)}
-              disabled={userHistory.length === 0}
-              className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                userHistory.length === 0
-                  ? 'border-slate-200 text-slate-400'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Clear History
-            </button>
             <button
               type="button"
               onClick={handleDownloadPaymentHistory}
@@ -619,6 +927,39 @@ const GeneralPaymentPage = () => {
       activeTab === tab ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
     }`;
 
+  const historySection = (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">Payment Page</h2>
+          <p className="text-sm text-slate-600">
+            Review the pooja registrations you saved from the cart to log a single consolidated payment, or revisit past
+            completions saved on this device.
+          </p>
+        </div>
+        <div className="flex w-full max-w-md rounded-full border border-slate-200 bg-slate-50 p-1 text-sm font-semibold text-slate-600 md:w-auto">
+          <button
+            type="button"
+            className={tabButtonClasses('summary')}
+            onClick={() => setActiveTab('summary')}
+          >
+            Current Summary
+          </button>
+          <button
+            type="button"
+            className={tabButtonClasses('history')}
+            onClick={() => setActiveTab('history')}
+          >
+            Payment History
+          </button>
+        </div>
+      </div>
+      <div>
+        {activeTab === 'summary' ? renderSummaryContent() : renderHistoryContent()}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {showCelebration && (
@@ -648,38 +989,13 @@ const GeneralPaymentPage = () => {
           </div>
         </div>
       )}
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-800">General Payment</h1>
-            <p className="text-sm text-slate-600">
-              Review the pooja registrations you saved from the cart to log a single consolidated payment, or revisit past
-              completions saved on this device.
-            </p>
-          </div>
-          <div className="flex w-full max-w-md rounded-full border border-slate-200 bg-slate-50 p-1 text-sm font-semibold text-slate-600 md:w-auto">
-            <button
-              type="button"
-              className={tabButtonClasses('summary')}
-              onClick={() => setActiveTab('summary')}
-            >
-              Current Summary
-            </button>
-            <button
-              type="button"
-              className={tabButtonClasses('history')}
-              onClick={() => setActiveTab('history')}
-            >
-              Payment History
-            </button>
-          </div>
-        </div>
-        <div className="mt-6">
-          {activeTab === 'summary' ? renderSummaryContent() : renderHistoryContent()}
+      <section id="payment-cart-section" className="rounded-lg bg-white p-6 shadow-sm space-y-8">
+        <div className="divide-y divide-slate-100">
+          {historySection}
         </div>
       </section>
     </div>
   );
 };
 
-export default GeneralPaymentPage;
+export default PaymentPage;

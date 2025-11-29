@@ -21,6 +21,14 @@ interface CombineLookupPayload {
   items: CartItem[];
 }
 
+interface SelectedDonorSummary {
+  id: number | null;
+  name?: string | null;
+  phone?: string | null;
+  items: CartItem[];
+  totalAmount: number;
+}
+
 const buildMembersLabel = (members?: CartItem['members']) => {
   if (!members || members.length === 0) {
     return null;
@@ -135,7 +143,6 @@ const CombinePaymentPage = () => {
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const combinePaymentHistory = usePaymentStore((state) => state.combinePaymentHistory);
   const addCombinePaymentHistory = usePaymentStore((state) => state.addCombinePaymentHistory);
-  const clearCombinePaymentHistory = usePaymentStore((state) => state.clearCombinePaymentHistory);
 
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
   const [historyMonth, setHistoryMonth] = useState<string>(() => formatMonthKey(new Date()) ?? '');
@@ -143,14 +150,26 @@ const CombinePaymentPage = () => {
   const [donorDirectory, setDonorDirectory] = useState<DonorDirectoryEntry[]>([]);
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [directoryError, setDirectoryError] = useState('');
-  const [selectedDonorId, setSelectedDonorId] = useState<number | ''>('');
-  const [selectedDonor, setSelectedDonor] = useState<CombineLookupPayload | null>(null);
-  const [selectedDonorLoading, setSelectedDonorLoading] = useState(false);
+  const [selectedDonorIds, setSelectedDonorIds] = useState<number[]>([]);
+  const [selectedDonorDetails, setSelectedDonorDetails] = useState<Record<number, CombineLookupPayload>>({});
+  const [selectedDonorLoadingIds, setSelectedDonorLoadingIds] = useState<number[]>([]);
   const [selectedDonorError, setSelectedDonorError] = useState('');
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [petalSeed, setPetalSeed] = useState(0);
+  const [clubTransactionReference, setClubTransactionReference] = useState('');
+  const [clubTransactionReferenceError, setClubTransactionReferenceError] = useState<string | null>(null);
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedDonorDetailsRef = useRef<Record<number, CombineLookupPayload>>({});
+  const updateSelectedDonorDetails = (
+    updater: (prev: Record<number, CombineLookupPayload>) => Record<number, CombineLookupPayload>,
+  ) => {
+    setSelectedDonorDetails((prev) => {
+      const next = updater(prev);
+      selectedDonorDetailsRef.current = next;
+      return next;
+    });
+  };
 
   const yourTotalAmount = useMemo(
     () =>
@@ -160,16 +179,52 @@ const CombinePaymentPage = () => {
     [cartItems],
   );
 
+  const selectedDonorSummaries = useMemo<SelectedDonorSummary[]>(() => {
+    return selectedDonorIds
+      .map((id) => selectedDonorDetails[id])
+      .filter((donor): donor is CombineLookupPayload => Boolean(donor))
+      .map((donor) => {
+        const totalAmount = donor.items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
+        return {
+          id: donor.donor_id ?? null,
+          name: donor.donor_name ?? null,
+          phone: donor.donor_phone ?? null,
+          items: donor.items,
+          totalAmount,
+        };
+      });
+  }, [selectedDonorIds, selectedDonorDetails]);
+
   const clubTotals = useMemo(() => {
-    if (!selectedDonor) {
-      return { count: 0, total: 0 };
+    const total = selectedDonorSummaries.reduce((sum, donor) => sum + donor.totalAmount, 0);
+    const donorsCount = selectedDonorSummaries.length;
+    const itemsCount = selectedDonorSummaries.reduce((sum, donor) => sum + donor.items.length, 0);
+    return { donorsCount, itemsCount, total };
+  }, [selectedDonorSummaries]);
+  const isSelectedDonorLoading = selectedDonorLoadingIds.length > 0;
+  const [donorSearch, setDonorSearch] = useState('');
+  const filteredDirectory = useMemo(() => {
+    const query = donorSearch.trim().toLowerCase();
+    if (query.length === 0) {
+      return donorDirectory;
     }
-    const total = selectedDonor.items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
-    return { count: selectedDonor.items.length, total };
-  }, [selectedDonor]);
+    return donorDirectory.filter((entry) => {
+      const name = entry.name?.toLowerCase() ?? '';
+      const phone = entry.phone_number?.toLowerCase() ?? '';
+      return name.includes(query) || phone.includes(query);
+    });
+  }, [donorDirectory, donorSearch]);
+  const handleToggleDonorSelected = (donorId: number) => {
+    setSelectedDonorIds((prev) => {
+      if (prev.includes(donorId)) {
+        return prev.filter((id) => id !== donorId);
+      }
+      return [...prev, donorId];
+    });
+  };
 
   const combinedTotal = yourTotalAmount + clubTotals.total;
-  const combinedPoojaCount = cartItems.length + clubTotals.count;
+  const combinedPoojaCount = cartItems.length + clubTotals.itemsCount;
   const petals = useMemo(
     () =>
       Array.from({ length: 22 }, (_, index) => ({
@@ -209,6 +264,7 @@ const CombinePaymentPage = () => {
 
     filteredHistory.forEach((entry, index) => {
       const completionLabel = formatDateTime(entry.completedAt);
+      const donorTotal = entry.donors.reduce((sum, donor) => sum + donor.totalAmount, 0);
       content.push(
         {
           text: `Payment ${index + 1} • ₹ ${formatCurrency(entry.combinedTotal)} • ${completionLabel}`,
@@ -216,7 +272,7 @@ const CombinePaymentPage = () => {
         },
         {
           text: `Your share ₹ ${formatCurrency(entry.yourTotal)} • Donor share ₹ ${formatCurrency(
-            entry.donor?.totalAmount ?? 0,
+            donorTotal,
           )}`,
           style: 'pdfEntryMeta',
         },
@@ -237,13 +293,15 @@ const CombinePaymentPage = () => {
           `₹ ${formatCurrency(item.amount)}`,
           buildMembersLabel(item.members) ?? '—',
         ]),
-        ...(entry.donor?.items || []).map((item) => [
-          entry.donor?.name ?? 'Donor',
-          item.poojaName || 'Pooja',
-          formatDate(item.customDayDate || item.bookingDate),
-          `₹ ${formatCurrency(item.amount)}`,
-          buildMembersLabel(item.members) ?? '—',
-        ]),
+        ...entry.donors.flatMap((donor) =>
+          donor.items.map((item) => [
+            donor.name ?? 'Donor',
+            item.poojaName || 'Pooja',
+            formatDate(item.customDayDate || item.bookingDate),
+            `₹ ${formatCurrency(item.amount)}`,
+            buildMembersLabel(item.members) ?? '—',
+          ]),
+        ),
       ];
 
       if (tableBody.length > 1) {
@@ -338,50 +396,69 @@ const CombinePaymentPage = () => {
   }, [isClubExpanded, donorDirectory.length]);
 
   useEffect(() => {
-    if (selectedDonorId === '') {
-      setSelectedDonor(null);
-      setSelectedDonorError('');
-      setSelectedDonorLoading(false);
+    setSelectedDonorError('');
+    if (selectedDonorIds.length === 0) {
+      setSelectedDonorLoadingIds([]);
+      return;
+    }
+    const idsToFetch = selectedDonorIds.filter((donorId) => !selectedDonorDetailsRef.current[donorId]);
+    if (idsToFetch.length === 0) {
       return;
     }
     let isActive = true;
-    const fetchDonorRegistrations = async () => {
-      setSelectedDonorLoading(true);
-      setSelectedDonorError('');
-      try {
-        const { data } = await api.get<CombineLookupPayload>('pooja/registrations/combine-lookup/', {
-          params: { donor_id: selectedDonorId },
-        });
-        if (!isActive) {
-          return;
-        }
-        setSelectedDonor(data);
-      } catch (err: any) {
-        if (isActive) {
+    idsToFetch.forEach((donorId) => {
+      setSelectedDonorLoadingIds((prev) => Array.from(new Set([...prev, donorId])));
+      api
+        .get<CombineLookupPayload>('pooja/registrations/combine-lookup/', {
+          params: { donor_id: donorId },
+        })
+        .then(({ data }) => {
+          if (!isActive) {
+            return;
+          }
+          updateSelectedDonorDetails((prev) => ({ ...prev, [donorId]: data }));
+        })
+        .catch((err: any) => {
+          if (!isActive) {
+            return;
+          }
           const detail =
-            err?.response?.data?.detail ?? err?.message ?? 'Unable to load the selected donor commitments.';
+            err?.response?.data?.detail ??
+            err?.message ??
+            `Unable to load commitments for donor #${donorId}.`;
           setSelectedDonorError(
             typeof detail === 'string' ? detail : 'Unable to load the selected donor commitments.',
           );
-          setSelectedDonor(null);
-        }
-      } finally {
-        if (isActive) {
-          setSelectedDonorLoading(false);
-        }
-      }
-    };
-    fetchDonorRegistrations();
+          updateSelectedDonorDetails((prev) => {
+            const next = { ...prev };
+            delete next[donorId];
+            return next;
+          });
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setSelectedDonorLoadingIds((prev) => prev.filter((loadingId) => loadingId !== donorId));
+        });
+    });
     return () => {
       isActive = false;
     };
-  }, [selectedDonorId]);
+  }, [selectedDonorIds]);
 
   useEffect(() => {
-    if (!selectedDonor) {
+    if (selectedDonorSummaries.length === 0) {
       setShowPaymentDetails(false);
     }
-  }, [selectedDonor]);
+  }, [selectedDonorSummaries]);
+
+  useEffect(() => {
+    if (!showPaymentDetails) {
+      setClubTransactionReference('');
+      setClubTransactionReferenceError(null);
+    }
+  }, [showPaymentDetails]);
 
   useEffect(() => {
     if (historyMonthOptions.length === 0) {
@@ -406,8 +483,9 @@ const CombinePaymentPage = () => {
       celebrationTimeoutRef.current = null;
     }
     setShowCelebration(false);
-    setSelectedDonorId('');
-    setSelectedDonor(null);
+    setSelectedDonorIds([]);
+    updateSelectedDonorDetails(() => ({}));
+    setSelectedDonorLoadingIds([]);
     setSelectedDonorError('');
     setShowPaymentDetails(false);
   };
@@ -417,19 +495,25 @@ const CombinePaymentPage = () => {
   };
 
   const handlePaymentCompleted = () => {
-    if (!selectedDonor) {
+    const trimmedReference = clubTransactionReference.trim();
+    if (!trimmedReference) {
+      setClubTransactionReferenceError('Transaction ID or UPI ID is required.');
+      return;
+    }
+    setClubTransactionReferenceError(null);
+    if (selectedDonorSummaries.length === 0) {
       return;
     }
     addCombinePaymentHistory({
       yourItems: cartItems,
       yourTotal: yourTotalAmount,
-      donor: {
-        id: selectedDonor.donor_id,
-        name: selectedDonor.donor_name,
-        phone: selectedDonor.donor_phone,
-        items: selectedDonor.items,
-        totalAmount: clubTotals.total,
-      },
+      donors: selectedDonorSummaries.map((donor) => ({
+        id: donor.id,
+        name: donor.name,
+        phone: donor.phone,
+        items: donor.items,
+        totalAmount: donor.totalAmount,
+      })),
       combinedTotal,
     });
     setPetalSeed((seed) => seed + 1);
@@ -453,8 +537,8 @@ const CombinePaymentPage = () => {
           <p className="text-sm font-semibold text-slate-700">₹ {formatCurrency(yourTotalAmount)}</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clubbed Donor</p>
-          <p className="text-lg font-bold text-slate-800">{clubTotals.count}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clubbed Donors</p>
+          <p className="text-lg font-bold text-slate-800">{clubTotals.donorsCount}</p>
           <p className="text-sm font-semibold text-slate-700">₹ {formatCurrency(clubTotals.total)}</p>
         </div>
         <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-center">
@@ -510,38 +594,83 @@ const CombinePaymentPage = () => {
         {isClubExpanded && (
           <div className="mt-4 space-y-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <div>
-              <label htmlFor="donor-selector" className="text-sm font-semibold text-slate-700">
-                Pick donor by name & phone
-              </label>
-              <select
-                id="donor-selector"
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                value={selectedDonorId}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (!value) {
-                    setSelectedDonorId('');
-                    return;
-                  }
-                  const numeric = Number(value);
-                  setSelectedDonorId(Number.isFinite(numeric) ? numeric : '');
-                }}
+              <div className="flex items-center justify-between">
+                <label htmlFor="donor-search" className="text-sm font-semibold text-slate-700">
+                  Pick donor by name & phone
+                </label>
+                <span className="text-[0.65rem] uppercase tracking-wide text-slate-400">
+                  Tap to toggle multiple
+                </span>
+              </div>
+              <input
+                id="donor-search"
+                type="search"
+                placeholder="Search name or phone"
+                value={donorSearch}
+                onChange={(event) => setDonorSearch(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
                 disabled={directoryLoading || donorDirectory.length === 0}
-              >
-                <option value="">Select donor to club</option>
-                {donorDirectory.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.name || `Donor #${entry.id}`} — {entry.phone_number || 'No phone'}
-                  </option>
-                ))}
-              </select>
-              {directoryLoading && (
-                <p className="mt-2 text-xs font-medium text-slate-500">Loading donor directory…</p>
-              )}
+              />
               {directoryError && (
                 <p className="mt-2 text-xs font-medium text-red-600">{directoryError}</p>
               )}
             </div>
+
+            {directoryLoading && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-600">
+                Loading donor directory…
+              </div>
+            )}
+
+            {!directoryLoading && donorDirectory.length === 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                No donors are currently available for clubbing.
+              </div>
+            )}
+
+            {!directoryLoading && donorDirectory.length > 0 && filteredDirectory.length === 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                No donors match your search. Clear the filter to see all donors.
+              </div>
+            )}
+
+            {!directoryLoading && filteredDirectory.length > 0 && (
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {filteredDirectory.map((entry) => {
+                  const isSelected = selectedDonorIds.includes(entry.id);
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => handleToggleDonorSelected(entry.id)}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left shadow-sm transition focus-visible:outline-none ${
+                        isSelected
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                      aria-pressed={isSelected}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {entry.name || `Donor #${entry.id}`}
+                          </p>
+                          <p className="text-xs text-slate-500">{entry.phone_number || 'Phone unavailable'}</p>
+                        </div>
+                        <span
+                          className={`h-5 w-5 rounded-full border-2 ${
+                            isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-white'
+                          }`}
+                        />
+                      </div>
+                      <p className="mt-1 text-[0.65rem] uppercase tracking-wide text-slate-400">
+                        Tap to {isSelected ? 'remove' : 'add'} in your club
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {selectedDonorError && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">
@@ -549,72 +678,96 @@ const CombinePaymentPage = () => {
               </div>
             )}
 
-            {selectedDonorLoading && (
+            {isSelectedDonorLoading && (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-600">
-                Fetching the donor&apos;s pooja selections…
+                Fetching the selected donors&apos; pooja selections…
               </div>
             )}
 
-            {!selectedDonorLoading && selectedDonor && (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{selectedDonor.donor_name || 'Donor'}</p>
-                  <p className="text-xs text-slate-500">
-                    Contact: {selectedDonor.donor_phone || 'Phone unavailable'}
-                  </p>
-                </div>
-                {selectedDonor.items.length === 0 ? (
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    This donor does not have any poojas in their cart yet.
+            {selectedDonorSummaries.length > 0 ? (
+              <div className="space-y-4">
+                {selectedDonorSummaries.map((donor, index) => (
+                  <div
+                    key={`selected-donor-${donor.id ?? index}-${donor.phone ?? donor.name ?? index}`}
+                    className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{donor.name || 'Donor'}</p>
+                        <p className="text-xs text-slate-500">
+                          Contact: {donor.phone || 'Phone unavailable'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Total</p>
+                        <p className="text-lg font-semibold text-slate-900">
+                          ₹ {formatCurrency(donor.totalAmount)}
+                        </p>
+                        <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">
+                          {donor.items.length} item{donor.items.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                    </div>
+                    {donor.items.length === 0 ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        This donor does not have any poojas in their cart yet.
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
+                        {donor.items.map((item) => (
+                          <li key={item.cartId} className="grid gap-2 px-4 py-3 sm:grid-cols-4 sm:items-center">
+                            <div className="sm:col-span-2">
+                              <p className="font-semibold text-slate-900">
+                                {item.poojaName || 'Pooja'}{' '}
+                                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                  {item.poojaCode ?? ''}
+                                </span>
+                              </p>
+                              <p className="text-xs uppercase tracking-wide text-slate-500">
+                                {item.dayOptionDescription || 'No day option'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Date</p>
+                              <p className="font-medium text-slate-800">
+                                {formatDate(item.customDayDate || item.bookingDate)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Devotees</p>
+                              <p className="font-medium text-slate-800">{resolveDevoteesLabel(item)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-slate-500">Amount</p>
+                              <p className="font-semibold text-slate-900">
+                                ₹ {formatCurrency(item.amount)}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                ) : (
-                  <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
-                    {selectedDonor.items.map((item) => (
-                      <li key={item.cartId} className="grid gap-2 px-4 py-3 sm:grid-cols-4 sm:items-center">
-                        <div className="sm:col-span-2">
-                          <p className="font-semibold text-slate-900">
-                            {item.poojaName || 'Pooja'}{' '}
-                            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                              {item.poojaCode ?? ''}
-                            </span>
-                          </p>
-                          <p className="text-xs uppercase tracking-wide text-slate-500">
-                            {item.dayOptionDescription || 'No day option'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500">Date</p>
-                          <p className="font-medium text-slate-800">
-                            {formatDate(item.customDayDate || item.bookingDate)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500">Devotees</p>
-                          <p className="font-medium text-slate-800">{resolveDevoteesLabel(item)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500">Amount</p>
-                          <p className="font-semibold text-slate-900">₹ {formatCurrency(item.amount)}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                ))}
               </div>
-            )}
-
-            {!selectedDonorLoading && !selectedDonor && selectedDonorId === '' && (
+            ) : (
               <p className="text-sm text-slate-600">
-                Choose a donor from the dropdown to preview their pooja commitments for clubbed payment.
+                {isSelectedDonorLoading
+                  ? 'Loading the selected donors so you can review their commitments.'
+                  : 'Choose donors from the dropdown to preview their pooja commitments for clubbed payment.'}
               </p>
             )}
 
-            {selectedDonor && (
+            {selectedDonorSummaries.length > 0 && (
               <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-600">
                   <p>
-                    Ready to combine the payment with <span className="font-semibold">{selectedDonor.donor_name}</span>?{' '}
-                    Click Proceed to view the payment instructions or clear to pick someone else.
+                    Ready to combine the payment with{' '}
+                    <span className="font-semibold">
+                      {selectedDonorSummaries.length} donor
+                      {selectedDonorSummaries.length === 1 ? '' : 's'}
+                    </span>
+                    ? Click Proceed to view the payment instructions or clear to pick different donors.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -641,9 +794,9 @@ const CombinePaymentPage = () => {
         )}
       </div>
 
-      {selectedDonor && showPaymentDetails && (
-        <div className="space-y-4 rounded-2xl border border-orange-100 bg-white p-5 shadow-inner">
-          <div className="grid gap-5 lg:grid-cols-2">
+        {selectedDonorSummaries.length > 0 && showPaymentDetails && (
+          <div className="space-y-4 rounded-2xl border border-orange-100 bg-white p-5 shadow-inner">
+            <div className="grid gap-5 lg:grid-cols-2">
             <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
               <img
                 src="/images/payment_qrcode.png"
@@ -670,10 +823,31 @@ const CombinePaymentPage = () => {
                 <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
               </div>
             </div>
-          </div>
-          <p className="text-sm text-slate-600">
-            After the transfer, inform the temple office with both sets of cart details for quicker reconciliation.
-          </p>
+            </div>
+            <div className="mt-4">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="club-transaction-reference">
+                Transaction ID or UPI ID
+              </label>
+              <input
+                id="club-transaction-reference"
+                type="text"
+                value={clubTransactionReference}
+                onChange={(event) => {
+                  setClubTransactionReference(event.target.value);
+                  if (clubTransactionReferenceError) {
+                    setClubTransactionReferenceError(null);
+                  }
+                }}
+                placeholder="Enter the transaction reference or UPI ID used"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+              {clubTransactionReferenceError && (
+                <p className="mt-2 text-sm text-rose-600">{clubTransactionReferenceError}</p>
+              )}
+            </div>
+            <p className="text-sm text-slate-600">
+              After the transfer, inform the temple office with both sets of cart details for quicker reconciliation.
+            </p>
           <div className="flex justify-end pt-2">
             <button
               type="button"
@@ -737,18 +911,6 @@ const CombinePaymentPage = () => {
           </select>
           <button
             type="button"
-            onClick={clearCombinePaymentHistory}
-            disabled={combinePaymentHistory.length === 0}
-            className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-              combinePaymentHistory.length === 0
-                ? 'border-slate-200 text-slate-400'
-                : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Clear History
-          </button>
-          <button
-            type="button"
             onClick={handleDownloadPaymentHistory}
             disabled={filteredHistory.length === 0}
             className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
@@ -775,7 +937,8 @@ const CombinePaymentPage = () => {
         )}
 
         {filteredHistory.map((entry) => {
-          const totalCount = entry.yourCount + (entry.donor?.count ?? 0);
+          const donorItemCount = entry.donors.reduce((sum, donor) => sum + donor.count, 0);
+          const totalCount = entry.yourCount + donorItemCount;
           return (
             <article
               key={`${entry.id}-${entry.completedAt}`}
@@ -803,22 +966,31 @@ const CombinePaymentPage = () => {
                   </p>
                   {entry.yourItems.length > 0 && renderPreviewList(entry.yourItems)}
                 </div>
-                {entry.donor && (
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clubbed Donor</p>
-                    <p className="text-sm font-medium text-slate-800">
-                      {(entry.donor.name || 'Donor')}{' '}
-                      <span className="text-xs text-slate-500">
-                        ({entry.donor.count} item{entry.donor.count === 1 ? '' : 's'})
-                      </span>
-                    </p>
-                    <p className="text-sm font-semibold text-slate-700">
-                      ₹ {formatCurrency(entry.donor.totalAmount)}
-                    </p>
-                    {entry.donor.phone && (
-                      <p className="text-xs text-slate-500">Phone: {entry.donor.phone}</p>
-                    )}
-                    {entry.donor.items.length > 0 && renderPreviewList(entry.donor.items)}
+                {entry.donors.length > 0 && (
+                  <div className="space-y-3">
+                    {entry.donors.map((donor, index) => (
+                      <div
+                        key={`history-donor-${entry.id}-${donor.id ?? index}`}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Clubbed Donor {index + 1}
+                        </p>
+                        <p className="text-sm font-medium text-slate-800">
+                          {donor.name || 'Donor'}{' '}
+                          <span className="text-xs text-slate-500">
+                            ({donor.count} item{donor.count === 1 ? '' : 's'})
+                          </span>
+                        </p>
+                        <p className="text-sm font-semibold text-slate-700">
+                          ₹ {formatCurrency(donor.totalAmount)}
+                        </p>
+                        {donor.phone && (
+                          <p className="text-xs text-slate-500">Phone: {donor.phone}</p>
+                        )}
+                        {donor.items.length > 0 && renderPreviewList(donor.items)}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

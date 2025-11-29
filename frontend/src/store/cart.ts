@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { RecurrenceFrequency, RecurrenceKind } from '../types/recurrence';
 
 export interface CartItem {
   cartId: string;
@@ -31,6 +32,9 @@ export interface CartItem {
   memberGothra?: string;
   memberDob?: string | null;
   memberFamilyName?: string | null;
+  recurrenceKind?: RecurrenceKind;
+  recurrenceFrequency?: RecurrenceFrequency;
+  recurrenceOneTimeDate?: string | null;
   members?: Array<{
     id: number | null;
     name: string | null;

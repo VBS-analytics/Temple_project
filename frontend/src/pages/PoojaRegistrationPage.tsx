@@ -3,6 +3,9 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
 import { useAuthStore } from '../store/auth';
+import { usePaymentStore } from '../store/payments';
+import { RecurrenceSelection, RecurrenceFrequency } from '../types/recurrence';
+import { Link } from 'react-router-dom';
 
 /* -------------------------------------------------------------------------- */
 /*                               Reusable Select                              */
@@ -788,6 +791,65 @@ const getOccurrenceMessage = (state?: DayOccurrenceState): string | undefined =>
   }
 };
 
+const areRecurrenceSelectionsEqual = (
+  a?: RecurrenceSelection,
+  b?: RecurrenceSelection,
+): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'recurring' && b.kind === 'recurring') {
+    return a.frequency === b.frequency;
+  }
+  if (a.kind === 'one_time_extra' && b.kind === 'one_time_extra') {
+    return (a.oneTimeDate ?? '') === (b.oneTimeDate ?? '');
+  }
+  return false;
+};
+
+const RECURRING_FREQUENCY_DESCRIPTIONS: Record<RecurrenceFrequency, string> = {
+  monthly: 'Monthly (every 1 month)',
+  quarterly: 'Quarterly (every 3 months)',
+  annually: 'Annual (once per year)',
+};
+
+const FREQUENCY_TOOLTIP: Record<RecurrenceFrequency, string> = {
+  monthly: 'This schedule runs once every month.',
+  quarterly: 'This schedule runs once every three months.',
+  annually: 'This schedule runs once per calendar year',
+};
+
+const buildRecurrenceFields = (
+  selection?: RecurrenceSelection,
+  fallbackDate?: string,
+): {
+  recurrenceKind?: RecurrenceSelection['kind'];
+  recurrenceFrequency?: RecurrenceFrequency;
+  recurrenceOneTimeDate?: string | undefined;
+} => {
+  if (!selection) {
+    return {};
+  }
+  return {
+    recurrenceKind: selection.kind,
+    recurrenceFrequency: selection.kind === 'recurring' ? selection.frequency : undefined,
+    recurrenceOneTimeDate:
+      selection.kind === 'one_time_extra'
+        ? selection.oneTimeDate ?? fallbackDate ?? undefined
+        : undefined,
+  };
+};
+
+const deriveRecurrenceSelectionFromCartItem = (item: CartItem): RecurrenceSelection | undefined => {
+  if (item.recurrenceKind === 'recurring') {
+    return { kind: 'recurring', frequency: item.recurrenceFrequency ?? 'monthly' };
+  }
+  if (item.recurrenceKind === 'one_time_extra') {
+    return { kind: 'one_time_extra', oneTimeDate: item.recurrenceOneTimeDate ?? undefined };
+  }
+  return undefined;
+};
+
 /* -------------------------------------------------------------------------- */
 /*                            Main Page Component                             */
 /* -------------------------------------------------------------------------- */
@@ -813,25 +875,41 @@ const PoojaRegistrationPage = () => {
   const [prasadamSelectionMap, setPrasadamSelectionMap] = useState<Record<number, boolean>>({});
   const [chartDetailsMap, setChartDetailsMap] = useState<Record<number, { date: string; note: string }>>({});
   const [amountSelectionMap, setAmountSelectionMap] = useState<Record<number, string>>({});
+  const [recurrenceSelectionMap, setRecurrenceSelectionMap] = useState<Record<number, RecurrenceSelection>>({});
   const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
   const [bookingMode, setBookingMode] = useState<BookingMode>('full');
   const [tableMessage, setTableMessage] = useState<{ status: 'info' | 'error'; text: string } | null>(null);
+  const tableMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [warningPopup, setWarningPopup] = useState<string | null>(null);
-  const adminDefaultClearedRef = useRef(false);
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
   const addToCart = useCartStore((state) => state.addItem);
   const removeFromCart = useCartStore((state) => state.removeItem);
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const cartTotals = useMemo(() => {
+    const count = cartItems.length;
+    const amount = cartItems.reduce((total, item) => {
+      const value = Number(item.amount);
+      return Number.isFinite(value) ? total + value : total;
+    }, 0);
+    return { count, amount };
+  }, [cartItems]);
+  const cartTotalAmount = cartTotals.amount;
+  const formattedCartAmount = formatCurrency(cartTotalAmount.toString()) || '0';
+  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
+  const handleViewCart = useCallback(() => {
+    setGeneralPayment({
+      userKey: cartKey,
+      items: cartItems,
+      totalAmount: cartTotalAmount,
+    });
+  }, [cartItems, cartKey, cartTotalAmount, setGeneralPayment]);
   const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
   const isAdminUser = (profile?.user?.role ?? user?.role) === 'admin';
   const requiresMemberSelection = !isAdminUser;
-  const fallbackMemberSelection = useMemo(
-    () => (requiresMemberSelection ? ['self'] : []),
-    [requiresMemberSelection],
-  );
+  const fallbackMemberSelection = useMemo(() => [], []);
   const normalizeMemberSelection = useCallback(
     (members: string[]) => {
       const unique = Array.from(new Set(members));
@@ -915,29 +993,66 @@ const PoojaRegistrationPage = () => {
   }, [cartItems]);
 
   useEffect(() => {
-    if (requiresMemberSelection && selectedMemberIds.length === 0) {
-      setSelectedMemberIds(['self']);
-    }
-  }, [requiresMemberSelection, selectedMemberIds.length]);
+    setRecurrenceSelectionMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      cartItems.forEach((item) => {
+        const incoming = deriveRecurrenceSelectionFromCartItem(item);
+        if (!incoming) return;
+        const existing = next[item.poojaId];
+        if (!existing || !areRecurrenceSelectionsEqual(existing, incoming)) {
+          next[item.poojaId] = incoming;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [cartItems]);
 
-  useEffect(() => {
-    if (requiresMemberSelection) {
-      adminDefaultClearedRef.current = false;
-      return;
+  const resolveRecurrenceSelection = (poojaId: number): RecurrenceSelection | undefined =>
+    recurrenceSelectionMap[poojaId];
+
+  const applyRecurrenceSelection = (poojaId: number, nextSelection?: RecurrenceSelection) => {
+    setRecurrenceSelectionMap((prev) => {
+      const existing = prev[poojaId];
+      if (!nextSelection) {
+        if (!existing) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[poojaId];
+        return next;
+      }
+      if (areRecurrenceSelectionsEqual(existing, nextSelection)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [poojaId]: nextSelection,
+      };
+    });
+    setTableMessage(null);
+  };
+
+  const showTemporaryTableMessage = useCallback((text: string) => {
+    if (tableMessageTimerRef.current) {
+      clearTimeout(tableMessageTimerRef.current);
     }
-    if (
-      !adminDefaultClearedRef.current &&
-      selectedMemberIds.length === 1 &&
-      selectedMemberIds[0] === 'self'
-    ) {
-      setSelectedMemberIds([]);
-      adminDefaultClearedRef.current = true;
-    }
-  }, [requiresMemberSelection, selectedMemberIds]);
+    setTableMessage({ status: 'info', text });
+    const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
+    tableMessageTimerRef.current = schedule(() => {
+      setTableMessage(null);
+      tableMessageTimerRef.current = null;
+    }, 4000);
+  }, []);
 
   useEffect(() => {
     return () => {
       hideWarningPopup();
+      if (tableMessageTimerRef.current) {
+        clearTimeout(tableMessageTimerRef.current);
+        tableMessageTimerRef.current = null;
+      }
     };
   }, [hideWarningPopup]);
 
@@ -1083,8 +1198,7 @@ const PoojaRegistrationPage = () => {
   const memberLookup = memberDirectory.lookup;
   const memberIdLookup = memberDirectory.idLookup;
 
-  const primaryMemberKey: string | null =
-    selectedMemberIds[0] ?? (requiresMemberSelection ? 'self' : null);
+  const primaryMemberKey: string | null = selectedMemberIds[0] ?? null;
 
   const primaryMember = useMemo(() => {
     if (!primaryMemberKey) {
@@ -1838,25 +1952,13 @@ const PoojaRegistrationPage = () => {
   };
 
   const applySelectionToggle = (current: string[], value: string): string[] => {
-    let next = [...current];
-    const hasValue = next.includes(value);
-
-    if (value === 'self') {
-      next = hasValue ? next.filter((id) => id !== 'self') : ['self'];
+    const next = new Set(current);
+    if (next.has(value)) {
+      next.delete(value);
     } else {
-      next = hasValue
-        ? next.filter((id) => id !== value)
-        : [...next.filter((id) => id !== value), value];
-      if (next.length > 1 && next.includes('self')) {
-        next = next.filter((id) => id !== 'self');
-      }
+      next.add(value);
     }
-
-    if (requiresMemberSelection && next.length === 0) {
-      next = ['self'];
-    }
-
-    return Array.from(new Set(next));
+    return Array.from(next);
   };
 
   const toggleMemberSelection = (value: string) => {
@@ -1874,7 +1976,7 @@ const PoojaRegistrationPage = () => {
     const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
     const matchingItem = findMatchingCartItem(row, effectiveDayId);
     const currentKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
-    const normalized = applySelectionToggle(currentKeys, value);
+    const normalized = applySelectionToggle(currentKeys ?? fallbackMemberSelection, value);
 
     setMemberSelectionMap((prev) => ({
       ...prev,
@@ -1974,9 +2076,9 @@ const PoojaRegistrationPage = () => {
     );
   };
 
-  const resolveSelectedMemberKeys = (poojaId: number, matchingItem?: CartItem): string[] => {
+  const resolveSelectedMemberKeys = (poojaId: number, matchingItem?: CartItem): string[] | null => {
     const explicit = memberSelectionMap[poojaId];
-    if (explicit && explicit.length > 0) {
+    if (explicit !== undefined) {
       return Array.from(new Set(explicit));
     }
 
@@ -2013,7 +2115,7 @@ const PoojaRegistrationPage = () => {
       }
     }
 
-    return [];
+    return null;
   };
 
   const describeMemberKey = (memberKey: string, matchingItem?: CartItem): string => {
@@ -2115,7 +2217,7 @@ const PoojaRegistrationPage = () => {
     });
     const effectiveDay = dayOptionDisabled ? null : selectedDay;
     const matchingItem = findMatchingCartItem(row, effectiveDay);
-    const presetMembers = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+    const presetMembers = resolveSelectedMemberKeys(row.pooja.id, matchingItem) ?? [];
     const currentPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
     setPrasadamSelectionMap((prev) => ({
       ...prev,
@@ -2166,6 +2268,11 @@ const PoojaRegistrationPage = () => {
         ? dayOptionMap.get(Number(selectedStarForRow))
         : undefined;
     const postPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
+    const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
+    if (recurrenceSelection?.kind === 'one_time_extra' && !recurrenceSelection.oneTimeDate) {
+      showWarningPopup('Please pick an English month date for the one-time extra before adding it to the cart.');
+      return;
+    }
 
     if (requiresChartDetails) {
       if (!chartDetails?.date) {
@@ -2232,6 +2339,11 @@ const PoojaRegistrationPage = () => {
       memberLookup.get(primarySelectionKey) ??
       null;
 
+    const recurrenceFields = buildRecurrenceFields(recurrenceSelection, resolvedBookingDate);
+
+    const selectedRecurrenceSelection = selectedPooja ? resolveRecurrenceSelection(selectedPooja.id) : undefined;
+    const modalRecurrenceFields = buildRecurrenceFields(selectedRecurrenceSelection, dateValue);
+
     const item = createCartItem({
       poojaId: row.pooja.id,
       poojaName: row.pooja.name,
@@ -2265,6 +2377,7 @@ const PoojaRegistrationPage = () => {
       memberDob: primaryPayload.dob ?? null,
       memberFamilyName: primaryPayload.familyName ?? null,
       members: membersPayload,
+      ...recurrenceFields,
     });
 
     setMemberSelectionMap((prev) => ({
@@ -2278,7 +2391,7 @@ const PoojaRegistrationPage = () => {
     }));
 
     addToCart(cartKey, item);
-    setTableMessage({ status: 'info', text: `${row.uiLabel} added to cart.` });
+    showTemporaryTableMessage(`${row.uiLabel} added to cart.`);
   };
 
   const handleCloseModal = () => {
@@ -2356,6 +2469,8 @@ const PoojaRegistrationPage = () => {
 
     const primaryEntry =
       membersPayload[0] ?? buildMemberPayloadFromKey(memberKeys[0] ?? 'self', resolvedName);
+    const selectedRecurrenceSelection = selectedPooja ? resolveRecurrenceSelection(selectedPooja.id) : undefined;
+    const recurrenceFields = buildRecurrenceFields(selectedRecurrenceSelection, dateValue);
     const item = createCartItem({
       poojaId: selectedPooja.id,
       poojaName: selectedPooja.name,
@@ -2388,6 +2503,7 @@ const PoojaRegistrationPage = () => {
       memberGothra: primaryEntry?.gothra,
       memberDob: primaryEntry?.dob ?? null,
       members: membersPayload,
+      ...recurrenceFields,
     });
 
     setMemberSelectionMap((prev) => ({
@@ -2451,7 +2567,7 @@ const PoojaRegistrationPage = () => {
           </div>
         </div>
       )}
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-screen-2xl mx-auto">
         <div className="mb-6 sm:mb-8 md:mb-10">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Pooja Registration</h1>
           <p className="text-base sm:text-lg text-gray-700">
@@ -2472,6 +2588,21 @@ const PoojaRegistrationPage = () => {
                 <p className="text-orange-900 font-medium">
                   நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
                 </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <span className="font-medium text-slate-700">
+                  Added {cartTotals.count} {cartTotals.count === 1 ? 'pooja' : 'poojas'}
+                </span>
+                <span>
+                  Amount ₹ {formattedCartAmount}
+                </span>
+                <Link
+                  to="/payments/general?tab=summary"
+                  onClick={handleViewCart}
+                  className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
+                >
+                  View cart & Payment
+                </Link>
               </div>
             </div>
           </div>
@@ -2499,39 +2630,81 @@ const PoojaRegistrationPage = () => {
 
             {!isLoading && !error && masterRows.length > 0 && (
               <>
+                {tableMessage && (
+                  <div
+                    className={`mb-4 rounded-lg p-3 text-sm font-medium ${
+                      tableMessage.status === 'error'
+                        ? 'border border-red-200 bg-red-50 text-red-700'
+                        : 'border border-orange-200 bg-orange-50 text-orange-700'
+                    }`}
+                  >
+                    {tableMessage.text}
+                  </div>
+                )}
                 {/* Desktop Table View */}
-                <div className="hidden lg:block overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
-                  <table className="min-w-full divide-y divide-gray-200 bg-white">
+                <div className="hidden lg:block rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="max-h-[70vh] overflow-auto">
+                    <table className="min-w-full divide-y divide-gray-200 bg-white">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Code
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[15%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[15%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Pooja Name
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[20%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[20%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Day Option
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Devotees
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Next Occurrence
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Amount
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Prasadam
                         </th>
-                        <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Add to Cart
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Registered By
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%]">
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
+                        >
                           Registration Date
                         </th>
                       </tr>
@@ -2562,8 +2735,13 @@ const PoojaRegistrationPage = () => {
                         const iconClasses = inCart
                           ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
                           : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
-                        const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
-                        const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
+                          const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+                          const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
+                          const memberButtonLabel = formatMemberLabel(
+                            row.pooja.id,
+                            memberKeysForDisplay,
+                            matchingItem,
+                          );
                         const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
                         const hasAdjustableAmount =
                           Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
@@ -2583,6 +2761,7 @@ const PoojaRegistrationPage = () => {
                         });
                         const showDefaultFirstDay =
                           Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
+                        const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
                         
                         return (
                         <tr
@@ -2665,15 +2844,13 @@ const PoojaRegistrationPage = () => {
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm overflow-visible">
-                              <MemberMultiSelect
-                                label={memberButtonLabel}
-                                options={memberOptions}
-                                selectedValues={
-                                  resolvedMemberKeys.length > 0 ? resolvedMemberKeys : fallbackMemberSelection
-                                }
-                                onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
-                                disabled={memberOptions.length === 0}
-                              />
+                            <MemberMultiSelect
+                              label={memberButtonLabel}
+                              options={memberOptions}
+                              selectedValues={memberKeysForDisplay}
+                              onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
+                              disabled={memberOptions.length === 0}
+                            />
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-700">
                               {showDefaultFirstDay ? (
@@ -2720,28 +2897,136 @@ const PoojaRegistrationPage = () => {
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {hasAdjustableAmount ? (
-                                <div className="space-y-2">
-                                  <p className="text-xs text-gray-500">Range: {row.rateLabel}</p>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-500">₹</span>
-                                    <input
-                                      type="number"
-                                      min={row.minAmount ?? undefined}
-                                      max={row.maxAmount ?? undefined}
-                                      step={VARIABLE_AMOUNT_STEP}
-                                      className="w-28 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                      value={amountInputValue}
-                                      onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
-                                    />
-                                  </div>
-                                  {amountInputError && (
-                                    <p className="text-xs text-red-600">{amountInputError}</p>
+                              <div className="space-y-4">
+                                <div>
+                                  {hasAdjustableAmount ? (
+                                    <div className="space-y-2">
+                                      <p className="text-xs text-gray-500">Range: {row.rateLabel}</p>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-gray-500">₹</span>
+                                        <input
+                                          type="number"
+                                          min={row.minAmount ?? undefined}
+                                          max={row.maxAmount ?? undefined}
+                                          step={VARIABLE_AMOUNT_STEP}
+                                          className="w-28 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                          value={amountInputValue}
+                                          onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
+                                        />
+                                      </div>
+                                      {amountInputError && (
+                                        <p className="text-xs text-red-600">{amountInputError}</p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span>{row.rateLabel}</span>
                                   )}
                                 </div>
-                              ) : (
-                                <span>{row.rateLabel}</span>
-                              )}
+                                <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs">
+                                  <p className="text-gray-500 font-semibold uppercase tracking-wide">Schedule</p>
+                                  <div className="flex flex-wrap items-center gap-4 text-gray-700">
+                                    <label className="inline-flex items-center">
+                                      <input
+                                        type="radio"
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                        checked={recurrenceSelection?.kind === 'recurring'}
+                                        onChange={() =>
+                                          applyRecurrenceSelection(row.pooja.id, {
+                                            kind: 'recurring',
+                                            frequency:
+                                              recurrenceSelection?.kind === 'recurring'
+                                                ? recurrenceSelection.frequency
+                                                : 'monthly',
+                                          })
+                                        }
+                                      />
+                                      <span className="ml-2">Recurring</span>
+                                    </label>
+                                    <label className="inline-flex items-center">
+                                      <input
+                                        type="radio"
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                        checked={recurrenceSelection?.kind === 'one_time_extra'}
+                                        onChange={() =>
+                                          applyRecurrenceSelection(row.pooja.id, {
+                                            kind: 'one_time_extra',
+                                            oneTimeDate:
+                                              recurrenceSelection?.kind === 'one_time_extra'
+                                                ? recurrenceSelection.oneTimeDate
+                                                : undefined,
+                                          })
+                                        }
+                                      />
+                                      <span className="ml-2">One-time extra</span>
+                                    </label>
+                                  </div>
+                                  <p className="mt-1 text-[0.65rem] text-gray-500">Leave both options unchecked for a one-time booking.</p>
+                                  {recurrenceSelection ? (
+                                    <>
+                                      {recurrenceSelection.kind === 'recurring' ? (
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-2 text-gray-600">
+                                            <span className="text-xs font-medium">Frequency:</span>
+                                            <div className="flex items-center gap-1">
+                                              <select
+                                                value={recurrenceSelection.frequency}
+                                                onChange={(event) =>
+                                                  applyRecurrenceSelection(row.pooja.id, {
+                                                    kind: 'recurring',
+                                                    frequency: event.target.value as RecurrenceFrequency,
+                                                  })
+                                                }
+                                                className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
+                                              >
+                                                <option value="monthly">Monthly</option>
+                                                <option value="quarterly">Quarterly</option>
+                                                <option value="annually">Annually</option>
+                                              </select>
+                                              <span
+                                                className="text-[0.65rem] font-semibold text-slate-500"
+                                                title={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
+                                                aria-label={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
+                                              >
+                                                ℹ
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <p className="text-[0.65rem] text-gray-500">
+                                            {RECURRING_FREQUENCY_DESCRIPTIONS[recurrenceSelection.frequency]}
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          <label className="block text-xs font-medium text-gray-600">
+                                            English month date
+                                          </label>
+                                          <input
+                                            type="date"
+                                            min={todayIso}
+                                            className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                            value={recurrenceSelection.oneTimeDate ?? ''}
+                                            onChange={(event) =>
+                                              applyRecurrenceSelection(row.pooja.id, {
+                                                kind: 'one_time_extra',
+                                                oneTimeDate: event.target.value,
+                                              })
+                                            }
+                                          />
+                                        </div>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="mt-2 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-100"
+                                        onClick={() => applyRecurrenceSelection(row.pooja.id)}
+                                      >
+                                        Clear schedule
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-gray-500">Choose a schedule to proceed.</p>
+                                  )}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-center text-sm">
                               <div className="flex items-center justify-center space-x-4">
@@ -2797,7 +3082,8 @@ const PoojaRegistrationPage = () => {
                         );
                       })}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
 
                 {/* Mobile Card View */}
@@ -2828,7 +3114,12 @@ const PoojaRegistrationPage = () => {
                       ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
                       : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
                     const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
-                    const memberButtonLabel = formatMemberLabel(row.pooja.id, resolvedMemberKeys, matchingItem);
+                    const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
+                    const memberButtonLabel = formatMemberLabel(
+                      row.pooja.id,
+                      memberKeysForDisplay,
+                      matchingItem,
+                    );
                     const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
                     const hasAdjustableAmount =
                       Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
@@ -2848,6 +3139,7 @@ const PoojaRegistrationPage = () => {
                     });
                     const showDefaultFirstDay =
                       Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
+                    const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
 
                     return (
                       <div
@@ -2954,9 +3246,7 @@ const PoojaRegistrationPage = () => {
                             <MemberMultiSelect
                               label={memberButtonLabel}
                               options={memberOptions}
-                              selectedValues={
-                                resolvedMemberKeys.length > 0 ? resolvedMemberKeys : fallbackMemberSelection
-                              }
+                              selectedValues={memberKeysForDisplay}
                               onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
                               disabled={memberOptions.length === 0}
                             />
@@ -3040,6 +3330,114 @@ const PoojaRegistrationPage = () => {
                             )}
                           </div>
 
+                          {/* Recurrence Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Schedule
+                            </label>
+                            <div className="space-y-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs">
+                              <div className="flex flex-wrap items-center gap-4 text-gray-700">
+                                <label className="inline-flex items-center">
+                                  <input
+                                    type="radio"
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                    checked={recurrenceSelection?.kind === 'recurring'}
+                                    onChange={() =>
+                                      applyRecurrenceSelection(row.pooja.id, {
+                                        kind: 'recurring',
+                                        frequency:
+                                          recurrenceSelection?.kind === 'recurring'
+                                            ? recurrenceSelection.frequency
+                                            : 'monthly',
+                                      })
+                                    }
+                                  />
+                                  <span className="ml-2">Recurring</span>
+                                </label>
+                                <label className="inline-flex items-center">
+                                  <input
+                                    type="radio"
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                    checked={recurrenceSelection?.kind === 'one_time_extra'}
+                                    onChange={() =>
+                                      applyRecurrenceSelection(row.pooja.id, {
+                                        kind: 'one_time_extra',
+                                        oneTimeDate:
+                                          recurrenceSelection?.kind === 'one_time_extra'
+                                            ? recurrenceSelection.oneTimeDate
+                                            : undefined,
+                                      })
+                                    }
+                                  />
+                                  <span className="ml-2">One-time extra</span>
+                                </label>
+                              </div>
+                              <p className="mt-1 text-[0.65rem] text-gray-500">Leave both options unchecked for a one-time booking.</p>
+                              {recurrenceSelection ? (
+                                <>
+                                  {recurrenceSelection.kind === 'recurring' ? (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2 text-gray-600">
+                                        <span className="text-xs font-medium">Frequency:</span>
+                                        <div className="flex items-center gap-1">
+                                          <select
+                                            value={recurrenceSelection.frequency}
+                                            onChange={(event) =>
+                                              applyRecurrenceSelection(row.pooja.id, {
+                                                kind: 'recurring',
+                                                frequency: event.target.value as RecurrenceFrequency,
+                                              })
+                                            }
+                                            className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
+                                          >
+                                            <option value="monthly">Monthly</option>
+                                            <option value="quarterly">Quarterly</option>
+                                            <option value="annually">Annually</option>
+                                          </select>
+                                          <span
+                                            className="text-[0.65rem] font-semibold text-slate-500"
+                                            title={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
+                                            aria-label={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
+                                          >
+                                            ℹ
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <p className="text-[0.65rem] text-gray-500">
+                                        {RECURRING_FREQUENCY_DESCRIPTIONS[recurrenceSelection.frequency]}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      <label className="block text-xs font-medium text-gray-600">English month date</label>
+                                      <input
+                                        type="date"
+                                        min={todayIso}
+                                        className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                        value={recurrenceSelection.oneTimeDate ?? ''}
+                                        onChange={(event) =>
+                                          applyRecurrenceSelection(row.pooja.id, {
+                                            kind: 'one_time_extra',
+                                            oneTimeDate: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="mt-2 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-100"
+                                    onClick={() => applyRecurrenceSelection(row.pooja.id)}
+                                  >
+                                    Clear schedule
+                                  </button>
+                                </>
+                              ) : (
+                                <p className="text-xs text-gray-500">Choose a schedule to proceed.</p>
+                              )}
+                            </div>
+                          </div>
+
                           {/* Prasadam Section */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3100,11 +3498,6 @@ const PoojaRegistrationPage = () => {
               </>
             )}
 
-            {tableMessage && (
-              <div className={`mt-4 p-3 rounded-lg text-center ${tableMessage.status === 'error' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'}`}>
-                {tableMessage.text}
-              </div>
-            )}
           </div>
         </div>
       </div>

@@ -12,6 +12,7 @@ from .views import (
     PoojaDayOptionViewSet,
     PoojaOptionViewSet,
     PoojaRegistrationViewSet,
+    RecurringPoojaPlanViewSet,
     RecentPoojaRegistrationsView,
     TodayPoojaRegistrationsPublicView,
 )
@@ -22,6 +23,7 @@ router.register('day-options', PoojaDayOptionViewSet, basename='pooja-day-option
 router.register('daily-messages', DailyMessageViewSet, basename='pooja-daily-messages')
 router.register('donor-messages', DonorMessageTemplateViewSet, basename='pooja-donor-messages')
 router.register('registrations', PoojaRegistrationViewSet, basename='pooja-registrations')
+router.register('recurrence/plans', RecurringPoojaPlanViewSet, basename='pooja-recurrence-plans')
 router.register('featured-poojas', FeaturedPoojaViewSet, basename='featured-poojas')
 
 urlpatterns = [

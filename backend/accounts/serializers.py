@@ -1,5 +1,6 @@
 """Serializers for accounts authentication and donor profile handling."""
 
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
 from rest_framework import serializers
@@ -26,6 +27,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "rasi",
             "gender",
             "date_of_birth",
+            "tamil_name",
             "family_name",
             "notes",
         )
@@ -170,7 +172,7 @@ class RegisterSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
-    otp_code = serializers.CharField(max_length=6)
+    otp_code = serializers.CharField(max_length=6, required=False, allow_blank=True)
     email = serializers.EmailField(required=False, allow_blank=True)
 
     # Donor profile fields
@@ -182,31 +184,37 @@ class RegisterSerializer(serializers.Serializer):
     postal_code = serializers.CharField(required=False, allow_blank=True)
     gothra = serializers.CharField(required=False, allow_blank=True)
     tamil_star = serializers.CharField(required=False, allow_blank=True)
+    rasi = serializers.CharField(required=False, allow_blank=True)
     date_of_birth = serializers.DateField(required=False, allow_null=True)
     family_name = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     gender = serializers.CharField(required=False, allow_blank=True)
+    tamil_name = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
         if User.objects.filter(phone_number=attrs["phone_number"]).exists():
             raise serializers.ValidationError({"phone_number": "Phone number already registered"})
-        token = (
-            OtpToken.objects.filter(phone_number=attrs["phone_number"], purpose=OtpPurpose.REGISTRATION)
-            .order_by("-created_at")
-            .first()
-        )
-        if not token or not token.is_valid(attrs["otp_code"]):
-            raise serializers.ValidationError({"otp_code": "Invalid or expired OTP"})
-        attrs["token"] = token
+        if settings.REGISTRATION_OTP_ENABLED:
+            otp_code = attrs.get("otp_code") or ""
+            if not otp_code:
+                raise serializers.ValidationError({"otp_code": "OTP is required"})
+            token = (
+                OtpToken.objects.filter(phone_number=attrs["phone_number"], purpose=OtpPurpose.REGISTRATION)
+                .order_by("-created_at")
+                .first()
+            )
+            if not token or not token.is_valid(otp_code):
+                raise serializers.ValidationError({"otp_code": "Invalid or expired OTP"})
+            attrs["token"] = token
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
-        token: OtpToken = validated_data.pop("token")
+        token = validated_data.pop("token", None)
         validated_data.pop("confirm_password")
-        otp_code = validated_data.pop("otp_code")  # noqa: F841 - kept for audit/logging if needed
+        otp_code = validated_data.pop("otp_code", "")  # noqa: F841 - kept for audit/logging if needed
 
         gender_marker = object()
         gender_value = validated_data.pop("gender", gender_marker)
@@ -227,7 +235,8 @@ class RegisterSerializer(serializers.Serializer):
             email=validated_data.pop("email", ""),
         )
         profile, _ = DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
-        token.mark_used()
+        if token:
+            token.mark_used()
         user.refresh_from_db()
         refresh = RefreshToken.for_user(user)
         user_data = UserSerializer(user).data

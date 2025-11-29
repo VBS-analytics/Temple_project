@@ -12,8 +12,13 @@ from .models import (
     PoojaOption,
     PoojaRegistration,
     PoojaRegistrationMember,
+    RecurringPoojaPlan,
+    RecurrenceFrequency,
+    RecurrenceKind,
 )
 from accounts.models import UserRole
+
+from .services.recurrence import create_plan_from_registration
 
 
 class PoojaOptionSerializer(serializers.ModelSerializer):
@@ -125,6 +130,7 @@ class PoojaRegistrationMemberSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "family_name",
             "tamil_star",
+            "rasi",
             "gothra",
         )
         read_only_fields = ("id",)
@@ -132,6 +138,7 @@ class PoojaRegistrationMemberSerializer(serializers.ModelSerializer):
             "date_of_birth": {"required": False, "allow_null": True},
             "family_name": {"required": False, "allow_blank": True},
             "tamil_star": {"required": False, "allow_blank": True},
+            "rasi": {"required": False, "allow_blank": True},
             "gothra": {"required": False, "allow_blank": True},
             "phone_number": {"required": False, "allow_blank": True},
             "relationship": {"required": False, "allow_blank": True},
@@ -140,6 +147,18 @@ class PoojaRegistrationMemberSerializer(serializers.ModelSerializer):
 
 class PoojaRegistrationSerializer(serializers.ModelSerializer):
     members = PoojaRegistrationMemberSerializer(many=True, required=False)
+    recurrence_kind = serializers.ChoiceField(
+        choices=RecurrenceKind.choices,
+        required=False,
+        write_only=True,
+    )
+    recurrence_frequency = serializers.ChoiceField(
+        choices=RecurrenceFrequency.choices,
+        required=False,
+        write_only=True,
+    )
+    recurrence_one_time_date = serializers.DateField(required=False, write_only=True, allow_null=True)
+    cart_item = serializers.DictField(required=False, write_only=True)
     donor_name = serializers.SerializerMethodField()
     donor_phone = serializers.SerializerMethodField()
     pooja_option_name = serializers.SerializerMethodField()
@@ -172,6 +191,10 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "members",
+            "recurrence_kind",
+            "recurrence_frequency",
+            "recurrence_one_time_date",
+            "cart_item",
         )
         read_only_fields = (
             "id",
@@ -190,8 +213,20 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         members = validated_data.pop("members", [])
+        recurrence_kind = validated_data.pop("recurrence_kind", None)
+        recurrence_frequency = validated_data.pop("recurrence_frequency", None)
+        recurrence_one_time_date = validated_data.pop("recurrence_one_time_date", None)
+        cart_item_payload = validated_data.pop("cart_item", None)
         registration = PoojaRegistration.objects.create(**validated_data)
         self._sync_members(registration, members)
+        if recurrence_kind:
+            create_plan_from_registration(
+                registration=registration,
+                recurrence_kind=recurrence_kind,
+                recurrence_frequency=recurrence_frequency,
+                recurrence_one_time_date=recurrence_one_time_date,
+                cart_item_payload=cart_item_payload,
+            )
         return registration
 
     @transaction.atomic
@@ -305,6 +340,38 @@ class PublicTodayPoojaRegistrationSerializer(serializers.ModelSerializer):
         if email.strip():
             return email.strip()
         return "Temple Admin"
+
+
+class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
+    pooja_option_name = serializers.CharField(source="pooja_option.name", read_only=True)
+    pooja_option_code = serializers.CharField(source="pooja_option.code", read_only=True)
+    day_option_description = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RecurringPoojaPlan
+        fields = (
+            "id",
+            "pooja_option_name",
+            "pooja_option_code",
+            "day_option_description",
+            "recurrence_kind",
+            "recurrence_frequency",
+            "start_date",
+            "next_occurrence",
+            "last_occurrence",
+            "one_time_date",
+            "amount",
+            "is_active",
+            "pause_from",
+            "pause_until",
+            "metadata",
+        )
+
+    def get_day_option_description(self, obj):
+        day_option = getattr(obj, "day_option", None)
+        if day_option is None:
+            return None
+        return getattr(day_option, "description", "") or None
 
 
 class LandingPoojaRegistrationSerializer(serializers.ModelSerializer):

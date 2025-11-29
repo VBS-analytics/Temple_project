@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
-import LanguageToggle from "../components/LanguageToggle";
 import api, { extractResults } from "../lib/api";
 import { resolveMediaUrl } from "../lib/media";
 

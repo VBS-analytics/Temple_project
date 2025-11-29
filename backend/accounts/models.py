@@ -124,6 +124,7 @@ class DonorProfile(models.Model):
     tamil_star = models.CharField(max_length=128, blank=True)
     rasi = models.CharField(max_length=128, blank=True)
     gender = models.CharField(max_length=32, blank=True, default="")
+    tamil_name = models.CharField(max_length=255, blank=True, default="")
     date_of_birth = models.DateField(blank=True, null=True)
     family_name = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True)

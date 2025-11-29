@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
-import LanguageToggle from '../components/LanguageToggle';
 import { indianCities } from '../data/indianCities';
 import { nakshatraOptions } from '../data/nakshatraOptions';
 import api from '../lib/api';
@@ -51,6 +50,7 @@ interface FormValues {
   gothra: string;
   rasi: string;
   gender: string;
+  tamil_name: string;
   family_name: string;
   family_selection: string;
   notes: string;
@@ -85,6 +85,7 @@ const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const registrationOtpEnabled = false;
 
   const {
     register,
@@ -96,22 +97,23 @@ const RegisterPage = () => {
     setError,
     setValue,
   } = useForm<FormValues>({
-      defaultValues: {
-        phone_number: '',
-        name: '',
-        address_line1: '',
-        address_line2: '',
-        address_line3: '',
-        city: '',
-        state: '',
-        postal_code: '',
-        date_of_birth: '',
-        tamil_star: '',
-        gothra: '',
-        rasi: '',
-        gender: '',
-        family_name: '',
-        family_selection: '',
+    defaultValues: {
+      phone_number: '',
+      name: '',
+      address_line1: '',
+      address_line2: '',
+      address_line3: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      date_of_birth: '',
+      tamil_star: '',
+      gothra: '',
+      rasi: '',
+      gender: '',
+      tamil_name: '',
+      family_name: '',
+      family_selection: '',
       notes: '',
       password: '',
       confirm_password: '',
@@ -152,6 +154,7 @@ const RegisterPage = () => {
     gothra: 3,
     rasi: 3,
     gender: 3,
+    tamil_name: 3,
     family_selection: 3,
     family_name: 3,
     notes: 3,
@@ -179,7 +182,10 @@ const RegisterPage = () => {
     let isValid = false;
     
     if (currentStep === 1) {
-      isValid = await trigger(['phone_number', 'name', 'otp_code', 'password', 'confirm_password']);
+      const firstStepFields: Array<keyof FormValues> = registrationOtpEnabled
+        ? ['phone_number', 'name', 'otp_code', 'password', 'confirm_password']
+        : ['phone_number', 'name', 'password', 'confirm_password'];
+      isValid = await trigger(firstStepFields);
     } else if (currentStep === 2) {
       isValid = await trigger(['address_line1', 'address_line2', 'address_line3', 'city', 'state', 'postal_code']);
     } else if (currentStep === 3) {
@@ -198,6 +204,10 @@ const RegisterPage = () => {
   const prevStep = () => {
     setCurrentStep(currentStep - 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancel = () => {
+    navigate('/');
   };
 
   const redirectToDashboard = () => {
@@ -224,6 +234,7 @@ const RegisterPage = () => {
     if (!values.date_of_birth) delete payload.date_of_birth;
     if (!payload.family_name) delete payload.family_name;
     if (!payload.notes) delete payload.notes;
+    if (!payload.tamil_name) delete payload.tamil_name;
     if (gender) {
       payload.gender = gender;
     }
@@ -368,7 +379,6 @@ const RegisterPage = () => {
                 <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
                   Login
                 </Link>
-                <LanguageToggle />
               </div>
             </div>
 
@@ -411,9 +421,6 @@ const RegisterPage = () => {
                   >
                     Sign&nbsp;Up
                   </Link>
-                  <div className="flex justify-center pt-2">
-                    <LanguageToggle />
-                  </div>
                 </div>
               </div>
             </div>
@@ -660,59 +667,61 @@ const RegisterPage = () => {
                           </div>
                         </div>
 
-                        <div className="relative">
-                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                            OTP Verification <span className="text-rose-500 ml-1">*</span>
-                          </label>
-                          <div className="flex flex-col sm:flex-row gap-3">
-                            <div className="relative flex-1">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
+                        {registrationOtpEnabled && (
+                          <div className="relative">
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                              OTP Verification <span className="text-rose-500 ml-1">*</span>
+                            </label>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <div className="relative flex-1">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                  </svg>
+                                </div>
+                                <input
+                                  type="text"
+                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                    isFocused === 'otp_code' || errors.otp_code ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                  }`}
+                                  placeholder="Enter OTP"
+                                  {...register('otp_code', {
+                                    required: 'OTP is required',
+                                    pattern: { value: /^\d{6}$/, message: 'OTP must be 6 digits' }
+                                  })}
+                                  onFocus={() => handleFocus('otp_code')}
+                                  onBlur={handleBlur}
+                                />
                               </div>
-                              <input
-                                type="text"
-                                className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                  isFocused === 'otp_code' || errors.otp_code ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                }`}
-                                placeholder="Enter OTP"
-                                {...register('otp_code', {
-                                  required: 'OTP is required',
-                                  pattern: { value: /^\d{6}$/, message: 'OTP must be 6 digits' }
-                                })}
-                                onFocus={() => handleFocus('otp_code')}
-                                onBlur={handleBlur}
-                              />
+                              <button
+                                type="button"
+                                onClick={requestOtp}
+                                className="px-4 sm:px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center"
+                              >
+                                <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                                Send OTP
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={requestOtp}
-                              className="px-4 sm:px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center"
-                            >
-                              <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                              </svg>
-                              Send OTP
-                            </button>
+                            {errors.otp_code && (
+                              <p className="mt-1 text-xs text-red-600 flex items-center">
+                                <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                {errors.otp_code.message}
+                              </p>
+                            )}
+                            {otpStatus && (
+                              <p className="mt-1 text-xs text-gray-500 flex items-center">
+                                <svg className="h-4 w-4 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                {otpStatus}
+                              </p>
+                            )}
                           </div>
-                          {errors.otp_code && (
-                            <p className="mt-1 text-xs text-red-600 flex items-center">
-                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                              {errors.otp_code.message}
-                            </p>
-                          )}
-                          {otpStatus && (
-                            <p className="mt-1 text-xs text-gray-500 flex items-center">
-                              <svg className="h-4 w-4 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                              {otpStatus}
-                            </p>
-                          )}
-                        </div>
+                        )}
 
                         <div className="grid grid-cols-1 gap-4 sm:gap-6">
                           <div className="relative">
@@ -1297,6 +1306,29 @@ const RegisterPage = () => {
                                 </p>
                               )}
                             </div>
+                            
+                            <div className="relative">
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                Tamil Name (Saravam) <span className="text-gray-400 text-xs font-normal ml-2">(Optional)</span>
+                              </label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 4h12M8 8h8M10 12h4M4 18h16" />
+                                  </svg>
+                                </div>
+                                <input
+                                  type="text"
+                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                    isFocused === 'tamil_name' ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                                  }`}
+                                  placeholder="Enter Tamil name"
+                                  {...register('tamil_name')}
+                                  onFocus={() => handleFocus('tamil_name')}
+                                  onBlur={handleBlur}
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -1401,55 +1433,65 @@ const RegisterPage = () => {
                     )}
 
                     {/* Navigation Buttons */}
-                    <div className="mt-8 flex flex-col sm:flex-row justify-between gap-3">
-                      {currentStep > 1 && (
-                        <button
-                          type="button"
-                          onClick={prevStep}
-                          className="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-all duration-300 shadow hover:shadow-md transform hover:-translate-y-0.5 flex items-center justify-center"
-                        >
-                          <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                          </svg>
-                          Previous
-                        </button>
-                      )}
-                      
-                      {currentStep < 3 ? (
-                        <button
-                          type="button"
-                          onClick={nextStep}
-                          className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center sm:ml-auto"
-                        >
-                          Next
-                          <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center sm:ml-auto disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                          {isSubmitting ? (
-                            <>
-                              <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Creating account…
-                            </>
-                          ) : (
-                            <>
-                              Complete Registration
-                              <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </>
-                          )}
-                        </button>
-                      )}
+                    <div className="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={handleCancel}
+                        className="px-6 py-3 bg-white/80 text-gray-700 font-medium rounded-xl border border-gray-200 hover:bg-white transition-all duration-300 shadow-sm"
+                      >
+                        Cancel
+                      </button>
+
+                      <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto sm:justify-end">
+                        {currentStep > 1 && (
+                          <button
+                            type="button"
+                            onClick={prevStep}
+                            className="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-all duration-300 shadow hover:shadow-md transform hover:-translate-y-0.5 flex items-center justify-center"
+                          >
+                            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Previous
+                          </button>
+                        )}
+                        
+                        {currentStep < 3 ? (
+                          <button
+                            type="button"
+                            onClick={nextStep}
+                            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center sm:ml-auto"
+                          >
+                            Next
+                            <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center sm:ml-auto disabled:opacity-70 disabled:cursor-not-allowed"
+                          >
+                            {isSubmitting ? (
+                              <>
+                                <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Creating account…
+                              </>
+                            ) : (
+                              <>
+                                Complete Registration
+                                <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-4 sm:mt-6 text-center text-sm text-gray-600">

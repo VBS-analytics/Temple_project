@@ -134,12 +134,93 @@ class PoojaRegistrationMember(models.Model):
     family_name = models.CharField(max_length=255, blank=True, default="")
     tamil_star = models.CharField(max_length=128, blank=True)
     gothra = models.CharField(max_length=128, blank=True)
+    rasi = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
         ordering = ("registration", "name")
 
     def __str__(self):
         return f"{self.name} ({self.registration_id})"
+
+
+class RecurrenceKind(models.TextChoices):
+    RECURRING = "recurring", "Recurring"
+    ONE_TIME_EXTRA = "one_time_extra", "One-time extra"
+
+
+class RecurrenceFrequency(models.TextChoices):
+    MONTHLY = "monthly", "Monthly"
+    QUARTERLY = "quarterly", "Quarterly"
+    ANNUALLY = "annually", "Annually"
+
+
+class RecurringPoojaPlan(models.Model):
+    donor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="recurrence_plans",
+    )
+    pooja_option = models.ForeignKey(
+        PoojaOption,
+        on_delete=models.CASCADE,
+        related_name="recurrence_plans",
+    )
+    day_option = models.ForeignKey(
+        PoojaDayOption,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    recurrence_kind = models.CharField(
+        max_length=32,
+        choices=RecurrenceKind.choices,
+        default=RecurrenceKind.RECURRING,
+    )
+    recurrence_frequency = models.CharField(
+        max_length=32,
+        choices=RecurrenceFrequency.choices,
+        default=RecurrenceFrequency.MONTHLY,
+    )
+    start_date = models.DateField(null=True, blank=True)
+    next_occurrence = models.DateField(null=True, blank=True)
+    last_occurrence = models.DateField(null=True, blank=True)
+    one_time_date = models.DateField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    pause_from = models.DateField(null=True, blank=True)
+    pause_until = models.DateField(null=True, blank=True)
+    origin_registration = models.ForeignKey(
+        PoojaRegistration,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="originating_recurring_plans",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    cart_payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["donor", "pooja_option", "day_option", "recurrence_kind"],
+                condition=models.Q(recurrence_kind=RecurrenceKind.RECURRING),
+                name="pooja_recurring_unique",
+            ),
+            models.UniqueConstraint(
+                fields=["donor", "pooja_option", "day_option", "recurrence_kind", "one_time_date"],
+                condition=models.Q(recurrence_kind=RecurrenceKind.ONE_TIME_EXTRA),
+                name="pooja_one_time_unique",
+            ),
+        ]
+
+    def __str__(self):
+        kind_label = self.get_recurrence_kind_display()
+        pooja_label = self.pooja_option.name if self.pooja_option else "Pooja"
+        next_label = self.next_occurrence.isoformat() if self.next_occurrence else "pending"
+        return f"{self.donor} – {pooja_label} ({kind_label}) → {next_label}"
 
 
 class FeaturedPooja(models.Model):

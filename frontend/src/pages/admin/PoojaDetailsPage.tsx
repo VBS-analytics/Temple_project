@@ -19,6 +19,7 @@ interface RegistrationMember {
   familyName?: string | null;
   tamil_star?: string | null;
   tamilStar?: string | null;
+  rasi?: string | null;
   gothra?: string | null;
   gothram?: string | null;
 }
@@ -255,6 +256,7 @@ const MEMBER_FIELD_ALIASES = {
   dateOfBirth: ['date_of_birth', 'dateOfBirth', 'dob', 'birth_date', 'birthDate'],
   familyName: ['family_name', 'familyName', 'family', 'familyname'],
   tamilStar: ['tamil_star', 'tamilStar', 'star'],
+  rasi: ['rasi', 'member_rasi', 'memberRasi'],
   gothra: ['gothra', 'gothram', 'gothram_name', 'gothramName', 'gothram'],
 } as const;
 
@@ -299,6 +301,9 @@ const resolveMemberFamilyName = (member: RegistrationMember | null | undefined) 
 const resolveMemberTamilStar = (member: RegistrationMember | null | undefined) =>
   readMemberField(member, MEMBER_FIELD_ALIASES.tamilStar);
 
+const resolveMemberRasi = (member: RegistrationMember | null | undefined) =>
+  readMemberField(member, MEMBER_FIELD_ALIASES.rasi);
+
 const resolveMemberGothra = (member: RegistrationMember | null | undefined) =>
   readMemberField(member, MEMBER_FIELD_ALIASES.gothra);
 
@@ -313,8 +318,9 @@ const formatDevoteesForExport = (members?: RegistrationMember[] | null) => {
       const familyName = resolveMemberFamilyName(member) ?? 'N/A';
       const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
       const gothra = resolveMemberGothra(member) ?? 'N/A';
+      const rasi = resolveMemberRasi(member) ?? 'N/A';
       const dob = formatDobDisplay(resolveMemberDob(member));
-      return `${name} (DOB: ${dob}, Family: ${familyName}, Tamil Star: ${tamilStar}, Gothram: ${gothra})`;
+      return `${name} (DOB: ${dob}, Family: ${familyName}, Rasi: ${rasi}, Tamil Star: ${tamilStar}, Gothram: ${gothra})`;
     })
     .join('\n');
 };
@@ -1177,26 +1183,28 @@ const PoojaDetailsPage = () => {
             <div className="space-y-2 mt-1">
               {members.length === 0 ? (
                 <span className="text-xs text-slate-400 italic">No devotee details available</span>
-              ) : (
-                members.map((member, index) => {
-                  const name = (member?.name ?? '').trim() || 'N/A';
-                  const familyName = resolveMemberFamilyName(member) ?? 'N/A';
-                  const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
-                  const gothra = resolveMemberGothra(member) ?? 'N/A';
-                  const dob = formatDobDisplay(resolveMemberDob(member));
-                  
-                  return (
-                    <div key={member?.id ?? index} className="text-sm border-l-2 border-slate-200 pl-2 py-1">
-                      <div className="font-medium text-slate-800">{name}</div>
-                      <div className="grid grid-cols-2 gap-1 mt-1 text-xs text-slate-600">
-                        <div><span className="font-medium">DOB:</span> {dob}</div>
-                        <div><span className="font-medium">Family:</span> {familyName}</div>
-                        <div><span className="font-medium">Tamil Star:</span> {tamilStar}</div>
-                        <div><span className="font-medium">Gothram:</span> {gothra}</div>
-                      </div>
-                    </div>
-                  );
-                })
+                  ) : (
+                    members.map((member, index) => {
+                      const name = (member?.name ?? '').trim() || 'N/A';
+                      const familyName = resolveMemberFamilyName(member) ?? 'N/A';
+                      const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
+                      const gothra = resolveMemberGothra(member) ?? 'N/A';
+                      const rasi = resolveMemberRasi(member) ?? 'N/A';
+                      const dob = formatDobDisplay(resolveMemberDob(member));
+                      
+                      return (
+                        <div key={member?.id ?? index} className="text-sm border-l-2 border-slate-200 pl-2 py-1">
+                          <div className="font-medium text-slate-800">{name}</div>
+                          <div className="grid grid-cols-2 gap-1 mt-1 text-xs text-slate-600">
+                            <div><span className="font-medium">DOB:</span> {dob}</div>
+                            <div><span className="font-medium">Family:</span> {familyName}</div>
+                            <div><span className="font-medium">Rasi:</span> {rasi}</div>
+                            <div><span className="font-medium">Tamil Star:</span> {tamilStar}</div>
+                            <div className="col-span-2"><span className="font-medium">Gothram:</span> {gothra}</div>
+                          </div>
+                        </div>
+                      );
+                    })
               )}
             </div>
           </div>
@@ -1693,7 +1701,10 @@ const PoojaDetailsPage = () => {
                 </div>
                 
                 {viewMode === 'table' ? (
-                  <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-inner">
+                  <div
+                    className="overflow-auto rounded-2xl border border-slate-100 bg-white shadow-inner"
+                    style={{ maxHeight: '70vh' }}
+                  >
                     <table className="min-w-[800px] w-full table-fixed divide-y divide-slate-200">
                       <colgroup>
                         <col style={{ width: '8%' }} />
@@ -1892,47 +1903,48 @@ const PoojaDetailsPage = () => {
                                       </div>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <div className="space-y-1">
-                                        {members.length === 0 ? (
-                                          <span className="text-xs text-slate-400 italic">No devotee details available</span>
-                                        ) : (
-                                          members.map((member, index) => {
-                                            const name = (member?.name ?? '').trim() || 'N/A';
-                                            const familyName = resolveMemberFamilyName(member) ?? 'N/A';
-                                            const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
-                                            const gothra = resolveMemberGothra(member) ?? 'N/A';
-                                            const dob = formatDobDisplay(resolveMemberDob(member));
-                                            
-                                            return (
-                                              <div key={member?.id ?? index} className="text-sm">
-                                                <div className="font-medium text-slate-800">{name}</div>
-                                                <div className="mt-1 space-y-1 text-xs text-slate-600">
-                                                  <div className="flex flex-wrap gap-x-6 gap-y-1">
-                                                    <span className="inline-flex items-baseline gap-1">
-                                                      <span className="font-medium">DOB:</span>
-                                                      <span>{dob}</span>
-                                                    </span>
-                                                    <span className="inline-flex items-baseline gap-1">
-                                                      <span className="font-medium">Family:</span>
-                                                      <span>{familyName}</span>
-                                                    </span>
-                                                  </div>
-                                                  <div className="flex flex-wrap gap-x-6 gap-y-1">
-                                                    <span className="inline-flex items-baseline gap-1">
-                                                      <span className="font-medium">Tamil Star:</span>
-                                                      <span>{tamilStar}</span>
-                                                    </span>
-                                                    <span className="inline-flex items-baseline gap-1">
-                                                      <span className="font-medium">Gothram:</span>
-                                                      <span>{gothra}</span>
-                                                    </span>
-                                                  </div>
-                                                </div>
+                                    <div className="space-y-1">
+                                      {members.length === 0 ? (
+                                        <span className="text-xs text-slate-400 italic">No devotee details available</span>
+                                      ) : (
+                                        members.map((member, index) => {
+                                          const name = (member?.name ?? '').trim() || 'N/A';
+                                          const familyName = resolveMemberFamilyName(member) ?? 'N/A';
+                                          const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
+                                          const gothra = resolveMemberGothra(member) ?? 'N/A';
+                                          const rasi = resolveMemberRasi(member) ?? 'N/A';
+                                          const dob = formatDobDisplay(resolveMemberDob(member));
+                                          
+                                          return (
+                                            <div key={member?.id ?? index} className="text-sm">
+                                              <div className="font-medium text-slate-800">{name}</div>
+                                              <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
+                                                <span className="inline-flex items-baseline gap-1">
+                                                  <span className="font-medium">DOB:</span>
+                                                  <span>{dob}</span>
+                                                </span>
+                                                <span className="inline-flex items-baseline gap-1">
+                                                  <span className="font-medium">Family:</span>
+                                                  <span>{familyName}</span>
+                                                </span>
+                                                <span className="inline-flex items-baseline gap-1">
+                                                  <span className="font-medium">Rasi:</span>
+                                                  <span>{rasi}</span>
+                                                </span>
+                                                <span className="inline-flex items-baseline gap-1">
+                                                  <span className="font-medium">Tamil Star:</span>
+                                                  <span>{tamilStar}</span>
+                                                </span>
+                                                <span className="inline-flex items-baseline gap-1">
+                                                  <span className="font-medium">Gothram:</span>
+                                                  <span>{gothra}</span>
+                                                </span>
                                               </div>
-                                            );
-                                          })
-                                        )}
-                                      </div>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
                                     </td>
                                     <td className="px-4 py-3">
                                       <span className={prasadamBadgeClass}>

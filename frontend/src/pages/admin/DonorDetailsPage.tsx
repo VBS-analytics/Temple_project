@@ -1,13 +1,29 @@
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { nakshatraOptions } from '../../data/nakshatraOptions';
 import api from '../../lib/api';
+
+const rasiOptions = [
+  'மேஷம்',
+  'ரிஷபம்',
+  'மிதுனம்',
+  'கடகம்',
+  'சிம்மம்',
+  'கன்னி',
+  'துலாம்',
+  'விருச்சிகம்',
+  'தனுசு',
+  'மகரம்',
+  'கும்பம்',
+  'மீனம்',
+];
 
 interface DonorProfile {
   donor_id?: string | null;
   address_line1?: string;
   address_line2?: string;
   address_line3?: string;
+  tamil_name?: string;
   city?: string;
   state?: string;
   postal_code?: string;
@@ -35,6 +51,7 @@ interface DonorMember {
   gender?: string;
   tamil_star?: string;
   gothra?: string;
+  rasi?: string;
   date_of_birth?: string | null;
   family_name?: string;
 }
@@ -312,20 +329,11 @@ const DonorDetailsPage = () => {
     date_of_birth: '',
     tamil_star: '',
     gothra: '',
+    rasi: '',
     family_name: '',
     isOtherSelected: false,
     customFamilyName: ''
   });
-  const [memberStarSearch, setMemberStarSearch] = useState('');
-  const [memberStarDropdownOpen, setMemberStarDropdownOpen] = useState(false);
-  const memberStarInputRef = useRef<HTMLInputElement | null>(null);
-  const filteredMemberStars = useMemo(() => {
-    const normalized = memberStarSearch.trim().toLowerCase();
-    if (!normalized) {
-      return nakshatraOptions;
-    }
-    return nakshatraOptions.filter((option) => option.toLowerCase().includes(normalized));
-  }, [memberStarSearch]);
   const [memberError, setMemberError] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
   const [adminMembers, setAdminMembers] = useState<DonorMember[]>([]);
@@ -379,12 +387,11 @@ const DonorDetailsPage = () => {
       date_of_birth: '',
       tamil_star: '',
       gothra: '',
+      rasi: '',
       family_name: '',
       isOtherSelected: false,
       customFamilyName: ''
     });
-    setMemberStarSearch('');
-    setMemberStarDropdownOpen(false);
   };
 
   const handleMemberChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -400,15 +407,6 @@ const DonorDetailsPage = () => {
     } else {
       setMemberForm((prev) => ({ ...prev, [name]: value }));
     }
-  };
-
-  const handleMemberStarSelection = (value: string) => {
-    setMemberForm((prev) => ({ ...prev, tamil_star: value }));
-    setMemberStarSearch(value);
-    setMemberStarDropdownOpen(false);
-    requestAnimationFrame(() => {
-      memberStarInputRef.current?.blur();
-    });
   };
 
   const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -432,6 +430,9 @@ const DonorDetailsPage = () => {
     }
     if (memberForm.gothra) {
       payload.gothra = memberForm.gothra;
+    }
+    if (memberForm.rasi) {
+      payload.rasi = memberForm.rasi;
     }
     if (memberForm.date_of_birth) {
       payload.date_of_birth = memberForm.date_of_birth;
@@ -1134,102 +1135,40 @@ const DonorDetailsPage = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-star">
                     Tamil Star
                   </label>
-                  <div className="relative">
-                    <input
-                      ref={memberStarInputRef}
-                      id="member-star"
-                      name="tamil_star"
-                      type="text"
-                      className="w-full rounded-lg border border-slate-300 px-4 pr-11 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 capitalize text-sm sm:text-base"
-                      placeholder="Search Nakshatra"
-                      value={memberStarDropdownOpen ? memberStarSearch : memberForm.tamil_star}
-                      onFocus={() => {
-                        setMemberStarSearch(memberForm.tamil_star || '');
-                        setMemberStarDropdownOpen(true);
-                      }}
-                      onBlur={() => {
-                        setTimeout(() => setMemberStarDropdownOpen(false), 120);
-                      }}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setMemberStarSearch(value);
-                        if (!memberStarDropdownOpen) {
-                          setMemberStarDropdownOpen(true);
-                        }
-                        if (value === '') {
-                          setMemberForm((prev) => ({ ...prev, tamil_star: '' }));
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          const normalized = memberStarSearch.trim().toLowerCase();
-                          const exactMatch = nakshatraOptions.find(
-                            (option) => option.toLowerCase() === normalized
-                          );
-                          const selection = exactMatch ?? filteredMemberStars[0];
-                          if (selection) {
-                            handleMemberStarSelection(selection);
-                          }
-                        }
-                        if (event.key === 'Escape') {
-                          setMemberStarDropdownOpen(false);
-                          requestAnimationFrame(() => {
-                            memberStarInputRef.current?.blur();
-                          });
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-2 flex items-center text-slate-500 hover:text-slate-700"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        if (memberStarDropdownOpen) {
-                          setMemberStarDropdownOpen(false);
-                          requestAnimationFrame(() => {
-                            memberStarInputRef.current?.blur();
-                          });
-                        } else {
-                          setMemberStarSearch(memberForm.tamil_star || '');
-                          setMemberStarDropdownOpen(true);
-                          requestAnimationFrame(() => {
-                            memberStarInputRef.current?.focus();
-                          });
-                        }
-                      }}
-                      aria-label="Toggle Nakshatra options"
-                    >
-                      <svg
-                        className={`h-5 w-5 transition-transform ${memberStarDropdownOpen ? 'rotate-180' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {memberStarDropdownOpen && (
-                      <ul className="absolute z-10 mt-2 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                        {filteredMemberStars.length > 0 ? (
-                          filteredMemberStars.map((option) => (
-                            <li
-                              key={option}
-                              className="cursor-pointer px-4 py-2 text-sm text-slate-700 hover:bg-orange-50 capitalize"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                handleMemberStarSelection(option);
-                              }}
-                            >
-                              {option}
-                            </li>
-                          ))
-                        ) : (
-                          <li className="px-4 py-2 text-sm text-slate-500">No matches found</li>
-                        )}
-                      </ul>
-                    )}
-                  </div>
+                  <select
+                    id="member-star"
+                    name="tamil_star"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
+                    value={memberForm.tamil_star}
+                    onChange={handleMemberChange}
+                  >
+                    <option value="">Select Nakshatra</option>
+                    {nakshatraOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-rasi">
+                    Rasi
+                  </label>
+                  <select
+                    id="member-rasi"
+                    name="rasi"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
+                    value={memberForm.rasi}
+                    onChange={handleMemberChange}
+                  >
+                    <option value="">Select Rasi</option>
+                    {rasiOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -1479,6 +1418,15 @@ const DonorDetailsPage = () => {
                 icon: (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5l7.5 6-7.5 6-7.5-6z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Tamil Name (Saravam)',
+                value: resolveText(profile.tamil_name),
+                icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l2.09 6.26H20.5l-5.18 3.76 1.98 6.1L12 15.75l-5.3 3.37 1.98-6.1L3.5 9.26h6.41L12 3z" />
                   </svg>
                 ),
               },
