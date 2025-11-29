@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
-import LanguageToggle from '../components/LanguageToggle';
 import api from '../lib/api';
 
 type FormValues = {
@@ -166,7 +165,6 @@ const ForgotPasswordPage = () => {
                 >
                   Sign&nbsp;Up
                 </Link>
-                <LanguageToggle />
               </div>
             </div>
           </div>

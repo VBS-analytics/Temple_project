@@ -5,6 +5,7 @@ from datetime import datetime
 from django.db import transaction
 from django.db.models import Max, Prefetch
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -21,6 +22,7 @@ from .models import (
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
+    RecurringPoojaPlan,
 )
 from .services.calendar import get_calendar_service
 from .serializers import (
@@ -31,6 +33,7 @@ from .serializers import (
     PoojaDayOptionSerializer,
     PoojaOptionSerializer,
     PoojaRegistrationSerializer,
+    RecurringPoojaPlanSerializer,
     LandingPoojaRegistrationSerializer,
     PublicTodayPoojaRegistrationSerializer,
 )
@@ -283,9 +286,63 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
                 "name": entry["name"] or "",
                 "phone_number": entry["phone_number"] or "",
             }
-            for entry in donors
+        for entry in donors
         ]
         return Response(payload)
+
+
+class RecurringPoojaPlanViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = RecurringPoojaPlanSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_queryset(self):
+        qs = RecurringPoojaPlan.objects.select_related("pooja_option", "day_option")
+        if self.request.user.role == UserRole.ADMIN:
+            return qs.order_by("donor__name", "-next_occurrence", "-created_at")
+        return qs.filter(donor=self.request.user).order_by("-next_occurrence", "-created_at")
+
+    def _ensure_plan_access(self, plan: RecurringPoojaPlan) -> None:
+        if self.request.user.role == UserRole.ADMIN:
+            return
+        if plan.donor_id != self.request.user.id:
+            raise PermissionDenied("You can only manage your own recurring plans.")
+
+    @action(detail=True, methods=["post"], url_path="pause")
+    def pause(self, request, pk=None):
+        plan = self.get_object()
+        self._ensure_plan_access(plan)
+        pause_from_value = request.data.get("pause_from")
+        pause_until_value = request.data.get("pause_until")
+        if not pause_until_value:
+            return Response({"detail": "Provide a pause_until date."}, status=status.HTTP_400_BAD_REQUEST)
+        pause_until = parse_date(pause_until_value)
+        if pause_until is None:
+            return Response({"detail": "Invalid date provided for pause_until."}, status=status.HTTP_400_BAD_REQUEST)
+        pause_from = parse_date(pause_from_value) if pause_from_value else timezone.localdate()
+        if pause_from is None:
+            return Response({"detail": "Invalid date provided for pause_from."}, status=status.HTTP_400_BAD_REQUEST)
+        today = timezone.localdate()
+        if pause_from < today:
+            return Response({"detail": "Pause start must be today or later."}, status=status.HTTP_400_BAD_REQUEST)
+        if pause_until <= pause_from:
+            return Response({"detail": "Pause end must be after the pause start."}, status=status.HTTP_400_BAD_REQUEST)
+        plan.pause_from = pause_from
+        plan.pause_until = pause_until
+        plan.is_active = False
+        plan.save()
+        serializer = self.get_serializer(plan)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="resume")
+    def resume(self, request, pk=None):
+        plan = self.get_object()
+        self._ensure_plan_access(plan)
+        plan.pause_until = None
+        plan.pause_from = None
+        plan.is_active = True
+        plan.save()
+        serializer = self.get_serializer(plan)
+        return Response(serializer.data)
 
 
 class PoojaCartSnapshotView(APIView):

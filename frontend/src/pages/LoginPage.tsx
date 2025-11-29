@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import LanguageToggle from '../components/LanguageToggle';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
 
@@ -150,7 +149,6 @@ const LoginPage = () => {
                   >
                     Sign&nbsp;Up
                   </Link>
-                  <LanguageToggle />
                 </div>
               </div>
 
@@ -230,9 +228,6 @@ const LoginPage = () => {
                 >
                   Sign Up
                 </Link>
-                <div className="flex justify-center pt-2">
-                  <LanguageToggle />
-                </div>
               </div>
             </nav>
           </div>

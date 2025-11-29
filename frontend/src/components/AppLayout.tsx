@@ -1,7 +1,6 @@
 import clsx from 'clsx';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
-import LanguageToggle from './LanguageToggle';
 import useCartSync from '../hooks/useCartSync';
 import { isAdmin, useAuthStore } from '../store/auth';
 import { useCartStore } from '../store/cart';
@@ -59,13 +58,7 @@ const AppLayout = () => {
     { to: '/admin/donors', label: 'Donor Details', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/pooja-details', label: 'Pooja Details', show: Boolean(user && isAdmin(user.role)) },
     { to: '/pooja/register', label: 'Pooja Registration', show: true },
-    {
-      to: '/pooja/cart',
-      label: 'Cart',
-      show: true,
-      badge: cartCount > 0 ? String(cartCount) : undefined
-    },
-    { to: '/payments/general', label: 'General Payment', show: true },
+    { to: '/payments/general', label: 'Payment Page', show: true },
     { to: '/payments/combine', label: 'Combine Payment', show: true }
   ];
 
@@ -95,10 +88,9 @@ const AppLayout = () => {
 
               {/* ACTIONS */}
               <div className="notranslate flex items-center gap-3" translate="no">
-                <LanguageToggle theme="light" />
                 <div className="hidden h-10 w-px bg-orange-200 md:block" />
 
-                <div className="notranslate flex items-center gap-3" translate="no">
+                <div className="flex items-center gap-3">
                   {/* USER CARD */}
                   <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-white px-3 py-1.5 shadow-sm">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-700">

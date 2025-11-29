@@ -24,26 +24,26 @@ interface CombinePaymentHistoryEntry {
   yourTotal: number;
   yourCount: number;
   yourItems: CartItem[];
-  donor?: {
+  donors: {
     id: number | null;
     name?: string | null;
     phone?: string | null;
     totalAmount: number;
     count: number;
     items: CartItem[];
-  };
+  }[];
 }
 
 interface CombinePaymentHistoryPayload {
   yourItems: CartItem[];
   yourTotal: number;
-  donor?: {
+  donors?: {
     id: number | null;
     name?: string | null;
     phone?: string | null;
     items: CartItem[];
     totalAmount: number;
-  } | null;
+  }[] | null;
   combinedTotal: number;
 }
 
@@ -106,7 +106,7 @@ export const usePaymentStore = create<GeneralPaymentState>()(
             ? state.generalPaymentHistory.filter((entry) => entry.userKey !== userKey)
             : [],
         })),
-      addCombinePaymentHistory: ({ yourItems, yourTotal, donor, combinedTotal }) =>
+      addCombinePaymentHistory: ({ yourItems, yourTotal, donors, combinedTotal }) =>
         set((state) => {
           const entry: CombinePaymentHistoryEntry = {
             id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -115,16 +115,16 @@ export const usePaymentStore = create<GeneralPaymentState>()(
             yourTotal,
             yourCount: yourItems.length,
             yourItems: yourItems.map(cloneCartItem),
-            donor: donor
-              ? {
-                  id: donor.id ?? null,
-                  name: donor.name ?? null,
-                  phone: donor.phone ?? null,
-                  totalAmount: donor.totalAmount,
-                  count: donor.items.length,
-                  items: donor.items.map(cloneCartItem),
-                }
-              : undefined,
+            donors: donors
+              ? donors.map((donorEntry) => ({
+                  id: donorEntry.id ?? null,
+                  name: donorEntry.name ?? null,
+                  phone: donorEntry.phone ?? null,
+                  totalAmount: donorEntry.totalAmount,
+                  count: donorEntry.items.length,
+                  items: donorEntry.items.map(cloneCartItem),
+                }))
+              : [],
           };
           return {
             combinePaymentHistory: [entry, ...state.combinePaymentHistory].slice(0, HISTORY_LIMIT),

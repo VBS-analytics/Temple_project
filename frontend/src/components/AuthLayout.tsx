@@ -1,8 +1,6 @@
 import { PropsWithChildren } from 'react';
 import { Link } from 'react-router-dom';
 
-import LanguageToggle from './LanguageToggle';
-
 type AuthLayoutProps = PropsWithChildren<{
   title: string;
   variant?: 'card' | 'immersive';
@@ -15,7 +13,6 @@ const AuthLayout = ({ children, title, variant = 'card' }: AuthLayoutProps) => {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <LanguageToggle theme="light" className="absolute right-6 top-6" />
       <div className="w-full max-w-xl rounded-xl bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
           <Link to="/" className="text-2xl font-semibold text-brand-700">

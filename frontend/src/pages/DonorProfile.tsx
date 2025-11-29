@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { ChangeEvent } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import api, { extractResults } from '../lib/api';
 
@@ -28,6 +28,7 @@ interface ApiDonorProfile {
   date_of_birth?: string | null;
   family_name?: string | null;
   notes?: string | null;
+  tamil_name?: string | null;
 }
 
 interface FamilyMember {
@@ -69,6 +70,7 @@ interface DonorProfileFormState {
   gothra: string;
   tamil_star: string;
   rasi: string;
+  tamil_name: string;
   address_line1: string;
   address_line2: string;
   address_line3: string;
@@ -93,6 +95,24 @@ interface PoojaRegistration {
   created_at?: string | null;
   updated_at?: string | null;
   members?: RegistrationMember[];
+}
+
+interface RecurringPlan {
+  id: number;
+  pooja_option_name?: string | null;
+  pooja_option_code?: string | null;
+  day_option_description?: string | null;
+  recurrence_kind: 'recurring' | 'one_time_extra';
+  recurrence_frequency?: string | null;
+  start_date?: string | null;
+  next_occurrence?: string | null;
+  last_occurrence?: string | null;
+  one_time_date?: string | null;
+  amount?: string | number | null;
+  is_active: boolean;
+  pause_until?: string | null;
+  pause_from?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 // All utility functions remain the same
@@ -214,6 +234,54 @@ const formatDateForInput = (value?: string | null) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatPlanFrequencyLabel = (kind: RecurringPlan['recurrence_kind'], frequency?: string | null) => {
+  if (kind === 'recurring') {
+    const frequencyLabel =
+      frequency === 'quarterly'
+        ? 'Quarterly'
+        : frequency === 'monthly'
+          ? 'Monthly'
+          : 'Recurring';
+    return `${frequencyLabel} recurring`;
+  }
+  return 'One-time extra';
+};
+
+const formatPlanAmount = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return String(value);
+};
+
+const formatPlanDateLabel = ({ next_occurrence, one_time_date }: RecurringPlan) => {
+  const displayDate = next_occurrence || one_time_date;
+  return displayDate ? formatDate(displayDate) : '—';
+};
+
+const getPlanMemberNames = (metadata?: RecurringPlan['metadata']) => {
+  if (!metadata) {
+    return [];
+  }
+  const members = (metadata as { members?: unknown }).members;
+  if (!Array.isArray(members)) {
+    return [];
+  }
+  return members.map((entry) => {
+    if (typeof entry === 'object' && entry !== null) {
+      const name = (entry as { name?: string | null }).name;
+      if (name && name.trim()) {
+        return name.trim();
+      }
+    }
+    return 'Member';
+  });
+};
+
 const resolvePoojaId = (registration: PoojaRegistration) => {
   const trimmed = (registration.pooja_reg_id ?? '').trim();
   return trimmed.length > 0 ? trimmed : `#${registration.id}`;
@@ -260,6 +328,122 @@ const DonorProfile = () => {
   const [registrations, setRegistrations] = useState<PoojaRegistration[]>([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(true);
   const [registrationsError, setRegistrationsError] = useState<string | null>(null);
+  const [recurrencePlans, setRecurrencePlans] = useState<RecurringPlan[]>([]);
+  const [recurrenceLoading, setRecurrenceLoading] = useState(true);
+  const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
+  const [pauseWindowInputs, setPauseWindowInputs] = useState<Record<number, { start: string; end: string }>>({});
+  const [planActionLoading, setPlanActionLoading] = useState<Record<number, boolean>>({});
+  const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const reloadRecurrencePlans = useCallback(
+    async (options?: { activeCheck?: () => boolean }) => {
+      const isActive = options?.activeCheck ?? (() => true);
+      if (!isActive()) {
+        return;
+      }
+
+      setRecurrenceLoading(true);
+      setRecurrenceError(null);
+      try {
+        const response = await api.get('pooja/recurrence/plans/', { params: { page_size: 200 } });
+        if (!isActive()) {
+          return;
+        }
+        setRecurrencePlans(extractResults<RecurringPlan>(response.data));
+        setPauseWindowInputs({});
+      } catch (err) {
+        if (!isActive()) {
+          return;
+        }
+        setRecurrencePlans([]);
+        setRecurrenceError(extractErrorMessage(err));
+      } finally {
+        if (!isActive()) {
+          return;
+        }
+        setRecurrenceLoading(false);
+      }
+    },
+    [],
+  );
+
+  const handlePauseInputChange = (planId: number, field: 'start' | 'end', value: string) => {
+    setPauseWindowInputs((prev) => ({
+      ...prev,
+      [planId]: {
+        ...prev[planId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const resolvePauseWindow = (plan: RecurringPlan) => {
+    const stored = pauseWindowInputs[plan.id];
+    return {
+      start: stored?.start ?? plan.pause_from ?? todayIso,
+      end: stored?.end ?? plan.pause_until ?? '',
+    };
+  };
+
+  const handlePausePlan = useCallback(
+    async (plan: RecurringPlan) => {
+      const { start, end } = resolvePauseWindow(plan);
+      if (!end) {
+        setRecurrenceError('Select an end date before pausing the plan.');
+        return;
+      }
+      if (start < todayIso) {
+        setRecurrenceError('Pause start must be today or later.');
+        return;
+      }
+      if (end < start) {
+        setRecurrenceError('Pause end must be the same as or after the start date.');
+        return;
+      }
+      setPlanActionLoading((prev) => ({
+        ...prev,
+        [plan.id]: true,
+      }));
+      setRecurrenceError(null);
+      try {
+        await api.post(`pooja/recurrence/plans/${plan.id}/pause/`, {
+          pause_from: start,
+          pause_until: end,
+        });
+        await reloadRecurrencePlans();
+      } catch (error) {
+        setRecurrenceError(extractErrorMessage(error));
+      } finally {
+        setPlanActionLoading((prev) => ({
+          ...prev,
+          [plan.id]: false,
+        }));
+      }
+    },
+    [reloadRecurrencePlans, todayIso, pauseWindowInputs],
+  );
+
+  const handleResumePlan = useCallback(
+    async (planId: number) => {
+      setPlanActionLoading((prev) => ({
+        ...prev,
+        [planId]: true,
+      }));
+      setRecurrenceError(null);
+      try {
+        await api.post(`pooja/recurrence/plans/${planId}/resume/`);
+        await reloadRecurrencePlans();
+      } catch (error) {
+        setRecurrenceError(extractErrorMessage(error));
+      } finally {
+        setPlanActionLoading((prev) => ({
+          ...prev,
+          [planId]: false,
+        }));
+      }
+    },
+    [reloadRecurrencePlans],
+  );
   const [editingRegistrationId, setEditingRegistrationId] = useState<number | null>(null);
   const [registrationEditDate, setRegistrationEditDate] = useState('');
   const [registrationEditError, setRegistrationEditError] = useState<string | null>(null);
@@ -362,6 +546,7 @@ const DonorProfile = () => {
     gothra: (profileData?.gothra ?? '').trim(),
     tamil_star: (profileData?.tamil_star ?? '').trim(),
     rasi: (profileData?.rasi ?? '').trim(),
+    tamil_name: (profileData?.tamil_name ?? '').trim(),
     address_line1: (profileData?.address_line1 ?? '').trim(),
     address_line2: (profileData?.address_line2 ?? '').trim(),
     address_line3: (profileData?.address_line3 ?? '').trim(),
@@ -435,6 +620,7 @@ const DonorProfile = () => {
 
     loadProfile();
     loadRegistrations();
+    reloadRecurrencePlans({ activeCheck: () => active });
     return () => {
       active = false;
     };
@@ -497,6 +683,7 @@ const DonorProfile = () => {
         gothra: profileFormData.gothra.trim(),
         tamil_star: profileFormData.tamil_star.trim(),
         rasi: profileFormData.rasi.trim(),
+        tamil_name: profileFormData.tamil_name.trim(),
         address_line1: profileFormData.address_line1.trim(),
         address_line2: profileFormData.address_line2.trim(),
         address_line3: profileFormData.address_line3.trim(),
@@ -508,6 +695,7 @@ const DonorProfile = () => {
       const updatedProfile = {
         ...response.data,
         rasi: response.data.rasi?.trim() || payload.rasi,
+        tamil_name: response.data.tamil_name?.trim() ?? payload.tamil_name,
       };
       setProfile(updatedProfile);
       setIsEditingProfile(false);
@@ -656,6 +844,7 @@ const DonorProfile = () => {
     { label: 'Donor ID', value: resolveText(profile?.donor_id ?? '') },
     { label: 'Family Name', value: resolveText(profile?.family_name) },
     { label: 'Donor Name', value: resolveText(user?.name ?? '') },
+    { label: 'Tamil Name (Saravam)', value: resolveText(profile?.tamil_name) },
     { label: 'Donor Header Text', value: resolveText(profile?.notes) },
     { label: 'Gender', value: formatGender(profile?.gender) },
     { label: 'Date of Birth', value: formatDate(profile?.date_of_birth) },
@@ -751,6 +940,16 @@ const DonorProfile = () => {
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Tamil Name (Saravam)</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                      value={profileFormData.tamil_name}
+                      onChange={handleProfileInputChange('tamil_name')}
+                      placeholder="Enter Tamil name (optional)"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Date of Birth</label>
@@ -1847,6 +2046,160 @@ const DonorProfile = () => {
                     </table>
                   </div>
                 </div>
+              </div>
+            )}
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full mt-10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Recurring Pooja Plans</h2>
+                <p className="text-sm text-slate-500">
+                  Track your ongoing monthly schedules or one-time extras so you know what’s coming up.
+                </p>
+              </div>
+              <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                {recurrencePlans.length} {recurrencePlans.length === 1 ? 'Plan' : 'Plans'}
+              </span>
+            </div>
+
+            {recurrenceLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-emerald-600"></div>
+                Loading recurring plans...
+              </div>
+            ) : recurrenceError ? (
+              <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {recurrenceError}
+              </div>
+            ) : recurrencePlans.length === 0 ? (
+              <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                No recurring plans found yet. Start by adding a recurring pooja from the registration page.
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {recurrencePlans.map((plan) => {
+                  const memberNames = getPlanMemberNames(plan.metadata);
+                  const planPaused = Boolean(plan.pause_from || plan.pause_until);
+                  const pauseWindow = resolvePauseWindow(plan);
+                  const pauseStartValue = pauseWindow.start;
+                  const pauseEndValue = pauseWindow.end;
+                  const actionLoading = planActionLoading[plan.id] ?? false;
+                  const isRecurringPlan = plan.recurrence_kind === 'recurring';
+                  return (
+                    <div
+                      key={plan.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
+                    >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-600 uppercase tracking-wide">
+                          {plan.pooja_option_code || 'Pooja'}
+                        </p>
+                        <h3 className="text-base font-medium text-slate-900">
+                          {plan.pooja_option_name?.trim() || 'Unnamed pooja'}
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          {plan.day_option_description?.trim() || '—'}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          plan.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {plan.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 space-y-2 text-sm text-slate-700">
+                      <p className="text-xs uppercase tracking-wider text-slate-500">Schedule</p>
+                      <p className="text-base font-semibold text-slate-900">
+                        {formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency)}
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-slate-500">Next occurrence</p>
+                          <p className="text-sm font-medium text-slate-900">{formatPlanDateLabel(plan)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Amount</p>
+                          <p className="text-sm font-medium text-slate-900">
+                            ₹ {formatPlanAmount(plan.amount)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {(plan.pause_from || plan.pause_until) && (
+                      <div className="mt-4 text-xs font-semibold text-orange-700">
+                        {plan.pause_from && plan.pause_until
+                          ? `Paused from ${formatDate(plan.pause_from)} until ${formatDate(plan.pause_until)}.`
+                          : plan.pause_until
+                            ? `Paused until ${formatDate(plan.pause_until)}.`
+                            : `Pause scheduled from ${formatDate(plan.pause_from)}.`}
+                      </div>
+                    )}
+                    {memberNames.length > 0 && (
+                      <p className="mt-3 text-xs text-slate-500">
+                        Members: {memberNames.join(', ')}
+                      </p>
+                    )}
+                    {isRecurringPlan && (
+                      <div className="mt-4 space-y-3">
+                        {planPaused ? (
+                          <button
+                            type="button"
+                            onClick={() => handleResumePlan(plan.id)}
+                            disabled={actionLoading}
+                            className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+                          >
+                            {actionLoading ? 'Resuming...' : 'Resume plan'}
+                          </button>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-1 text-sm text-slate-500">
+                                <label htmlFor={`pause-start-${plan.id}`} className="text-xs font-semibold uppercase tracking-wide">
+                                  Pause start
+                                </label>
+                                <input
+                                  id={`pause-start-${plan.id}`}
+                                  type="date"
+                                  min={todayIso}
+                                  value={pauseStartValue}
+                                  onChange={(event) => handlePauseInputChange(plan.id, 'start', event.target.value)}
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                />
+                              </div>
+                              <div className="space-y-1 text-sm text-slate-500">
+                                <label htmlFor={`pause-end-${plan.id}`} className="text-xs font-semibold uppercase tracking-wide">
+                                  Pause end
+                                </label>
+                                <input
+                                  id={`pause-end-${plan.id}`}
+                                  type="date"
+                                  min={pauseStartValue || todayIso}
+                                  value={pauseEndValue}
+                                  onChange={(event) => handlePauseInputChange(plan.id, 'end', event.target.value)}
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handlePausePlan(plan)}
+                              disabled={!pauseEndValue || actionLoading}
+                              className="w-full rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-wait disabled:opacity-70"
+                            >
+                              {actionLoading ? 'Pausing...' : 'Pause plan'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  );
+                })}
               </div>
             )}
           </section>
