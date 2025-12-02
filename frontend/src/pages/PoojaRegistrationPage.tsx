@@ -546,8 +546,56 @@ const formatCurrency = (value?: string | null) => {
   return amountNumber.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const TAMIL_STAR_DESCRIPTION_MAP: Record<string, string> = {
+  aswini: 'அசுவினி',
+  bharani: 'பரணி',
+  karthigai: 'கிருத்திகை',
+  kartigai: 'கிருத்திகை',
+  rohini: 'ரோகிணி',
+  mrigsheersham: 'மிருகசீரிடம்',
+  mrigsheersam: 'மிருகசீரிடம்',
+  tiruvadarai: 'திருவாதிரை',
+  thiruvadarai: 'திருவாதிரை',
+  punarpoosam: 'புனர்பூசம்',
+  poosam: 'பூசம்',
+  aayilyam: 'ஆயில்யம்',
+  ayilyam: 'ஆயில்யம்',
+  magam: 'மகம்',
+  pooram: 'பூரம்',
+  uttiram: 'உத்தரம்',
+  astham: 'அஸ்தம்',
+  ashtam: 'அஸ்தம்',
+  chitrai: 'சித்திரை',
+  chithirai: 'சித்திரை',
+  swathi: 'சுவாதி',
+  visakam: 'விசாகம்',
+  anusham: 'அனुषம்',
+  kettai: 'கேட்டை',
+  moolam: 'மூலம்',
+  pooradam: 'பூராடம்',
+  pooraadam: 'பூராடம்',
+  uttiradam: 'உத்திராடம்',
+  uttradam: 'உத்திராடம்',
+  thiruvonam: 'திருவோணம்',
+  thirivonam: 'திருவோணம்',
+  avittam: 'அவிட்டம்',
+  sadayam: 'சதயம்',
+  poorattathi: 'பூரட்டாதி',
+  poorattadhi: 'பூரட்டாதி',
+  uttrattathi: 'உத்திரட்டாதி',
+  uttirattathi: 'உத்திரட்டாதி',
+  revathi: 'ரேவதி',
+};
+
+const getTamilStarLabel = (option: DayOption) => {
+  const normalizedDescription = option.description.trim().toLowerCase();
+  return TAMIL_STAR_DESCRIPTION_MAP[normalizedDescription] ?? option.description;
+};
+
 const formatDayOptionLabel = (option: DayOption) => {
-  return option.code ? `${option.description} — ${option.code}` : option.description;
+  const baseLabel = option.category === 'tamil_star' ? getTamilStarLabel(option) : option.description;
+  const code = option.code?.trim() ?? '';
+  return code ? `${baseLabel} — ${code}` : baseLabel;
 };
 
 const toCurrencyLabel = (value?: string | null) => {
@@ -2797,16 +2845,21 @@ const PoojaRegistrationPage = () => {
                                   />
                                   {selectedDayOption?.code === 'CS' && (
                                     <div className="mt-2">
-                                      <SearchableSelect
-                                        options={tamilStarOptions.map((option) => ({
-                                          value: String(option.id),
-                                          label: formatDayOptionLabel(option),
-                                        }))}
-                                        value={tamilStarSelectionMap[row.pooja.id] || ''}
-                                        onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
-                                        placeholder="Select your star"
-                                        className="w-64"
-                                      />
+                                      <select
+                                        value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                        onChange={(event) =>
+                                          handleTamilStarSelection(row.pooja.id, event.target.value)
+                                        }
+                                        className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
+                                        aria-label="Select your star"
+                                      >
+                                        <option value="">Select your star</option>
+                                        {tamilStarOptions.map((option) => (
+                                          <option key={option.id} value={String(option.id)}>
+                                            {formatDayOptionLabel(option)}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </div>
                                   )}
                                   {requiresChartDetails && (
@@ -3191,16 +3244,21 @@ const PoojaRegistrationPage = () => {
                                 />
                                 {selectedDayOption?.code === 'CS' && (
                                   <div className="mt-2">
-                                    <SearchableSelect
-                                      options={tamilStarOptions.map((option) => ({
-                                        value: String(option.id),
-                                        label: formatDayOptionLabel(option),
-                                      }))}
-                                      value={tamilStarSelectionMap[row.pooja.id] || ''}
-                                      onChange={(val) => handleTamilStarSelection(row.pooja.id, val)}
-                                      placeholder="Select your star"
-                                      className="w-full"
-                                    />
+                                    <select
+                                      value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                      onChange={(event) =>
+                                        handleTamilStarSelection(row.pooja.id, event.target.value)
+                                      }
+                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
+                                      aria-label="Select your star"
+                                    >
+                                      <option value="">Select your star</option>
+                                      {tamilStarOptions.map((option) => (
+                                        <option key={option.id} value={String(option.id)}>
+                                          {formatDayOptionLabel(option)}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
                                 )}
                                 {requiresChartDetails && (
