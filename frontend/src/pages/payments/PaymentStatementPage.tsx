@@ -25,6 +25,8 @@ interface PaymentRecordEntry {
   status?: string | null;
   created_at?: string | null;
   registration_status?: string | null;
+  registration_donor_name?: string | null;
+  registration_is_group_registration?: boolean | null;
 }
 
 interface PoojaRegistrationEntry {
@@ -36,6 +38,7 @@ interface PoojaRegistrationEntry {
   total_amount?: string | number | null;
   created_at?: string | null;
   status?: string | null;
+  is_group_registration?: boolean | null;
 }
 
 const TIMEFRAME_FILTERS: { label: string; value: TimeframeOption }[] = [
@@ -90,6 +93,14 @@ const parseNumeric = (value?: string | number | null) => {
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isNaN(numeric) ? 0 : numeric;
 };
+
+const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
+  record.registration_donor_name || '—';
+
+const resolveBookedByLabel = (record: PaymentRecordEntry) => record.donor_name || '—';
+
+const resolveClubPaymentLabel = (record: PaymentRecordEntry) =>
+  record.registration_is_group_registration ? 'Yes' : 'No';
 
 const getTimeframeRange = (reference: Date, timeframe: TimeframeOption) => {
   const start = new Date(reference);
@@ -368,22 +379,24 @@ const PaymentStatementPage = () => {
       (registration) => !paidRegistrationIds.has(registration.id),
     );
     const registrationRecords: PaymentRecordEntry[] = remainingRegistrations.map(
-      (registration) => ({
-        id: `registration-${registration.id}`,
-        donor: registration.donor ?? null,
-        donor_name: registration.donor_name ?? null,
-        pooja_option: registration.pooja_option_name ?? null,
-        registration: registration.id,
-        registration_start_date: registration.start_date ?? null,
-        registration_total_amount: registration.total_amount ?? null,
-        pooja_due_amount: registration.total_amount ?? null,
-        amount: 0,
-        transaction_reference: null,
-        status: 'pending',
-        registration_status: registration.status ?? null,
-        created_at: registration.created_at ?? null,
-      }),
-    );
+        (registration) => ({
+          id: `registration-${registration.id}`,
+          donor: registration.donor ?? null,
+          donor_name: registration.donor_name ?? null,
+          pooja_option: registration.pooja_option_name ?? null,
+          registration: registration.id,
+          registration_start_date: registration.start_date ?? null,
+          registration_total_amount: registration.total_amount ?? null,
+          pooja_due_amount: registration.total_amount ?? null,
+          amount: 0,
+          transaction_reference: null,
+          status: 'pending',
+          registration_status: registration.status ?? null,
+          created_at: registration.created_at ?? null,
+          registration_donor_name: registration.donor_name ?? null,
+          registration_is_group_registration: registration.is_group_registration ?? false,
+        }),
+      );
     return [...records, ...registrationRecords];
   }, [records, registrations]);
 
@@ -431,6 +444,9 @@ const PaymentStatementPage = () => {
       'Pooja Due Amount': formatCurrency(record.pooja_due_amount ?? record.registration_total_amount),
       'Paid Amount': formatCurrency(record.amount),
       'Transaction ID': record.transaction_reference || '—',
+      'Pooja Registered by': record.registration_donor_name ?? '—',
+      'Pooja Booked by': record.donor_name ?? '—',
+      'Club Payment': record.registration_is_group_registration ? 'Yes' : 'No',
       Status: getStatusLabel(record),
     }));
 
@@ -452,21 +468,37 @@ const PaymentStatementPage = () => {
           { text: rangeLabel, style: 'subheader', margin: [0, 0, 0, 8] },
           { text: `Records: ${filteredRecords.length}`, style: 'subheader' },
           {
-            table: {
-              headerRows: 1,
-              widths: ['auto', 'auto', '*', '*', 'auto', 'auto', 'auto', '*', 'auto'],
-              body: [
-                [
-                  'S.no',
-                  'Donor ID',
+              table: {
+                headerRows: 1,
+                widths: [
+                  'auto',
+                  'auto',
+                  '*',
+                  '*',
+                  'auto',
+                  'auto',
+                  'auto',
+                  '*',
+                  '*',
+                  '*',
+                  'auto',
+                  'auto',
+                ],
+                body: [
+                  [
+                    'S.no',
+                    'Donor ID',
                   'Donor Name',
                   'Pooja',
                   'Pooja Date',
                   'Due Amount',
-                  'Paid Amount',
-                  'Transaction ID',
-                  'Status',
-                ],
+                    'Paid Amount',
+                    'Transaction ID',
+                    'Pooja Registered by',
+                    'Pooja Booked by',
+                    'Club Payment',
+                    'Status',
+                  ],
                 ...rows.map((row) => Object.values(row)),
               ],
             },
@@ -547,6 +579,9 @@ const PaymentStatementPage = () => {
             'Pooja Due Amount',
             'Paid Amount',
             'Transaction ID',
+            'Pooja Registered by',
+            'Pooja Booked by',
+            'Club Payment',
             'Status',
           ];
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headerKeys });
@@ -707,6 +742,9 @@ const PaymentStatementPage = () => {
                   <th className="px-4 py-3 text-right font-semibold">Pooja Due Amount</th>
                   <th className="px-4 py-3 text-right font-semibold">Paid Amount</th>
                   <th className="px-4 py-3 text-left font-semibold">Transaction Id</th>
+                  <th className="px-4 py-3 text-left font-semibold">Pooja Registered by</th>
+                  <th className="px-4 py-3 text-left font-semibold">Pooja Booked by</th>
+                  <th className="px-4 py-3 text-center font-semibold">Club Payment</th>
                   <th className="px-4 py-3 text-left font-semibold">Status</th>
                 </tr>
               </thead>
@@ -734,6 +772,15 @@ const PaymentStatementPage = () => {
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {record.transaction_reference || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {resolveRegisteredByLabel(record)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {resolveBookedByLabel(record)}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-slate-800">
+                        {resolveClubPaymentLabel(record)}
                       </td>
                       <td className="px-4 py-3">
                         {isAdminUser ? (
@@ -816,6 +863,18 @@ const PaymentStatementPage = () => {
                     <span className="text-slate-400">
                       {record.transaction_reference || '—'}
                     </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-600">Pooja Registered by</span>
+                    <span className="text-slate-600">{resolveRegisteredByLabel(record)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-600">Pooja Booked by</span>
+                    <span className="text-slate-600">{resolveBookedByLabel(record)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-600">Club Payment</span>
+                    <span className="text-slate-600">{resolveClubPaymentLabel(record)}</span>
                   </div>
                   {isAdminUser && (
                     <div className="mt-2">

@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { indianCities } from '../data/indianCities';
 import { nakshatraOptions } from '../data/nakshatraOptions';
+import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
 
@@ -35,6 +36,25 @@ const rasiOptions = [
   'கும்பம்',
   'மீனம்',
 ] as const;
+
+type CountryOption = {
+  code: CountryDialCode['dialCode'];
+  label: CountryDialCode['name'];
+  iso: CountryDialCode['iso2'];
+};
+
+const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
+  code: entry.dialCode,
+  label: entry.name,
+  iso: entry.iso2,
+}));
+
+const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
+
+const flagEmoji = (iso: string) =>
+  iso
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 
 interface FormValues {
   phone_number: string;
@@ -120,6 +140,27 @@ const RegisterPage = () => {
       otp_code: '',
     },
   });
+
+  const [selectedCountry, setSelectedCountry] = useState<CountryOption>(defaultCountry);
+  const [localPhoneNumber, setLocalPhoneNumber] = useState('');
+  const combinedPhoneNumber = localPhoneNumber ? `${selectedCountry.code}${localPhoneNumber}` : '';
+  const selectedCountryFlag = selectedCountry.iso ? flagEmoji(selectedCountry.iso) : '🌐';
+
+  useEffect(() => {
+    setValue('phone_number', combinedPhoneNumber);
+  }, [combinedPhoneNumber, setValue]);
+
+  const handleCountryCodeChange = (iso: CountryOption['iso']) => {
+    const option = countryCodeOptions.find((item) => item.iso === iso);
+    if (option) {
+      setSelectedCountry(option);
+    }
+  };
+
+  const handleLocalPhoneInput = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 15);
+    setLocalPhoneNumber(digits);
+  };
 
   const familySelection = watch('family_selection');
   const donorHeaderText = watch('notes') ?? '';
@@ -574,40 +615,55 @@ const RegisterPage = () => {
                               Mobile Number <span className="text-rose-500 ml-1">*</span>
                             </label>
                             <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                              </div>
-                              <div className="absolute inset-y-0 left-12 flex items-center pointer-events-none text-gray-400">
-                                +91
+                              <div className="absolute inset-y-0 left-0 flex items-center">
+                                <div className="relative">
+                                  <div
+                                    className={`flex h-full items-center gap-2 rounded-l-xl border px-3 py-3 text-sm font-semibold ${
+                                      isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 bg-white shadow-sm' : 'border-gray-300 bg-white'
+                                    } pointer-events-none`}
+                                  >
+                                    <span className="text-lg leading-none">{selectedCountryFlag}</span>
+                                    <span>{selectedCountry.code}</span>
+                                    <svg className="h-3 w-3 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" />
+                                    </svg>
+                                  </div>
+                                  <select
+                                    value={selectedCountry.iso}
+                                    onChange={(event) => handleCountryCodeChange(event.target.value as CountryOption['iso'])}
+                                    aria-label="Country code"
+                                    className="absolute inset-y-0 left-0 w-32 opacity-0 cursor-pointer"
+                                    onFocus={() => handleFocus('phone_number')}
+                                    onBlur={handleBlur}
+                                  >
+                                    {countryCodeOptions.map((option) => (
+                                      <option key={option.iso} value={option.iso}>
+                                        {option.label} ({option.code})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                               </div>
                               <input
                                 type="tel"
-                                className={`w-full rounded-xl border pl-20 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                value={localPhoneNumber}
+                                className={`w-full rounded-xl border pl-36 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
                                   isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 shadow-sm' : 'border-gray-300'
                                 }`}
-                                placeholder="Enter mobile"
+                                placeholder="Enter mobile number"
+                                onChange={(event) => handleLocalPhoneInput(event.target.value)}
+                                onFocus={() => handleFocus('phone_number')}
+                                onBlur={handleBlur}
+                              />
+                              <input
+                                type="hidden"
                                 {...register('phone_number', {
                                   required: 'Mobile number is required',
                                   pattern: {
-                                    value: /^\d{10}$/,
-                                    message: 'Mobile number must be exactly 10 digits'
-                                  }
+                                    value: /^\+?[0-9]{7,15}$/,
+                                    message: 'Enter a valid international mobile number',
+                                  },
                                 })}
-                                onFocus={() => handleFocus('phone_number')}
-                                onBlur={handleBlur}
-                                onInput={(e) => {
-                                  const input = e.target as HTMLInputElement;
-                                  // Remove any non-digit characters
-                                  const value = input.value.replace(/\D/g, '');
-                                  // Limit to 10 digits
-                                  const truncatedValue = value.slice(0, 10);
-                                  if (truncatedValue !== input.value) {
-                                    input.value = truncatedValue;
-                                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                                  }
-                                }}
                               />
                             </div>
                             {errors.phone_number && (
