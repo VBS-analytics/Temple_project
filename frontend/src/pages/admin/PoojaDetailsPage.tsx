@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
-import { loadPdfMake } from '../../lib/pdfMakeLoader';
+import { loadPdfMake, PDF_TAMIL_FONT_NAME } from '../../lib/pdfMakeLoader';
 import api, { extractResults } from '../../lib/api';
 
 const DAY_BUCKETS = [{ key: 'all', label: 'All Registrations' }] as const;
@@ -687,8 +687,17 @@ const PoojaDetailsPage = () => {
       }
 
       const tableBody = [
-        EXPORT_HEADERS.map((header) => ({ text: header, style: 'tableHeader' })),
-        ...rows.map((row) => EXPORT_HEADERS.map((header) => row[header] ?? '')),
+        EXPORT_HEADERS.map((header) => ({
+          text: header,
+          style: 'tableHeader',
+          font: PDF_TAMIL_FONT_NAME,
+        })),
+        ...rows.map((row) =>
+          EXPORT_HEADERS.map((header) => ({
+            text: row[header] ?? '',
+            font: PDF_TAMIL_FONT_NAME,
+          })),
+        ),
       ];
 
       const generatedOn = formatDateTimeDisplay(new Date().toISOString());
@@ -701,19 +710,23 @@ const PoojaDetailsPage = () => {
         pageSize: 'A4',
         pageMargins: [24, 24, 24, 24],
         defaultStyle: {
+          font: PDF_TAMIL_FONT_NAME,
           fontSize: 9,
         },
         styles: {
           header: {
+            font: PDF_TAMIL_FONT_NAME,
             fontSize: 16,
             bold: true,
           },
           subheader: {
+            font: PDF_TAMIL_FONT_NAME,
             fontSize: 10,
             color: '#475569',
             margin: [0, 2, 0, 8],
           },
           tableHeader: {
+            font: PDF_TAMIL_FONT_NAME,
             bold: true,
             fillColor: '#f1f5f9',
           },
