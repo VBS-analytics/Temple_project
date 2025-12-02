@@ -429,6 +429,10 @@ class TempleCalendarService:
 
     # --------------------------- Tithi helpers ----------------------------- #
 
+    # Tithis stay valid for roughly a day, so sampling every couple of hours still catches them
+    # while cutting the number of Skyfield evaluations by more than 4× in production.
+    _TITHI_SAMPLE_INTERVAL_MINUTES = 120
+
     def _next_tithi(self, start: date, targets: Iterable[int]) -> date:
         wanted = set(targets)
         probe = start
@@ -499,7 +503,7 @@ class TempleCalendarService:
         return occurrences
 
     def _tithi_occurs_on_day(self, day: date, wanted: set[int]) -> bool:
-        for minute_offset in range(0, 24 * 60, 30):
+        for minute_offset in range(0, 24 * 60, self._TITHI_SAMPLE_INTERVAL_MINUTES):
             hour, minute = divmod(minute_offset, 60)
             if self._tithi_on(day, hour=hour, minute=minute) in wanted:
                 return True

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from django.db import transaction
-from django.db.models import Max, Prefetch
+from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import permissions, status, viewsets
@@ -211,9 +211,47 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         base_qs = PoojaRegistration.objects.select_related("pooja_option", "day_option", "donor")
+        donor_id = self.request.query_params.get("donor_id")
+        donor_phone = self.request.query_params.get("donor_phone")
+        donor_search = self.request.query_params.get("donor")
+        filters = Q()
+        has_filters = False
+
+        if donor_id:
+            donor_id = donor_id.strip()
+            if donor_id:
+                try:
+                    donor_id_value = int(donor_id)
+                except ValueError:
+                    donor_id_value = None
+                if donor_id_value is not None:
+                    filters &= Q(donor__id=donor_id_value)
+                    has_filters = True
+
+        if donor_phone:
+            donor_phone = donor_phone.strip()
+            if donor_phone:
+                filters &= Q(donor__phone_number__icontains=donor_phone)
+                has_filters = True
+
+        if donor_search:
+            donor_search = donor_search.strip()
+            if donor_search:
+                search_filters = Q(donor__phone_number__icontains=donor_search)
+                if donor_search.isdigit():
+                    search_filters |= Q(donor__id=int(donor_search))
+                filters &= search_filters
+                has_filters = True
+
         if self.request.user.role == UserRole.ADMIN:
-            return base_qs.prefetch_related("members")
-        return base_qs.filter(donor=self.request.user).prefetch_related("members")
+            queryset = base_qs
+        else:
+            queryset = base_qs.filter(donor=self.request.user)
+
+        if has_filters:
+            queryset = queryset.filter(filters)
+
+        return queryset.prefetch_related("members")
 
     def perform_create(self, serializer):
         serializer.save(donor=self.request.user)

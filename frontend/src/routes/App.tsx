@@ -9,6 +9,7 @@ import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import LoginPage from '../pages/LoginPage';
 import PoojaRegistrationPage from '../pages/PoojaRegistrationPage';
 import PaymentPage from '../pages/payments/PaymentPage';
+import PaymentStatementPage from '../pages/payments/PaymentStatementPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
@@ -65,6 +66,7 @@ const App = () => (
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
         <Route path="/payments/general" element={<PaymentPage />} />
         <Route path="/payments/combine" element={<CombinePaymentPage />} />
+        <Route path="/payments/statement" element={<PaymentStatementPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>

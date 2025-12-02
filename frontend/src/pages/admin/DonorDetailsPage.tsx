@@ -979,7 +979,7 @@ const DonorDetailsPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white p-3 sm:p-4 md:p-6">
-      <div className="mx-auto w-full max-w-screen-2xl">
+      <div className="responsive-layout">
         {/* Header Section */}
         <header className="mb-6 sm:mb-8 md:mb-10">
           <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 md:p-8">

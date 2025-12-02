@@ -610,7 +610,7 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50">
-      <div className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
+      <div className="responsive-layout py-6 sm:py-8">
         {/* Header Section */}
         <div className="mb-8 sm:mb-10">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">

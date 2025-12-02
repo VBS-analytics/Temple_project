@@ -253,10 +253,19 @@ const buildRegistrationPayload = (item: CartItem) => {
   return payload;
 };
 
-const recordRegistrations = async (items: CartItem[]) => {
+const recordRegistrations = async (items: CartItem[], transactionReference: string) => {
   for (const item of items) {
     const payload = buildRegistrationPayload(item);
-    await api.post('pooja/registrations/', payload);
+    const response = await api.post('pooja/registrations/', payload);
+    const registrationId = response.data?.id;
+    await api.post('payments/records/', {
+      registration: typeof registrationId === 'number' ? registrationId : undefined,
+      amount: Number(item.amount) || 0,
+      mode: 'upi',
+      status: 'pending',
+      transaction_reference: transactionReference,
+      notes: payload.additional_notes ?? '',
+    });
   }
 };
 
@@ -459,9 +468,7 @@ const PaymentPage = () => {
   };
 
   const handlePaymentCompleted = async () => {
-    if (!paymentSnapshot || registrationInProgress) {
-      return;
-    }
+    if (!paymentSnapshot || registrationInProgress) return;
     const trimmedReference = transactionReference.trim();
     if (!trimmedReference) {
       setTransactionReferenceError('Transaction ID or UPI ID is required.');
@@ -471,7 +478,7 @@ const PaymentPage = () => {
     setRegistrationError(null);
     setRegistrationInProgress(true);
     try {
-      await recordRegistrations(paymentSnapshot.items);
+      await recordRegistrations(paymentSnapshot.items, trimmedReference);
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
       return;
@@ -485,9 +492,7 @@ const PaymentPage = () => {
     if (celebrationTimeoutRef.current) {
       clearTimeout(celebrationTimeoutRef.current);
     }
-    celebrationTimeoutRef.current = setTimeout(() => {
-      handleClearSummary();
-    }, 1800);
+    celebrationTimeoutRef.current = setTimeout(handleClearSummary, 1800);
   };
 
   const handleRemoveFromSummary = useCallback(

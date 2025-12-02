@@ -2567,7 +2567,7 @@ const PoojaRegistrationPage = () => {
           </div>
         </div>
       )}
-      <div className="max-w-screen-2xl mx-auto">
+      <div className="responsive-layout">
         <div className="mb-6 sm:mb-8 md:mb-10">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Pooja Registration</h1>
           <p className="text-base sm:text-lg text-gray-700">

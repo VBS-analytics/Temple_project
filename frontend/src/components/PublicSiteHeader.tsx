@@ -85,7 +85,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
 
   return (
     <header className={headerClass}>
-      <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="responsive-layout flex items-center justify-between gap-4 py-4">
         <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
           <Link to="/" className={clsx('min-w-0 flex-shrink text-left', brandTextClass)}>
             <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.24em]">
