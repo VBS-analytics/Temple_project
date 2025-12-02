@@ -120,7 +120,7 @@ const LoginPage = () => {
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="bg-transparent text-white">
-          <div className="mx-auto flex w-full max-w-screen-2xl items-center px-4 py-3 text-white sm:px-6 lg:px-10">
+        <div className="responsive-layout flex items-center py-3 text-white lg:px-10">
             <div className="flex h-16 w-full items-center justify-between">
               <Link
                 to="/"

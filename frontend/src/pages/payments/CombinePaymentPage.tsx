@@ -635,7 +635,7 @@ const CombinePaymentPage = () => {
             )}
 
             {!directoryLoading && filteredDirectory.length > 0 && (
-              <div className="space-y-2 max-h-56 overflow-y-auto">
+              <div className="grid gap-2 max-h-56 overflow-y-auto sm:grid-cols-2">
                 {filteredDirectory.map((entry) => {
                   const isSelected = selectedDonorIds.includes(entry.id);
                   return (
@@ -685,7 +685,7 @@ const CombinePaymentPage = () => {
             )}
 
             {selectedDonorSummaries.length > 0 ? (
-              <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 {selectedDonorSummaries.map((donor, index) => (
                   <div
                     key={`selected-donor-${donor.id ?? index}-${donor.phone ?? donor.name ?? index}`}
@@ -796,33 +796,33 @@ const CombinePaymentPage = () => {
 
         {selectedDonorSummaries.length > 0 && showPaymentDetails && (
           <div className="space-y-4 rounded-2xl border border-orange-100 bg-white p-5 shadow-inner">
-            <div className="grid gap-5 lg:grid-cols-2">
-            <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <img
-                src="/images/payment_qrcode.png"
-                alt="Temple payment QR code"
-                className="h-56 w-56 rounded-lg border border-slate-200 bg-white p-3 object-contain"
-              />
-              <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(combinedTotal)}</p>
-            </div>
-            <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                <p className="text-lg font-semibold text-slate-900">Sri Temple Trust</p>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <img
+                  src="/images/payment_qrcode.png"
+                  alt="Temple payment QR code"
+                  className="h-56 w-56 rounded-lg border border-slate-200 bg-white p-3 object-contain"
+                />
+                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(combinedTotal)}</p>
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
-                <p className="text-lg font-semibold text-slate-900">123456789012</p>
+              <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
+                  <p className="text-lg font-semibold text-slate-900">Sri Temple Trust</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
+                  <p className="text-lg font-semibold text-slate-900">123456789012</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
+                  <p className="text-lg font-semibold text-slate-900">SBIN0000123</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</p>
+                  <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
-                <p className="text-lg font-semibold text-slate-900">SBIN0000123</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</p>
-                <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
-              </div>
-            </div>
             </div>
             <div className="mt-4">
               <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="club-transaction-reference">
@@ -848,17 +848,17 @@ const CombinePaymentPage = () => {
             <p className="text-sm text-slate-600">
               After the transfer, inform the temple office with both sets of cart details for quicker reconciliation.
             </p>
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={handlePaymentCompleted}
-              className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-            >
-              Payment Completed
-            </button>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handlePaymentCompleted}
+                className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+              >
+                Payment Completed
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 
@@ -904,25 +904,25 @@ const CombinePaymentPage = () => {
               onChange={(event) => setHistoryMonth(event.target.value)}
             >
               {historyMonthOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleDownloadPaymentHistory}
-            disabled={filteredHistory.length === 0}
-            className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-              filteredHistory.length === 0
-                ? 'border-slate-200 text-slate-400'
-                : 'border-orange-300 text-orange-700 hover:bg-orange-50'
-            }`}
-          >
-            Download Payment History
-          </button>
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleDownloadPaymentHistory}
+              disabled={filteredHistory.length === 0}
+              className={`inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                filteredHistory.length === 0
+                  ? 'border-slate-200 text-slate-400'
+                  : 'border-orange-300 text-orange-700 hover:bg-orange-50'
+              }`}
+            >
+              Download Payment History
+            </button>
+          </div>
         </div>
-      </div>
 
         {combinePaymentHistory.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
@@ -936,67 +936,71 @@ const CombinePaymentPage = () => {
           </div>
         )}
 
-        {filteredHistory.map((entry) => {
-          const donorItemCount = entry.donors.reduce((sum, donor) => sum + donor.count, 0);
-          const totalCount = entry.yourCount + donorItemCount;
-          return (
-            <article
-              key={`${entry.id}-${entry.completedAt}`}
-              className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm ring-1 ring-slate-100"
-            >
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment Completed</p>
-                  <p className="text-base font-semibold text-slate-900">{formatDateTime(entry.completedAt)}</p>
-                  <p className="text-sm text-slate-600">
-                    {totalCount} pooja{totalCount === 1 ? '' : 's'} combined • Your share:{' '}
-                    {entry.yourCount} item{entry.yourCount === 1 ? '' : 's'}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Combined Total</p>
-                  <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(entry.combinedTotal)}</p>
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Poojas</p>
-                  <p className="text-sm font-medium text-slate-800">
-                    {entry.yourCount} item{entry.yourCount === 1 ? '' : 's'} • ₹ {formatCurrency(entry.yourTotal)}
-                  </p>
-                  {entry.yourItems.length > 0 && renderPreviewList(entry.yourItems)}
-                </div>
-                {entry.donors.length > 0 && (
-                  <div className="space-y-3">
-                    {entry.donors.map((donor, index) => (
-                      <div
-                        key={`history-donor-${entry.id}-${donor.id ?? index}`}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-4"
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Clubbed Donor {index + 1}
-                        </p>
-                        <p className="text-sm font-medium text-slate-800">
-                          {donor.name || 'Donor'}{' '}
-                          <span className="text-xs text-slate-500">
-                            ({donor.count} item{donor.count === 1 ? '' : 's'})
-                          </span>
-                        </p>
-                        <p className="text-sm font-semibold text-slate-700">
-                          ₹ {formatCurrency(donor.totalAmount)}
-                        </p>
-                        {donor.phone && (
-                          <p className="text-xs text-slate-500">Phone: {donor.phone}</p>
-                        )}
-                        {donor.items.length > 0 && renderPreviewList(donor.items)}
-                      </div>
-                    ))}
+        {filteredHistory.length > 0 && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {filteredHistory.map((entry) => {
+              const donorItemCount = entry.donors.reduce((sum, donor) => sum + donor.count, 0);
+              const totalCount = entry.yourCount + donorItemCount;
+              return (
+                <article
+                  key={`${entry.id}-${entry.completedAt}`}
+                  className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm ring-1 ring-slate-100"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment Completed</p>
+                      <p className="text-base font-semibold text-slate-900">{formatDateTime(entry.completedAt)}</p>
+                      <p className="text-sm text-slate-600">
+                        {totalCount} pooja{totalCount === 1 ? '' : 's'} combined • Your share:{' '}
+                        {entry.yourCount} item{entry.yourCount === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Combined Total</p>
+                      <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(entry.combinedTotal)}</p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </article>
-          );
-        })}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Poojas</p>
+                      <p className="text-sm font-medium text-slate-800">
+                        {entry.yourCount} item{entry.yourCount === 1 ? '' : 's'} • ₹ {formatCurrency(entry.yourTotal)}
+                      </p>
+                      {entry.yourItems.length > 0 && renderPreviewList(entry.yourItems)}
+                    </div>
+                    {entry.donors.length > 0 && (
+                      <div className="space-y-3">
+                        {entry.donors.map((donor, index) => (
+                          <div
+                            key={`history-donor-${entry.id}-${donor.id ?? index}`}
+                            className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                          >
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Clubbed Donor {index + 1}
+                            </p>
+                            <p className="text-sm font-medium text-slate-800">
+                              {donor.name || 'Donor'}{' '}
+                              <span className="text-xs text-slate-500">
+                                ({donor.count} item{donor.count === 1 ? '' : 's'})
+                              </span>
+                            </p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              ₹ {formatCurrency(donor.totalAmount)}
+                            </p>
+                            {donor.phone && (
+                              <p className="text-xs text-slate-500">Phone: {donor.phone}</p>
+                            )}
+                            {donor.items.length > 0 && renderPreviewList(donor.items)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };

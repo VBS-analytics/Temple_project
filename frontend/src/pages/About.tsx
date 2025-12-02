@@ -708,7 +708,7 @@ export default function AboutPage() {
         />
 
         {/* Container */}
-        <div className="mx-auto w-full max-w-screen-2xl space-y-16 px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        <div className="responsive-layout space-y-16 py-12 lg:py-16">
           {/* Hero */}
           <header className="space-y-4 text-center">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">

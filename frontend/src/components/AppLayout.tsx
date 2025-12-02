@@ -29,7 +29,7 @@ const AppLayout = () => {
   const useFullWidthLayout = isPoojaRegistrationPage || isProfilePage;
   const mainClassName = useFullWidthLayout
     ? 'w-full px-4 py-6 lg:px-6'
-    : 'mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8';
+    : 'responsive-layout py-6 sm:py-8';
 
   const userInitials =
     user?.name
@@ -59,15 +59,19 @@ const AppLayout = () => {
     { to: '/admin/pooja-details', label: 'Pooja Details', show: Boolean(user && isAdmin(user.role)) },
     { to: '/pooja/register', label: 'Pooja Registration', show: true },
     { to: '/payments/general', label: 'Payment Page', show: true },
-    { to: '/payments/combine', label: 'Combine Payment', show: true }
+    { to: '/payments/combine', label: 'Combine Payment', show: true },
+    {
+      to: '/payments/statement',
+      label: 'Payment Statement',
+      show: Boolean(user),
+    },
   ];
 
   return (
     <div className="min-h-screen bg-orange-50">
       {/* HEADER */}
       <header className="border-b border-orange-200 bg-gradient-to-r from-orange-100 via-white to-rose-100/70">
-        <div className="mx-auto w-full max-w-screen-2xl px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4">
+        <div className="responsive-layout flex flex-col gap-4 py-3">
 
             {/* TOP ROW */}
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -147,8 +151,6 @@ const AppLayout = () => {
                   </NavLink>
                 ))}
             </nav>
-
-          </div>
         </div>
       </header>
 

@@ -33,6 +33,22 @@ const paymentModes = [
   { value: 'other', label: 'Other' },
 ];
 
+const formatHistoryDateTime = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const formatPaymentModeLabel = (mode: string) => mode.replace(/_/g, ' ');
+
 const PaymentPage = () => {
   const [records, setRecords] = useState<PaymentRecord[]>([]);
   const [message, setMessage] = useState('');
@@ -125,35 +141,90 @@ const PaymentPage = () => {
 
       <section className="rounded-lg bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-800">History</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-              <tr>
-                <th className="px-4 py-2">Date</th>
-                <th className="px-4 py-2">Amount</th>
-                <th className="px-4 py-2">Mode</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr key={record.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2">{new Date(record.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-2">
-                    {record.amount} {record.currency}
-                  </td>
-                  <td className="px-4 py-2 capitalize">{record.mode.replace('_', ' ')}</td>
-                  <td className={`px-4 py-2 capitalize ${record.status === 'pending' ? 'text-amber-600' : 'text-green-600'}`}>
-                    {record.status}
-                  </td>
-                  <td className="px-4 py-2">{record.notes || '--'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {records.length === 0 && <p className="p-4 text-sm text-slate-500">No payments logged yet.</p>}
-        </div>
+        {records.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">No payments logged yet.</p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            <div className="hidden overflow-x-auto md:block">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+                  <tr>
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2">Amount</th>
+                    <th className="px-4 py-2">Mode</th>
+                    <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((record) => (
+                    <tr key={record.id} className="border-t border-slate-100">
+                      <td className="px-4 py-2">{formatHistoryDateTime(record.created_at)}</td>
+                      <td className="px-4 py-2">
+                        {record.amount} {record.currency}
+                      </td>
+                      <td className="px-4 py-2 capitalize">{formatPaymentModeLabel(record.mode)}</td>
+                      <td
+                        className={`px-4 py-2 capitalize ${
+                          record.status === 'pending' ? 'text-amber-600' : 'text-green-600'
+                        }`}
+                      >
+                        {record.status}
+                      </td>
+                      <td className="px-4 py-2">{record.notes || '--'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-3 md:hidden">
+              {records.map((record) => {
+                const statusColor = record.status === 'pending' ? 'text-amber-600' : 'text-green-600';
+                return (
+                  <article
+                    key={record.id}
+                    className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">{formatHistoryDateTime(record.created_at)}</p>
+                      <span className={`text-xs font-semibold uppercase tracking-wide ${statusColor}`}>
+                        {record.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm text-slate-600">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Amount</span>
+                        <span>
+                          ₹ {record.amount} {record.currency}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Mode</span>
+                        <span className="capitalize">{formatPaymentModeLabel(record.mode)}</span>
+                      </div>
+                      {record.payment_month && (
+                        <div className="flex justify-between">
+                          <span className="font-semibold text-slate-600">Payment Month</span>
+                          <span>{record.payment_month}</span>
+                        </div>
+                      )}
+                      {record.pooja_option && (
+                        <div className="flex justify-between">
+                          <span className="font-semibold text-slate-600">Pooja</span>
+                          <span>{record.pooja_option}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Notes</span>
+                        <span className="text-slate-500">{record.notes || '--'}</span>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

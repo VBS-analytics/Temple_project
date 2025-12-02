@@ -14,7 +14,7 @@ const Gallery: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <PublicSiteHeader />
-      <main className="mx-auto w-full max-w-screen-2xl px-4 py-12 sm:px-6 lg:px-8">
+      <main className="responsive-layout py-12">
         <div className="text-center">
           <h1 className="mb-4 text-4xl font-bold text-gray-900">Temple Gallery</h1>
           <p className="mb-12 text-gray-600">

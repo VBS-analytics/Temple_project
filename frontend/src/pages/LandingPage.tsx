@@ -391,7 +391,7 @@ const LandingPage = () => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
           </div>
-          <div className="relative z-10 mx-auto flex w-full max-w-screen-2xl flex-col px-4 py-16 sm:px-6 sm:py-20 md:px-10 md:py-28">
+          <div className="responsive-layout relative z-10 flex flex-col py-16 sm:py-20 md:py-28 md:px-10">
             <div className="max-w-2xl space-y-4 sm:space-y-6">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white">
                 A living temple dedicated to{" "}
@@ -423,7 +423,7 @@ const LandingPage = () => {
 
         {/* TIMINGS */}
         <section id="timings" className="relative -mt-12 sm:-mt-16 z-20 pb-12 sm:pb-16 pt-6 sm:pt-8 md:-mt-20">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 md:px-10">
+          <div className="responsive-layout md:px-10">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
               {heroHighlights.map((item) => (
                 <div
@@ -469,7 +469,7 @@ const LandingPage = () => {
         <section id="architecture" className="bg-[#f8f4f4] py-12 sm:py-16">
           <div
             ref={archRef}
-            className="mx-auto grid w-full max-w-screen-2xl grid-cols-1 gap-8 px-4 sm:px-6 md:grid-cols-[5fr_6fr] md:items-center md:px-10"
+            className="responsive-layout grid grid-cols-1 gap-8 md:grid-cols-[5fr_6fr] md:items-center md:px-10"
           >
             {/* Images on the left */}
             <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2">
@@ -518,7 +518,7 @@ const LandingPage = () => {
 
         {/* VISITOR GUIDE AND PLAN YOUR VISIT */}
         <section id="visit" className="py-12 sm:py-16 bg-gradient-to-b from-slate-100 to-white">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 md:px-10">
+          <div className="responsive-layout md:px-10">
             {/* Header Section */}
             <div className="text-center mb-6 sm:mb-8">
               <span className="inline-flex items-center rounded-full bg-[#b10026]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-[#b10026]">
@@ -654,7 +654,7 @@ const LandingPage = () => {
 
         {/* DARSHAN & POOJA */}
         <section id="darshan" className="py-12 sm:py-16">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 md:px-10">
+          <div className="responsive-layout md:px-10">
             <div className="space-y-3 sm:space-y-4 text-center md:text-left">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">Pooja Schedule</h2>
               <p className="text-slate-600 text-sm sm:text-base md:text-lg">
@@ -734,7 +734,7 @@ const LandingPage = () => {
 
         {/* NEWS */}
         <section id="news" className="py-12 sm:py-16">
-          <div className="mx-auto w-full max-w-screen-2xl space-y-6 sm:space-y-8 px-4 sm:px-6 md:px-10">
+          <div className="responsive-layout space-y-6 sm:space-y-8 md:px-10">
             <div className="space-y-2 sm:space-y-3 text-center md:text-left">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">Temple Blog & Updates</h2>
               <p className="text-slate-600 text-sm sm:text-base md:text-lg">
@@ -758,7 +758,7 @@ const LandingPage = () => {
 
         {/* SUPPORT */}
         <section id="support" className="bg-gradient-to-r from-red-800 to-red-600 py-12 sm:py-14 text-white">
-          <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 sm:gap-8 px-4 sm:px-6 md:flex-row md:items-center md:justify-between md:px-10">
+          <div className="responsive-layout flex flex-col gap-6 sm:gap-8 md:flex-row md:items-center md:justify-between md:px-10">
             <div className="max-w-2xl space-y-3 sm:space-y-4">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Support the Temple</p>
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">Preserve the legacy of Kakkazhany Gramam Temple's</h2>
@@ -777,7 +777,7 @@ const LandingPage = () => {
 
       {/* FOOTER */}
       <footer id="contact" className="bg-slate-950 py-10 sm:py-12 text-slate-300">
-        <div className="mx-auto grid w-full max-w-screen-2xl grid-cols-1 gap-6 sm:gap-8 px-4 sm:px-6 md:grid-cols-2 lg:grid-cols-4 md:px-10">
+        <div className="responsive-layout grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-4 md:px-10">
           <div className="space-y-2 sm:space-y-3">
             <p className="text-base sm:text-lg font-semibold text-white">Kakkazhany Gramam Temple</p>
             <p className="text-sm text-slate-400">Kakkazhany Gramam, Agraharam, Tamil Nadu 625001</p>

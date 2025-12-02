@@ -354,7 +354,7 @@ const RegisterPage = () => {
       {/* HEADER */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="bg-transparent text-white">
-          <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-10">
+        <div className="responsive-layout flex items-center justify-between gap-6 py-4 text-white lg:px-10">
             <Link
               to="/"
               className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
