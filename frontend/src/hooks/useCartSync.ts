@@ -72,8 +72,13 @@ const useCartSync = () => {
       }
     };
     loadSnapshot();
+    const handleFocus = () => {
+      loadSnapshot();
+    };
+    window.addEventListener('focus', handleFocus);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', handleFocus);
     };
   }, [cartKey, clearGeneralPayment, setGeneralPayment, setItemsForUser, user?.id, user?.role]);
 
