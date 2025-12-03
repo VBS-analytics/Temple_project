@@ -405,6 +405,35 @@ class PoojaCartSnapshotView(APIView):
         return Response(serializer.data)
 
 
+class PoojaCartSnapshotAssignView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        donor_id_raw = request.data.get("donor_id")
+        if donor_id_raw is None:
+            return Response(
+                {"detail": "donor_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            donor_id = int(donor_id_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "donor_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        donor_user = User.objects.filter(id=donor_id, role=UserRole.DONOR).first()
+        if donor_user is None:
+            return Response({"detail": "Donor not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if donor_user != request.user and request.user.role != UserRole.ADMIN:
+            raise PermissionDenied("Cannot update snapshots for other donors.")
+
+        snapshot, _ = PoojaCartSnapshot.objects.get_or_create(donor=donor_user)
+        serializer = PoojaCartSnapshotSerializer(instance=snapshot, data={"items": request.data.get("items", [])})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
 class CombinePaymentLookupView(APIView):
     """Fetch cart selections for a donor to support group / combined payments."""
 

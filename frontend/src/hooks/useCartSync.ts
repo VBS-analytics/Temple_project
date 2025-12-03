@@ -76,6 +76,56 @@ const useCartSync = () => {
       cancelled = true;
     };
   }, [cartKey, clearGeneralPayment, setGeneralPayment, setItemsForUser, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    const currentUserId = typeof user.id === 'number' ? user.id : null;
+    const itemsByDonor = new Map<number, CartItem[]>();
+    items.forEach((item) => {
+      const donorId = item.targetDonorId ?? currentUserId;
+      if (typeof donorId !== 'number') {
+        return;
+      }
+      if (!itemsByDonor.has(donorId)) {
+        itemsByDonor.set(donorId, []);
+      }
+      itemsByDonor.get(donorId)!.push(item);
+    });
+    const donorIdsToSync = Array.from(itemsByDonor.keys()).filter(
+      (donorId) => donorId !== currentUserId,
+    );
+    if (donorIdsToSync.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    const syncTargetSnapshots = async () => {
+      for (const donorId of donorIdsToSync) {
+        if (cancelled) {
+          return;
+        }
+        const donorItems = itemsByDonor.get(donorId);
+        if (!donorItems || donorItems.length === 0) {
+          continue;
+        }
+        try {
+          await api.post('pooja/cart-snapshots/assign/', {
+            donor_id: donorId,
+            items: donorItems,
+          });
+        } catch (err) {
+          if (import.meta.env.DEV) {
+            console.warn('Failed to assign cart snapshot', err);
+          }
+        }
+      }
+    };
+    syncTargetSnapshots();
+    return () => {
+      cancelled = true;
+    };
+  }, [items, user?.id]);
 };
 
 export default useCartSync;

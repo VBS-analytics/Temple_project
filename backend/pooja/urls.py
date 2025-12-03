@@ -8,6 +8,7 @@ from .views import (
     DailyMessageViewSet,
     DonorMessageTemplateViewSet,
     FeaturedPoojaViewSet,
+    PoojaCartSnapshotAssignView,
     PoojaCartSnapshotView,
     PoojaDayOptionViewSet,
     PoojaOptionViewSet,
@@ -27,6 +28,7 @@ router.register('recurrence/plans', RecurringPoojaPlanViewSet, basename='pooja-r
 router.register('featured-poojas', FeaturedPoojaViewSet, basename='featured-poojas')
 
 urlpatterns = [
+    path('cart-snapshots/assign/', PoojaCartSnapshotAssignView.as_view(), name='pooja-cart-snapshots-assign'),
     path('cart-snapshots/', PoojaCartSnapshotView.as_view(), name='pooja-cart-snapshots'),
     path('registrations/combine-lookup/', CombinePaymentLookupView.as_view(), name='pooja-registrations-combine-lookup'),
     path('registrations/recent-public/', RecentPoojaRegistrationsView.as_view(), name='pooja-registrations-recent-public'),
