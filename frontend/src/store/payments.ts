@@ -47,16 +47,25 @@ interface CombinePaymentHistoryPayload {
   combinedTotal: number;
 }
 
+interface CombineDraft {
+  donorIds: number[];
+  effectiveMonth: string;
+  updatedAt: string;
+}
+
 interface GeneralPaymentState {
   lastGeneralPaymentByUser: Record<string, GeneralPaymentSnapshot>;
   generalPaymentHistory: GeneralPaymentHistoryEntry[];
   combinePaymentHistory: CombinePaymentHistoryEntry[];
+  combineDraft: CombineDraft | null;
   setGeneralPayment: (payload: { items: CartItem[]; totalAmount: number; userKey: string }) => void;
   clearGeneralPayment: (userKey: string) => void;
   addGeneralPaymentHistory: (snapshot: GeneralPaymentSnapshot) => void;
   clearGeneralPaymentHistory: (userKey?: string) => void;
   addCombinePaymentHistory: (payload: CombinePaymentHistoryPayload) => void;
   clearCombinePaymentHistory: () => void;
+  saveCombineDraft: (draft: CombineDraft) => void;
+  clearCombineDraft: () => void;
 }
 
 const cloneCartItem = (item: CartItem): CartItem => ({
@@ -70,6 +79,7 @@ export const usePaymentStore = create<GeneralPaymentState>()(
       lastGeneralPaymentByUser: {},
       generalPaymentHistory: [],
       combinePaymentHistory: [],
+      combineDraft: null,
       setGeneralPayment: ({ items, totalAmount, userKey }) =>
         set((state) => ({
           lastGeneralPaymentByUser: {
@@ -131,6 +141,8 @@ export const usePaymentStore = create<GeneralPaymentState>()(
           };
         }),
       clearCombinePaymentHistory: () => set(() => ({ combinePaymentHistory: [] })),
+      saveCombineDraft: (draft) => set(() => ({ combineDraft: draft })),
+      clearCombineDraft: () => set(() => ({ combineDraft: null })),
     }),
     {
       name: 'general-payment-snapshot',
@@ -139,6 +151,7 @@ export const usePaymentStore = create<GeneralPaymentState>()(
         lastGeneralPaymentByUser: state.lastGeneralPaymentByUser,
         generalPaymentHistory: state.generalPaymentHistory,
         combinePaymentHistory: state.combinePaymentHistory,
+        combineDraft: state.combineDraft,
       }),
     },
   ),

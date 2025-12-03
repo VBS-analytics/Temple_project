@@ -3,11 +3,27 @@ import { useEffect, useMemo } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { useCartStore } from '../store/cart';
+import { usePaymentStore } from '../store/payments';
+import type { CartItem } from '../store/cart';
+
+const parseCartAmount = (value?: number | string | null) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const computeTotalAmount = (items: CartItem[]) =>
+  items.reduce((sum, item) => sum + parseCartAmount(item.amount), 0);
 
 const useCartSync = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
   const items = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const setItemsForUser = useCartStore((state) => state.setItemsForUser);
+  const clearGeneralPayment = usePaymentStore((state) => state.clearGeneralPayment);
+  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
 
   const serialized = useMemo(() => JSON.stringify(items), [items]);
 
@@ -27,7 +43,39 @@ const useCartSync = () => {
       }
     };
     syncCart();
-  }, [serialized, user?.id]);
+  }, [cartKey, serialized, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'donor') {
+      return;
+    }
+    let cancelled = false;
+    const loadSnapshot = async () => {
+      try {
+        const { data } = await api.get('pooja/cart-snapshots/');
+        if (cancelled) return;
+        const snapshotItems: CartItem[] = Array.isArray(data?.items) ? data.items : [];
+        setItemsForUser(cartKey, snapshotItems);
+        if (snapshotItems.length > 0) {
+          setGeneralPayment({
+            userKey: cartKey,
+            items: snapshotItems,
+            totalAmount: computeTotalAmount(snapshotItems),
+          });
+        } else {
+          clearGeneralPayment(cartKey);
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn('Failed to load cart snapshot', err);
+        }
+      }
+    };
+    loadSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [cartKey, clearGeneralPayment, setGeneralPayment, setItemsForUser, user?.id, user?.role]);
 };
 
 export default useCartSync;

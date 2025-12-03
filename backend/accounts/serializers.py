@@ -110,13 +110,37 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, attrs):
         phone_number = attrs.get("phone_number")
         password = attrs.get("password")
-        user = authenticate(username=phone_number, password=password)
+        user = self._authenticate_with_variations(phone_number, password)
         if not user:
             raise serializers.ValidationError("Invalid phone number or password")
         if not user.is_active:
             raise serializers.ValidationError("Account is disabled")
         attrs["user"] = user
         return attrs
+
+    def _authenticate_with_variations(self, phone_number: str | None, password: str | None):
+        if not phone_number or not password:
+            return None
+        candidates = []
+        normalized = "".join(ch for ch in phone_number if ch.isdigit())
+        if phone_number not in candidates:
+            candidates.append(phone_number.strip())
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+        if phone_number.startswith("+"):
+            stripped_plus = phone_number.lstrip("+")
+            if stripped_plus and stripped_plus not in candidates:
+                candidates.append(stripped_plus)
+        if normalized and len(normalized) > 10:
+            local_suffix = normalized[-10:]
+            if local_suffix not in candidates:
+                candidates.append(local_suffix)
+
+        for candidate in candidates:
+            user = authenticate(username=candidate, password=password)
+            if user:
+                return user
+        return None
 
     def create(self, validated_data):
         user = validated_data["user"]

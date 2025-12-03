@@ -20,6 +20,16 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
     )
     pooja_due_amount = serializers.SerializerMethodField()
     registration_status = serializers.CharField(source="registration.status", read_only=True, allow_null=True)
+    registration_donor_name = serializers.CharField(
+        source="registration.donor.name",
+        read_only=True,
+        allow_null=True,
+    )
+    registration_is_group_registration = serializers.BooleanField(
+        source="registration.is_group_registration",
+        read_only=True,
+        default=False,
+    )
 
     class Meta:
         model = PaymentRecord
@@ -42,6 +52,8 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "registration_status",
+            "registration_donor_name",
+            "registration_is_group_registration",
         )
         read_only_fields = (
             "id",
@@ -54,6 +66,8 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "registration_status",
+            "registration_donor_name",
+            "registration_is_group_registration",
         )
 
     def create(self, validated_data):

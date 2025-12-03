@@ -25,6 +25,8 @@ interface PaymentRecordEntry {
   status?: string | null;
   created_at?: string | null;
   registration_status?: string | null;
+  registration_donor_name?: string | null;
+  registration_is_group_registration?: boolean | null;
 }
 
 interface PoojaRegistrationEntry {
@@ -36,6 +38,7 @@ interface PoojaRegistrationEntry {
   total_amount?: string | number | null;
   created_at?: string | null;
   status?: string | null;
+  is_group_registration?: boolean | null;
 }
 
 const TIMEFRAME_FILTERS: { label: string; value: TimeframeOption }[] = [
@@ -50,6 +53,10 @@ const STATUS_STYLES: Record<string, string> = {
   'Payment not received': 'bg-rose-100 text-rose-800',
   'Payment Received': 'bg-emerald-100 text-emerald-800',
   'Pooja Completed': 'bg-emerald-100 text-emerald-800',
+};
+const CLUB_STYLES: Record<string, string> = {
+  Yes: 'bg-emerald-100 text-emerald-800',
+  No: 'bg-rose-100 text-rose-800',
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -90,6 +97,14 @@ const parseNumeric = (value?: string | number | null) => {
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isNaN(numeric) ? 0 : numeric;
 };
+
+const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
+  record.registration_donor_name || '—';
+
+const resolveBookedByLabel = (record: PaymentRecordEntry) => record.donor_name || '—';
+
+const getClubBadgeClasses = (label: string) =>
+  CLUB_STYLES[label] ?? 'bg-slate-100 text-slate-700';
 
 const getTimeframeRange = (reference: Date, timeframe: TimeframeOption) => {
   const start = new Date(reference);
@@ -151,7 +166,10 @@ const STATUS_OPTIONS = [
   'Admin action is pending',
 ];
 
+const CLUB_OPTIONS = ['Yes', 'No'] as const;
+
 const STATUS_OVERRIDES_STORAGE_KEY = 'payment-statement-status-overrides';
+const CLUB_OVERRIDES_STORAGE_KEY = 'payment-statement-club-overrides';
 
 const PaymentStatementPage = () => {
   const [records, setRecords] = useState<PaymentRecordEntry[]>([]);
@@ -171,6 +189,7 @@ const PaymentStatementPage = () => {
   const isAdminUser = Boolean(user && isAdmin(user.role));
   const showDonorFilter = isAdminUser;
   const [statusOverrideMap, setStatusOverrideMap] = useState<Record<string, string>>({});
+  const [clubOverrideMap, setClubOverrideMap] = useState<Record<string, string>>({});
 
   const applyOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
     setStatusOverrideMap((prev) => {
@@ -178,6 +197,20 @@ const PaymentStatementPage = () => {
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem(STATUS_OVERRIDES_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore storage errors
+        }
+      }
+      return next;
+    });
+  };
+
+  const applyClubOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
+    setClubOverrideMap((prev) => {
+      const next = updater(prev);
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(CLUB_OVERRIDES_STORAGE_KEY, JSON.stringify(next));
         } catch {
           // ignore storage errors
         }
@@ -196,6 +229,13 @@ const PaymentStatementPage = () => {
         const parsed = JSON.parse(stored);
         if (typeof parsed === 'object' && parsed !== null) {
           setStatusOverrideMap(parsed as Record<string, string>);
+        }
+      }
+      const clubStored = window.localStorage.getItem(CLUB_OVERRIDES_STORAGE_KEY);
+      if (clubStored) {
+        const parsedClub = JSON.parse(clubStored);
+        if (typeof parsedClub === 'object' && parsedClub !== null) {
+          setClubOverrideMap(parsedClub as Record<string, string>);
         }
       }
     } catch {
@@ -368,22 +408,24 @@ const PaymentStatementPage = () => {
       (registration) => !paidRegistrationIds.has(registration.id),
     );
     const registrationRecords: PaymentRecordEntry[] = remainingRegistrations.map(
-      (registration) => ({
-        id: `registration-${registration.id}`,
-        donor: registration.donor ?? null,
-        donor_name: registration.donor_name ?? null,
-        pooja_option: registration.pooja_option_name ?? null,
-        registration: registration.id,
-        registration_start_date: registration.start_date ?? null,
-        registration_total_amount: registration.total_amount ?? null,
-        pooja_due_amount: registration.total_amount ?? null,
-        amount: 0,
-        transaction_reference: null,
-        status: 'pending',
-        registration_status: registration.status ?? null,
-        created_at: registration.created_at ?? null,
-      }),
-    );
+        (registration) => ({
+          id: `registration-${registration.id}`,
+          donor: registration.donor ?? null,
+          donor_name: registration.donor_name ?? null,
+          pooja_option: registration.pooja_option_name ?? null,
+          registration: registration.id,
+          registration_start_date: registration.start_date ?? null,
+          registration_total_amount: registration.total_amount ?? null,
+          pooja_due_amount: registration.total_amount ?? null,
+          amount: 0,
+          transaction_reference: null,
+          status: 'pending',
+          registration_status: registration.status ?? null,
+          created_at: registration.created_at ?? null,
+          registration_donor_name: registration.donor_name ?? null,
+          registration_is_group_registration: registration.is_group_registration ?? false,
+        }),
+      );
     return [...records, ...registrationRecords];
   }, [records, registrations]);
 
@@ -399,25 +441,77 @@ const PaymentStatementPage = () => {
     if (!range) {
       return mergedRecords;
     }
-    return mergedRecords.filter((record) => {
-      const rawValue = record.registration_start_date ?? record.created_at;
-      if (!rawValue) {
+    const isInRange = (value?: string | null) => {
+      if (!value) {
         return false;
       }
-      const createdAt = new Date(rawValue);
-      if (Number.isNaN(createdAt.getTime())) {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
         return false;
       }
-      return createdAt >= range.start && createdAt < range.end;
-    });
+      return parsed >= range.start && parsed < range.end;
+    };
+    return mergedRecords.filter(
+      (record) => isInRange(record.registration_start_date) || isInRange(record.created_at),
+    );
   }, [mergedRecords, range]);
 
   const recordKey = (record: PaymentRecordEntry) => record.id.toString();
   const getStatusLabel = (record: PaymentRecordEntry) =>
     statusOverrideMap[recordKey(record)] ?? resolveStatusLabel(record);
+  const getClubSelectionLabel = (record: PaymentRecordEntry) => {
+    const override = clubOverrideMap[recordKey(record)];
+    if (override) {
+      return override;
+    }
+    return record.registration_is_group_registration ? 'Yes' : 'No';
+  };
+
+  const getDisplayedDueAmountValue = (record: PaymentRecordEntry) => {
+    const statusLabel = getStatusLabel(record);
+    if (statusLabel === 'Payment not received') {
+      const pendingAmount = parseNumeric(record.amount);
+      if (pendingAmount > 0) {
+        return pendingAmount;
+      }
+    }
+    return parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
+  };
+
+  const getDisplayedPaidAmountValue = (record: PaymentRecordEntry) => {
+    const statusLabel = getStatusLabel(record);
+    if (statusLabel === 'Payment not received') {
+      return 0;
+    }
+    return parseNumeric(record.amount);
+  };
 
   const formatFilenameDate = (value: Date) =>
     value.toISOString().replace(/[:.]/g, '').replace(/-/g, '').slice(0, 15);
+
+  const clubValueToBool = (label: string) => label === 'Yes';
+
+  const handleClubChange = async (record: PaymentRecordEntry, label: string) => {
+    if (typeof record.registration !== 'number') {
+      return;
+    }
+    const key = recordKey(record);
+    applyClubOverrides((prev) => ({ ...prev, [key]: label }));
+    try {
+      await api.patch(`pooja/registrations/${record.registration}/`, {
+        is_group_registration: clubValueToBool(label),
+      });
+      setRecordsVersion((prev) => prev + 1);
+      setRegistrationsVersion((prev) => prev + 1);
+    } catch (err) {
+      console.error('Failed to update club payment flag', err);
+      applyClubOverrides((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
 
   const buildDownloadRows = (rows: PaymentRecordEntry[]) =>
     rows.map((record, idx) => ({
@@ -428,9 +522,12 @@ const PaymentStatementPage = () => {
       'Pooja Date': record.registration_start_date
         ? formatDisplayDate(record.registration_start_date)
         : formatDisplayDate(record.created_at ?? ''),
-      'Pooja Due Amount': formatCurrency(record.pooja_due_amount ?? record.registration_total_amount),
-      'Paid Amount': formatCurrency(record.amount),
+      'Pooja Due Amount': formatCurrency(getDisplayedDueAmountValue(record)),
+      'Paid Amount': formatCurrency(getDisplayedPaidAmountValue(record)),
       'Transaction ID': record.transaction_reference || '—',
+      'Pooja Registered by': record.registration_donor_name ?? '—',
+      'Pooja Booked by': record.donor_name ?? '—',
+      'Club Payment': getClubSelectionLabel(record),
       Status: getStatusLabel(record),
     }));
 
@@ -452,21 +549,37 @@ const PaymentStatementPage = () => {
           { text: rangeLabel, style: 'subheader', margin: [0, 0, 0, 8] },
           { text: `Records: ${filteredRecords.length}`, style: 'subheader' },
           {
-            table: {
-              headerRows: 1,
-              widths: ['auto', 'auto', '*', '*', 'auto', 'auto', 'auto', '*', 'auto'],
-              body: [
-                [
-                  'S.no',
-                  'Donor ID',
+              table: {
+                headerRows: 1,
+                widths: [
+                  'auto',
+                  'auto',
+                  '*',
+                  '*',
+                  'auto',
+                  'auto',
+                  'auto',
+                  '*',
+                  '*',
+                  '*',
+                  'auto',
+                  'auto',
+                ],
+                body: [
+                  [
+                    'S.no',
+                    'Donor ID',
                   'Donor Name',
                   'Pooja',
                   'Pooja Date',
                   'Due Amount',
-                  'Paid Amount',
-                  'Transaction ID',
-                  'Status',
-                ],
+                    'Paid Amount',
+                    'Transaction ID',
+                    'Pooja Registered by',
+                    'Pooja Booked by',
+                    'Club Payment',
+                    'Status',
+                  ],
                 ...rows.map((row) => Object.values(row)),
               ],
             },
@@ -547,6 +660,9 @@ const PaymentStatementPage = () => {
             'Pooja Due Amount',
             'Paid Amount',
             'Transaction ID',
+            'Pooja Registered by',
+            'Pooja Booked by',
+            'Club Payment',
             'Status',
           ];
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headerKeys });
@@ -569,14 +685,39 @@ const PaymentStatementPage = () => {
   }, [filteredRecords]);
 
   const totalPaid = useMemo(
-    () => filteredRecords.reduce((sum, record) => sum + parseNumeric(record.amount), 0),
-    [filteredRecords],
+    () => filteredRecords.reduce((sum, record) => sum + getDisplayedPaidAmountValue(record), 0),
+    [filteredRecords, statusOverrideMap],
   );
 
   const totalDue = useMemo(
-    () => filteredRecords.reduce((sum, record) => sum + parseNumeric(record.pooja_due_amount), 0),
-    [filteredRecords],
+    () =>
+      filteredRecords.reduce((sum, record) => sum + getDisplayedDueAmountValue(record), 0),
+    [filteredRecords, statusOverrideMap],
   );
+
+  const clubPaymentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    CLUB_OPTIONS.forEach((option) => {
+      counts[option] = 0;
+    });
+    filteredRecords.forEach((record) => {
+      const label = getClubSelectionLabel(record);
+      counts[label] = (counts[label] ?? 0) + 1;
+    });
+    return counts;
+  }, [filteredRecords, clubOverrideMap]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    STATUS_OPTIONS.forEach((option) => {
+      counts[option] = 0;
+    });
+    filteredRecords.forEach((record) => {
+      const label = getStatusLabel(record);
+      counts[label] = (counts[label] ?? 0) + 1;
+    });
+    return counts;
+  }, [filteredRecords, statusOverrideMap]);
 
   const rangeLabel = useMemo(
     () => buildRangeLabel(referenceDateValue, timeframe),
@@ -692,10 +833,40 @@ const PaymentStatementPage = () => {
           <p className="text-2xl font-semibold text-slate-800">{formatCurrency(totalDue)}</p>
         </div>
       </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Club Payments</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-600">
+            {CLUB_OPTIONS.map((option) => (
+              <div key={option} className="flex items-center justify-between">
+                <span className="text-slate-600">
+                  {option} club payment
+                </span>
+                <span className="text-base font-semibold text-slate-800">
+                  {clubPaymentCounts[option] ?? 0}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Status Counts</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-600">
+            {STATUS_OPTIONS.map((status) => (
+              <div key={status} className="flex items-center justify-between">
+                <span className="text-slate-600">{status}</span>
+                <span className="text-base font-semibold text-slate-800">
+                  {statusCounts[status] ?? 0}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="hidden rounded-t-2xl md:block">
-          <div className="max-h-[420px] overflow-auto">
+          <div className="max-h-[720px] overflow-auto">
             <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -707,6 +878,9 @@ const PaymentStatementPage = () => {
                   <th className="px-4 py-3 text-right font-semibold">Pooja Due Amount</th>
                   <th className="px-4 py-3 text-right font-semibold">Paid Amount</th>
                   <th className="px-4 py-3 text-left font-semibold">Transaction Id</th>
+                  <th className="px-4 py-3 text-left font-semibold">Pooja Registered by</th>
+                  <th className="px-4 py-3 text-left font-semibold">Pooja Booked by</th>
+                  <th className="px-4 py-3 text-center font-semibold">Club Payment</th>
                   <th className="px-4 py-3 text-left font-semibold">Status</th>
                 </tr>
               </thead>
@@ -715,6 +889,9 @@ const PaymentStatementPage = () => {
                   const statusKey = getStatusLabel(record);
                   const statusClasses =
                     STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
+                  const clubLabel = getClubSelectionLabel(record);
+                  const clubClasses = getClubBadgeClasses(clubLabel);
+                  const displayedDueAmount = getDisplayedDueAmountValue(record);
                   return (
                     <tr key={record.id}>
                       <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
@@ -725,15 +902,40 @@ const PaymentStatementPage = () => {
                         {formatDisplayDate(record.registration_start_date)}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                        {formatCurrency(
-                          record.pooja_due_amount ?? record.registration_total_amount,
-                        )}
+                        {formatCurrency(displayedDueAmount)}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                        {formatCurrency(record.amount)}
+                        {formatCurrency(getDisplayedPaidAmountValue(record))}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {record.transaction_reference || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {resolveRegisteredByLabel(record)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {resolveBookedByLabel(record)}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-slate-800">
+                        {isAdminUser && typeof record.registration === 'number' ? (
+                          <select
+                            value={clubLabel}
+                            onChange={(event) => handleClubChange(record, event.target.value)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide focus:outline-none ${clubClasses}`}
+                          >
+                            {CLUB_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${clubClasses}`}
+                          >
+                            {clubLabel}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {isAdminUser ? (
@@ -770,6 +972,8 @@ const PaymentStatementPage = () => {
             const statusKey = getStatusLabel(record);
             const statusClasses =
               STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
+            const clubLabel = getClubSelectionLabel(record);
+            const clubClasses = getClubBadgeClasses(clubLabel);
             return (
               <div
                 key={record.id}
@@ -803,18 +1007,32 @@ const PaymentStatementPage = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="font-semibold text-slate-600">Due Amount</span>
-                    <span>
-                      {formatCurrency(record.pooja_due_amount ?? record.registration_total_amount)}
-                    </span>
+                    <span>{formatCurrency(getDisplayedDueAmountValue(record))}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Paid Amount</span>
-                    <span>{formatCurrency(record.amount)}</span>
-                  </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-slate-600">Paid Amount</span>
+                      <span>{formatCurrency(getDisplayedPaidAmountValue(record))}</span>
+                    </div>
                   <div className="flex justify-between">
                     <span className="font-semibold text-slate-600">Transaction ID</span>
                     <span className="text-slate-400">
                       {record.transaction_reference || '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-600">Pooja Registered by</span>
+                    <span className="text-slate-600">{resolveRegisteredByLabel(record)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-600">Pooja Booked by</span>
+                    <span className="text-slate-600">{resolveBookedByLabel(record)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-600">Club Payment</span>
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-wide ${clubClasses}`}
+                    >
+                      {clubLabel}
                     </span>
                   </div>
                   {isAdminUser && (
@@ -825,6 +1043,21 @@ const PaymentStatementPage = () => {
                         className={`w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
                       >
                         {STATUS_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {isAdminUser && typeof record.registration === 'number' && (
+                    <div className="mt-2">
+                      <select
+                        value={getClubSelectionLabel(record)}
+                        onChange={(event) => handleClubChange(record, event.target.value)}
+                        className="w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 focus:outline-none"
+                      >
+                        {CLUB_OPTIONS.map((option) => (
                           <option key={option} value={option}>
                             {option}
                           </option>

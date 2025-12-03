@@ -1,9 +1,8 @@
 import clsx from 'clsx';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import useCartSync from '../hooks/useCartSync';
 import { isAdmin, useAuthStore } from '../store/auth';
-import { useCartStore } from '../store/cart';
 
 type NavItem = {
   to: string;
@@ -14,22 +13,11 @@ type NavItem = {
 };
 
 const AppLayout = () => {
-  const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
   useCartSync();
 
-  const cartKey = user ? String(user.id) : 'guest';
-  const cartCount =
-    useCartStore((state) => state.itemsByUser[cartKey]?.length ?? 0) ?? 0;
-
-  const isPoojaRegistrationPage = location.pathname.startsWith('/pooja/register');
-  const isProfilePage = location.pathname.startsWith('/profile');
-
-  const useFullWidthLayout = isPoojaRegistrationPage || isProfilePage;
-  const mainClassName = useFullWidthLayout
-    ? 'w-full px-4 py-6 lg:px-6'
-    : 'responsive-layout py-6 sm:py-8';
+  const mainClassName = 'responsive-layout py-6 sm:py-8';
 
   const userInitials =
     user?.name

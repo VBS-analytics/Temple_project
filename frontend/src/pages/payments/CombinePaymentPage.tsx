@@ -143,6 +143,9 @@ const CombinePaymentPage = () => {
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const combinePaymentHistory = usePaymentStore((state) => state.combinePaymentHistory);
   const addCombinePaymentHistory = usePaymentStore((state) => state.addCombinePaymentHistory);
+  const combineDraft = usePaymentStore((state) => state.combineDraft);
+  const saveCombineDraft = usePaymentStore((state) => state.saveCombineDraft);
+  const clearCombineDraft = usePaymentStore((state) => state.clearCombineDraft);
 
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
   const [historyMonth, setHistoryMonth] = useState<string>(() => formatMonthKey(new Date()) ?? '');
@@ -170,6 +173,10 @@ const CombinePaymentPage = () => {
       return next;
     });
   };
+
+  const [draftMonth, setDraftMonth] = useState<string>(() => combineDraft?.effectiveMonth ?? formatMonthKey(new Date()) ?? '');
+  const [saveStatusMessage, setSaveStatusMessage] = useState('');
+  const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const yourTotalAmount = useMemo(
     () =>
@@ -470,9 +477,38 @@ const CombinePaymentPage = () => {
   }, [historyMonth, historyMonthOptions]);
 
   useEffect(() => {
+    if (combineDraft?.effectiveMonth) {
+      setDraftMonth(combineDraft.effectiveMonth);
+      return;
+    }
+    setDraftMonth(formatMonthKey(new Date()) ?? '');
+  }, [combineDraft]);
+
+  useEffect(() => {
+    if (!combineDraft?.donorIds?.length) {
+      return;
+    }
+    const storedIds = combineDraft.donorIds;
+    setSelectedDonorIds((prev) => {
+      if (prev.length === storedIds.length && prev.every((value, index) => value === storedIds[index])) {
+        return prev;
+      }
+      return storedIds;
+    });
+  }, [combineDraft]);
+
+  useEffect(() => {
     return () => {
       if (celebrationTimeoutRef.current) {
         clearTimeout(celebrationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (saveStatusTimeoutRef.current) {
+        clearTimeout(saveStatusTimeoutRef.current);
       }
     };
   }, []);
@@ -492,6 +528,44 @@ const CombinePaymentPage = () => {
 
   const handleProceedToPayment = () => {
     setShowPaymentDetails(true);
+  };
+
+  const handleSaveCombination = () => {
+    if (selectedDonorSummaries.length === 0) {
+      return;
+    }
+    const effectiveMonth = draftMonth?.trim() || formatMonthKey(new Date()) || '';
+    if (!effectiveMonth) {
+      return;
+    }
+    saveCombineDraft({
+      donorIds: [...selectedDonorIds],
+      effectiveMonth,
+      updatedAt: new Date().toISOString(),
+    });
+    const monthLabel = formatMonthLabel(effectiveMonth);
+    const donorLabel = `${selectedDonorSummaries.length} donor${
+      selectedDonorSummaries.length === 1 ? '' : 's'
+    }`;
+    const message = `Saved ${donorLabel} for ${monthLabel}.`;
+    setSaveStatusMessage(message);
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current);
+    }
+    saveStatusTimeoutRef.current = setTimeout(() => {
+      setSaveStatusMessage('');
+      saveStatusTimeoutRef.current = null;
+    }, 4000);
+  };
+
+  const handleClearSavedCombination = () => {
+    clearCombineDraft();
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current);
+      saveStatusTimeoutRef.current = null;
+    }
+    setSaveStatusMessage('');
+    handleClearClubbedDonor();
   };
 
   const handlePaymentCompleted = () => {
@@ -759,34 +833,92 @@ const CombinePaymentPage = () => {
             )}
 
             {selectedDonorSummaries.length > 0 && (
-              <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-slate-600">
-                  <p>
-                    Ready to combine the payment with{' '}
-                    <span className="font-semibold">
-                      {selectedDonorSummaries.length} donor
-                      {selectedDonorSummaries.length === 1 ? '' : 's'}
-                    </span>
-                    ? Click Proceed to view the payment instructions or clear to pick different donors.
-                  </p>
+              <div className="space-y-3 pt-4">
+                <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <label
+                        htmlFor="combine-effective-month"
+                        className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                      >
+                        Effective month
+                      </label>
+                      <input
+                        id="combine-effective-month"
+                        type="month"
+                        value={draftMonth}
+                        onChange={(event) => setDraftMonth(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveCombination}
+                        disabled={isSelectedDonorLoading}
+                        className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                          isSelectedDonorLoading
+                            ? 'border-slate-200 bg-slate-100 text-slate-400'
+                            : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                        }`}
+                      >
+                        Save combination
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearSavedCombination}
+                        disabled={!combineDraft}
+                        className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                          combineDraft
+                            ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                            : 'border-slate-100 bg-slate-50 text-slate-300'
+                        }`}
+                      >
+                        De-link donors
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 text-[0.7rem] leading-snug text-slate-500">
+                    {combineDraft ? (
+                      <p>
+                        Saved for {formatMonthLabel(combineDraft.effectiveMonth)} • {combineDraft.donorIds.length}{' '}
+                        donor{combineDraft.donorIds.length === 1 ? '' : 's'} preserved.
+                      </p>
+                    ) : (
+                      <p>Save the current club to resume this combination even after you log out.</p>
+                    )}
+                    {saveStatusMessage && <p className="text-xs font-semibold text-slate-700">{saveStatusMessage}</p>}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleClearClubbedDonor}
-                    className="inline-flex items-center justify-center rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Clear All
-                  </button>
-                  {!showPaymentDetails && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-slate-600">
+                    <p>
+                      Ready to combine the payment with{' '}
+                      <span className="font-semibold">
+                        {selectedDonorSummaries.length} donor
+                        {selectedDonorSummaries.length === 1 ? '' : 's'}
+                      </span>
+                      ? Click Proceed to view the payment instructions or clear to pick different donors.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
                     <button
                       type="button"
-                      onClick={handleProceedToPayment}
-                      className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                      onClick={handleClearClubbedDonor}
+                      className="inline-flex items-center justify-center rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                     >
-                      Proceed for Payment
+                      Clear All
                     </button>
-                  )}
+                    {!showPaymentDetails && (
+                      <button
+                        type="button"
+                        onClick={handleProceedToPayment}
+                        className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                      >
+                        Proceed for Payment
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
