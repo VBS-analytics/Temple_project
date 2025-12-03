@@ -75,10 +75,21 @@ const useCartSync = () => {
     const handleFocus = () => {
       loadSnapshot();
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadSnapshot();
+      }
+    };
+    const intervalId = window.setInterval(() => {
+      loadSnapshot();
+    }, 5_000);
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       cancelled = true;
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearInterval(intervalId);
     };
   }, [cartKey, clearGeneralPayment, setGeneralPayment, setItemsForUser, user?.id, user?.role]);
 
