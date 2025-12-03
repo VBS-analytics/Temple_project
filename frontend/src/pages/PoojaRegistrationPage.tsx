@@ -1280,6 +1280,7 @@ const PoojaRegistrationPage = () => {
     selectionKey: entry.key,
     donorName: entry.donorName ?? null,
     donorPhone: entry.donorPhone ?? null,
+    donorId: entry.donorId ?? null,
   });
 
   const buildMemberPayloadFromKey = useCallback(
@@ -1316,6 +1317,7 @@ const PoojaRegistrationPage = () => {
           selectionKey: memberKey,
           donorName: null,
           donorPhone: null,
+          donorId: null,
         };
       }
       return {
@@ -1331,6 +1333,7 @@ const PoojaRegistrationPage = () => {
         selectionKey: memberKey,
         donorName: null,
         donorPhone: null,
+        donorId: null,
       };
     },
     [memberIdLookup, memberLookup],
@@ -2424,6 +2427,11 @@ const PoojaRegistrationPage = () => {
       memberGothra: primaryPayload.gothra,
       memberDob: primaryPayload.dob ?? null,
       memberFamilyName: primaryPayload.familyName ?? null,
+      targetDonorId:
+        primaryPayload.donorId ??
+        primaryDirectoryEntry?.donorId ??
+        baseUserId ??
+        null,
       members: membersPayload,
       ...recurrenceFields,
     });
@@ -2550,6 +2558,7 @@ const PoojaRegistrationPage = () => {
       memberRasi: primaryEntry?.rasi,
       memberGothra: primaryEntry?.gothra,
       memberDob: primaryEntry?.dob ?? null,
+      targetDonorId: primaryEntry?.donorId ?? baseUserId ?? null,
       members: membersPayload,
       ...recurrenceFields,
     });

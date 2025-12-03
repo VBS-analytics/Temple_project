@@ -35,6 +35,7 @@ export interface CartItem {
   recurrenceKind?: RecurrenceKind;
   recurrenceFrequency?: RecurrenceFrequency;
   recurrenceOneTimeDate?: string | null;
+  targetDonorId?: number | null;
   members?: Array<{
     id: number | null;
     name: string | null;
@@ -48,6 +49,7 @@ export interface CartItem {
     selectionKey?: string | null;
     donorName?: string | null;
     donorPhone?: string | null;
+    donorId?: number | null;
   }>;
 }
 
