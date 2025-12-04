@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -34,6 +34,7 @@ from .serializers import (
     PoojaOptionSerializer,
     PoojaRegistrationSerializer,
     RecurringPoojaPlanSerializer,
+    RecurringPoojaPlanUpdateSerializer,
     LandingPoojaRegistrationSerializer,
     PublicTodayPoojaRegistrationSerializer,
 )
@@ -329,7 +330,12 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         return Response(payload)
 
 
-class RecurringPoojaPlanViewSet(viewsets.ReadOnlyModelViewSet):
+class RecurringPoojaPlanViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
     serializer_class = RecurringPoojaPlanSerializer
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -338,6 +344,16 @@ class RecurringPoojaPlanViewSet(viewsets.ReadOnlyModelViewSet):
         if self.request.user.role == UserRole.ADMIN:
             return qs.order_by("donor__name", "-next_occurrence", "-created_at")
         return qs.filter(donor=self.request.user).order_by("-next_occurrence", "-created_at")
+
+    def get_serializer_class(self):
+        if self.action in ('partial_update', 'update'):
+            return RecurringPoojaPlanUpdateSerializer
+        return RecurringPoojaPlanSerializer
+
+    def get_object(self):
+        plan = super().get_object()
+        self._ensure_plan_access(plan)
+        return plan
 
     def _ensure_plan_access(self, plan: RecurringPoojaPlan) -> None:
         if self.request.user.role == UserRole.ADMIN:
@@ -348,7 +364,6 @@ class RecurringPoojaPlanViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="pause")
     def pause(self, request, pk=None):
         plan = self.get_object()
-        self._ensure_plan_access(plan)
         pause_from_value = request.data.get("pause_from")
         pause_until_value = request.data.get("pause_until")
         if not pause_until_value:
@@ -374,7 +389,6 @@ class RecurringPoojaPlanViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="resume")
     def resume(self, request, pk=None):
         plan = self.get_object()
-        self._ensure_plan_access(plan)
         plan.pause_until = None
         plan.pause_from = None
         plan.is_active = True

@@ -169,3 +169,4 @@ CORS_ALLOW_HEADERS = tuple(default_headers) + (
 LOGIN_REDIRECT_URL = '/'  # placeholder for admin use
 
 REGISTRATION_OTP_ENABLED = os.environ.get("REGISTRATION_OTP_ENABLED", "false").lower() == "true"
+RESET_PASSWORD_OTP_ENABLED = os.environ.get("RESET_PASSWORD_OTP_ENABLED", "false").lower() == "true"
