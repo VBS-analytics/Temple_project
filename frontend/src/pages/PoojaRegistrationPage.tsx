@@ -237,6 +237,7 @@ function MemberMultiSelect({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const selectedCount = selectedValues.length;
 
   useEffect(() => {
     if (!open) return;
@@ -286,18 +287,22 @@ function MemberMultiSelect({
   }, [open, options]);
 
   return (
-    <div className="relative w-full min-w-[13rem] max-w-sm" ref={containerRef}>
+    <div className="relative w-full max-w-[240px] min-w-0" ref={containerRef}>
       <button
         type="button"
-        className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50 shadow-sm"
+        className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50 shadow-sm overflow-hidden"
         onClick={() => !disabled && setOpen((prev) => !prev)}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
+        title={label}
       >
         <span className="truncate">{label}</span>
         <span className="ml-2 text-gray-400 flex-shrink-0">▾</span>
       </button>
+      <p className="mt-1 text-xs text-gray-500">
+        Devotees selected: {selectedCount} {selectedCount === 1 ? 'devotee' : 'devotees'}
+      </p>
       {open && (
         <div
           ref={dropdownRef}

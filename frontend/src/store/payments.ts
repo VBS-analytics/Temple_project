@@ -57,15 +57,15 @@ interface GeneralPaymentState {
   lastGeneralPaymentByUser: Record<string, GeneralPaymentSnapshot>;
   generalPaymentHistory: GeneralPaymentHistoryEntry[];
   combinePaymentHistory: CombinePaymentHistoryEntry[];
-  combineDraft: CombineDraft | null;
+  combineDrafts: Record<string, CombineDraft | null>;
   setGeneralPayment: (payload: { items: CartItem[]; totalAmount: number; userKey: string }) => void;
   clearGeneralPayment: (userKey: string) => void;
   addGeneralPaymentHistory: (snapshot: GeneralPaymentSnapshot) => void;
   clearGeneralPaymentHistory: (userKey?: string) => void;
   addCombinePaymentHistory: (payload: CombinePaymentHistoryPayload) => void;
   clearCombinePaymentHistory: () => void;
-  saveCombineDraft: (draft: CombineDraft) => void;
-  clearCombineDraft: () => void;
+  saveCombineDraft: (userKey: string, draft: CombineDraft) => void;
+  clearCombineDraft: (userKey: string) => void;
 }
 
 const cloneCartItem = (item: CartItem): CartItem => ({
@@ -79,7 +79,7 @@ export const usePaymentStore = create<GeneralPaymentState>()(
       lastGeneralPaymentByUser: {},
       generalPaymentHistory: [],
       combinePaymentHistory: [],
-      combineDraft: null,
+      combineDrafts: {},
       setGeneralPayment: ({ items, totalAmount, userKey }) =>
         set((state) => ({
           lastGeneralPaymentByUser: {
@@ -141,8 +141,19 @@ export const usePaymentStore = create<GeneralPaymentState>()(
           };
         }),
       clearCombinePaymentHistory: () => set(() => ({ combinePaymentHistory: [] })),
-      saveCombineDraft: (draft) => set(() => ({ combineDraft: draft })),
-      clearCombineDraft: () => set(() => ({ combineDraft: null })),
+      saveCombineDraft: (userKey, draft) =>
+        set((state) => ({
+          combineDrafts: {
+            ...state.combineDrafts,
+            [userKey]: draft,
+          },
+        })),
+      clearCombineDraft: (userKey) =>
+        set((state) => {
+          const next = { ...state.combineDrafts };
+          delete next[userKey];
+          return { combineDrafts: next };
+        }),
     }),
     {
       name: 'general-payment-snapshot',
@@ -151,7 +162,7 @@ export const usePaymentStore = create<GeneralPaymentState>()(
         lastGeneralPaymentByUser: state.lastGeneralPaymentByUser,
         generalPaymentHistory: state.generalPaymentHistory,
         combinePaymentHistory: state.combinePaymentHistory,
-        combineDraft: state.combineDraft,
+        combineDrafts: state.combineDrafts,
       }),
     },
   ),

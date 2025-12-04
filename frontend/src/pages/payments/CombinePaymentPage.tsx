@@ -143,7 +143,7 @@ const CombinePaymentPage = () => {
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const combinePaymentHistory = usePaymentStore((state) => state.combinePaymentHistory);
   const addCombinePaymentHistory = usePaymentStore((state) => state.addCombinePaymentHistory);
-  const combineDraft = usePaymentStore((state) => state.combineDraft);
+  const combineDraft = usePaymentStore((state) => state.combineDrafts[cartKey] ?? null);
   const saveCombineDraft = usePaymentStore((state) => state.saveCombineDraft);
   const clearCombineDraft = usePaymentStore((state) => state.clearCombineDraft);
 
@@ -538,7 +538,7 @@ const CombinePaymentPage = () => {
     if (!effectiveMonth) {
       return;
     }
-    saveCombineDraft({
+    saveCombineDraft(cartKey, {
       donorIds: [...selectedDonorIds],
       effectiveMonth,
       updatedAt: new Date().toISOString(),
@@ -559,7 +559,7 @@ const CombinePaymentPage = () => {
   };
 
   const handleClearSavedCombination = () => {
-    clearCombineDraft();
+    clearCombineDraft(cartKey);
     if (saveStatusTimeoutRef.current) {
       clearTimeout(saveStatusTimeoutRef.current);
       saveStatusTimeoutRef.current = null;
