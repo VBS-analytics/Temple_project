@@ -733,7 +733,7 @@ const DonorDetailsPage = () => {
         setExpandedSections((prev) => {
           const next: Record<number, { members: boolean; registrations: boolean; details: boolean }> = {};
           donorData.forEach((donor) => {
-            next[donor.user.id] = prev[donor.user.id] ?? { members: false, registrations: false, details: true };
+            next[donor.user.id] = prev[donor.user.id] ?? { members: false, registrations: false, details: false };
           });
           return next;
         });
@@ -803,7 +803,7 @@ const DonorDetailsPage = () => {
 
   const toggleSection = (donorId: number, section: 'members' | 'registrations' | 'details') => {
     setExpandedSections((prev) => {
-      const current = prev[donorId] ?? { members: false, registrations: false, details: true };
+      const current = prev[donorId] ?? { members: false, registrations: false, details: false };
       return { ...prev, [donorId]: { ...current, [section]: !current[section] } };
     });
   };
