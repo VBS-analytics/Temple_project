@@ -374,6 +374,34 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
         return getattr(day_option, "description", "") or None
 
 
+class RecurringPoojaPlanUpdateSerializer(serializers.ModelSerializer):
+    recurrence_frequency = serializers.ChoiceField(
+        choices=RecurrenceFrequency.choices,
+        required=False,
+    )
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = RecurringPoojaPlan
+        fields = ("recurrence_frequency", "amount")
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        if instance and instance.recurrence_kind != RecurrenceKind.RECURRING and "recurrence_frequency" in attrs:
+            raise serializers.ValidationError("Only recurring plans can change frequency.")
+        return attrs
+
+    def validate_amount(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Amount must be zero or greater.")
+        return value
+
+
 class LandingPoojaRegistrationSerializer(serializers.ModelSerializer):
     pooja_name = serializers.CharField(source="pooja_option.name", default="")
     day_option = serializers.CharField(source="day_option.description", default="")

@@ -9,6 +9,27 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import DonorProfile, FamilyMember, OtpPurpose, OtpToken, User
 
 
+def build_phone_candidates(phone_number: str | None) -> list[str]:
+    if not phone_number:
+        return []
+    candidates: list[str] = []
+    trimmed = phone_number.strip()
+    if trimmed and trimmed not in candidates:
+        candidates.append(trimmed)
+    normalized = "".join(ch for ch in phone_number if ch.isdigit())
+    if normalized and normalized not in candidates:
+        candidates.append(normalized)
+    if phone_number.startswith("+"):
+        stripped_plus = phone_number.lstrip("+").strip()
+        if stripped_plus and stripped_plus not in candidates:
+            candidates.append(stripped_plus)
+    if normalized and len(normalized) > 10:
+        local_suffix = normalized[-10:]
+        if local_suffix not in candidates:
+            candidates.append(local_suffix)
+    return candidates
+
+
 class DonorProfileSerializer(serializers.ModelSerializer):
     donor_id = serializers.SerializerMethodField()
 
@@ -121,20 +142,7 @@ class LoginSerializer(serializers.Serializer):
     def _authenticate_with_variations(self, phone_number: str | None, password: str | None):
         if not phone_number or not password:
             return None
-        candidates = []
-        normalized = "".join(ch for ch in phone_number if ch.isdigit())
-        if phone_number not in candidates:
-            candidates.append(phone_number.strip())
-        if normalized and normalized not in candidates:
-            candidates.append(normalized)
-        if phone_number.startswith("+"):
-            stripped_plus = phone_number.lstrip("+")
-            if stripped_plus and stripped_plus not in candidates:
-                candidates.append(stripped_plus)
-        if normalized and len(normalized) > 10:
-            local_suffix = normalized[-10:]
-            if local_suffix not in candidates:
-                candidates.append(local_suffix)
+        candidates = build_phone_candidates(phone_number)
 
         for candidate in candidates:
             user = authenticate(username=candidate, password=password)
@@ -279,32 +287,44 @@ class PasswordResetSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=15)
     new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
-    otp_code = serializers.CharField(max_length=6)
+    otp_code = serializers.CharField(max_length=6, required=False, allow_blank=True)
 
     def validate(self, attrs):
         if attrs["new_password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
-        try:
-            user = User.objects.get(phone_number=attrs["phone_number"])
-        except User.DoesNotExist as exc:  # pragma: no cover - raised only when data bad
-            raise serializers.ValidationError({"phone_number": "Account not found"}) from exc
-        token = (
-            OtpToken.objects.filter(phone_number=attrs["phone_number"], purpose=OtpPurpose.RESET_PASSWORD)
-            .order_by("-created_at")
-            .first()
-        )
-        if not token or not token.is_valid(attrs["otp_code"]):
-            raise serializers.ValidationError({"otp_code": "Invalid or expired OTP"})
+        candidates = build_phone_candidates(attrs["phone_number"])
+        user = None
+        for candidate in candidates:
+            try:
+                user = User.objects.get(phone_number=candidate)
+                attrs["phone_number"] = candidate
+                break
+            except User.DoesNotExist:
+                continue
+        if not user:
+            raise serializers.ValidationError({"phone_number": "Account not found"})
         attrs["user"] = user
-        attrs["token"] = token
+        if settings.RESET_PASSWORD_OTP_ENABLED:
+            otp_code = attrs.get("otp_code") or ""
+            if not otp_code:
+                raise serializers.ValidationError({"otp_code": "OTP is required"})
+            token = (
+                OtpToken.objects.filter(phone_number__in=candidates, purpose=OtpPurpose.RESET_PASSWORD)
+                .order_by("-created_at")
+                .first()
+            )
+            if not token or not token.is_valid(otp_code):
+                raise serializers.ValidationError({"otp_code": "Invalid or expired OTP"})
+            attrs["token"] = token
         return attrs
 
     def create(self, validated_data):
         user: User = validated_data["user"]
-        token: OtpToken = validated_data["token"]
+        token: OtpToken | None = validated_data.get("token")
         user.set_password(validated_data["new_password"])
         user.save(update_fields=["password"])
-        token.mark_used()
+        if token:
+            token.mark_used()
         return user
 
 

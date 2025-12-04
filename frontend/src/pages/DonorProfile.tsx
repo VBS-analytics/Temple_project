@@ -115,6 +115,17 @@ interface RecurringPlan {
   metadata?: Record<string, unknown>;
 }
 
+interface PlanEditFormState {
+  recurrence_frequency: string;
+  amount: string;
+}
+
+const PLAN_FREQUENCY_OPTIONS = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annually', label: 'Annually' },
+];
+
 // All utility functions remain the same
 const formatDate = (value?: string | null) => {
   if (!value) {
@@ -258,9 +269,32 @@ const formatPlanAmount = (value?: string | number | null) => {
   return String(value);
 };
 
-const formatPlanDateLabel = ({ next_occurrence, one_time_date }: RecurringPlan) => {
-  const displayDate = next_occurrence || one_time_date;
-  return displayDate ? formatDate(displayDate) : '—';
+const formatPlanDateLabel = (plan: RecurringPlan, todayIso: string) => {
+  const collectFuture = (value?: string | null) => {
+    if (!value) {
+      return null;
+    }
+    return value;
+  };
+
+  const candidates = [
+    collectFuture(plan.start_date),
+    collectFuture(plan.next_occurrence),
+    collectFuture(plan.one_time_date),
+  ].filter(Boolean) as string[];
+
+  let nextDate: string | null = null;
+  for (const candidate of candidates) {
+    if (candidate >= todayIso) {
+      if (!nextDate || candidate < nextDate) {
+        nextDate = candidate;
+      }
+    }
+  }
+
+  const fallback = plan.next_occurrence ?? plan.one_time_date ?? plan.start_date ?? '';
+  const pickDate = nextDate ?? fallback;
+  return pickDate ? formatDate(pickDate) : '—';
 };
 
 const getPlanMemberNames = (metadata?: RecurringPlan['metadata']) => {
@@ -333,6 +367,12 @@ const DonorProfile = () => {
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
   const [pauseWindowInputs, setPauseWindowInputs] = useState<Record<number, { start: string; end: string }>>({});
   const [planActionLoading, setPlanActionLoading] = useState<Record<number, boolean>>({});
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
+  const [planEditValues, setPlanEditValues] = useState<PlanEditFormState>({
+    recurrence_frequency: 'monthly',
+    amount: '',
+  });
+  const [planEditSubmitting, setPlanEditSubmitting] = useState(false);
   const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const reloadRecurrencePlans = useCallback(
@@ -444,6 +484,63 @@ const DonorProfile = () => {
     },
     [reloadRecurrencePlans],
   );
+
+  const startEditingPlan = useCallback((plan: RecurringPlan) => {
+    setEditingPlanId(plan.id);
+    setPlanEditValues({
+      recurrence_frequency: plan.recurrence_frequency ?? 'monthly',
+      amount: plan.amount != null ? String(plan.amount) : '',
+    });
+    setRecurrenceError(null);
+  }, []);
+
+  const cancelPlanEditing = useCallback(() => {
+    setEditingPlanId(null);
+    setPlanEditValues({
+      recurrence_frequency: 'monthly',
+      amount: '',
+    });
+    setRecurrenceError(null);
+  }, []);
+
+  const handlePlanEditChange = useCallback(
+    (field: keyof PlanEditFormState, value: string) => {
+      setPlanEditValues((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    },
+    [],
+  );
+
+  const handlePlanEditSave = useCallback(async () => {
+    if (editingPlanId === null) {
+      return;
+    }
+    const payload: Record<string, string> = {};
+    if (planEditValues.recurrence_frequency) {
+      payload.recurrence_frequency = planEditValues.recurrence_frequency;
+    }
+    const amountValue = planEditValues.amount.trim();
+    if (amountValue) {
+      payload.amount = amountValue;
+    }
+    if (Object.keys(payload).length === 0) {
+      setRecurrenceError('Update at least one field.');
+      return;
+    }
+    setPlanEditSubmitting(true);
+    setRecurrenceError(null);
+    try {
+      await api.patch(`pooja/recurrence/plans/${editingPlanId}/`, payload);
+      await reloadRecurrencePlans();
+      cancelPlanEditing();
+    } catch (error) {
+      setRecurrenceError(extractErrorMessage(error));
+    } finally {
+      setPlanEditSubmitting(false);
+    }
+  }, [editingPlanId, planEditValues, reloadRecurrencePlans, cancelPlanEditing]);
   const [editingRegistrationId, setEditingRegistrationId] = useState<number | null>(null);
   const [registrationEditDate, setRegistrationEditDate] = useState('');
   const [registrationEditError, setRegistrationEditError] = useState<string | null>(null);
@@ -2119,7 +2216,9 @@ const DonorProfile = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-xs text-slate-500">Next occurrence</p>
-                          <p className="text-sm font-medium text-slate-900">{formatPlanDateLabel(plan)}</p>
+                          <p className="text-sm font-medium text-slate-900">
+                            {formatPlanDateLabel(plan, todayIso)}
+                          </p>
                         </div>
                         <div>
                           <p className="text-xs text-slate-500">Amount</p>
@@ -2146,6 +2245,78 @@ const DonorProfile = () => {
                     )}
                     {isRecurringPlan && (
                       <div className="mt-4 space-y-3">
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => startEditingPlan(plan)}
+                            className="rounded border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:bg-slate-100"
+                          >
+                            Edit plan
+                          </button>
+                        </div>
+                        {editingPlanId === plan.id && (
+                          <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-1 text-sm text-slate-500">
+                                <label
+                                  htmlFor={`plan-frequency-${plan.id}`}
+                                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                >
+                                  Recurrence frequency
+                                </label>
+                                <select
+                                  id={`plan-frequency-${plan.id}`}
+                                  value={planEditValues.recurrence_frequency}
+                                  onChange={(event) =>
+                                    handlePlanEditChange('recurrence_frequency', event.target.value)
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                >
+                                  {PLAN_FREQUENCY_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-1 text-sm text-slate-500">
+                                <label
+                                  htmlFor={`plan-amount-${plan.id}`}
+                                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                >
+                                  Amount
+                                </label>
+                                <input
+                                  id={`plan-amount-${plan.id}`}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={planEditValues.amount}
+                                  onChange={(event) => handlePlanEditChange('amount', event.target.value)}
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handlePlanEditSave}
+                                disabled={planEditSubmitting}
+                                className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+                              >
+                                {planEditSubmitting ? 'Saving...' : 'Save changes'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelPlanEditing}
+                                disabled={planEditSubmitting}
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 disabled:cursor-wait disabled:opacity-70"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {planPaused ? (
                           <button
                             type="button"

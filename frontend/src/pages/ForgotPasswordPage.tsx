@@ -1,15 +1,61 @@
 // ForgotPasswordPage.jsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import api from '../lib/api';
+import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
 
 type FormValues = {
   phone_number: string;
   new_password: string;
   confirm_password: string;
-  otp_code: string;
+};
+
+type CountryOption = {
+  code: CountryDialCode['dialCode'];
+  label: CountryDialCode['name'];
+  iso: CountryDialCode['iso2'];
+};
+
+const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
+  code: entry.dialCode,
+  label: entry.name,
+  iso: entry.iso2,
+}));
+
+const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
+
+const flagEmoji = (iso: string) =>
+  iso
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+
+const flattenErrorValues = (value: unknown): string[] => {
+  if (value == null) {
+    return [];
+  }
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(flattenErrorValues);
+  }
+  if (typeof value === 'object') {
+    return Object.values(value).flatMap(flattenErrorValues);
+  }
+  return [];
+};
+
+const getApiErrorMessage = (detail: unknown): string => {
+  if (!detail) {
+    return 'Unable to reset password';
+  }
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  const flattened = flattenErrorValues(detail);
+  return flattened.length > 0 ? flattened.join(' ') : 'Check the details and try again.';
 };
 
 const navLinks = [
@@ -24,50 +70,51 @@ const navLinks = [
 ] as const;
 
 const features = [
-  { icon: '🔐', title: 'Secure Reset', description: 'Safely reset your password with OTP verification' },
+  { icon: '🔐', title: 'Secure Reset', description: 'Safely reset your password in just a couple of steps' },
   { icon: '⚡', title: 'Quick Process', description: 'Reset your password in just a few simple steps' },
   { icon: '📱', title: 'Mobile First', description: 'Designed for seamless mobile experience' },
 ] as const;
 
 const ForgotPasswordPage = () => {
   const navigate = useNavigate();
-  const [otpStatus, setOtpStatus] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<CountryOption>(defaultCountry);
+  const [localPhoneNumber, setLocalPhoneNumber] = useState('');
+  const combinedPhoneNumber = localPhoneNumber ? `${selectedCountry.code}${localPhoneNumber}` : '';
+  const selectedCountryFlag = selectedCountry.iso ? flagEmoji(selectedCountry.iso) : '🌐';
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     watch,
+    setValue,
   } = useForm<FormValues>({
     defaultValues: {
       phone_number: '',
       new_password: '',
       confirm_password: '',
-      otp_code: '',
     },
   });
 
-  const requestOtp = async () => {
-    const phone = watch('phone_number');
-    if (!phone) {
-      setOtpStatus('Please enter your mobile number first.');
-      return;
+  useEffect(() => {
+    setValue('phone_number', combinedPhoneNumber);
+  }, [combinedPhoneNumber, setValue]);
+
+  const handleCountryCodeChange = (iso: CountryOption['iso']) => {
+    const option = countryCodeOptions.find((item) => item.iso === iso);
+    if (option) {
+      setSelectedCountry(option);
     }
-    try {
-      const { data } = await api.post('/auth/request-otp/', {
-        phone_number: phone,
-        purpose: 'reset_password',
-      });
-      setOtpStatus(`OTP sent! (Dev preview: ${data.code})`);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail ?? 'Could not send OTP';
-      setOtpStatus(detail);
-    }
+  };
+
+  const handleLocalPhoneInput = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 15);
+    setLocalPhoneNumber(digits);
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -77,13 +124,8 @@ const ForgotPasswordPage = () => {
       setIsSuccess(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (error: any) {
-      const detail =
-        error?.response?.data ?? error?.message ?? 'Unable to reset password';
-      setApiError(
-        typeof detail === 'string'
-          ? detail
-          : 'Check OTP and try again.'
-      );
+      const rawDetail = error?.response?.data ?? error?.message;
+      setApiError(getApiErrorMessage(rawDetail));
     }
   };
 
@@ -221,17 +263,8 @@ const ForgotPasswordPage = () => {
                       2
                     </div>
                     <div>
-                      <div className="font-medium text-amber-300">Verify OTP</div>
-                      <div className="text-xs text-white/60">Enter the OTP sent to your mobile</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 flex-shrink-0 rounded-full w-6 h-6 flex items-center justify-center bg-gradient-to-r from-amber-400 to-amber-600 text-white">
-                      3
-                    </div>
-                    <div>
                       <div className="font-medium text-amber-300">Set New Password</div>
-                      <div className="text-xs text-white/60">Create a new secure password</div>
+                      <div className="text-xs text-white/60">Choose a secure password to protect your account</div>
                     </div>
                   </div>
                 </div>
@@ -305,38 +338,53 @@ const ForgotPasswordPage = () => {
                               Mobile Number <span className="text-rose-500 ml-1">*</span>
                             </label>
                             <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                              </div>
-                              <div className="absolute inset-y-0 left-12 flex items-center pointer-events-none text-gray-400">
-                                +91
+                              <div className="absolute inset-y-0 left-0 flex items-center">
+                                <div
+                                  className={`flex h-full items-center gap-2 rounded-l-xl border px-3 py-3 text-sm font-semibold ${
+                                    isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 bg-white shadow-sm' : 'border-gray-300 bg-white'
+                                  } pointer-events-none`}
+                                >
+                                  <span className="text-lg leading-none">{selectedCountryFlag}</span>
+                                  <span>{selectedCountry.code}</span>
+                                  <svg className="h-3 w-3 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" />
+                                  </svg>
+                                </div>
+                                <select
+                                  value={selectedCountry.iso}
+                                  onChange={(event) => handleCountryCodeChange(event.target.value as CountryOption['iso'])}
+                                  aria-label="Country code"
+                                  className="absolute inset-y-0 left-0 w-32 opacity-0 cursor-pointer"
+                                  onFocus={() => handleFocus('phone_number')}
+                                  onBlur={handleBlur}
+                                >
+                                  {countryCodeOptions.map((option) => (
+                                    <option key={option.iso} value={option.iso}>
+                                      {option.label} ({option.code})
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                               <input
                                 type="tel"
-                                className={`w-full rounded-xl border pl-20 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
+                                value={localPhoneNumber}
+                                className={`w-full rounded-xl border pl-32 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
                                   isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 shadow-sm' : 'border-gray-300'
                                 }`}
-                                placeholder="Enter mobile"
+                                placeholder="Enter your mobile number"
+                                onFocus={() => handleFocus('phone_number')}
+                                onBlur={handleBlur}
+                                onChange={(event) => handleLocalPhoneInput(event.target.value)}
+                              />
+                              <input
+                                type="hidden"
                                 {...register('phone_number', {
                                   required: 'Mobile number is required',
                                   pattern: {
-                                    value: /^\d{10}$/,
-                                    message: 'Mobile number must be exactly 10 digits'
-                                  }
+                                    value: /^\+?[0-9]{7,15}$/,
+                                    message: 'Enter a valid international mobile number',
+                                  },
                                 })}
-                                onFocus={() => handleFocus('phone_number')}
-                                onBlur={handleBlur}
-                                onInput={(e) => {
-                                  const input = e.target as HTMLInputElement;
-                                  const value = input.value.replace(/\D/g, '');
-                                  const truncatedValue = value.slice(0, 10);
-                                  if (truncatedValue !== input.value) {
-                                    input.value = truncatedValue;
-                                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                                  }
-                                }}
                               />
                             </div>
                             {errors.phone_number && (
@@ -345,60 +393,6 @@ const ForgotPasswordPage = () => {
                                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                 </svg>
                                 {errors.phone_number.message}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                              OTP Verification <span className="text-rose-500 ml-1">*</span>
-                            </label>
-                            <div className="flex gap-3">
-                              <div className="relative flex-1">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                  </svg>
-                                </div>
-                                <input
-                                  type="text"
-                                  className={`w-full rounded-xl border pl-10 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                    isFocused === 'otp_code' || errors.otp_code ? 'border-amber-500 shadow-sm' : 'border-gray-300'
-                                  }`}
-                                  placeholder="Enter OTP"
-                                  {...register('otp_code', {
-                                    required: 'OTP is required',
-                                    pattern: { value: /^\d{6}$/, message: 'OTP must be 6 digits' }
-                                  })}
-                                  onFocus={() => handleFocus('otp_code')}
-                                  onBlur={handleBlur}
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={requestOtp}
-                                className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center"
-                              >
-                                <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                </svg>
-                                Send OTP
-                              </button>
-                            </div>
-                            {errors.otp_code && (
-                              <p className="mt-1 text-xs text-red-600 flex items-center">
-                                <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                {errors.otp_code.message}
-                              </p>
-                            )}
-                            {otpStatus && (
-                              <p className="mt-1 text-xs text-gray-500 flex items-center">
-                                <svg className="h-4 w-4 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
-                                {otpStatus}
                               </p>
                             )}
                           </div>
