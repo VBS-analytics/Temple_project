@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
@@ -325,6 +325,7 @@ const PaymentPage = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
   const location = useLocation();
+  const navigate = useNavigate();
   const queryTab = useMemo<'summary' | 'history' | null>(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
@@ -492,7 +493,10 @@ const PaymentPage = () => {
     if (celebrationTimeoutRef.current) {
       clearTimeout(celebrationTimeoutRef.current);
     }
-    celebrationTimeoutRef.current = setTimeout(handleClearSummary, 1800);
+    celebrationTimeoutRef.current = setTimeout(() => {
+      handleClearSummary();
+      navigate('/profile');
+    }, 1800);
   };
 
   const handleRemoveFromSummary = useCallback(

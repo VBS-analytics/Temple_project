@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
@@ -140,6 +141,7 @@ const parseAmount = (value?: string | number | null) => {
 const CombinePaymentPage = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
+  const navigate = useNavigate();
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const combinePaymentHistory = usePaymentStore((state) => state.combinePaymentHistory);
   const addCombinePaymentHistory = usePaymentStore((state) => state.addCombinePaymentHistory);
@@ -597,8 +599,8 @@ const CombinePaymentPage = () => {
       clearTimeout(celebrationTimeoutRef.current);
     }
     celebrationTimeoutRef.current = setTimeout(() => {
-      setShowCelebration(false);
       handleClearClubbedDonor();
+      navigate('/profile');
     }, 1800);
   };
 
