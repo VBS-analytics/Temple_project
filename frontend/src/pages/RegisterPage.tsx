@@ -1265,6 +1265,7 @@ const RegisterPage = () => {
                                   <option value="ஹரிதா">ஹரிதா</option>
                                   <option value="செளநகா">செளநகா</option>
                                   <option value="சாண்டில்யர்">சாண்டில்யர்</option>
+                                  <option value="ஸ்ரீவத்ஸ கோத்திரம்">ஸ்ரீவத்ஸ கோத்திரம்</option>
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                                   <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
