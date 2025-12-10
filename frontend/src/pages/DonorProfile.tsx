@@ -1,8 +1,12 @@
 import axios from 'axios';
 import type { ChangeEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import api, { extractResults } from '../lib/api';
+import { useAuthStore } from '../store/auth';
+import { usePaymentStore } from '../store/payments';
+import type { CartItem } from '../store/cart';
 
 // All interfaces remain the same
 interface ApiUser {
@@ -269,6 +273,44 @@ const formatPlanAmount = (value?: string | number | null) => {
   return String(value);
 };
 
+const formatCartAmount = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return String(value);
+  }
+  return `₹ ${numeric.toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+const formatCartFrequencyLabel = (frequency?: string | null) => {
+  switch (frequency) {
+    case 'monthly':
+      return 'Monthly recurring';
+    case 'quarterly':
+      return 'Quarterly recurring';
+    case 'annually':
+    case 'annual':
+      return 'Annual recurring';
+    default:
+      return 'Recurring';
+  }
+};
+
+const buildCartMemberNames = (members?: CartItem['members']) => {
+  if (!members || members.length === 0) {
+    return '—';
+  }
+  const names = members
+    .map((member) => member?.name?.trim())
+    .filter((name): name is string => Boolean(name && name.length > 0));
+  return names.length > 0 ? names.join(', ') : '—';
+};
+
 const formatPlanDateLabel = (plan: RecurringPlan, todayIso: string) => {
   const collectFuture = (value?: string | null) => {
     if (!value) {
@@ -374,6 +416,25 @@ const DonorProfile = () => {
   });
   const [planEditSubmitting, setPlanEditSubmitting] = useState(false);
   const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const authUser = useAuthStore((state) => state.user);
+  const cartKey = authUser ? String(authUser.id) : 'guest';
+  const paymentSnapshot = usePaymentStore((state) => state.lastGeneralPaymentByUser[cartKey] ?? null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const fromCartReview = useMemo(
+    () => new URLSearchParams(location.search).get('fromCart') === '1',
+    [location.search],
+  );
+  const pendingRegistrations = useMemo(
+    () => (paymentSnapshot?.items ?? []).filter((item) => item.recurrenceKind !== 'recurring'),
+    [paymentSnapshot],
+  );
+  const pendingRecurringPlans = useMemo(
+    () => (paymentSnapshot?.items ?? []).filter((item) => item.recurrenceKind === 'recurring'),
+    [paymentSnapshot],
+  );
+  const pendingCartCount = pendingRegistrations.length + pendingRecurringPlans.length;
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reloadRecurrencePlans = useCallback(
     async (options?: { activeCheck?: () => boolean }) => {
@@ -562,9 +623,11 @@ const DonorProfile = () => {
   ];
 
   const GOTHRA_OPTIONS = [
-    'ஆத்ரேயா',
-    'நைத்திருவ காட்ச்யபம்',
-    'கார்கேயா',
+  'ஆத்ரேயா',
+  'நைத்திருவ காட்ச்யபம்',
+  'காஷ்யப கோத்திரம்',
+  'வாதூல கோத்திரம்',
+  'கார்கேயா',
     'கவுண்டின்யா',
     'கெளஷிகா',
     'கெளதமர்',
@@ -729,6 +792,39 @@ const DonorProfile = () => {
       setProfileFormData(createDonorProfileFormState(profile ?? undefined));
     }
   }, [profile, isEditingProfile]);
+
+  const handleManualPaymentRedirect = useCallback(() => {
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+    }
+    navigate('/payments/general?tab=summary');
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!fromCartReview || pendingCartCount === 0) {
+      return () => {
+        if (redirectTimerRef.current) {
+          clearTimeout(redirectTimerRef.current);
+          redirectTimerRef.current = null;
+        }
+      };
+    }
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+    }
+    const startTimeout = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
+    redirectTimerRef.current = startTimeout(() => {
+      redirectTimerRef.current = null;
+      navigate('/payments/general?tab=summary');
+    }, 2400);
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
+  }, [fromCartReview, navigate, pendingCartCount]);
 
   const startAddingNew = () => {
     setFormData(createInitialFormState(profile ?? undefined));
@@ -1923,6 +2019,89 @@ const DonorProfile = () => {
               </span>
             </div>
 
+            {fromCartReview && pendingCartCount > 0 && (
+              <div className="mt-4 space-y-2 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+                <p className="font-semibold">
+                  You&apos;re reviewing {pendingCartCount} cart item
+                  {pendingCartCount === 1 ? '' : 's'} before saving. We will redirect you to the Payment Page shortly.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleManualPaymentRedirect}
+                    className="inline-flex items-center justify-center rounded-full bg-orange-600 px-4 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                  >
+                    Continue to Payment
+                  </button>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-orange-700">
+                    Redirecting in a moment...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {pendingRegistrations.length > 0 && (
+              <div className="mt-6 space-y-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-800">Cart preview (pending registrations)</p>
+                  <span className="rounded-full bg-amber-100 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                    Pending
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {pendingRegistrations.map((item) => {
+                    const serviceDate = item.customDayDate || item.bookingDate;
+                    const membersLabel = buildCartMemberNames(item.members);
+                    const amountLabel = formatCartAmount(item.amount);
+                    return (
+                      <article key={item.cartId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-wider text-slate-500">
+                              {item.poojaCode ?? 'POOJA'}
+                            </p>
+                            <h3 className="text-lg font-semibold text-slate-900">{item.poojaName}</h3>
+                            {item.dayOptionDescription && (
+                              <p className="text-sm text-slate-500">{item.dayOptionDescription}</p>
+                            )}
+                          </div>
+                          <span className="rounded-full bg-amber-100 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                            Cart
+                          </span>
+                        </div>
+                        <dl className="mt-4 grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Service Date</dt>
+                            <dd className="text-slate-800">{formatDate(serviceDate)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Members</dt>
+                            <dd className="text-slate-800">{membersLabel}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Amount</dt>
+                            <dd className="text-slate-800">{amountLabel}</dd>
+                          </div>
+                        </dl>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <span
+                            className={`rounded-full px-3 py-0.5 ${
+                              item.postPrasadam ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            Post Prasadam {item.postPrasadam ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                        {item.customDayNote && (
+                          <p className="mt-3 text-sm text-slate-600">Notes: {item.customDayNote}</p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {registrationsLoading ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-500">
                 <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600"></div>
@@ -2159,6 +2338,64 @@ const DonorProfile = () => {
                 {recurrencePlans.length} {recurrencePlans.length === 1 ? 'Plan' : 'Plans'}
               </span>
             </div>
+
+            {pendingRecurringPlans.length > 0 && (
+              <div className="mt-6 space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-800">Cart preview (pending recurring plans)</p>
+                  <span className="rounded-full bg-emerald-100 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                    Recurring
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {pendingRecurringPlans.map((item) => {
+                    const serviceDate = item.customDayDate || item.bookingDate;
+                    const membersLabel = buildCartMemberNames(item.members);
+                    const amountLabel = formatCartAmount(item.amount);
+                    return (
+                      <article key={item.cartId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-wider text-slate-500">
+                              {item.poojaCode ?? 'PLAN'}
+                            </p>
+                            <h3 className="text-lg font-semibold text-slate-900">{item.poojaName}</h3>
+                            {item.dayOptionDescription && (
+                              <p className="text-sm text-slate-500">{item.dayOptionDescription}</p>
+                            )}
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                              {formatCartFrequencyLabel(item.recurrenceFrequency ?? null)}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-emerald-100 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                            Cart
+                          </span>
+                        </div>
+                        <dl className="mt-4 grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                              Next occurrence
+                            </dt>
+                            <dd className="text-slate-800">{formatDate(serviceDate)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Members</dt>
+                            <dd className="text-slate-800">{membersLabel}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Amount</dt>
+                            <dd className="text-slate-800">{amountLabel}</dd>
+                          </div>
+                        </dl>
+                        {item.customDayNote && (
+                          <p className="mt-3 text-sm text-slate-600">Notes: {item.customDayNote}</p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {recurrenceLoading ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-500">

@@ -933,29 +933,30 @@ const CombinePaymentPage = () => {
             <div className="grid gap-5 md:grid-cols-2">
               <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <img
-                  src="/images/payment_qrcode.png"
+                  src="/images/payment-qr-code.jpg"
                   alt="Temple payment QR code"
-                  className="h-56 w-56 rounded-lg border border-slate-200 bg-white p-3 object-contain"
+                  className="h-72 w-72 rounded-lg border border-slate-200 bg-white p-3 object-contain"
                 />
                 <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(combinedTotal)}</p>
               </div>
               <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                  <p className="text-lg font-semibold text-slate-900">Sri Temple Trust</p>
+                  <p className="text-lg font-semibold text-slate-900">ALAMELU V</p>
+                  <p className="text-lg font-semibold text-slate-900">SRIRAM RAJU</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
-                  <p className="text-lg font-semibold text-slate-900">123456789012</p>
+                  <p className="text-lg font-semibold text-slate-900">007701028012</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
-                  <p className="text-lg font-semibold text-slate-900">SBIN0000123</p>
+                  <p className="text-lg font-semibold text-slate-900">ICIC0000077</p>
                 </div>
-                <div>
+                {/*<div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</p>
                   <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
-                </div>
+                </div>*/}
               </div>
             </div>
             <div className="mt-4">

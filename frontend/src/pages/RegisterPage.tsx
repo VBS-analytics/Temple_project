@@ -1257,6 +1257,8 @@ const RegisterPage = () => {
                                   <option value="">Select Gothram</option>
                                   <option value="ஆத்ரேயா">ஆத்ரேயா</option>
                                   <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
+                                  <option value="காஷ்யப கோத்திரம்">காஷ்யப கோத்திரம்</option>
+                                  <option value="வாதூல கோத்திரம்">வாதூல கோத்திரம்</option>
                                   <option value="கார்கேயா">கார்கேயா</option>
                                   <option value="கவுண்டின்யா">கவுண்டின்யா</option>
                                   <option value="கெளஷிகா">கெளஷிகா</option>
