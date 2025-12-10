@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { indianCities } from '../../data/indianCities';
 import { nakshatraOptions } from '../../data/nakshatraOptions';
 import api from '../../lib/api';
 
@@ -16,6 +17,20 @@ const rasiOptions = [
   'மகரம்',
   'கும்பம்',
   'மீனம்',
+];
+
+const GOTHRA_OPTIONS = [
+  'ஆத்ரேயா',
+  'நைத்திருவ காட்ச்யபம்',
+  'கார்கேயா',
+  'கவுண்டின்யா',
+  'கெளஷிகா',
+  'கெளதமர்',
+  'பரத்வாஜா',
+  'ஹரிதா',
+  'செளநகா',
+  'சாண்டில்யர்',
+  'ஸ்ரீவத்ஸ கோத்திரம்',
 ];
 
 interface DonorProfile {
@@ -358,6 +373,20 @@ const DonorDetailsPage = () => {
   const [donorEditForm, setDonorEditForm] = useState<DonorEditFormState>(createEmptyDonorEditForm);
   const [donorEditError, setDonorEditError] = useState('');
   const [donorEditSubmitting, setDonorEditSubmitting] = useState(false);
+  const cityStateLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    indianCities.forEach((city) => {
+      const key = city.name.trim().toLowerCase();
+      if (key && city.stateName) {
+        map.set(key, city.stateName);
+      }
+    });
+    return map;
+  }, []);
+  const stateOptions = useMemo(() => {
+    const names = Array.from(new Set(indianCities.map((city) => city.stateName).filter(Boolean)));
+    return names.sort((a, b) => a.localeCompare(b));
+  }, []);
 
   const loadAdminMembers = useCallback(async () => {
     setAdminMembersLoading(true);
@@ -532,7 +561,17 @@ const DonorDetailsPage = () => {
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = event.target;
-    setDonorEditForm((prev) => ({ ...prev, [name]: value }));
+    setDonorEditForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'city') {
+        const normalizedCity = value.trim().toLowerCase();
+        const matchedState = cityStateLookup.get(normalizedCity);
+        if (matchedState) {
+          next.state = matchedState;
+        }
+      }
+      return next;
+    });
   };
 
   const handleDonorEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1193,6 +1232,7 @@ const DonorDetailsPage = () => {
                       <option value="ஹரிதா">ஹரிதா</option>
                       <option value="செளநகா">செளநகா</option>
                       <option value="சாண்டில்யர்">சாண்டில்யர்</option>
+                      <option value="ஸ்ரீவத்ஸ கோத்திரம்">ஸ்ரீவத்ஸ கோத்திரம்</option>
                   </select>
                 </div>
 
@@ -1764,11 +1804,21 @@ const DonorDetailsPage = () => {
                                         id={`city-${user.id}`}
                                         name="city"
                                         type="text"
+                                        list="city-options-list"
                                         className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
                                         value={donorEditForm.city}
                                         onChange={handleDonorEditChange}
                                         disabled={donorEditSubmitting}
                                       />
+                                      <datalist id="city-options-list">
+                                        {indianCities.map((city) => (
+                                          <option
+                                            key={`${city.name}-${city.stateCode}`}
+                                            value={city.name}
+                                            label={city.stateName ? `${city.name}, ${city.stateName}` : city.name}
+                                          />
+                                        ))}
+                                      </datalist>
                                     </div>
                                     <div>
                                       <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`state-${user.id}`}>
@@ -1778,11 +1828,17 @@ const DonorDetailsPage = () => {
                                         id={`state-${user.id}`}
                                         name="state"
                                         type="text"
+                                        list="state-options-list"
                                         className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
                                         value={donorEditForm.state}
                                         onChange={handleDonorEditChange}
                                         disabled={donorEditSubmitting}
                                       />
+                                      <datalist id="state-options-list">
+                                        {stateOptions.map((state) => (
+                                          <option key={state} value={state} />
+                                        ))}
+                                      </datalist>
                                     </div>
                                   </div>
                                   <div>
@@ -1830,29 +1886,41 @@ const DonorDetailsPage = () => {
                                     <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`tamil-star-${user.id}`}>
                                       Tamil Star
                                     </label>
-                                    <input
+                                    <select
                                       id={`tamil-star-${user.id}`}
                                       name="tamil_star"
-                                      type="text"
                                       className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
                                       value={donorEditForm.tamil_star}
                                       onChange={handleDonorEditChange}
                                       disabled={donorEditSubmitting}
-                                    />
+                                    >
+                                      <option value="">Select Tamil star</option>
+                                      {nakshatraOptions.map((option) => (
+                                        <option key={option} value={option}>
+                                          {option}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
                                   <div>
                                     <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`gothra-${user.id}`}>
                                       Gothra
                                     </label>
-                                    <input
+                                    <select
                                       id={`gothra-${user.id}`}
                                       name="gothra"
-                                      type="text"
                                       className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
                                       value={donorEditForm.gothra}
                                       onChange={handleDonorEditChange}
                                       disabled={donorEditSubmitting}
-                                    />
+                                    >
+                                      <option value="">Select Gothra</option>
+                                      {GOTHRA_OPTIONS.map((option) => (
+                                        <option key={option} value={option}>
+                                          {option}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
                                 </div>
                               </div>
@@ -2371,9 +2439,10 @@ const DonorDetailsPage = () => {
                                   <option value="கெளஷிகா">கெளஷிகா</option>
                                   <option value="கெளதமர்">கெளதமர்</option>
                                   <option value="பரத்வாஜா">பரத்வாஜா</option>
-                                  <option value="ஹரிதா">ஹரிதா</option>
-                                  <option value="செளநகா">செளநகா</option>
-                                  <option value="சாண்டில்யர்">சாண்டில்யர்</option>
+                                <option value="ஹரிதா">ஹரிதா</option>
+                                <option value="செளநகா">செளநகா</option>
+                                <option value="சாண்டில்யர்">சாண்டில்யர்</option>
+                                <option value="ஸ்ரீவத்ஸ கோத்திரம்">ஸ்ரீவத்ஸ கோத்திரம்</option>
                               </select>
                             </div>
 

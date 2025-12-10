@@ -572,6 +572,7 @@ const DonorProfile = () => {
     'ஹரிதா',
     'செளநகா',
     'சாண்டில்யர்',
+    'ஸ்ரீவத்ஸ கோத்திரம்',
   ];
 
   const TAMIL_STAR_OPTIONS = [
@@ -1289,7 +1290,7 @@ const DonorProfile = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">Gothra</label>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Gothram</label>
                           <select
                             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                             value={formData.gothra}
