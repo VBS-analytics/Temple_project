@@ -22,6 +22,8 @@ const rasiOptions = [
 const GOTHRA_OPTIONS = [
   'ஆத்ரேயா',
   'நைத்திருவ காட்ச்யபம்',
+  'காஷ்யப கோத்திரம்',
+  'வாதூல கோத்திரம்',
   'கார்கேயா',
   'கவுண்டின்யா',
   'கெளஷிகா',
@@ -1222,17 +1224,11 @@ const DonorDetailsPage = () => {
                     onChange={handleMemberChange}
                   >
                     <option value="">Select Gothram</option>
-                      <option value="ஆத்ரேயா">ஆத்ரேயா</option>
-                      <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
-                      <option value="கார்கேயா">கார்கேயா</option>
-                      <option value="கவுண்டின்யா">கவுண்டின்யா</option>
-                      <option value="கெளஷிகா">கெளஷிகா</option>
-                      <option value="கெளதமர்">கெளதமர்</option>
-                      <option value="பரத்வாஜா">பரத்வாஜா</option>
-                      <option value="ஹரிதா">ஹரிதா</option>
-                      <option value="செளநகா">செளநகா</option>
-                      <option value="சாண்டில்யர்">சாண்டில்யர்</option>
-                      <option value="ஸ்ரீவத்ஸ கோத்திரம்">ஸ்ரீவத்ஸ கோத்திரம்</option>
+                    {GOTHRA_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -2432,17 +2428,11 @@ const DonorDetailsPage = () => {
                                 disabled={adminMemberEditSubmitting || isDeleting}
                               >
                                 <option value="">Select Gothram</option>
-                                  <option value="ஆத்ரேயா">ஆத்ரேயா</option>
-                                  <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
-                                  <option value="கார்கேயா">கார்கேயா</option>
-                                  <option value="கவுண்டின்யா">கவுண்டின்யா</option>
-                                  <option value="கெளஷிகா">கெளஷிகா</option>
-                                  <option value="கெளதமர்">கெளதமர்</option>
-                                  <option value="பரத்வாஜா">பரத்வாஜா</option>
-                                <option value="ஹரிதா">ஹரிதா</option>
-                                <option value="செளநகா">செளநகா</option>
-                                <option value="சாண்டில்யர்">சாண்டில்யர்</option>
-                                <option value="ஸ்ரீவத்ஸ கோத்திரம்">ஸ்ரீவத்ஸ கோத்திரம்</option>
+                                  {GOTHRA_OPTIONS.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
                               </select>
                             </div>
 

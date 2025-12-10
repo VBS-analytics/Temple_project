@@ -5,7 +5,7 @@ import { CartItem, createCartItem, useCartStore } from '../store/cart';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import { RecurrenceSelection, RecurrenceFrequency } from '../types/recurrence';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 /* -------------------------------------------------------------------------- */
 /*                               Reusable Select                              */
@@ -922,11 +922,15 @@ const PoojaRegistrationPage = () => {
   const [dateValue, setDateValue] = useState('');
   const [formError, setFormError] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const normalizedSelectedMemberIds = useMemo(
+    () => Array.from(new Set(selectedMemberIds)),
+    [selectedMemberIds],
+  );
   const [contactDetails, setContactDetails] = useState({ phoneNumber: '', address: '' });
   const [daySelectionMap, setDaySelectionMap] = useState<Record<number, number | null>>({});
   const [memberSelectionMap, setMemberSelectionMap] = useState<Record<number, string[]>>({});
   const [prasadamSelectionMap, setPrasadamSelectionMap] = useState<Record<number, boolean>>({});
-  const [chartDetailsMap, setChartDetailsMap] = useState<Record<number, { date: string; note: string }>>({});
+  const [chartDetailsMap, setChartDetailsMap] = useState<Record<string, { date: string; note: string }>>({});
   const [amountSelectionMap, setAmountSelectionMap] = useState<Record<number, string>>({});
   const [recurrenceSelectionMap, setRecurrenceSelectionMap] = useState<Record<number, RecurrenceSelection>>({});
   const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
@@ -939,6 +943,7 @@ const PoojaRegistrationPage = () => {
   const addToCart = useCartStore((state) => state.addItem);
   const removeFromCart = useCartStore((state) => state.removeItem);
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const baseUserId = typeof profile?.user?.id === 'number' ? profile.user.id : null;
   const cartTotals = useMemo(() => {
     const count = cartItems.length;
     const amount = cartItems.reduce((total, item) => {
@@ -949,14 +954,34 @@ const PoojaRegistrationPage = () => {
   }, [cartItems]);
   const cartTotalAmount = cartTotals.amount;
   const formattedCartAmount = formatCurrency(cartTotalAmount.toString()) || '0';
+  const cartAmountBreakdown = useMemo(() => {
+    let recurringAmount = 0;
+    let oneTimeAmount = 0;
+    cartItems.forEach((item) => {
+      const value = Number(item.amount);
+      if (!Number.isFinite(value)) return;
+      if (item.recurrenceKind === 'recurring') {
+        recurringAmount += value;
+      } else {
+        oneTimeAmount += value;
+      }
+    });
+    return { recurringAmount, oneTimeAmount };
+  }, [cartItems]);
+  const formattedRecurringAmount =
+    formatCurrency(cartAmountBreakdown.recurringAmount.toString()) || '0';
+  const formattedOneTimeAmount =
+    formatCurrency(cartAmountBreakdown.oneTimeAmount.toString()) || '0';
   const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
+  const navigate = useNavigate();
   const handleViewCart = useCallback(() => {
     setGeneralPayment({
       userKey: cartKey,
       items: cartItems,
       totalAmount: cartTotalAmount,
     });
-  }, [cartItems, cartKey, cartTotalAmount, setGeneralPayment]);
+    navigate('/profile?fromCart=1');
+  }, [cartItems, cartKey, cartTotalAmount, navigate, setGeneralPayment]);
   const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
@@ -1132,7 +1157,6 @@ const PoojaRegistrationPage = () => {
 
     const baseName = (profile?.user?.name ?? '').trim();
     const basePhone = (profile?.user?.phone_number ?? '').trim();
-    const baseUserId = typeof profile?.user?.id === 'number' ? profile.user.id : null;
 
     const selfEntry: MemberDirectoryEntry = {
       key: 'self',
@@ -1684,48 +1708,58 @@ const PoojaRegistrationPage = () => {
     });
   }, [selectedPooja, basePhone, baseAddress, bookingMode]);
 
+  const buildChartDetailsKey = (poojaId: number, memberKey: string) =>
+    `${poojaId}:${memberKey || 'self'}`;
+
+  const getChartDetailsForMember = (poojaId: number, memberKey: string) => {
+    const key = buildChartDetailsKey(poojaId, memberKey);
+    return chartDetailsMap[key] ?? { date: '', note: '' };
+  };
+
+  const clearChartDetailsForPooja = useCallback((poojaId: number) => {
+    setChartDetailsMap((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      const prefix = `${poojaId}:`;
+      Object.keys(prev).forEach((key) => {
+        if (key.startsWith(prefix)) {
+          delete next[key];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   const ensureChartDetailState = useCallback(
     (poojaId: number, optionId: number | null) => {
       const option = optionId ? dayOptionMap.get(optionId) : undefined;
-      if (option && isChartDayOption(option)) {
-        setChartDetailsMap((prev) => {
-          if (prev[poojaId]) {
-            return prev;
-          }
-          return {
-            ...prev,
-            [poojaId]: { date: '', note: '' },
-          };
-        });
-      } else {
-        setChartDetailsMap((prev) => {
-          if (!(poojaId in prev)) {
-            return prev;
-          }
-          const next = { ...prev };
-          delete next[poojaId];
-          return next;
-        });
+      if (!option || !isChartDayOption(option)) {
+        clearChartDetailsForPooja(poojaId);
       }
     },
-    [dayOptionMap],
+    [clearChartDetailsForPooja, dayOptionMap],
   );
 
-  const updateChartDetails = useCallback((poojaId: number, field: 'date' | 'note', value: string) => {
-    setChartDetailsMap((prev) => {
-      const existing = prev[poojaId] ?? { date: '', note: '' };
-      if (existing[field] === value) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [poojaId]: {
-          ...existing,
-          [field]: value,
-        },
-      };
-    });
-  }, []);
+  const updateChartDetails = useCallback(
+    (poojaId: number, memberKey: string, field: 'date' | 'note', value: string) => {
+      const key = buildChartDetailsKey(poojaId, memberKey);
+      setChartDetailsMap((prev) => {
+        const existing = prev[key] ?? { date: '', note: '' };
+        if (existing[field] === value) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [key]: {
+            ...existing,
+            [field]: value,
+          },
+        };
+      });
+    },
+    [],
+  );
 
   const fetchOccurrenceForRow = useCallback(
     async (poojaId: number, option: DayOption | undefined, options: { tamilStarId?: string | null } = {}) => {
@@ -2030,8 +2064,9 @@ const PoojaRegistrationPage = () => {
       uiLabel: row.uiLabel,
     });
     const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
-    const matchingItem = findMatchingCartItem(row, effectiveDayId);
-    const currentKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+    const matchingItems = findCartItemsForRow(row, effectiveDayId);
+    const matchingItem = matchingItems[0];
+    const currentKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
     const normalized = applySelectionToggle(currentKeys ?? fallbackMemberSelection, value);
 
     setMemberSelectionMap((prev) => ({
@@ -2117,7 +2152,7 @@ const PoojaRegistrationPage = () => {
     setTableMessage(null);
   };
 
-  const findMatchingCartItem = (row: MasterRow, dayId?: number | null): CartItem | undefined => {
+  const findCartItemsForRow = (row: MasterRow, dayId?: number | null): CartItem[] => {
     const dayOptionDisabled = isDayOptionDisabledPooja({
       name: row.pooja.name,
       displayName: row.displayName,
@@ -2125,37 +2160,69 @@ const PoojaRegistrationPage = () => {
     });
     const baseDayId = dayId !== undefined ? dayId : resolveSelectedDayId(row.pooja.id);
     const effectiveDayId = dayOptionDisabled ? null : baseDayId;
-    return cartItems.find(
+    return cartItems.filter(
       (item) =>
         item.poojaId === row.pooja.id &&
         ((item.dayOptionId ?? null) === (effectiveDayId ?? null)),
     );
   };
 
-  const resolveSelectedMemberKeys = (poojaId: number, matchingItem?: CartItem): string[] | null => {
+  const findMatchingCartItem = (row: MasterRow, dayId?: number | null): CartItem | undefined => {
+    const items = findCartItemsForRow(row, dayId);
+    return items[0];
+  };
+
+  const resolveSelectedMemberKeys = (
+    poojaId: number,
+    matchingItem?: CartItem,
+    matchingItems?: CartItem[],
+  ): string[] | null => {
     const explicit = memberSelectionMap[poojaId];
     if (explicit !== undefined) {
       return Array.from(new Set(explicit));
     }
 
-    if (matchingItem?.members && matchingItem.members.length > 0) {
-      return Array.from(
-        new Set(
-          matchingItem.members.map((member) => {
-            if (member.selectionKey) {
-              return member.selectionKey;
+    const itemsToInspect =
+      matchingItems && matchingItems.length > 0
+        ? matchingItems
+        : matchingItem
+          ? [matchingItem]
+          : [];
+    const gatheredKeys: string[] = [];
+
+    itemsToInspect.forEach((item) => {
+      if (Array.isArray(item.members) && item.members.length > 0) {
+        item.members.forEach((member) => {
+          if (!member) return;
+          if (member.selectionKey) {
+            gatheredKeys.push(member.selectionKey);
+            return;
+          }
+          if (member.id !== undefined && member.id !== null) {
+            const mapped = memberIdLookup.get(member.id);
+            if (mapped) {
+              gatheredKeys.push(mapped);
+            } else {
+              gatheredKeys.push(String(member.id));
             }
-            if (member.id !== undefined && member.id !== null) {
-              const mapped = memberIdLookup.get(member.id);
-              if (mapped) {
-                return mapped;
-              }
-              return String(member.id);
-            }
-            return 'self';
-          }),
-        ),
-      );
+            return;
+          }
+          gatheredKeys.push('self');
+        });
+      } else if (item.memberId !== undefined && item.memberId !== null) {
+        const mapped = memberIdLookup.get(item.memberId);
+        if (mapped) {
+          gatheredKeys.push(mapped);
+        } else {
+          gatheredKeys.push(String(item.memberId));
+        }
+      } else if (item.fullName) {
+        gatheredKeys.push('self');
+      }
+    });
+
+    if (gatheredKeys.length > 0) {
+      return Array.from(new Set(gatheredKeys));
     }
 
     if (matchingItem) {
@@ -2272,8 +2339,9 @@ const PoojaRegistrationPage = () => {
       uiLabel: row.uiLabel,
     });
     const effectiveDay = dayOptionDisabled ? null : selectedDay;
-    const matchingItem = findMatchingCartItem(row, effectiveDay);
-    const presetMembers = resolveSelectedMemberKeys(row.pooja.id, matchingItem) ?? [];
+    const matchingItems = findCartItemsForRow(row, effectiveDay);
+    const matchingItem = matchingItems[0];
+    const presetMembers = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems) ?? [];
     const currentPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
     setPrasadamSelectionMap((prev) => ({
       ...prev,
@@ -2295,7 +2363,8 @@ const PoojaRegistrationPage = () => {
       uiLabel: row.uiLabel,
     });
     const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
-    const matchingItem = findMatchingCartItem(row, effectiveDayId);
+    const matchingItems = findCartItemsForRow(row, effectiveDayId);
+    const matchingItem = matchingItems[0];
     const isFirstDayPooja = isFirstDayEnglishMonthPooja({
       name: row.pooja.name,
       displayName: row.displayName,
@@ -2304,8 +2373,8 @@ const PoojaRegistrationPage = () => {
     const defaultFirstDayDate =
       dayOptionDisabled && isFirstDayPooja && nextFirstDayOccurrence ? nextFirstDayOccurrence.date : null;
 
-    if (matchingItem) {
-      removeFromCart(cartKey, matchingItem.cartId);
+    if (matchingItems.length > 0) {
+      matchingItems.forEach((item) => removeFromCart(cartKey, item.cartId));
       setTableMessage({ status: 'info', text: `${row.uiLabel} removed from cart.` });
       return;
     }
@@ -2317,7 +2386,6 @@ const PoojaRegistrationPage = () => {
 
     const chosenDayOption = !dayOptionDisabled && selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
     const requiresChartDetails = !dayOptionDisabled && isChartDayOption(chosenDayOption);
-    const chartDetails = chartDetailsMap[row.pooja.id];
     const selectedStarForRow = tamilStarSelectionMap[row.pooja.id] ?? selectedTamilStar;
     const selectedTamilStarOption =
       selectedStarForRow && chosenDayOption?.code === 'CS'
@@ -2330,40 +2398,30 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    if (requiresChartDetails) {
-      if (!chartDetails?.date) {
-      showWarningPopup('Please pick a date for the donor chart option before adding to the cart.');
-      return;
-    }
-    if (!chartDetails?.note?.trim()) {
-        showWarningPopup('Please provide notes for the donor chart option before adding to the cart.');
+    let resolvedBookingDate = '';
+    if (!requiresChartDetails) {
+      const occurrenceState = dayOccurrenceMap[row.pooja.id];
+      if (defaultFirstDayDate) {
+        resolvedBookingDate = defaultFirstDayDate;
+      } else if (occurrenceState?.status === 'ready' && occurrenceState.date) {
+        resolvedBookingDate = occurrenceState.date;
+      } else {
+        const fallbackMessage = dayOptionDisabled
+          ? 'Next occurrence could not be determined for this pooja. Please contact the temple for assistance.'
+          : occurrenceState?.status === 'loading'
+            ? 'Fetching the next occurrence. Please try again in a moment.'
+            : (getOccurrenceMessage(occurrenceState) ??
+              'Select a day option and wait for the next occurrence before adding this pooja to the cart.');
+        showWarningPopup(fallbackMessage);
+        return;
+      }
+
+      if (!resolvedBookingDate) {
+        showWarningPopup('Choose or confirm a pooja date before adding this item to the cart.');
         return;
       }
     }
 
-    const occurrenceState = dayOccurrenceMap[row.pooja.id];
-    let resolvedBookingDate = '';
-    if (requiresChartDetails) {
-      resolvedBookingDate = chartDetails?.date ?? '';
-    } else if (defaultFirstDayDate) {
-      resolvedBookingDate = defaultFirstDayDate;
-    } else if (occurrenceState?.status === 'ready' && occurrenceState.date) {
-      resolvedBookingDate = occurrenceState.date;
-    } else {
-      const fallbackMessage = dayOptionDisabled
-        ? 'Next occurrence could not be determined for this pooja. Please contact the temple for assistance.'
-        : occurrenceState?.status === 'loading'
-          ? 'Fetching the next occurrence. Please try again in a moment.'
-          : (getOccurrenceMessage(occurrenceState) ??
-            'Select a day option and wait for the next occurrence before adding this pooja to the cart.');
-      showWarningPopup(fallbackMessage);
-      return;
-    }
-
-    if (!resolvedBookingDate) {
-      showWarningPopup('Choose or confirm a pooja date before adding this item to the cart.');
-      return;
-    }
     const amountForCart = getRowAmount(row);
     const amountValidationMessage = validateRowAmount(row, amountForCart);
     if (amountValidationMessage) {
@@ -2383,22 +2441,88 @@ const PoojaRegistrationPage = () => {
       const fallbackName =
         matchingItem?.members?.[index]?.name ??
         (memberKey === 'self' ? baseName || matchingItem?.fullName || 'Self' : undefined);
-      return buildMemberPayloadFromKey(memberKey, fallbackName);
+      return { key: memberKey, payload: buildMemberPayloadFromKey(memberKey, fallbackName) };
     });
 
     const primarySelectionKey = selectedMemberKeys[0] ?? 'self';
     const primaryPayload =
-      membersPayload[0] ??
+      membersPayload[0]?.payload ??
       buildMemberPayloadFromKey(primarySelectionKey, baseName || matchingItem?.fullName || 'Self');
     const primaryDirectoryEntry =
       memberLookup.get(primaryPayload.selectionKey ?? primarySelectionKey) ??
       memberLookup.get(primarySelectionKey) ??
       null;
 
-    const recurrenceFields = buildRecurrenceFields(recurrenceSelection, resolvedBookingDate);
+    if (requiresChartDetails) {
+      const missingEntry = membersPayload.find((entry) => {
+        const details = getChartDetailsForMember(row.pooja.id, entry.key);
+        return !details.date || !details.note.trim();
+      });
+      if (missingEntry) {
+        const label = describeMemberKey(missingEntry.key, matchingItem) || 'devotee';
+        showWarningPopup(`Please provide a preferred date and instructions for ${label}.`);
+        return;
+      }
 
-    const selectedRecurrenceSelection = selectedPooja ? resolveRecurrenceSelection(selectedPooja.id) : undefined;
-    const modalRecurrenceFields = buildRecurrenceFields(selectedRecurrenceSelection, dateValue);
+      const buildRecurrenceForDetails = (detailsDate: string | undefined) =>
+        buildRecurrenceFields(recurrenceSelection, detailsDate);
+
+      membersPayload.forEach((entry) => {
+        const details = getChartDetailsForMember(row.pooja.id, entry.key);
+        const item = createCartItem({
+          poojaId: row.pooja.id,
+          poojaName: row.pooja.name,
+          poojaCode: row.code,
+          poojaImage: '',
+          poojaImageUrl: null,
+          amount: amountForCart,
+          bookingDate: details.date,
+          fullName: entry.payload.name ?? baseName,
+          email: baseEmail,
+          phoneNumber: basePhone,
+          address: baseAddress,
+          dayOptionId: chosenDayOption?.id ?? null,
+          dayOptionCode: chosenDayOption?.code ?? null,
+          dayOptionDescription: chosenDayOption?.description ?? null,
+          dayOptionCategory: chosenDayOption?.category ?? null,
+          selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedStarForRow ?? null : null,
+          selectedTamilStarLabel:
+            chosenDayOption?.code === 'CS' && selectedTamilStarOption
+              ? formatDayOptionLabel(selectedTamilStarOption)
+              : null,
+          customDayDate: details.date ?? null,
+          customDayNote: details.note.trim() ?? null,
+          postPrasadam,
+          memberId: entry.payload.id ?? null,
+          memberRelationship: entry.payload.relationship ?? undefined,
+          memberGender: entry.payload.gender,
+          memberTamilStar: entry.payload.tamilStar,
+          memberRasi: entry.payload.rasi,
+          memberGothra: entry.payload.gothra,
+          memberDob: entry.payload.dob ?? null,
+          memberFamilyName: entry.payload.familyName ?? null,
+          targetDonorId: entry.payload.donorId ?? baseUserId ?? null,
+          members: [entry.payload],
+          ...buildRecurrenceForDetails(details.date),
+        });
+        addToCart(cartKey, item);
+      });
+
+      setMemberSelectionMap((prev) => ({
+        ...prev,
+        [row.pooja.id]: selectedMemberKeys,
+      }));
+
+      setPrasadamSelectionMap((prev) => ({
+        ...prev,
+        [row.pooja.id]: postPrasadam,
+      }));
+
+      showTemporaryTableMessage(`${row.uiLabel} added to cart.`);
+      return;
+    }
+
+    const recurrenceFields = buildRecurrenceFields(recurrenceSelection, resolvedBookingDate);
 
     const item = createCartItem({
       poojaId: row.pooja.id,
@@ -2421,8 +2545,8 @@ const PoojaRegistrationPage = () => {
         chosenDayOption?.code === 'CS' && selectedTamilStarOption
           ? formatDayOptionLabel(selectedTamilStarOption)
           : null,
-      customDayDate: requiresChartDetails ? chartDetails?.date ?? null : null,
-      customDayNote: requiresChartDetails ? chartDetails?.note?.trim() ?? null : null,
+      customDayDate: null,
+      customDayNote: null,
       postPrasadam,
       memberId: primaryDirectoryEntry?.id ?? null,
       memberRelationship: primaryPayload.relationship ?? undefined,
@@ -2437,7 +2561,7 @@ const PoojaRegistrationPage = () => {
         primaryDirectoryEntry?.donorId ??
         baseUserId ??
         null,
-      members: membersPayload,
+      members: membersPayload.map((entry) => entry.payload),
       ...recurrenceFields,
     });
 
@@ -2502,24 +2626,13 @@ const PoojaRegistrationPage = () => {
     const chosenDayOption =
       !selectedPoojaDayOptionDisabled && selectedDayOptionId ? dayOptionMap.get(selectedDayOptionId) : undefined;
     const requiresChartDetails = isChartDayOption(chosenDayOption);
-    const chartDetails = chartDetailsMap[selectedPooja.id];
     const postPrasadam = prasadamSelectionMap[selectedPooja.id] ?? false;
 
-    if (requiresChartDetails) {
-      if (!chartDetails?.date) {
-        setFormError('Please choose a preferred date for this day option.');
-        return;
-      }
-      if (!chartDetails?.note?.trim()) {
-        setFormError('Please add instructions for this day option.');
-        return;
-      }
-    }
-
     const memberKeys = normalizedSelectedMembers;
-    const membersPayload = memberKeys.map((key, index) =>
-      buildMemberPayloadFromKey(key, index === 0 ? resolvedName : undefined),
-    );
+    const membersPayload = memberKeys.map((key, index) => ({
+      key,
+      payload: buildMemberPayloadFromKey(key, index === 0 ? resolvedName : undefined),
+    }));
 
     const selectedStarForSelected =
       selectedPooja ? tamilStarSelectionMap[selectedPooja.id] ?? selectedTamilStar : selectedTamilStar;
@@ -2529,8 +2642,77 @@ const PoojaRegistrationPage = () => {
         : undefined;
 
     const primaryEntry =
-      membersPayload[0] ?? buildMemberPayloadFromKey(memberKeys[0] ?? 'self', resolvedName);
+      membersPayload[0]?.payload ?? buildMemberPayloadFromKey(memberKeys[0] ?? 'self', resolvedName);
     const selectedRecurrenceSelection = selectedPooja ? resolveRecurrenceSelection(selectedPooja.id) : undefined;
+
+    if (requiresChartDetails) {
+      const missingEntry = membersPayload.find((entry) => {
+        const details = getChartDetailsForMember(selectedPooja.id, entry.key);
+        return !details.date || !details.note.trim();
+      });
+      if (missingEntry) {
+        const memberLabel = missingEntry.payload.name || 'devotee';
+        setFormError(`Please provide a preferred date and instructions for ${memberLabel}.`);
+        return;
+      }
+
+      const buildRecurrenceForDetails = (detailsDate: string | undefined) =>
+        buildRecurrenceFields(selectedRecurrenceSelection, detailsDate);
+
+      membersPayload.forEach((entry) => {
+        const details = getChartDetailsForMember(selectedPooja.id, entry.key);
+        const item = createCartItem({
+          poojaId: selectedPooja.id,
+          poojaName: selectedPooja.name,
+          poojaCode: selectedPooja.code ?? null,
+          poojaImage: selectedPooja.image ?? '',
+          poojaImageUrl: selectedPooja.image_url,
+          amount: selectedPooja.amount,
+          bookingDate: details.date,
+          fullName: entry.payload.name ?? resolvedName,
+          email: resolvedEmail,
+          phoneNumber: contactDetails.phoneNumber,
+          address: contactDetails.address,
+          dayOptionId: chosenDayOption?.id ?? null,
+          dayOptionCode: chosenDayOption?.code ?? null,
+          dayOptionDescription: chosenDayOption?.description ?? null,
+          dayOptionCategory: chosenDayOption?.category ?? null,
+          selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedStarForSelected ?? null : null,
+          selectedTamilStarLabel:
+            chosenDayOption?.code === 'CS' && selectedTamilStarOption
+              ? formatDayOptionLabel(selectedTamilStarOption)
+              : null,
+          customDayDate: details.date ?? null,
+          customDayNote: details.note.trim() ?? null,
+          postPrasadam,
+          memberId: entry.payload.id ?? null,
+          memberRelationship: entry.payload.relationship ?? undefined,
+          memberGender: entry.payload.gender,
+          memberTamilStar: entry.payload.tamilStar,
+          memberRasi: entry.payload.rasi,
+          memberGothra: entry.payload.gothra,
+          memberDob: entry.payload.dob ?? null,
+          targetDonorId: entry.payload.donorId ?? baseUserId ?? null,
+          members: [entry.payload],
+          ...buildRecurrenceForDetails(details.date),
+        });
+        addToCart(cartKey, item);
+      });
+
+      setMemberSelectionMap((prev) => ({
+        ...prev,
+        [selectedPooja.id]: memberKeys,
+      }));
+
+      setPrasadamSelectionMap((prev) => ({
+        ...prev,
+        [selectedPooja.id]: postPrasadam,
+      }));
+
+      handleCloseModal();
+      return;
+    }
+
     const recurrenceFields = buildRecurrenceFields(selectedRecurrenceSelection, dateValue);
     const item = createCartItem({
       poojaId: selectedPooja.id,
@@ -2553,8 +2735,8 @@ const PoojaRegistrationPage = () => {
         chosenDayOption?.code === 'CS' && selectedTamilStarOption
           ? formatDayOptionLabel(selectedTamilStarOption)
           : null,
-      customDayDate: requiresChartDetails ? chartDetails?.date ?? null : null,
-      customDayNote: requiresChartDetails ? chartDetails?.note?.trim() ?? null : null,
+      customDayDate: null,
+      customDayNote: null,
       postPrasadam,
       memberId: primaryEntry?.id ?? null,
       memberRelationship: primaryEntry?.relationship ?? undefined,
@@ -2564,7 +2746,7 @@ const PoojaRegistrationPage = () => {
       memberGothra: primaryEntry?.gothra,
       memberDob: primaryEntry?.dob ?? null,
       targetDonorId: primaryEntry?.donorId ?? baseUserId ?? null,
-      members: membersPayload,
+      members: membersPayload.map((entry) => entry.payload),
       ...recurrenceFields,
     });
 
@@ -2602,7 +2784,57 @@ const PoojaRegistrationPage = () => {
     selectedPooja && !selectedPoojaDayOptionDisabled && selectedDayOptionId
       ? isChartDayOption(dayOptionMap.get(selectedDayOptionId))
       : false;
-  const modalChartDetails = selectedPooja ? chartDetailsMap[selectedPooja.id] ?? { date: '', note: '' } : { date: '', note: '' };
+
+  const renderChartDetailsInputs = (
+    poojaId: number,
+    memberKeys: string[],
+    matchingItem?: CartItem,
+    extraClasses?: string,
+  ) => {
+    if (memberKeys.length === 0) {
+      return (
+        <p className={clsx('text-xs text-gray-500', extraClasses)}>
+          Select devotees to add preferred dates and instructions for each.
+        </p>
+      );
+    }
+    return (
+      <div className={clsx('space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3', extraClasses)}>
+        {memberKeys.map((memberKey) => {
+          const chartDetails = getChartDetailsForMember(poojaId, memberKey);
+          const label = describeMemberKey(memberKey, matchingItem) || 'Devotee';
+          return (
+            <div key={memberKey} className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
+              <p className="text-xs font-semibold text-gray-600">
+                Preferred date for{' '}
+                <span className="font-semibold text-orange-600">{label}</span>
+              </p>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Preferred Date</label>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                  value={chartDetails.date}
+                  onChange={(event) => updateChartDetails(poojaId, memberKey, 'date', event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Donor Instructions</label>
+                <textarea
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                  value={chartDetails.note}
+                  onChange={(event) => updateChartDetails(poojaId, memberKey, 'note', event.target.value)}
+                  placeholder="Add donor instructions"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8">
@@ -2655,16 +2887,22 @@ const PoojaRegistrationPage = () => {
                 <span className="font-medium text-slate-700">
                   Added {cartTotals.count} {cartTotals.count === 1 ? 'pooja' : 'poojas'}
                 </span>
-                <span>
-                  Amount ₹ {formattedCartAmount}
-                </span>
-                <Link
-                  to="/payments/general?tab=summary"
+                <div className="flex flex-col text-sm text-slate-600">
+                  <span className="font-medium text-slate-700">
+                    Amount ₹ {formattedCartAmount}
+                  </span>
+                  <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                    <span>Recurring ₹ {formattedRecurringAmount}</span>
+                    <span>One-time ₹ {formattedOneTimeAmount}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
                   onClick={handleViewCart}
                   className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
                 >
                   View cart & Payment
-                </Link>
+                </button>
               </div>
             </div>
           </div>
@@ -2785,11 +3023,11 @@ const PoojaRegistrationPage = () => {
                           uiLabel: row.uiLabel,
                         });
                         const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
-                        const matchingItem = findMatchingCartItem(row, effectiveDayId);
-                        const inCart = Boolean(matchingItem);
+                        const matchingItems = findCartItemsForRow(row, effectiveDayId);
+                        const matchingItem = matchingItems[0];
+                        const inCart = matchingItems.length > 0;
                         const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
                         const requiresChartDetails = isChartDayOption(selectedDayOption);
-                        const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
                         const occurrenceState = dayOccurrenceMap[row.pooja.id];
                         const iconLabel = inCart
                           ? `Remove ${row.uiLabel} from cart`
@@ -2797,7 +3035,7 @@ const PoojaRegistrationPage = () => {
                         const iconClasses = inCart
                           ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
                           : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
-                          const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+                          const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
                           const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
                           const memberButtonLabel = formatMemberLabel(
                             row.pooja.id,
@@ -2876,34 +3114,8 @@ const PoojaRegistrationPage = () => {
                                       </select>
                                     </div>
                                   )}
-                                  {requiresChartDetails && (
-                                    <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 mt-2">
-                                      <div className="space-y-1">
-                                        <label className="block text-xs font-medium text-gray-700">
-                                          Preferred Date
-                                        </label>
-                                        <input
-                                          type="date"
-                                          min={new Date().toISOString().split('T')[0]}
-                                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                          value={chartDetails.date}
-                                          onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="block text-xs font-medium text-gray-700">
-                                          Donor Instructions
-                                        </label>
-                                        <textarea
-                                          rows={2}
-                                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                          value={chartDetails.note}
-                                          onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
-                                          placeholder="Add donor instructions"
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
+                                  {requiresChartDetails &&
+                                    renderChartDetailsInputs(row.pooja.id, memberKeysForDisplay, matchingItem)}
                                 </div>
                               )
                               ) : (
@@ -3168,11 +3380,11 @@ const PoojaRegistrationPage = () => {
                       uiLabel: row.uiLabel,
                     });
                     const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
-                    const matchingItem = findMatchingCartItem(row, effectiveDayId);
-                    const inCart = Boolean(matchingItem);
+                    const matchingItems = findCartItemsForRow(row, effectiveDayId);
+                    const matchingItem = matchingItems[0];
+                    const inCart = matchingItems.length > 0;
                     const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
                     const requiresChartDetails = isChartDayOption(selectedDayOption);
-                    const chartDetails = chartDetailsMap[row.pooja.id] ?? { date: '', note: '' };
                     const occurrenceState = dayOccurrenceMap[row.pooja.id];
                     const iconLabel = inCart
                       ? `Remove ${row.uiLabel} from cart`
@@ -3180,7 +3392,7 @@ const PoojaRegistrationPage = () => {
                     const iconClasses = inCart
                       ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
                       : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
-                    const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem);
+                    const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
                     const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
                     const memberButtonLabel = formatMemberLabel(
                       row.pooja.id,
@@ -3275,34 +3487,8 @@ const PoojaRegistrationPage = () => {
                                     </select>
                                   </div>
                                 )}
-                                {requiresChartDetails && (
-                                  <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 mt-2">
-                                    <div className="space-y-1">
-                                      <label className="block text-xs font-medium text-gray-700">
-                                        Preferred Date
-                                      </label>
-                                      <input
-                                        type="date"
-                                        min={new Date().toISOString().split('T')[0]}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                        value={chartDetails.date}
-                                        onChange={(event) => updateChartDetails(row.pooja.id, 'date', event.target.value)}
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="block text-xs font-medium text-gray-700">
-                                        Donor Instructions
-                                      </label>
-                                      <textarea
-                                        rows={2}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                        value={chartDetails.note}
-                                        onChange={(event) => updateChartDetails(row.pooja.id, 'note', event.target.value)}
-                                        placeholder="Add donor instructions"
-                                      />
-                                    </div>
-                                  </div>
-                                )}
+                                {requiresChartDetails &&
+                                  renderChartDetailsInputs(row.pooja.id, memberKeysForDisplay, matchingItem)}
                               </div>
                             )
                             ) : (
@@ -3699,34 +3885,15 @@ const PoojaRegistrationPage = () => {
                           placeholder="Select day option"
                           className="w-full"
                         />
-                        {modalRequiresChartDetails && (
-                          <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                            <div className="space-y-1">
-                              <label className="block text-sm font-medium text-gray-700">
-                                Preferred Date
-                              </label>
-                              <input
-                                type="date"
-                                min={new Date().toISOString().split('T')[0]}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                value={modalChartDetails.date}
-                                onChange={(event) => updateChartDetails(selectedPooja.id, 'date', event.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-sm font-medium text-gray-700">
-                                Donor Instructions
-                              </label>
-                              <textarea
-                                rows={3}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                value={modalChartDetails.note}
-                                onChange={(event) => updateChartDetails(selectedPooja.id, 'note', event.target.value)}
-                                placeholder="Add donor instructions"
-                              />
-                            </div>
-                          </div>
-                        )}
+                        {modalRequiresChartDetails &&
+                          renderChartDetailsInputs(
+                            selectedPooja.id,
+                            normalizedSelectedMemberIds.length > 0
+                              ? normalizedSelectedMemberIds
+                              : fallbackMemberSelection,
+                            undefined,
+                            'mt-3',
+                          )}
                       </>
                     )}
                   </div>
