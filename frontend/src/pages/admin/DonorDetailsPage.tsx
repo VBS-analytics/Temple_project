@@ -1,39 +1,8 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { indianCities } from '../../data/indianCities';
-import { nakshatraOptions } from '../../data/nakshatraOptions';
+import { gothraOptions, rasiOptions, tamilStarOptions } from '../../data/familyAttributes';
 import api from '../../lib/api';
-
-const rasiOptions = [
-  'மேஷம்',
-  'ரிஷபம்',
-  'மிதுனம்',
-  'கடகம்',
-  'சிம்மம்',
-  'கன்னி',
-  'துலாம்',
-  'விருச்சிகம்',
-  'தனுசு',
-  'மகரம்',
-  'கும்பம்',
-  'மீனம்',
-];
-
-const GOTHRA_OPTIONS = [
-  'ஆத்ரேயா',
-  'நைத்திருவ காட்ச்யபம்',
-  'காஷ்யப கோத்திரம்',
-  'வாதூல கோத்திரம்',
-  'கார்கேயா',
-  'கவுண்டின்யா',
-  'கெளஷிகா',
-  'கெளதமர்',
-  'பரத்வாஜா',
-  'ஹரிதா',
-  'செளநகா',
-  'சாண்டில்யர்',
-  'ஸ்ரீவத்ஸ கோத்திரம்',
-];
 
 interface DonorProfile {
   donor_id?: string | null;
@@ -51,6 +20,7 @@ interface DonorProfile {
   family_name?: string;
   gender?: string;
   notes?: string | null;
+  custom_number?: number | null;
 }
 
 interface DonorUser {
@@ -95,6 +65,7 @@ type DonorEditFormState = {
   city: string;
   state: string;
   postal_code: string;
+  custom_number: string;
 };
 
 const createEmptyDonorEditForm = (): DonorEditFormState => ({
@@ -113,6 +84,7 @@ const createEmptyDonorEditForm = (): DonorEditFormState => ({
   city: '',
   state: '',
   postal_code: '',
+  custom_number: '',
 });
 
 interface RegistrationMember {
@@ -375,6 +347,9 @@ const DonorDetailsPage = () => {
   const [donorEditForm, setDonorEditForm] = useState<DonorEditFormState>(createEmptyDonorEditForm);
   const [donorEditError, setDonorEditError] = useState('');
   const [donorEditSubmitting, setDonorEditSubmitting] = useState(false);
+  const [customNumberValues, setCustomNumberValues] = useState<Record<number, string>>({});
+  const [customNumberSavingIds, setCustomNumberSavingIds] = useState<Set<number>>(() => new Set());
+  const [customNumberErrors, setCustomNumberErrors] = useState<Record<number, string>>({});
   const cityStateLookup = useMemo(() => {
     const map = new Map<string, string>();
     indianCities.forEach((city) => {
@@ -389,6 +364,19 @@ const DonorDetailsPage = () => {
     const names = Array.from(new Set(indianCities.map((city) => city.stateName).filter(Boolean)));
     return names.sort((a, b) => a.localeCompare(b));
   }, []);
+
+  useEffect(() => {
+    setCustomNumberValues((prev) => {
+      const next = { ...prev };
+      donors.forEach((donor) => {
+        const normalized = donor.profile.custom_number != null ? String(donor.profile.custom_number) : '';
+        if (next[donor.user.id] !== normalized) {
+          next[donor.user.id] = normalized;
+        }
+      });
+      return next;
+    });
+  }, [donors]);
 
   const loadAdminMembers = useCallback(async () => {
     setAdminMembersLoading(true);
@@ -546,6 +534,7 @@ const DonorDetailsPage = () => {
       city: record.profile.city ?? '',
       state: record.profile.state ?? '',
       postal_code: record.profile.postal_code ?? '',
+      custom_number: record.profile.custom_number != null ? String(record.profile.custom_number) : '',
     });
     setExpandedSections((prev) => {
       const current = prev[record.user.id] ?? { members: false, registrations: false, details: true };
@@ -610,8 +599,13 @@ const DonorDetailsPage = () => {
         city: donorEditForm.city,
         state: donorEditForm.state,
         postal_code: donorEditForm.postal_code,
+        custom_number: null,
       },
     };
+    const customNumberRaw = donorEditForm.custom_number.trim();
+    const parsedCustomNumber = customNumberRaw === '' ? null : Number(customNumberRaw);
+    payload.profile.custom_number =
+      parsedCustomNumber === null || Number.isFinite(parsedCustomNumber) ? parsedCustomNumber : null;
 
     try {
       const response = await api.put(`auth/donors/${editingDonorId}/`, payload);
@@ -632,6 +626,116 @@ const DonorDetailsPage = () => {
       setDonorEditError(typeof detail === 'string' ? detail : 'Unable to update donor details');
     } finally {
       setDonorEditSubmitting(false);
+    }
+  };
+
+  const handleCustomNumberChange = (donorId: number, value: string) => {
+    if (value !== '' && !/^\d+$/.test(value)) {
+      return;
+    }
+    setCustomNumberValues((prev) => ({ ...prev, [donorId]: value }));
+    setCustomNumberErrors((prev) => {
+      if (!prev[donorId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[donorId];
+      return next;
+    });
+  };
+
+  const handleCustomNumberSave = async (donor: DonorRecord, overrideValue?: string) => {
+    const donorId = donor.user.id;
+    if (customNumberSavingIds.has(donorId)) {
+      return;
+    }
+    const currentValue = (overrideValue ?? customNumberValues[donorId] ?? '').trim();
+    setCustomNumberValues((prev) => {
+      if (prev[donorId] === currentValue) {
+        return prev;
+      }
+      return { ...prev, [donorId]: currentValue };
+    });
+    const originalValue = donor.profile.custom_number != null ? String(donor.profile.custom_number) : '';
+    if (currentValue === originalValue) {
+      setCustomNumberErrors((prev) => {
+        if (!prev[donorId]) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[donorId];
+        return next;
+      });
+      return;
+    }
+
+    let parsedValue: number | null = null;
+    if (currentValue !== '') {
+      parsedValue = Number(currentValue);
+      if (Number.isNaN(parsedValue)) {
+        setCustomNumberErrors((prev) => ({ ...prev, [donorId]: 'Enter a valid number' }));
+        return;
+      }
+    }
+
+    setCustomNumberSavingIds((prev) => {
+      const next = new Set(prev);
+      next.add(donorId);
+      return next;
+    });
+
+    try {
+      const response = await api.put(`auth/donors/${donorId}/`, {
+        profile: {
+          custom_number: parsedValue,
+        },
+      });
+      const updatedUser = response.data?.user;
+      const updatedProfile = response.data?.profile;
+      if (updatedUser || updatedProfile) {
+        setDonors((prev) =>
+          prev.map((record) =>
+            record.user.id === donorId
+              ? {
+                  ...record,
+                  user: updatedUser ?? record.user,
+                  profile: updatedProfile ?? record.profile,
+                }
+              : record,
+          ),
+        );
+      }
+      const normalized =
+        updatedProfile?.custom_number != null
+          ? String(updatedProfile.custom_number)
+          : parsedValue != null
+            ? String(parsedValue)
+            : '';
+      setCustomNumberValues((prev) => ({ ...prev, [donorId]: normalized }));
+      setCustomNumberErrors((prev) => {
+        if (!prev[donorId]) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[donorId];
+        return next;
+      });
+    } catch (err: any) {
+      const detail =
+        err?.response?.data?.detail ??
+        err?.response?.data?.message ??
+        err?.message ??
+        'Unable to save custom number';
+      setCustomNumberErrors((prev) => ({
+        ...prev,
+        [donorId]: typeof detail === 'string' ? detail : 'Unable to save custom number',
+      }));
+    } finally {
+      setCustomNumberSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(donorId);
+        return next;
+      });
     }
   };
 
@@ -1184,7 +1288,7 @@ const DonorDetailsPage = () => {
                     onChange={handleMemberChange}
                   >
                     <option value="">Select Nakshatra</option>
-                    {nakshatraOptions.map((option) => (
+                    {tamilStarOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -1224,7 +1328,7 @@ const DonorDetailsPage = () => {
                     onChange={handleMemberChange}
                   >
                     <option value="">Select Gothram</option>
-                    {GOTHRA_OPTIONS.map((option) => (
+                    {gothraOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -1350,6 +1454,11 @@ const DonorDetailsPage = () => {
             const emailLabel = resolveText(user.email, 'Not provided');
             const roleLabel = resolveText(user.role, 'Not provided');
             const fullAddress = profileAddress || 'Not provided';
+            const inlineCustomNumber =
+              customNumberValues[user.id] ??
+              (profile.custom_number != null ? String(profile.custom_number) : '');
+            const customNumberError = customNumberErrors[user.id];
+            const isCustomNumberSaving = customNumberSavingIds.has(user.id);
 
             const basicDetails = [
               {
@@ -1516,6 +1625,44 @@ const DonorDetailsPage = () => {
                           )}
                           <h2 className="text-lg sm:text-xl font-bold text-slate-800">{user.name}</h2>
                         </div>
+                        <div className="flex flex-wrap items-center gap-3 mb-2">
+                          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor={`donor-inline-number-${user.id}`}>
+                            Current Balance
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id={`donor-inline-number-${user.id}`}
+                              type="number"
+                              inputMode="numeric"
+                              step="1"
+                              min="0"
+                              className="no-spinner w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none"
+                              value={inlineCustomNumber}
+                              onChange={(event) => handleCustomNumberChange(user.id, event.target.value)}
+                              onBlur={(event) => handleCustomNumberSave(donor, event.currentTarget.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  handleCustomNumberSave(donor, event.currentTarget.value);
+                                }
+                              }}
+                            />
+                            {isCustomNumberSaving && (
+                              <svg
+                                className="h-4 w-4 animate-spin text-slate-500"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                        {customNumberError && (
+                          <p className="text-xs text-rose-600 mb-3">{customNumberError}</p>
+                        )}
                         
                         <div className="flex flex-wrap gap-2 mb-3">
                           {profile.family_name && (
@@ -1757,6 +1904,26 @@ const DonorDetailsPage = () => {
                                       disabled={donorEditSubmitting}
                                     ></textarea>
                                   </div>
+                                  <div>
+                                    <label
+                                      className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1"
+                                      htmlFor={`donor-custom-number-${user.id}`}
+                                    >
+                                      Current Balance
+                                    </label>
+                                    <input
+                                      id={`donor-custom-number-${user.id}`}
+                                      name="custom_number"
+                                      type="number"
+                                      inputMode="numeric"
+                                      step="1"
+                                      min="0"
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
+                                      value={donorEditForm.custom_number}
+                                      onChange={handleDonorEditChange}
+                                      disabled={donorEditSubmitting}
+                                    />
+                                  </div>
                                 </div>
                               </div>
 
@@ -1891,7 +2058,7 @@ const DonorDetailsPage = () => {
                                       disabled={donorEditSubmitting}
                                     >
                                       <option value="">Select Tamil star</option>
-                                      {nakshatraOptions.map((option) => (
+                                      {tamilStarOptions.map((option) => (
                                         <option key={option} value={option}>
                                           {option}
                                         </option>
@@ -1911,7 +2078,7 @@ const DonorDetailsPage = () => {
                                       disabled={donorEditSubmitting}
                                     >
                                       <option value="">Select Gothra</option>
-                                      {GOTHRA_OPTIONS.map((option) => (
+                                      {gothraOptions.map((option) => (
                                         <option key={option} value={option}>
                                           {option}
                                         </option>
@@ -2428,7 +2595,7 @@ const DonorDetailsPage = () => {
                                 disabled={adminMemberEditSubmitting || isDeleting}
                               >
                                 <option value="">Select Gothram</option>
-                                  {GOTHRA_OPTIONS.map((option) => (
+                                  {gothraOptions.map((option) => (
                                     <option key={option} value={option}>
                                       {option}
                                     </option>

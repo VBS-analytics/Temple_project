@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
+import { CountryCodePicker } from '../components/CountryCodePicker';
+import { CountryOption } from '../types/country';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
 
@@ -40,12 +42,6 @@ const testimonials = [
   }
 ] as const;
 
-type CountryOption = {
-  code: CountryDialCode['dialCode'];
-  label: CountryDialCode['name'];
-  iso: CountryDialCode['iso2'];
-};
-
 const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
   code: entry.dialCode,
   label: entry.name,
@@ -53,11 +49,6 @@ const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
 }));
 
 const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
-
-const flagEmoji = (iso: string) =>
-  iso
-    .toUpperCase()
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -78,9 +69,21 @@ const LoginPage = () => {
 
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(defaultCountry);
   const [localPhoneNumber, setLocalPhoneNumber] = useState('');
-  const combinedPhoneNumber = localPhoneNumber ? `${selectedCountry.code}${localPhoneNumber}` : '';
-  const selectedCountryFlag = selectedCountry.iso ? flagEmoji(selectedCountry.iso) : '🌐';
-
+  const [forceInternationalInput, setForceInternationalInput] = useState(false);
+  const combinedPhoneNumber = (() => {
+    if (!localPhoneNumber) {
+      return '';
+    }
+    if (forceInternationalInput) {
+      const internationalDigits = localPhoneNumber.startsWith('00')
+        ? localPhoneNumber.slice(2)
+        : localPhoneNumber;
+      if (internationalDigits) {
+        return `+${internationalDigits}`;
+      }
+    }
+    return `${selectedCountry.code}${localPhoneNumber}`;
+  })();
   useEffect(() => {
     setValue('phone_number', combinedPhoneNumber);
   }, [combinedPhoneNumber, setValue]);
@@ -93,8 +96,15 @@ const LoginPage = () => {
   };
 
   const handleLocalPhoneInput = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 15);
+    const trimmedValue = value.trim();
+    const digits = trimmedValue.replace(/\D/g, '').slice(0, 15);
+    const explicitInternational =
+      Boolean(trimmedValue) &&
+      (trimmedValue.startsWith('+') ||
+        trimmedValue.startsWith('00') ||
+        digits.startsWith('00'));
     setLocalPhoneNumber(digits);
+    setForceInternationalInput(explicitInternational);
   };
 
   const redirectToDashboard = () => {
@@ -397,37 +407,17 @@ const LoginPage = () => {
                           </label>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 flex items-center">
-                              <div className="relative">
-                                <div
-                                  className={`flex h-full items-center gap-2 rounded-l-xl border px-3 py-3 text-sm font-semibold ${
-                                    isFocused === 'phone_number' || errors.phone_number
-                                      ? 'border-amber-500 bg-white shadow-sm'
-                                      : 'border-gray-300 bg-white'
-                                  } pointer-events-none`}
-                                >
-                                  <span className="text-lg leading-none">{selectedCountryFlag}</span>
-                                  <span>{selectedCountry.code}</span>
-                                  <svg className="h-3 w-3 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" />
-                                  </svg>
-                                </div>
-                                <select
-                                  value={selectedCountry.iso}
-                                  onChange={(event) => handleCountryCodeChange(event.target.value as CountryOption['iso'])}
-                                  aria-label="Country code"
-                                  className="absolute inset-y-0 left-0 w-32 opacity-0 cursor-pointer"
-                                  onFocus={() => handleFocus('phone_number')}
-                                  onBlur={handleBlur}
-                                >
-                                  {countryCodeOptions.map((option) => (
-                                    <option key={option.iso} value={option.iso}>
-                                      {option.label} ({option.code})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                              <CountryCodePicker
+                                options={countryCodeOptions}
+                                selected={selectedCountry}
+                                onSelect={(iso) => handleCountryCodeChange(iso)}
+                                isFocused={isFocused === 'phone_number'}
+                                hasError={!!errors.phone_number}
+                                onFocus={() => handleFocus('phone_number')}
+                                onBlur={handleBlur}
+                              />
                             </div>
-                            <input
+                          <input
                               type="tel"
                               value={localPhoneNumber}
                               className={`w-full rounded-xl border pl-36 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${

@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
 import { useAuthStore } from '../store/auth';
@@ -441,6 +441,13 @@ interface MemberDirectoryEntry {
   donorPhone?: string;
 }
 
+interface ChartPreferredDateGroup {
+  key: string;
+  date: string;
+  note: string;
+  memberKeys: string[];
+}
+
 interface BookingPooja {
   id: number;
   code?: string;
@@ -645,6 +652,13 @@ const FIRST_DAY_NOTE_MESSAGE = 'First day of the English month';
 const FOUR_SATURDAY_NAVAGRAHA_NOTE = 'Temple performs this pooja on every Saturday. Dates are automatically listed for the current month, or the next month if no Saturdays remain.';
 const FOUR_SATURDAY_OCCURRENCE_KEY = 'special:navagraha-four-saturday';
 const FOUR_SATURDAY_NOTE_DISPLAY = 'Every Saturday — auto-scheduled';
+
+const createChartPreferredDateGroup = (): ChartPreferredDateGroup => ({
+  key: `preferred-date-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+  date: '',
+  note: '',
+  memberKeys: [],
+});
 
 const normalizePoojaName = (value?: string | null) => {
   if (!value) return '';
@@ -930,7 +944,7 @@ const PoojaRegistrationPage = () => {
   const [daySelectionMap, setDaySelectionMap] = useState<Record<number, number | null>>({});
   const [memberSelectionMap, setMemberSelectionMap] = useState<Record<number, string[]>>({});
   const [prasadamSelectionMap, setPrasadamSelectionMap] = useState<Record<number, boolean>>({});
-  const [chartDetailsMap, setChartDetailsMap] = useState<Record<string, { date: string; note: string }>>({});
+  const [chartPreferredDateGroupsMap, setChartPreferredDateGroupsMap] = useState<Record<number, ChartPreferredDateGroup[]>>({});
   const [amountSelectionMap, setAmountSelectionMap] = useState<Record<number, string>>({});
   const [recurrenceSelectionMap, setRecurrenceSelectionMap] = useState<Record<number, RecurrenceSelection>>({});
   const [dayOccurrenceMap, setDayOccurrenceMap] = useState<Record<number, DayOccurrenceState>>({});
@@ -1029,27 +1043,6 @@ const PoojaRegistrationPage = () => {
         if (!(item.poojaId in next)) {
           next[item.poojaId] = item.dayOptionId ?? null;
           changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [cartItems]);
-
-  useEffect(() => {
-    setChartDetailsMap((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      cartItems.forEach((item) => {
-        if (isChartDayOption({ code: item.dayOptionCode })) {
-          const current = next[item.poojaId] ?? { date: '', note: '' };
-          const incoming = {
-            date: item.customDayDate ?? '',
-            note: item.customDayNote ?? '',
-          };
-          if (current.date !== incoming.date || current.note !== incoming.note) {
-            next[item.poojaId] = incoming;
-            changed = true;
-          }
         }
       });
       return changed ? next : prev;
@@ -1708,53 +1701,149 @@ const PoojaRegistrationPage = () => {
     });
   }, [selectedPooja, basePhone, baseAddress, bookingMode]);
 
-  const buildChartDetailsKey = (poojaId: number, memberKey: string) =>
-    `${poojaId}:${memberKey || 'self'}`;
-
-  const getChartDetailsForMember = (poojaId: number, memberKey: string) => {
-    const key = buildChartDetailsKey(poojaId, memberKey);
-    return chartDetailsMap[key] ?? { date: '', note: '' };
-  };
-
-  const clearChartDetailsForPooja = useCallback((poojaId: number) => {
-    setChartDetailsMap((prev) => {
-      const next = { ...prev };
+  useEffect(() => {
+    const normalizedSet = new Set(normalizedSelectedMemberIds);
+    setChartPreferredDateGroupsMap((prev) => {
       let changed = false;
-      const prefix = `${poojaId}:`;
-      Object.keys(prev).forEach((key) => {
-        if (key.startsWith(prefix)) {
-          delete next[key];
-          changed = true;
-        }
+      const next: Record<number, ChartPreferredDateGroup[]> = {};
+      Object.entries(prev).forEach(([poojaId, groups]) => {
+        const filteredGroups = groups.map((group) => {
+          const filteredKeys = group.memberKeys.filter((key) => normalizedSet.has(key));
+          if (filteredKeys.length !== group.memberKeys.length) {
+            changed = true;
+            return {
+              ...group,
+              memberKeys: filteredKeys,
+            };
+          }
+          return group;
+        });
+        next[Number(poojaId)] = filteredGroups;
       });
       return changed ? next : prev;
     });
+  }, [normalizedSelectedMemberIds]);
+
+  const clearChartDetailsForPooja = useCallback((poojaId: number) => {
+    setChartPreferredDateGroupsMap((prev) => {
+      if (!(poojaId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[poojaId];
+      return next;
+    });
   }, []);
+
+  const ensurePreferredDateGroups = useCallback(
+    (poojaId: number, count = 1) => {
+      const normalizedCount = Math.max(1, Math.floor(count));
+      setChartPreferredDateGroupsMap((prev) => {
+        const existing = prev[poojaId] ?? [];
+        if (existing.length === normalizedCount) {
+          return prev;
+        }
+        const nextGroups = existing.slice(0, normalizedCount);
+        while (nextGroups.length < normalizedCount) {
+          nextGroups.push(createChartPreferredDateGroup());
+        }
+        return {
+          ...prev,
+          [poojaId]: nextGroups,
+        };
+      });
+    },
+    [],
+  );
 
   const ensureChartDetailState = useCallback(
     (poojaId: number, optionId: number | null) => {
       const option = optionId ? dayOptionMap.get(optionId) : undefined;
       if (!option || !isChartDayOption(option)) {
         clearChartDetailsForPooja(poojaId);
+        return;
       }
+      ensurePreferredDateGroups(poojaId, 1);
     },
-    [clearChartDetailsForPooja, dayOptionMap],
+    [clearChartDetailsForPooja, dayOptionMap, ensurePreferredDateGroups],
   );
-
-  const updateChartDetails = useCallback(
-    (poojaId: number, memberKey: string, field: 'date' | 'note', value: string) => {
-      const key = buildChartDetailsKey(poojaId, memberKey);
-      setChartDetailsMap((prev) => {
-        const existing = prev[key] ?? { date: '', note: '' };
-        if (existing[field] === value) {
+  const updatePreferredDateGroupField = useCallback(
+    (poojaId: number, groupKey: string, field: 'date' | 'note', value: string) => {
+      setChartPreferredDateGroupsMap((prev) => {
+        const groups = prev[poojaId];
+        if (!groups) {
+          return prev;
+        }
+        let changed = false;
+        const next = groups.map((group) => {
+          if (group.key !== groupKey) {
+            return group;
+          }
+          if (group[field] === value) {
+            return group;
+          }
+          changed = true;
+          return {
+            ...group,
+            [field]: value,
+          };
+        });
+        if (!changed) {
           return prev;
         }
         return {
           ...prev,
-          [key]: {
-            ...existing,
-            [field]: value,
-          },
+          [poojaId]: next,
+        };
+      });
+    },
+    [],
+  );
+
+  const togglePreferredDateGroupMember = useCallback(
+    (poojaId: number, groupKey: string, memberKey: string) => {
+      setChartPreferredDateGroupsMap((prev) => {
+        const groups = prev[poojaId];
+        if (!groups) {
+          return prev;
+        }
+        let changed = false;
+        const next = groups.map((group) => {
+          if (group.key !== groupKey) {
+            return group;
+          }
+          const existing = new Set(group.memberKeys);
+          if (existing.has(memberKey)) {
+            existing.delete(memberKey);
+          } else {
+            existing.add(memberKey);
+          }
+          const updatedKeys = Array.from(existing);
+          if (
+            updatedKeys.length === group.memberKeys.length &&
+            updatedKeys.every((key) => group.memberKeys.includes(key))
+          ) {
+            return group;
+          }
+          changed = true;
+          return {
+            ...group,
+            memberKeys: updatedKeys,
+          };
+        });
+        if (!changed) {
+          return prev;
+        }
+        const combinedKeys = Array.from(
+          new Set(next.flatMap((group) => group.memberKeys)),
+        );
+        setMemberSelectionMap((state) => ({
+          ...state,
+          [poojaId]: combinedKeys,
+        }));
+        return {
+          ...prev,
+          [poojaId]: next,
         };
       });
     },
@@ -2454,21 +2543,50 @@ const PoojaRegistrationPage = () => {
       null;
 
     if (requiresChartDetails) {
-      const missingEntry = membersPayload.find((entry) => {
-        const details = getChartDetailsForMember(row.pooja.id, entry.key);
-        return !details.date || !details.note.trim();
-      });
-      if (missingEntry) {
-        const label = describeMemberKey(missingEntry.key, matchingItem) || 'devotee';
-        showWarningPopup(`Please provide a preferred date and instructions for ${label}.`);
+      const groups = chartPreferredDateGroupsMap[row.pooja.id] ?? [];
+      if (groups.length === 0) {
+        showWarningPopup('Please specify at least one preferred date.');
+        return;
+      }
+
+      const selectedPayloadLookup = new Map(membersPayload.map((entry) => [entry.key, entry.payload]));
+      const assignedMembers = new Set<string>();
+      for (const group of groups) {
+        if (!group.date) {
+          showWarningPopup('Choose a preferred date for each entry.');
+          return;
+        }
+        if (!group.note.trim()) {
+          showWarningPopup('Add donor instructions for each preferred date.');
+          return;
+        }
+        if (group.memberKeys.length === 0) {
+          showWarningPopup('Assign at least one devotee to each preferred date.');
+          return;
+        }
+        group.memberKeys.forEach((key) => assignedMembers.add(key));
+      }
+
+      const unassignedMembers = selectedMemberKeys.filter((key) => !assignedMembers.has(key));
+      if (unassignedMembers.length > 0) {
+        showWarningPopup('Please assign every selected devotee to a preferred date.');
         return;
       }
 
       const buildRecurrenceForDetails = (detailsDate: string | undefined) =>
         buildRecurrenceFields(recurrenceSelection, detailsDate);
 
-      membersPayload.forEach((entry) => {
-        const details = getChartDetailsForMember(row.pooja.id, entry.key);
+      groups.forEach((group) => {
+        const groupMemberKeys = Array.from(new Set(group.memberKeys));
+        const membersPayloadForGroup = groupMemberKeys.map((key, index) => ({
+          key,
+          payload:
+            selectedPayloadLookup.get(key) ?? buildMemberPayloadFromKey(key, index === 0 ? baseName : undefined),
+        }));
+        const primaryPayload =
+          membersPayloadForGroup[0]?.payload ??
+          buildMemberPayloadFromKey(groupMemberKeys[0] ?? 'self', baseName);
+
         const item = createCartItem({
           poojaId: row.pooja.id,
           poojaName: row.pooja.name,
@@ -2476,8 +2594,8 @@ const PoojaRegistrationPage = () => {
           poojaImage: '',
           poojaImageUrl: null,
           amount: amountForCart,
-          bookingDate: details.date,
-          fullName: entry.payload.name ?? baseName,
+          bookingDate: group.date,
+          fullName: primaryPayload?.name ?? baseName,
           email: baseEmail,
           phoneNumber: basePhone,
           address: baseAddress,
@@ -2490,20 +2608,20 @@ const PoojaRegistrationPage = () => {
             chosenDayOption?.code === 'CS' && selectedTamilStarOption
               ? formatDayOptionLabel(selectedTamilStarOption)
               : null,
-          customDayDate: details.date ?? null,
-          customDayNote: details.note.trim() ?? null,
+          customDayDate: group.date ?? null,
+          customDayNote: group.note.trim() ?? null,
           postPrasadam,
-          memberId: entry.payload.id ?? null,
-          memberRelationship: entry.payload.relationship ?? undefined,
-          memberGender: entry.payload.gender,
-          memberTamilStar: entry.payload.tamilStar,
-          memberRasi: entry.payload.rasi,
-          memberGothra: entry.payload.gothra,
-          memberDob: entry.payload.dob ?? null,
-          memberFamilyName: entry.payload.familyName ?? null,
-          targetDonorId: entry.payload.donorId ?? baseUserId ?? null,
-          members: [entry.payload],
-          ...buildRecurrenceForDetails(details.date),
+          memberId: primaryPayload?.id ?? null,
+          memberRelationship: primaryPayload?.relationship ?? undefined,
+          memberGender: primaryPayload?.gender,
+          memberTamilStar: primaryPayload?.tamilStar,
+          memberRasi: primaryPayload?.rasi,
+          memberGothra: primaryPayload?.gothra,
+          memberDob: primaryPayload?.dob ?? null,
+          memberFamilyName: primaryPayload?.familyName ?? null,
+          targetDonorId: primaryPayload?.donorId ?? baseUserId ?? null,
+          members: membersPayloadForGroup.map((entry) => entry.payload),
+          ...buildRecurrenceForDetails(group.date),
         });
         addToCart(cartKey, item);
       });
@@ -2518,6 +2636,7 @@ const PoojaRegistrationPage = () => {
         [row.pooja.id]: postPrasadam,
       }));
 
+      clearChartDetailsForPooja(row.pooja.id);
       showTemporaryTableMessage(`${row.uiLabel} added to cart.`);
       return;
     }
@@ -2580,6 +2699,9 @@ const PoojaRegistrationPage = () => {
   };
 
   const handleCloseModal = () => {
+    if (selectedPooja) {
+      clearChartDetailsForPooja(selectedPooja.id);
+    }
     setSelectedPooja(null);
     setDateValue('');
     setFormError('');
@@ -2646,21 +2768,48 @@ const PoojaRegistrationPage = () => {
     const selectedRecurrenceSelection = selectedPooja ? resolveRecurrenceSelection(selectedPooja.id) : undefined;
 
     if (requiresChartDetails) {
-      const missingEntry = membersPayload.find((entry) => {
-        const details = getChartDetailsForMember(selectedPooja.id, entry.key);
-        return !details.date || !details.note.trim();
-      });
-      if (missingEntry) {
-        const memberLabel = missingEntry.payload.name || 'devotee';
-        setFormError(`Please provide a preferred date and instructions for ${memberLabel}.`);
+      const groups = chartPreferredDateGroupsMap[selectedPooja.id] ?? [];
+      if (groups.length === 0) {
+        setFormError('Please specify at least one preferred date.');
+        return;
+      }
+
+      const assignedMembers = new Set<string>();
+      for (const group of groups) {
+        if (!group.date) {
+          setFormError('Please choose a date for each preferred entry.');
+          return;
+        }
+        if (!group.note.trim()) {
+          setFormError('Please add donor instructions for each preferred date.');
+          return;
+        }
+        if (group.memberKeys.length === 0) {
+          setFormError('Assign at least one devotee to each preferred date.');
+          return;
+        }
+        group.memberKeys.forEach((key) => assignedMembers.add(key));
+      }
+
+      const unassignedMembers = normalizedSelectedMembers.filter((key) => !assignedMembers.has(key));
+      if (unassignedMembers.length > 0) {
+        setFormError('Please assign every selected devotee to a preferred date.');
         return;
       }
 
       const buildRecurrenceForDetails = (detailsDate: string | undefined) =>
         buildRecurrenceFields(selectedRecurrenceSelection, detailsDate);
 
-      membersPayload.forEach((entry) => {
-        const details = getChartDetailsForMember(selectedPooja.id, entry.key);
+      groups.forEach((group) => {
+        const groupMemberKeys = Array.from(new Set(group.memberKeys));
+        const membersPayloadForGroup = groupMemberKeys.map((key, index) => ({
+          key,
+          payload: buildMemberPayloadFromKey(key, index === 0 ? resolvedName : undefined),
+        }));
+        const primaryPayload =
+          membersPayloadForGroup[0]?.payload ??
+          buildMemberPayloadFromKey(groupMemberKeys[0] ?? 'self', resolvedName);
+
         const item = createCartItem({
           poojaId: selectedPooja.id,
           poojaName: selectedPooja.name,
@@ -2668,8 +2817,8 @@ const PoojaRegistrationPage = () => {
           poojaImage: selectedPooja.image ?? '',
           poojaImageUrl: selectedPooja.image_url,
           amount: selectedPooja.amount,
-          bookingDate: details.date,
-          fullName: entry.payload.name ?? resolvedName,
+          bookingDate: group.date,
+          fullName: primaryPayload?.name ?? resolvedName,
           email: resolvedEmail,
           phoneNumber: contactDetails.phoneNumber,
           address: contactDetails.address,
@@ -2682,19 +2831,20 @@ const PoojaRegistrationPage = () => {
             chosenDayOption?.code === 'CS' && selectedTamilStarOption
               ? formatDayOptionLabel(selectedTamilStarOption)
               : null,
-          customDayDate: details.date ?? null,
-          customDayNote: details.note.trim() ?? null,
+          customDayDate: group.date ?? null,
+          customDayNote: group.note.trim() ?? null,
           postPrasadam,
-          memberId: entry.payload.id ?? null,
-          memberRelationship: entry.payload.relationship ?? undefined,
-          memberGender: entry.payload.gender,
-          memberTamilStar: entry.payload.tamilStar,
-          memberRasi: entry.payload.rasi,
-          memberGothra: entry.payload.gothra,
-          memberDob: entry.payload.dob ?? null,
-          targetDonorId: entry.payload.donorId ?? baseUserId ?? null,
-          members: [entry.payload],
-          ...buildRecurrenceForDetails(details.date),
+          memberId: primaryPayload?.id ?? null,
+          memberRelationship: primaryPayload?.relationship ?? undefined,
+          memberGender: primaryPayload?.gender,
+          memberTamilStar: primaryPayload?.tamilStar,
+          memberRasi: primaryPayload?.rasi,
+          memberGothra: primaryPayload?.gothra,
+          memberDob: primaryPayload?.dob ?? null,
+          memberFamilyName: primaryPayload?.familyName ?? null,
+          targetDonorId: primaryPayload?.donorId ?? baseUserId ?? null,
+          members: membersPayloadForGroup.map((entry) => entry.payload),
+          ...buildRecurrenceForDetails(group.date),
         });
         addToCart(cartKey, item);
       });
@@ -2764,6 +2914,8 @@ const PoojaRegistrationPage = () => {
     handleCloseModal();
   };
 
+  const selectedDayOption = selectedDayOptionId ? dayOptionMap.get(selectedDayOptionId) : undefined;
+
   const selectedPoojaDayOptionDisabled = selectedPooja
     ? isDayOptionDisabledPooja({
         name: selectedPooja.name,
@@ -2781,57 +2933,102 @@ const PoojaRegistrationPage = () => {
     : dayOptionChoices;
 
   const modalRequiresChartDetails =
-    selectedPooja && !selectedPoojaDayOptionDisabled && selectedDayOptionId
-      ? isChartDayOption(dayOptionMap.get(selectedDayOptionId))
-      : false;
+    Boolean(
+      selectedPooja &&
+        !selectedPoojaDayOptionDisabled &&
+        selectedDayOption &&
+        isChartDayOption(selectedDayOption),
+    );
 
-  const renderChartDetailsInputs = (
-    poojaId: number,
-    memberKeys: string[],
-    matchingItem?: CartItem,
-    extraClasses?: string,
-  ) => {
-    if (memberKeys.length === 0) {
-      return (
-        <p className={clsx('text-xs text-gray-500', extraClasses)}>
-          Select devotees to add preferred dates and instructions for each.
-        </p>
-      );
+  useEffect(() => {
+    if (!modalRequiresChartDetails || !selectedPooja) {
+      return;
     }
+    ensurePreferredDateGroups(selectedPooja.id, 1);
+  }, [modalRequiresChartDetails, selectedPooja, ensurePreferredDateGroups]);
+
+  const renderPreferredDateGroupsEditor = (poojaId: number, availableOptions: SSOption[]) => {
+    const groups = chartPreferredDateGroupsMap[poojaId] ?? [];
+    const handleCountChange = (event: ChangeEvent<HTMLInputElement>) => {
+      const parsed = Number(event.target.value);
+      const nextCount = Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
+      ensurePreferredDateGroups(poojaId, nextCount);
+    };
+
     return (
-      <div className={clsx('space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3', extraClasses)}>
-        {memberKeys.map((memberKey) => {
-          const chartDetails = getChartDetailsForMember(poojaId, memberKey);
-          const label = describeMemberKey(memberKey, matchingItem) || 'Devotee';
-          return (
-            <div key={memberKey} className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
-              <p className="text-xs font-semibold text-gray-600">
-                Preferred date for{' '}
-                <span className="font-semibold text-orange-600">{label}</span>
-              </p>
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-700">Number of preferred dates</label>
+          <input
+            type="number"
+            min={1}
+            className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+            value={groups.length || 1}
+            onChange={handleCountChange}
+          />
+        </div>
+        {groups.length === 0 && (
+          <p className="text-xs text-gray-500">
+            Enter how many preferred dates you need to begin assigning devotees.
+          </p>
+        )}
+        {groups.map((group, index) => (
+          <div key={group.key} className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-xs font-semibold text-gray-600">
+              Preferred date {index + 1}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-gray-700">Preferred Date</label>
                 <input
                   type="date"
-                  min={new Date().toISOString().split('T')[0]}
+                  min={todayIso}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                  value={chartDetails.date}
-                  onChange={(event) => updateChartDetails(poojaId, memberKey, 'date', event.target.value)}
+                  value={group.date}
+                  onChange={(event) =>
+                    updatePreferredDateGroupField(poojaId, group.key, 'date', event.target.value)
+                  }
                 />
               </div>
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Donor Instructions</label>
-                <textarea
-                  rows={2}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                  value={chartDetails.note}
-                  onChange={(event) => updateChartDetails(poojaId, memberKey, 'note', event.target.value)}
-                  placeholder="Add donor instructions"
-                />
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Devotees</label>
+                {(() => {
+                  const selectedNames = group.memberKeys
+                    .map((key) => availableOptions.find((option) => option.value === key)?.label)
+                    .filter(Boolean);
+                  const label =
+                    selectedNames.length > 0 ? selectedNames.join(', ') : 'Select devotees';
+                  return (
+                    <MemberMultiSelect
+                      label={label}
+                      options={availableOptions}
+                      selectedValues={group.memberKeys}
+                      onToggleValue={(value) => togglePreferredDateGroupMember(poojaId, group.key, value)}
+                      disabled={availableOptions.length === 0}
+                    />
+                  );
+                })()}
+                {availableOptions.length === 0 && (
+                  <p className="mt-1 text-[0.65rem] text-gray-500">
+                    Select devotees from above to assign them to this date.
+                  </p>
+                )}
               </div>
             </div>
-          );
-        })}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Donor Instructions</label>
+              <textarea
+                rows={2}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                value={group.note}
+                onChange={(event) =>
+                  updatePreferredDateGroupField(poojaId, group.key, 'note', event.target.value)
+                }
+                placeholder="Add donor instructions"
+              />
+            </div>
+          </div>
+        ))}
       </div>
     );
   };
@@ -3028,6 +3225,8 @@ const PoojaRegistrationPage = () => {
                         const inCart = matchingItems.length > 0;
                         const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
                         const requiresChartDetails = isChartDayOption(selectedDayOption);
+                        const hideDevoteesForRow =
+                          !dayOptionDisabled && selectedDayOption ? isChartDayOption(selectedDayOption) : false;
                         const occurrenceState = dayOccurrenceMap[row.pooja.id];
                         const iconLabel = inCart
                           ? `Remove ${row.uiLabel} from cart`
@@ -3084,52 +3283,57 @@ const PoojaRegistrationPage = () => {
                                 dayOptionDisabled ? (
                                   <span className="text-xs text-gray-500">Day option not required for this pooja</span>
                                 ) : (
-                                <div className="space-y-3">
-                                  <SearchableSelect
-                                    options={availableDayOptions.map((option) => ({
-                                      value: String(option.id),
-                                      label: formatDayOptionLabel(option),
-                                    }))}
-                                    value={effectiveDayId !== null ? String(effectiveDayId) : ''}
-                                    onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
-                                    placeholder="Select day option"
-                                    className="w-64"
-                                  />
-                                  {selectedDayOption?.code === 'CS' && (
-                                    <div className="mt-2">
-                                      <select
-                                        value={tamilStarSelectionMap[row.pooja.id] ?? ''}
-                                        onChange={(event) =>
-                                          handleTamilStarSelection(row.pooja.id, event.target.value)
-                                        }
-                                        className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
-                                        aria-label="Select your star"
-                                      >
-                                        <option value="">Select your star</option>
-                                        {tamilStarOptions.map((option) => (
-                                          <option key={option.id} value={String(option.id)}>
-                                            {formatDayOptionLabel(option)}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  )}
-                                  {requiresChartDetails &&
-                                    renderChartDetailsInputs(row.pooja.id, memberKeysForDisplay, matchingItem)}
-                                </div>
-                              )
+                                  <div className="space-y-3">
+                                    <SearchableSelect
+                                      options={availableDayOptions.map((option) => ({
+                                        value: String(option.id),
+                                        label: formatDayOptionLabel(option),
+                                      }))}
+                                      value={effectiveDayId !== null ? String(effectiveDayId) : ''}
+                                      onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
+                                      placeholder="Select day option"
+                                      className="w-64"
+                                    />
+                                    {selectedDayOption?.code === 'CS' && (
+                                      <div className="mt-2">
+                                        <select
+                                          value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                          onChange={(event) =>
+                                            handleTamilStarSelection(row.pooja.id, event.target.value)
+                                          }
+                                          className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
+                                          aria-label="Select your star"
+                                        >
+                                          <option value="">Select your star</option>
+                                          {tamilStarOptions.map((option) => (
+                                            <option key={option.id} value={String(option.id)}>
+                                              {formatDayOptionLabel(option)}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    )}
+                                    {requiresChartDetails && (
+                                      <div className="mt-3">
+                                        {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
                               ) : (
                                 <span className="text-xs text-gray-500">Not configured</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm overflow-visible">
-                            <MemberMultiSelect
-                              label={memberButtonLabel}
-                              options={memberOptions}
-                              selectedValues={memberKeysForDisplay}
-                              onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
-                              disabled={memberOptions.length === 0}
-                            />
+                              {!hideDevoteesForRow && (
+                                <MemberMultiSelect
+                                  label={memberButtonLabel}
+                                  options={memberOptions}
+                                  selectedValues={memberKeysForDisplay}
+                                  onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
+                                  disabled={memberOptions.length === 0}
+                                />
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-700">
                               {showDefaultFirstDay ? (
@@ -3385,6 +3589,7 @@ const PoojaRegistrationPage = () => {
                     const inCart = matchingItems.length > 0;
                     const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
                     const requiresChartDetails = isChartDayOption(selectedDayOption);
+                    const hideDevoteesForRow = !dayOptionDisabled && isChartDayOption(selectedDayOption);
                     const occurrenceState = dayOccurrenceMap[row.pooja.id];
                     const iconLabel = inCart
                       ? `Remove ${row.uiLabel} from cart`
@@ -3487,8 +3692,11 @@ const PoojaRegistrationPage = () => {
                                     </select>
                                   </div>
                                 )}
-                                {requiresChartDetails &&
-                                  renderChartDetailsInputs(row.pooja.id, memberKeysForDisplay, matchingItem)}
+                  {requiresChartDetails && (
+                    <div className="mt-3">
+                      {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
+                    </div>
+                  )}
                               </div>
                             )
                             ) : (
@@ -3885,15 +4093,11 @@ const PoojaRegistrationPage = () => {
                           placeholder="Select day option"
                           className="w-full"
                         />
-                        {modalRequiresChartDetails &&
-                          renderChartDetailsInputs(
-                            selectedPooja.id,
-                            normalizedSelectedMemberIds.length > 0
-                              ? normalizedSelectedMemberIds
-                              : fallbackMemberSelection,
-                            undefined,
-                            'mt-3',
-                          )}
+                        {modalRequiresChartDetails && (
+                          <div className="mt-3">
+                            {renderPreferredDateGroupsEditor(selectedPooja.id, memberOptions)}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>

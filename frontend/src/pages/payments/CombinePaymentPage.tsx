@@ -5,6 +5,7 @@ import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
 import api from '../../lib/api';
 import { loadPdfMake } from '../../lib/pdfMakeLoader';
+import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { useCartStore, type CartItem } from '../../store/cart';
 import { useAuthStore } from '../../store/auth';
 import { usePaymentStore } from '../../store/payments';
@@ -111,6 +112,8 @@ const formatMonthLabel = (key: string) => {
   return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 };
 
+const MIN_DONOR_SEARCH_DIGITS = 7;
+
 const buildHistoryMonthOptions = <T,>(
   entries: T[],
   resolveDate: (entry: T) => string | Date | null | undefined,
@@ -162,6 +165,8 @@ const CombinePaymentPage = () => {
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [petalSeed, setPetalSeed] = useState(0);
+  const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
+    useCurrentBalance();
   const [clubTransactionReference, setClubTransactionReference] = useState('');
   const [clubTransactionReferenceError, setClubTransactionReferenceError] = useState<string | null>(null);
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -212,17 +217,21 @@ const CombinePaymentPage = () => {
   }, [selectedDonorSummaries]);
   const isSelectedDonorLoading = selectedDonorLoadingIds.length > 0;
   const [donorSearch, setDonorSearch] = useState('');
+  const donorSearchDigits = donorSearch.replace(/\D/g, '');
   const filteredDirectory = useMemo(() => {
-    const query = donorSearch.trim().toLowerCase();
-    if (query.length === 0) {
-      return donorDirectory;
+    if (donorSearchDigits.length < MIN_DONOR_SEARCH_DIGITS) {
+      return [];
     }
+    const query = donorSearch.trim().toLowerCase();
     return donorDirectory.filter((entry) => {
       const name = entry.name?.toLowerCase() ?? '';
-      const phone = entry.phone_number?.toLowerCase() ?? '';
-      return name.includes(query) || phone.includes(query);
+      if (query && name.includes(query)) {
+        return true;
+      }
+      const phoneDigits = entry.phone_number?.replace(/\D/g, '') ?? '';
+      return phoneDigits.includes(donorSearchDigits);
     });
-  }, [donorDirectory, donorSearch]);
+  }, [donorDirectory, donorSearch, donorSearchDigits]);
   const handleToggleDonorSelected = (donorId: number) => {
     setSelectedDonorIds((prev) => {
       if (prev.includes(donorId)) {
@@ -233,6 +242,7 @@ const CombinePaymentPage = () => {
   };
 
   const combinedTotal = yourTotalAmount + clubTotals.total;
+  const combinedAmountDue = Math.max(0, combinedTotal - (currentBalance ?? 0));
   const combinedPoojaCount = cartItems.length + clubTotals.itemsCount;
   const petals = useMemo(
     () =>
@@ -570,7 +580,7 @@ const CombinePaymentPage = () => {
     handleClearClubbedDonor();
   };
 
-  const handlePaymentCompleted = () => {
+  const handlePaymentCompleted = async () => {
     const trimmedReference = clubTransactionReference.trim();
     if (!trimmedReference) {
       setClubTransactionReferenceError('Transaction ID or UPI ID is required.');
@@ -592,6 +602,18 @@ const CombinePaymentPage = () => {
       })),
       combinedTotal,
     });
+    if (typeof currentBalance === 'number' && combinedTotal > 0) {
+      const updatedBalance = Math.max(0, currentBalance - combinedTotal);
+      try {
+        await api.put('auth/profile/', { custom_number: updatedBalance });
+        refreshBalance();
+      } catch (balanceError) {
+        console.error('Unable to refresh current balance after combined payment', balanceError);
+        setSelectedDonorError(
+          'Payment recorded but unable to refresh current balance. Please reload the page.',
+        );
+      }
+    }
     setPetalSeed((seed) => seed + 1);
     setShowCelebration(true);
     setShowPaymentDetails(false);
@@ -604,8 +626,16 @@ const CombinePaymentPage = () => {
     }, 1800);
   };
 
-  const renderCurrentView = () => (
-    <div className="space-y-6">
+  const renderCurrentView = () => {
+    const remainingDigits = Math.max(0, MIN_DONOR_SEARCH_DIGITS - donorSearchDigits.length);
+    const directoryFeedbackMessage =
+      donorSearchDigits.length < MIN_DONOR_SEARCH_DIGITS
+        ? donorSearchDigits.length === 0
+          ? `Enter at least ${MIN_DONOR_SEARCH_DIGITS} digits of a phone number to display donors.`
+          : `Enter ${remainingDigits} more digit${remainingDigits === 1 ? '' : 's'} to show results.`
+        : 'No donors match your search. Clear the filter to see all donors.';
+    return (
+      <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Poojas</p>
@@ -672,7 +702,7 @@ const CombinePaymentPage = () => {
             <div>
               <div className="flex items-center justify-between">
                 <label htmlFor="donor-search" className="text-sm font-semibold text-slate-700">
-                  Pick donor by name & phone
+                  Pick donor by phone
                 </label>
                 <span className="text-[0.65rem] uppercase tracking-wide text-slate-400">
                   Tap to toggle multiple
@@ -681,7 +711,7 @@ const CombinePaymentPage = () => {
               <input
                 id="donor-search"
                 type="search"
-                placeholder="Search name or phone"
+                placeholder="Search phone (min 7 digits)"
                 value={donorSearch}
                 onChange={(event) => setDonorSearch(event.target.value)}
                 className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
@@ -689,6 +719,11 @@ const CombinePaymentPage = () => {
               />
               {directoryError && (
                 <p className="mt-2 text-xs font-medium text-red-600">{directoryError}</p>
+              )}
+              {donorSearchDigits.length < MIN_DONOR_SEARCH_DIGITS && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Results appear after entering at least {MIN_DONOR_SEARCH_DIGITS} digits of the phone number.
+                </p>
               )}
             </div>
 
@@ -704,48 +739,48 @@ const CombinePaymentPage = () => {
               </div>
             )}
 
-            {!directoryLoading && donorDirectory.length > 0 && filteredDirectory.length === 0 && (
-              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                No donors match your search. Clear the filter to see all donors.
-              </div>
-            )}
-
-            {!directoryLoading && filteredDirectory.length > 0 && (
-              <div className="grid gap-2 max-h-56 overflow-y-auto sm:grid-cols-2">
-                {filteredDirectory.map((entry) => {
-                  const isSelected = selectedDonorIds.includes(entry.id);
-                  return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      onClick={() => handleToggleDonorSelected(entry.id)}
-                      className={`w-full rounded-2xl border px-4 py-3 text-left shadow-sm transition focus-visible:outline-none ${
-                        isSelected
-                          ? 'border-orange-300 bg-orange-50'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                      aria-pressed={isSelected}
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">
-                            {entry.name || `Donor #${entry.id}`}
-                          </p>
-                          <p className="text-xs text-slate-500">{entry.phone_number || 'Phone unavailable'}</p>
+            {!directoryLoading && donorDirectory.length > 0 && (
+              filteredDirectory.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                  {directoryFeedbackMessage}
+                </div>
+              ) : (
+                <div className="grid gap-2 max-h-56 overflow-y-auto sm:grid-cols-2">
+                  {filteredDirectory.map((entry) => {
+                    const isSelected = selectedDonorIds.includes(entry.id);
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => handleToggleDonorSelected(entry.id)}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left shadow-sm transition focus-visible:outline-none ${
+                          isSelected
+                            ? 'border-orange-300 bg-orange-50'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                        aria-pressed={isSelected}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {entry.name || `Donor #${entry.id}`}
+                            </p>
+                            <p className="text-xs text-slate-500">{entry.phone_number || 'Phone unavailable'}</p>
+                          </div>
+                          <span
+                            className={`h-5 w-5 rounded-full border-2 ${
+                              isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-white'
+                            }`}
+                          />
                         </div>
-                        <span
-                          className={`h-5 w-5 rounded-full border-2 ${
-                            isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-white'
-                          }`}
-                        />
-                      </div>
-                      <p className="mt-1 text-[0.65rem] uppercase tracking-wide text-slate-400">
-                        Tap to {isSelected ? 'remove' : 'add'} in your club
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+                        <p className="mt-1 text-[0.65rem] uppercase tracking-wide text-slate-400">
+                          Tap to {isSelected ? 'remove' : 'add'} in your club
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
             )}
 
             {selectedDonorError && (
@@ -928,16 +963,27 @@ const CombinePaymentPage = () => {
         )}
       </div>
 
-        {selectedDonorSummaries.length > 0 && showPaymentDetails && (
-          <div className="space-y-4 rounded-2xl border border-orange-100 bg-white p-5 shadow-inner">
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
+      {selectedDonorSummaries.length > 0 && showPaymentDetails && (
+        <div className="space-y-4 rounded-2xl border border-orange-100 bg-white p-5 shadow-inner">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {balanceLoading
+                ? 'Loading…'
+                : currentBalance !== null
+                  ? `₹ ${formatCurrency(currentBalance)}`
+                  : 'Not set'}
+            </p>
+            {balanceError && <p className="mt-1 text-xs text-rose-600">{balanceError}</p>}
+          </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <img
                   src="/images/payment-qr-code.jpg"
                   alt="Temple payment QR code"
                   className="h-72 w-72 rounded-lg border border-slate-200 bg-white p-3 object-contain"
                 />
-                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(combinedTotal)}</p>
+                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(combinedAmountDue)}</p>
               </div>
               <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
                 <div>
@@ -996,6 +1042,7 @@ const CombinePaymentPage = () => {
         )}
     </div>
   );
+  };
 
   const renderHistoryContent = () => {
     const renderPreviewList = (items: CartItem[]) => {
