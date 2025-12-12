@@ -128,6 +128,7 @@ class DonorProfile(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     family_name = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True)
+    custom_number = models.IntegerField(blank=True, null=True)
     donor_number = models.PositiveIntegerField(unique=True, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

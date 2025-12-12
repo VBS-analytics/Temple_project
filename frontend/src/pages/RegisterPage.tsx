@@ -4,10 +4,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { indianCities } from '../data/indianCities';
-import { nakshatraOptions } from '../data/nakshatraOptions';
+import { gothraOptions, rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
+import { CountryCodePicker } from '../components/CountryCodePicker';
+import { CountryOption } from '../types/country';
 
 const cityOptions = indianCities;
 const cityStateLookup = (() => {
@@ -21,28 +23,6 @@ const cityStateLookup = (() => {
   return map;
 })();
 
-const validNakshatraSet = new Set(nakshatraOptions.map((option) => option.toLowerCase()));
-const rasiOptions = [
-  'மேஷம்',
-  'ரிஷபம்',
-  'மிதுனம்',
-  'கடகம்',
-  'சிம்மம்',
-  'கன்னி',
-  'துலாம்',
-  'விருச்சிகம்',
-  'தனுசு',
-  'மகரம்',
-  'கும்பம்',
-  'மீனம்',
-] as const;
-
-type CountryOption = {
-  code: CountryDialCode['dialCode'];
-  label: CountryDialCode['name'];
-  iso: CountryDialCode['iso2'];
-};
-
 const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
   code: entry.dialCode,
   label: entry.name,
@@ -50,11 +30,6 @@ const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
 }));
 
 const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
-
-const flagEmoji = (iso: string) =>
-  iso
-    .toUpperCase()
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 
 interface FormValues {
   phone_number: string;
@@ -143,9 +118,21 @@ const RegisterPage = () => {
 
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(defaultCountry);
   const [localPhoneNumber, setLocalPhoneNumber] = useState('');
-  const combinedPhoneNumber = localPhoneNumber ? `${selectedCountry.code}${localPhoneNumber}` : '';
-  const selectedCountryFlag = selectedCountry.iso ? flagEmoji(selectedCountry.iso) : '🌐';
-
+  const [forceInternationalInput, setForceInternationalInput] = useState(false);
+  const combinedPhoneNumber = (() => {
+    if (!localPhoneNumber) {
+      return '';
+    }
+    if (forceInternationalInput) {
+      const internationalDigits = localPhoneNumber.startsWith('00')
+        ? localPhoneNumber.slice(2)
+        : localPhoneNumber;
+      if (internationalDigits) {
+        return `+${internationalDigits}`;
+      }
+    }
+    return `${selectedCountry.code}${localPhoneNumber}`;
+  })();
   useEffect(() => {
     setValue('phone_number', combinedPhoneNumber);
   }, [combinedPhoneNumber, setValue]);
@@ -158,8 +145,15 @@ const RegisterPage = () => {
   };
 
   const handleLocalPhoneInput = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 15);
+    const trimmedValue = value.trim();
+    const digits = trimmedValue.replace(/\D/g, '').slice(0, 15);
+    const explicitInternational =
+      Boolean(trimmedValue) &&
+      (trimmedValue.startsWith('+') ||
+        trimmedValue.startsWith('00') ||
+        digits.startsWith('00'));
     setLocalPhoneNumber(digits);
+    setForceInternationalInput(explicitInternational);
   };
 
   const familySelection = watch('family_selection');
@@ -616,33 +610,15 @@ const RegisterPage = () => {
                             </label>
                             <div className="relative">
                               <div className="absolute inset-y-0 left-0 flex items-center">
-                                <div className="relative">
-                                  <div
-                                    className={`flex h-full items-center gap-2 rounded-l-xl border px-3 py-3 text-sm font-semibold ${
-                                      isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 bg-white shadow-sm' : 'border-gray-300 bg-white'
-                                    } pointer-events-none`}
-                                  >
-                                    <span className="text-lg leading-none">{selectedCountryFlag}</span>
-                                    <span>{selectedCountry.code}</span>
-                                    <svg className="h-3 w-3 text-gray-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" />
-                                    </svg>
-                                  </div>
-                                  <select
-                                    value={selectedCountry.iso}
-                                    onChange={(event) => handleCountryCodeChange(event.target.value as CountryOption['iso'])}
-                                    aria-label="Country code"
-                                    className="absolute inset-y-0 left-0 w-32 opacity-0 cursor-pointer"
-                                    onFocus={() => handleFocus('phone_number')}
-                                    onBlur={handleBlur}
-                                  >
-                                    {countryCodeOptions.map((option) => (
-                                      <option key={option.iso} value={option.iso}>
-                                        {option.label} ({option.code})
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
+                                <CountryCodePicker
+                                  options={countryCodeOptions}
+                                  selected={selectedCountry}
+                                  onSelect={(iso) => handleCountryCodeChange(iso)}
+                                  isFocused={isFocused === 'phone_number'}
+                                  hasError={!!errors.phone_number}
+                                  onFocus={() => handleFocus('phone_number')}
+                                  onBlur={handleBlur}
+                                />
                               </div>
                               <input
                                 type="tel"
@@ -1209,7 +1185,7 @@ const RegisterPage = () => {
                                       onBlurCapture={handleBlur}
                                     >
                                       <option value="">Select Nakshatra</option>
-                                      {nakshatraOptions.map((option) => (
+                                      {tamilStarOptions.map((option) => (
                                         <option key={option} value={option}>
                                           {option}
                                         </option>
@@ -1255,19 +1231,11 @@ const RegisterPage = () => {
                                   onBlur={handleBlur}
                                 >
                                   <option value="">Select Gothram</option>
-                                  <option value="ஆத்ரேயா">ஆத்ரேயா</option>
-                                  <option value="நைத்திருவ காட்ச்யபம்">நைத்திருவ காட்ச்யபம்</option>
-                                  <option value="காஷ்யப கோத்திரம்">காஷ்யப கோத்திரம்</option>
-                                  <option value="வாதூல கோத்திரம்">வாதூல கோத்திரம்</option>
-                                  <option value="கார்கேயா">கார்கேயா</option>
-                                  <option value="கவுண்டின்யா">கவுண்டின்யா</option>
-                                  <option value="கெளஷிகா">கெளஷிகா</option>
-                                  <option value="கெளதமர்">கெளதமர்</option>
-                                  <option value="பரத்வாஜா">பரத்வாஜா</option>
-                                  <option value="ஹரிதா">ஹரிதா</option>
-                                  <option value="செளநகா">செளநகா</option>
-                                  <option value="சாண்டில்யர்">சாண்டில்யர்</option>
-                                  <option value="ஸ்ரீவத்ஸ கோத்திரம்">ஸ்ரீவத்ஸ கோத்திரம்</option>
+                                  {gothraOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                                   <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

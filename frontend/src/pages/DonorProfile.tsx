@@ -7,6 +7,7 @@ import api, { extractResults } from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import type { CartItem } from '../store/cart';
+import { gothraOptions, rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 
 // All interfaces remain the same
 interface ApiUser {
@@ -622,67 +623,6 @@ const DonorProfile = () => {
     'Other',
   ];
 
-  const GOTHRA_OPTIONS = [
-  'ஆத்ரேயா',
-  'நைத்திருவ காட்ச்யபம்',
-  'காஷ்யப கோத்திரம்',
-  'வாதூல கோத்திரம்',
-  'கார்கேயா',
-    'கவுண்டின்யா',
-    'கெளஷிகா',
-    'கெளதமர்',
-    'பரத்வாஜா',
-    'ஹரிதா',
-    'செளநகா',
-    'சாண்டில்யர்',
-    'ஸ்ரீவத்ஸ கோத்திரம்',
-  ];
-
-  const TAMIL_STAR_OPTIONS = [
-    'அசுவினி',
-    'பரணி',
-    'கிருத்திகை',
-    'ரோகிணி',
-    'மிருகசீரிடம்',
-    'திருவாதிரை',
-    'புனர்பூசம்',
-    'பூசம்',
-    'ஆயில்யம்',
-    'மகம்',
-    'பூரம்',
-    'உத்தரம்',
-    'அஸ்தம்',
-    'சித்திரை',
-    'சுவாதி',
-    'விசாகம்',
-    'அனுஷம்',
-    'கேட்டை',
-    'மூலம்',
-    'பூராடம்',
-    'உத்திராடம்',
-    'திருவோணம்',
-    'அவிட்டம்',
-    'சதயம்',
-    'பூரட்டாதி',
-    'உத்திரட்டாதி',
-    'ரேவதி',
-  ];
-
-  const RASI_OPTIONS = [
-    'மேஷம்',
-    'ரிஷபம்',
-    'மிதுனம்',
-    'கடகம்',
-    'சிம்மம்',
-    'கன்னி',
-    'துலாம்',
-    'விருச்சிகம்',
-    'தனுசு',
-    'மகரம்',
-    'கும்பம்',
-    'மீனம்',
-  ];
-
   const createInitialFormState = (profileData?: ApiDonorProfile): FamilyMemberFormState => ({
     name: '',
     relationship: '',
@@ -1171,7 +1111,7 @@ const DonorProfile = () => {
                       onChange={handleProfileInputChange('gothra')}
                     >
                       <option value="">Select Gothra</option>
-                      {GOTHRA_OPTIONS.map((opt) => (
+                      {gothraOptions.map((opt) => (
                         <option key={opt} value={opt}>
                           {opt}
                         </option>
@@ -1186,7 +1126,7 @@ const DonorProfile = () => {
                       onChange={handleProfileInputChange('tamil_star')}
                     >
                       <option value="">Select Tamil star</option>
-                      {TAMIL_STAR_OPTIONS.map((star) => (
+                      {tamilStarOptions.map((star) => (
                         <option key={star} value={star}>
                           {star}
                         </option>
@@ -1201,7 +1141,7 @@ const DonorProfile = () => {
                       onChange={handleProfileInputChange('rasi')}
                     >
                       <option value="">Select Rasi</option>
-                      {RASI_OPTIONS.map((option) => (
+                      {rasiOptions.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
@@ -1358,7 +1298,7 @@ const DonorProfile = () => {
                             }
                           >
                             <option value="">Select Rasi</option>
-                            {RASI_OPTIONS.map((option) => (
+                            {rasiOptions.map((option) => (
                               <option key={option} value={option}>
                                 {option}
                               </option>
@@ -1378,7 +1318,7 @@ const DonorProfile = () => {
                             }
                           >
                             <option value="">Select Tamil star</option>
-                            {TAMIL_STAR_OPTIONS.map((star) => (
+                            {tamilStarOptions.map((star) => (
                               <option key={star} value={star}>
                                 {star}
                               </option>
@@ -1393,7 +1333,7 @@ const DonorProfile = () => {
                             onChange={handleInputChange('gothra')}
                           >
                             <option value="">Select Gothra</option>
-                            {GOTHRA_OPTIONS.map((opt) => (
+                            {gothraOptions.map((opt) => (
                               <option key={opt} value={opt}>
                                 {opt}
                               </option>
@@ -1512,7 +1452,7 @@ const DonorProfile = () => {
                               }
                             >
                               <option value="">Select Rasi</option>
-                              {RASI_OPTIONS.map((option) => (
+                              {rasiOptions.map((option) => (
                                 <option key={option} value={option}>
                                   {option}
                                 </option>
@@ -1532,7 +1472,7 @@ const DonorProfile = () => {
                               }
                             >
                               <option value="">Select Tamil star</option>
-                              {TAMIL_STAR_OPTIONS.map((star) => (
+                              {tamilStarOptions.map((star) => (
                                 <option key={star} value={star}>
                                   {star}
                                 </option>
@@ -1547,7 +1487,7 @@ const DonorProfile = () => {
                               onChange={handleInputChange('gothra')}
                             >
                               <option value="">Select Gothra</option>
-                              {GOTHRA_OPTIONS.map((opt) => (
+                              {gothraOptions.map((opt) => (
                                 <option key={opt} value={opt}>
                                   {opt}
                                 </option>
@@ -1724,7 +1664,7 @@ const DonorProfile = () => {
                                 }
                               >
                                 <option value="">Select Rasi</option>
-                                {RASI_OPTIONS.map((option) => (
+                                {rasiOptions.map((option) => (
                                   <option key={option} value={option}>
                                     {option}
                                   </option>
@@ -1743,7 +1683,7 @@ const DonorProfile = () => {
                                 }
                               >
                                 <option value="">Select Tamil star</option>
-                                {TAMIL_STAR_OPTIONS.map((star) => (
+                                {tamilStarOptions.map((star) => (
                                   <option key={star} value={star}>
                                     {star}
                                   </option>
@@ -1757,7 +1697,7 @@ const DonorProfile = () => {
                                 onChange={handleInputChange('gothra')}
                               >
                                 <option value="">Select Gothra</option>
-                                {GOTHRA_OPTIONS.map((opt) => (
+                                {gothraOptions.map((opt) => (
                                   <option key={opt} value={opt}>
                                     {opt}
                                   </option>
@@ -1875,7 +1815,7 @@ const DonorProfile = () => {
                                     }
                                   >
                                     <option value="">Select Rasi</option>
-                                    {RASI_OPTIONS.map((option) => (
+                                    {rasiOptions.map((option) => (
                                       <option key={option} value={option}>
                                         {option}
                                       </option>
@@ -1894,7 +1834,7 @@ const DonorProfile = () => {
                                     }
                                   >
                                     <option value="">Select Tamil star</option>
-                                    {TAMIL_STAR_OPTIONS.map((star) => (
+                                    {tamilStarOptions.map((star) => (
                                       <option key={star} value={star}>
                                         {star}
                                       </option>
@@ -1908,7 +1848,7 @@ const DonorProfile = () => {
                                     onChange={handleInputChange('gothra')}
                                   >
                                     <option value="">Select Gothra</option>
-                                    {GOTHRA_OPTIONS.map((opt) => (
+                                    {gothraOptions.map((opt) => (
                                       <option key={opt} value={opt}>
                                         {opt}
                                       </option>

@@ -8,6 +8,7 @@ import { loadPdfMake } from '../../lib/pdfMakeLoader';
 import { useCartStore } from '../../store/cart';
 import { usePaymentStore } from '../../store/payments';
 import { useAuthStore } from '../../store/auth';
+import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import type { CartItem } from '../../store/cart';
 
 const formatCurrency = (value?: number | string | null) => {
@@ -362,6 +363,8 @@ const PaymentPage = () => {
   const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
   const [transactionReference, setTransactionReference] = useState('');
   const [petalSeed, setPetalSeed] = useState(0);
+  const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
+    useCurrentBalance();
 
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const petals = useMemo(
@@ -488,6 +491,16 @@ const PaymentPage = () => {
     }
 
     addGeneralPaymentHistory(paymentSnapshot);
+    if (typeof currentBalance === 'number' && paymentSnapshot.totalAmount > 0) {
+      const updatedBalance = Math.max(0, currentBalance - paymentSnapshot.totalAmount);
+      try {
+        await api.put('auth/profile/', { custom_number: updatedBalance });
+        refreshBalance();
+      } catch (balanceError) {
+        console.error('Unable to refresh current balance after payment', balanceError);
+        setRegistrationError('Payment recorded but unable to refresh current balance. Please reload.');
+      }
+    }
     setPetalSeed((seed) => seed + 1);
     setShowCelebration(true);
     if (celebrationTimeoutRef.current) {
@@ -634,6 +647,7 @@ const PaymentPage = () => {
     }
 
     const { items: snapshotItems, totalAmount: snapshotTotal, createdAt } = paymentSnapshot;
+    const netPaymentAmount = Math.max(0, snapshotTotal - (currentBalance ?? 0));
 
     return (
       <div className="space-y-6">
@@ -641,10 +655,10 @@ const PaymentPage = () => {
           <div>
           </div>
 
-          <div className="rounded-2xl bg-orange-50 px-5 py-3 text-center sm:text-right">
-            <p className="text-xs font-medium uppercase tracking-wide text-orange-600">Total Amount</p>
-            <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(snapshotTotal)}</p>
-          </div>
+        <div className="rounded-2xl bg-orange-50 px-5 py-3 text-center sm:text-right">
+          <p className="text-xs font-medium uppercase tracking-wide text-orange-600">Total Amount</p>
+          <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(snapshotTotal)}</p>
+        </div>
         </div>
 
         <div className="space-y-4">
@@ -721,6 +735,17 @@ const PaymentPage = () => {
 
         {showPaymentDetails && (
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ring-1 ring-orange-100">
+            <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {balanceLoading
+                  ? 'Loading…'
+                  : currentBalance !== null
+                    ? `₹ ${formatCurrency(currentBalance)}`
+                    : 'Not set'}
+              </p>
+              {balanceError && <p className="mt-1 text-xs text-rose-600">{balanceError}</p>}
+            </div>
             <h3 className="text-lg font-semibold text-slate-900">Complete Your Payment</h3>
             <p className="text-sm text-slate-600">Scan the QR code or use the account details to transfer the total amount.</p>
             <div className="mt-5 grid gap-6 md:grid-cols-2">
@@ -730,7 +755,7 @@ const PaymentPage = () => {
                   alt="Temple payment QR code"
                   className="h-72 w-72 rounded-lg border border-slate-200 bg-white p-3 object-contain"
                 />
-                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(snapshotTotal)}</p>
+                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(netPaymentAmount)}</p>
               </div>
               <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
                 <div>

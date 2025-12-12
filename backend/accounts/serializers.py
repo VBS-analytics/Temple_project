@@ -51,6 +51,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "tamil_name",
             "family_name",
             "notes",
+            "custom_number",
         )
         read_only_fields = ("donor_id",)
         extra_kwargs = {
