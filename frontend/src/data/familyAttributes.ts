@@ -1,6 +1,6 @@
 import { nakshatraOptions } from './nakshatraOptions';
 
-export const gothraOptions = [
+export const defaultGothraOptions = [
   'ஆத்ரேயா',
   'நைத்திருவ காட்ச்யபம்',
   'காஷ்யப கோத்திரம்',
@@ -35,6 +35,6 @@ export const rasiOptions = [
 
 export const tamilStarOptions = nakshatraOptions;
 
-export type GothraOption = (typeof gothraOptions)[number];
+export type GothraOption = (typeof defaultGothraOptions)[number];
 export type RasiOption = (typeof rasiOptions)[number];
 export type TamilStarOption = (typeof tamilStarOptions)[number];

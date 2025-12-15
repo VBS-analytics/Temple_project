@@ -9,6 +9,7 @@ import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { useCartStore, type CartItem } from '../../store/cart';
 import { useAuthStore } from '../../store/auth';
 import { usePaymentStore } from '../../store/payments';
+import RevealableAccountSection from '../../components/RevealableAccountSection';
 
 interface DonorDirectoryEntry {
   id: number;
@@ -985,7 +986,7 @@ const CombinePaymentPage = () => {
                 />
                 <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(combinedAmountDue)}</p>
               </div>
-              <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
+              <RevealableAccountSection className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
                   <p className="text-lg font-semibold text-slate-900">ALAMELU V</p>
@@ -1003,7 +1004,7 @@ const CombinePaymentPage = () => {
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</p>
                   <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
                 </div>*/}
-              </div>
+              </RevealableAccountSection>
             </div>
             <div className="mt-4">
               <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="club-transaction-reference">

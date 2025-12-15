@@ -10,6 +10,7 @@ import { usePaymentStore } from '../../store/payments';
 import { useAuthStore } from '../../store/auth';
 import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import type { CartItem } from '../../store/cart';
+import RevealableAccountSection from '../../components/RevealableAccountSection';
 
 const formatCurrency = (value?: number | string | null) => {
   if (value === null || value === undefined) {
@@ -757,7 +758,7 @@ const PaymentPage = () => {
                 />
                 <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(netPaymentAmount)}</p>
               </div>
-              <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
+              <RevealableAccountSection className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
                   <p className="text-lg font-semibold text-slate-900">ALAMELU V</p>
@@ -775,7 +776,7 @@ const PaymentPage = () => {
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</p>
                   <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
                 </div>*/}
-              </div>
+              </RevealableAccountSection>
             </div>
             <div className="mt-6">
               <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="transaction-reference">
@@ -803,7 +804,6 @@ const PaymentPage = () => {
 
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-slate-600">
-            <p>Need to make changes? Return to your cart, update the selections, and save again to refresh this summary.</p>
             <p>Click Payment to reveal the bank transfer details. Once the transfer is complete, click Payment Completed to clear the record.</p>
           </div>
           {!showPaymentDetails ? (

@@ -4,10 +4,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { indianCities } from '../data/indianCities';
-import { gothraOptions, rasiOptions, tamilStarOptions } from '../data/familyAttributes';
+import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
+import { useMasterDataStore } from '../store/masterData';
 import { CountryCodePicker } from '../components/CountryCodePicker';
 import { CountryOption } from '../types/country';
 
@@ -158,6 +159,12 @@ const RegisterPage = () => {
 
   const familySelection = watch('family_selection');
   const donorHeaderText = watch('notes') ?? '';
+  const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
+  const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+
+  useEffect(() => {
+    loadGothraOptions();
+  }, [loadGothraOptions]);
   const donorHeaderCharCount = donorHeaderText.length;
   const donorHeaderWordCount = donorHeaderText.trim() ? donorHeaderText.trim().split(/\s+/).length : 0;
   const cityValue = watch('city');

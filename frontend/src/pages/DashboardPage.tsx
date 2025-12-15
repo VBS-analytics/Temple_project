@@ -6,9 +6,9 @@ import { loadPdfMake } from '../lib/pdfMakeLoader';
 
 import api, { extractResults } from '../lib/api';
 import { isAdmin, useAuthStore } from '../store/auth';
+import { MONTHLY_DONATION_AMOUNT } from '../config/globalConstants';
 
 const TEMPLE_COUNT = 4;
-const MONTHLY_DONATION_AMOUNT = 20000;
 
 interface DonorRecord {
   members?: unknown[];

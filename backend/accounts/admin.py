@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import DonorProfile, FamilyMember, OtpToken, User
+from .models import DonorProfile, FamilyMember, GothraOption, OtpToken, User
 
 
 @admin.register(User)
@@ -58,3 +58,9 @@ class OtpTokenAdmin(admin.ModelAdmin):
 class FamilyMemberAdmin(admin.ModelAdmin):
     list_display = ("user", "name", "relationship", "gender", "rasi")
     search_fields = ("name", "relationship", "user__phone_number", "user__name", "rasi")
+
+
+@admin.register(GothraOption)
+class GothraOptionAdmin(admin.ModelAdmin):
+    list_display = ("name", "display_order", "created_at")
+    ordering = ("display_order", "name")

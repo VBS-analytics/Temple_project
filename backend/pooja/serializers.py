@@ -346,6 +346,9 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
     pooja_option_name = serializers.CharField(source="pooja_option.name", read_only=True)
     pooja_option_code = serializers.CharField(source="pooja_option.code", read_only=True)
     day_option_description = serializers.SerializerMethodField()
+    donor_name = serializers.SerializerMethodField()
+    donor_phone = serializers.SerializerMethodField()
+    donor_email = serializers.SerializerMethodField()
 
     class Meta:
         model = RecurringPoojaPlan
@@ -354,6 +357,9 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
             "pooja_option_name",
             "pooja_option_code",
             "day_option_description",
+            "donor_name",
+            "donor_phone",
+            "donor_email",
             "recurrence_kind",
             "recurrence_frequency",
             "start_date",
@@ -372,6 +378,33 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
         if day_option is None:
             return None
         return getattr(day_option, "description", "") or None
+
+    def get_donor_name(self, obj):
+        donor = getattr(obj, "donor", None)
+        if donor is None:
+            return None
+        name = getattr(donor, "name", "") or ""
+        if name.strip():
+            return name.strip()
+        username = getattr(donor, "username", "") or ""
+        if username.strip():
+            return username.strip()
+        email = getattr(donor, "email", "") or ""
+        if email.strip():
+            return email.strip()
+        return None
+
+    def get_donor_phone(self, obj):
+        donor = getattr(obj, "donor", None)
+        if donor is None:
+            return None
+        return getattr(donor, "phone_number", None)
+
+    def get_donor_email(self, obj):
+        donor = getattr(obj, "donor", None)
+        if donor is None:
+            return None
+        return getattr(donor, "email", None)
 
 
 class RecurringPoojaPlanUpdateSerializer(serializers.ModelSerializer):
