@@ -10,6 +10,7 @@ import { usePaymentStore } from '../../store/payments';
 import { useAuthStore } from '../../store/auth';
 import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { launchUpiLink } from '../../utils/upiLink';
+import { shareImageFile } from '../../utils/shareImageFile';
 import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
 import type { CartItem } from '../../store/cart';
 import RevealableAccountSection from '../../components/RevealableAccountSection';
@@ -365,6 +366,7 @@ const PaymentPage = () => {
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
   const [transactionReference, setTransactionReference] = useState('');
+  const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
     useCurrentBalance();
@@ -433,6 +435,31 @@ const PaymentPage = () => {
       launchUpiLink({ amount });
     },
     [isAndroid, isIos],
+  );
+
+  const handleSharePaymentQr = useCallback(
+    async (amount?: number) => {
+      if (!isIos || typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+        setShareError('Sharing is unavailable on this device; please use your bank/UPI app to scan the QR displayed above.');
+        return;
+      }
+      setShareError(null);
+      try {
+        const shareText = amount
+          ? `Pay ₹ ${formatCurrency(amount)} using this QR. Choose your UPI app from the share panel.`
+          : 'Pay via the temple QR. Choose your UPI app from the share panel.';
+        await shareImageFile({
+          url: PAYMENT_QR_IMAGE_URL,
+          filename: 'temple-payment-qr-code.jpg',
+          title: 'Temple payment QR',
+          text: shareText,
+        });
+      } catch (error) {
+        console.error('Failed to share payment QR', error);
+        setShareError('Sharing is unavailable on this device; please use your bank/UPI app to scan the QR displayed above.');
+      }
+    },
+    [isIos],
   );
 
   useEffect(() => {
@@ -779,7 +806,7 @@ const PaymentPage = () => {
                   className="h-72 w-72 rounded-lg border border-slate-200 bg-white p-3 object-contain"
                 />
                 <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(netPaymentAmount)}</p>
-                {(isAndroid || isIos) ? (
+                {isAndroid && (
                   <>
                     <p className="mt-1 text-xs text-center text-slate-500">
                       Tap "Open UPI apps" to launch whichever handler you already installed; only UPI apps will be shown.
@@ -792,10 +819,28 @@ const PaymentPage = () => {
                       Open UPI apps
                     </button>
                   </>
-                ) : (
+                )}
+                {isIos && (
+                  <>
+                    <p className="mt-1 text-xs text-center text-slate-500">
+                      Tap "Open UPI apps" to launch whichever handler you already installed; only UPI apps will be shown.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleSharePaymentQr(netPaymentAmount)}
+                      className="mt-2 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                      Share QR with UPI app
+                    </button>
+                  </>
+                )}
+                {!isAndroid && !isIos && (
                   <p className="mt-1 text-xs text-center text-slate-500">
                     This option requires a mobile browser; scan the QR from your phone’s banking/UPI app if you’re on a desktop.
                   </p>
+                )}
+                {shareError && (
+                  <p className="mt-2 text-xs text-rose-600">{shareError}</p>
                 )}
               </div>
               <RevealableAccountSection className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
