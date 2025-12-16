@@ -9,8 +9,8 @@ import { useCartStore } from '../../store/cart';
 import { usePaymentStore } from '../../store/payments';
 import { useAuthStore } from '../../store/auth';
 import { useCurrentBalance } from '../../hooks/useCurrentBalance';
-import { shareImageFile } from '../../utils/shareImageFile';
-import { PAYMENT_QR_DOWNLOAD_NAME, PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
+import { launchUpiLink } from '../../utils/upiLink';
+import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
 import type { CartItem } from '../../store/cart';
 import RevealableAccountSection from '../../components/RevealableAccountSection';
 
@@ -365,13 +365,13 @@ const PaymentPage = () => {
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
   const [transactionReference, setTransactionReference] = useState('');
-  const [qrShareError, setQrShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
     useCurrentBalance();
-
-  const isShareSupported = useMemo(
-    () => typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+  const isMobileBrowser = useMemo(
+    () =>
+      typeof navigator !== 'undefined' &&
+      /(Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini)/i.test(navigator.userAgent),
     [],
   );
 
@@ -421,29 +421,14 @@ const PaymentPage = () => {
     }
   }, [paymentSnapshot]);
 
-  const handleSharePaymentQr = useCallback(
-    async (amount?: number) => {
-      if (!isShareSupported) {
-        setQrShareError('Sharing is unavailable on this device; please use your bank/UPI app to scan the QR displayed above.');
+  const handleOpenUpiApp = useCallback(
+    (amount?: number) => {
+      if (!isMobileBrowser) {
         return;
       }
-      setQrShareError(null);
-      try {
-        const shareText = amount
-          ? `Pay ₹ ${formatCurrency(amount)} using this QR. Choose your UPI app from the share panel.`
-          : 'Pay via the temple QR. Choose your UPI app from the share panel.';
-        await shareImageFile({
-          url: PAYMENT_QR_IMAGE_URL,
-          filename: PAYMENT_QR_DOWNLOAD_NAME,
-          title: 'Temple payment QR',
-          text: shareText,
-        });
-      } catch (error) {
-        console.error('Failed to share payment QR', error);
-        setQrShareError('Sharing is unavailable on this device; please use your bank/UPI app to scan the QR displayed above.');
-      }
+      launchUpiLink({ amount });
     },
-    [isShareSupported],
+    [isMobileBrowser],
   );
 
   useEffect(() => {
@@ -785,31 +770,28 @@ const PaymentPage = () => {
             <div className="mt-5 grid gap-6 md:grid-cols-2">
               <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <img
-                  src="/images/payment-qr-code.jpg"
+                  src={PAYMENT_QR_IMAGE_URL}
                   alt="Temple payment QR code"
                   className="h-72 w-72 rounded-lg border border-slate-200 bg-white p-3 object-contain"
                 />
                 <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(netPaymentAmount)}</p>
-                {isShareSupported ? (
+                {isMobileBrowser ? (
                   <>
                     <p className="mt-1 text-xs text-center text-slate-500">
-                      Tap Share to open the QR inside your preferred UPI app while staying on this page.
+                      Tap "Open UPI apps" to launch whichever handler you already installed; only UPI apps will be shown.
                     </p>
                     <button
                       type="button"
-                      onClick={() => handleSharePaymentQr(netPaymentAmount)}
+                      onClick={() => handleOpenUpiApp(netPaymentAmount)}
                       className="mt-2 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-slate-50"
                     >
-                      Share QR with UPI app
+                      Open UPI apps
                     </button>
                   </>
                 ) : (
                   <p className="mt-1 text-xs text-center text-slate-500">
-                    Share with UPI apps is only available on mobile browsers. Use your bank/UPI app to scan the QR above.
+                    This option requires a mobile browser; scan the QR from your phone’s banking/UPI app if you’re on a desktop.
                   </p>
-                )}
-                {qrShareError && (
-                  <p className="mt-2 text-xs text-rose-600">{qrShareError}</p>
                 )}
               </div>
               <RevealableAccountSection className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
