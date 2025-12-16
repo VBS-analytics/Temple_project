@@ -7,7 +7,8 @@ import api, { extractResults } from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import type { CartItem } from '../store/cart';
-import { gothraOptions, rasiOptions, tamilStarOptions } from '../data/familyAttributes';
+import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
+import { useMasterDataStore } from '../store/masterData';
 
 // All interfaces remain the same
 interface ApiUser {
@@ -100,6 +101,7 @@ interface PoojaRegistration {
   created_at?: string | null;
   updated_at?: string | null;
   members?: RegistrationMember[];
+  status?: string | null;
 }
 
 interface RecurringPlan {
@@ -120,16 +122,34 @@ interface RecurringPlan {
   metadata?: Record<string, unknown>;
 }
 
+interface PaymentRecordEntry {
+  id: number;
+  registration?: number | null;
+  status?: string | null;
+  transaction_reference?: string | null;
+  created_at?: string | null;
+}
+
 interface PlanEditFormState {
   recurrence_frequency: string;
   amount: string;
 }
+
+type PlanActionType = 'pause' | 'resume' | 'cancel';
 
 const PLAN_FREQUENCY_OPTIONS = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'annually', label: 'Annually' },
 ];
+
+const PAUSE_REASON_OPTIONS = [
+  'No Pooja and No Payment',
+  'No Pooja and use the money for temple purpose',
+  "Continue the pooja with the Samy's names",
+];
+
+const PAUSE_MONTH_OPTIONS = Array.from({ length: 50 }, (_, index) => index + 1);
 
 // All utility functions remain the same
 const formatDate = (value?: string | null) => {
@@ -178,6 +198,31 @@ const sortMembers = (list: FamilyMember[]) =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const addMonthsToIso = (iso: string, months: number) => {
+  if (months <= 0) {
+    return iso;
+  }
+  const date = new Date(iso);
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const targetMonth = month + months;
+  const result = new Date(year, targetMonth, day);
+  const adjusted = result.toISOString().split('T')[0];
+  return adjusted;
+};
+
+const getPauseReasonLabel = (metadata?: Record<string, unknown>) => {
+  if (!isRecord(metadata)) {
+    return null;
+  }
+  const reason = metadata.pause_reason;
+  if (typeof reason === 'string' && reason.trim().length > 0) {
+    return reason.trim();
+  }
+  return null;
+};
 
 const extractErrorMessage = (error: unknown) => {
   if (axios.isAxiosError(error)) {
@@ -302,6 +347,56 @@ const formatCartFrequencyLabel = (frequency?: string | null) => {
   }
 };
 
+const STATUS_PAYMENT_RECEIVED_LABEL = 'Payment Received';
+const STATUS_PAYMENT_NOT_RECEIVED_LABEL = 'Payment not received';
+const STATUS_ADMIN_PENDING_LABEL = 'Admin action is pending';
+const STATUS_POOJA_COMPLETED_LABEL = 'Pooja Completed';
+const STATUS_LOADING_LABEL = 'Loading status...';
+
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  [STATUS_PAYMENT_RECEIVED_LABEL]: 'bg-emerald-100 text-emerald-800',
+  [STATUS_PAYMENT_NOT_RECEIVED_LABEL]: 'bg-rose-100 text-rose-800',
+  [STATUS_ADMIN_PENDING_LABEL]: 'bg-amber-100 text-amber-800',
+  [STATUS_POOJA_COMPLETED_LABEL]: 'bg-emerald-100 text-emerald-800',
+  [STATUS_LOADING_LABEL]: 'bg-slate-100 text-slate-600',
+};
+
+const getRegistrationStatusLabel = (
+  registration: PoojaRegistration,
+  recordsByRegistration: Map<number, PaymentRecordEntry[]>,
+  recordsLoaded: boolean,
+) => {
+  if (!recordsLoaded) {
+    return STATUS_LOADING_LABEL;
+  }
+  const normalizedRegistrationStatus = (registration.status ?? '').toLowerCase();
+  if (normalizedRegistrationStatus === 'completed') {
+    return STATUS_POOJA_COMPLETED_LABEL;
+  }
+  const records = recordsByRegistration.get(registration.id) ?? [];
+  if (records.length === 0) {
+    return STATUS_PAYMENT_NOT_RECEIVED_LABEL;
+  }
+  const latestRecord = records[0];
+  const normalizedPaymentStatus = (latestRecord.status ?? '').toLowerCase();
+  if (normalizedPaymentStatus === 'success') {
+    return STATUS_PAYMENT_RECEIVED_LABEL;
+  }
+  if (normalizedPaymentStatus === 'pending') {
+    if ((latestRecord.transaction_reference ?? '').trim().length > 0) {
+      return STATUS_ADMIN_PENDING_LABEL;
+    }
+    return STATUS_PAYMENT_NOT_RECEIVED_LABEL;
+  }
+  if (normalizedPaymentStatus === 'failed' || normalizedPaymentStatus === 'refunded') {
+    return STATUS_ADMIN_PENDING_LABEL;
+  }
+  return STATUS_ADMIN_PENDING_LABEL;
+};
+
+const getRegistrationStatusBadgeClasses = (label: string) =>
+  STATUS_BADGE_CLASSES[label] ?? 'bg-slate-100 text-slate-600';
+
 const buildCartMemberNames = (members?: CartItem['members']) => {
   if (!members || members.length === 0) {
     return '—';
@@ -405,11 +500,16 @@ const DonorProfile = () => {
   const [registrations, setRegistrations] = useState<PoojaRegistration[]>([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(true);
   const [registrationsError, setRegistrationsError] = useState<string | null>(null);
+  const [paymentRecords, setPaymentRecords] = useState<PaymentRecordEntry[]>([]);
+  const [paymentRecordsLoading, setPaymentRecordsLoading] = useState(true);
+  const [paymentRecordsError, setPaymentRecordsError] = useState<string | null>(null);
   const [recurrencePlans, setRecurrencePlans] = useState<RecurringPlan[]>([]);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
-  const [pauseWindowInputs, setPauseWindowInputs] = useState<Record<number, { start: string; end: string }>>({});
-  const [planActionLoading, setPlanActionLoading] = useState<Record<number, boolean>>({});
+  const [pauseDurationSelection, setPauseDurationSelection] = useState<Record<number, number>>({});
+  const [pauseReasonSelections, setPauseReasonSelections] = useState<Record<number, string>>({});
+  const [activePausePlanId, setActivePausePlanId] = useState<number | null>(null);
+  const [planActionState, setPlanActionState] = useState<Record<number, PlanActionType | null>>({});
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [planEditValues, setPlanEditValues] = useState<PlanEditFormState>({
     recurrence_frequency: 'monthly',
@@ -436,6 +536,12 @@ const DonorProfile = () => {
   );
   const pendingCartCount = pendingRegistrations.length + pendingRecurringPlans.length;
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
+  const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+
+  useEffect(() => {
+    loadGothraOptions();
+  }, [loadGothraOptions]);
 
   const reloadRecurrencePlans = useCallback(
     async (options?: { activeCheck?: () => boolean }) => {
@@ -452,7 +558,9 @@ const DonorProfile = () => {
           return;
         }
         setRecurrencePlans(extractResults<RecurringPlan>(response.data));
-        setPauseWindowInputs({});
+        setPauseReasonSelections({});
+        setActivePausePlanId(null);
+        setPlanActionState({});
       } catch (err) {
         if (!isActive()) {
           return;
@@ -469,78 +577,111 @@ const DonorProfile = () => {
     [],
   );
 
-  const handlePauseInputChange = (planId: number, field: 'start' | 'end', value: string) => {
-    setPauseWindowInputs((prev) => ({
-      ...prev,
-      [planId]: {
-        ...prev[planId],
-        [field]: value,
-      },
-    }));
-  };
-
-  const resolvePauseWindow = (plan: RecurringPlan) => {
-    const stored = pauseWindowInputs[plan.id];
-    return {
-      start: stored?.start ?? plan.pause_from ?? todayIso,
-      end: stored?.end ?? plan.pause_until ?? '',
-    };
-  };
+  const togglePauseForm = useCallback(
+    (planId: number) => {
+      setActivePausePlanId((prev) => (prev === planId ? null : planId));
+      setPauseReasonSelections((prev) => {
+        if (prev[planId]) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [planId]: PAUSE_REASON_OPTIONS[0],
+        };
+      });
+      setPauseDurationSelection((prev) => ({
+        ...prev,
+        [planId]: prev[planId] ?? 1,
+      }));
+      setRecurrenceError(null);
+    },
+    [setRecurrenceError],
+  );
 
   const handlePausePlan = useCallback(
-    async (plan: RecurringPlan) => {
-      const { start, end } = resolvePauseWindow(plan);
-      if (!end) {
-        setRecurrenceError('Select an end date before pausing the plan.');
+    async (plan: RecurringPlan, pauseReason: string) => {
+      const months = pauseDurationSelection[plan.id] ?? 1;
+      if (months <= 0) {
+        setRecurrenceError('Select at least one month for the pause duration.');
         return;
       }
-      if (start < todayIso) {
-        setRecurrenceError('Pause start must be today or later.');
+      if (!pauseReason?.trim()) {
+        setRecurrenceError('Select how you’d like to handle the pause.');
         return;
       }
-      if (end < start) {
-        setRecurrenceError('Pause end must be the same as or after the start date.');
-        return;
-      }
-      setPlanActionLoading((prev) => ({
+      const start = todayIso;
+      const end = addMonthsToIso(start, months);
+      setPlanActionState((prev) => ({
         ...prev,
-        [plan.id]: true,
+        [plan.id]: 'pause',
       }));
       setRecurrenceError(null);
       try {
         await api.post(`pooja/recurrence/plans/${plan.id}/pause/`, {
           pause_from: start,
           pause_until: end,
+          pause_reason: pauseReason,
+          pause_months: months,
         });
+        setActivePausePlanId(null);
         await reloadRecurrencePlans();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
-        setPlanActionLoading((prev) => ({
+        setPlanActionState((prev) => ({
           ...prev,
-          [plan.id]: false,
+          [plan.id]: null,
         }));
       }
     },
-    [reloadRecurrencePlans, todayIso, pauseWindowInputs],
+    [reloadRecurrencePlans, todayIso, pauseDurationSelection],
   );
 
   const handleResumePlan = useCallback(
     async (planId: number) => {
-      setPlanActionLoading((prev) => ({
+      setPlanActionState((prev) => ({
         ...prev,
-        [planId]: true,
+        [planId]: 'resume',
       }));
       setRecurrenceError(null);
       try {
         await api.post(`pooja/recurrence/plans/${planId}/resume/`);
+        setActivePausePlanId(null);
         await reloadRecurrencePlans();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
-        setPlanActionLoading((prev) => ({
+        setPlanActionState((prev) => ({
           ...prev,
-          [planId]: false,
+          [planId]: null,
+        }));
+      }
+    },
+    [reloadRecurrencePlans],
+  );
+
+  const handleCancelPlan = useCallback(
+    async (plan: RecurringPlan) => {
+      const confirmText =
+        'Canceling this plan will stop future poojas and payments. Continue?';
+      if (!window.confirm(confirmText)) {
+        return;
+      }
+      setPlanActionState((prev) => ({
+        ...prev,
+        [plan.id]: 'cancel',
+      }));
+      setRecurrenceError(null);
+      try {
+        await api.post(`pooja/recurrence/plans/${plan.id}/cancel/`);
+        setActivePausePlanId(null);
+        await reloadRecurrencePlans();
+      } catch (error) {
+        setRecurrenceError(extractErrorMessage(error));
+      } finally {
+        setPlanActionState((prev) => ({
+          ...prev,
+          [plan.id]: null,
         }));
       }
     },
@@ -609,6 +750,7 @@ const DonorProfile = () => {
   const [registrationEditSubmitting, setRegistrationEditSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
 
   const FAMILY_OPTIONS = [
     'Arunachalam-Sambasiva Iyr',
@@ -669,63 +811,116 @@ const DonorProfile = () => {
   const [profileFormError, setProfileFormError] = useState<string | null>(null);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    const loadProfile = async () => {
-      setLoading(true);
-      try {
-        // Fixed the API call to avoid the type error
-        const response = await api.get('auth/profile/');
-        const data = response.data as ProfileResponse;
-        
-        if (!active) {
-          return;
-        }
-        setUser(data.user);
-        setProfile(data.profile);
-        setMembers(sortMembers(data.members ?? []));
-        setError(null);
-      } catch (err) {
-        if (!active) {
-          return;
-        }
-        setError(extractErrorMessage(err));
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('auth/profile/');
+      const data = response.data as ProfileResponse;
+      if (!isMountedRef.current) {
+        return;
       }
-    };
-
-    const loadRegistrations = async () => {
-      setRegistrationsLoading(true);
-      setRegistrationsError(null);
-      try {
-        const response = await api.get('pooja/registrations/', { params: { page_size: 200 } });
-        if (!active) {
-          return;
-        }
-        setRegistrations(extractResults<PoojaRegistration>(response.data));
-      } catch (err) {
-        if (!active) {
-          return;
-        }
-        setRegistrations([]);
-        setRegistrationsError(extractErrorMessage(err));
-      } finally {
-        if (active) {
-          setRegistrationsLoading(false);
-        }
+      setUser(data.user);
+      setProfile(data.profile);
+      setMembers(sortMembers(data.members ?? []));
+      setError(null);
+    } catch (err) {
+      if (!isMountedRef.current) {
+        return;
       }
-    };
-
-    loadProfile();
-    loadRegistrations();
-    reloadRecurrencePlans({ activeCheck: () => active });
-    return () => {
-      active = false;
-    };
+      setError(extractErrorMessage(err));
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
   }, []);
+
+  const fetchRegistrations = useCallback(async () => {
+    setRegistrationsLoading(true);
+    setRegistrationsError(null);
+    try {
+      const response = await api.get('pooja/registrations/', { params: { page_size: 200 } });
+      if (!isMountedRef.current) {
+        return;
+      }
+      setRegistrations(extractResults<PoojaRegistration>(response.data));
+    } catch (err) {
+      if (!isMountedRef.current) {
+        return;
+      }
+      setRegistrations([]);
+      setRegistrationsError(extractErrorMessage(err));
+    } finally {
+      if (isMountedRef.current) {
+        setRegistrationsLoading(false);
+      }
+    }
+  }, []);
+
+  const fetchPaymentRecords = useCallback(async () => {
+    setPaymentRecordsLoading(true);
+    setPaymentRecordsError(null);
+    try {
+      const response = await api.get('payments/records/', {
+        params: { page_size: 250, ordering: '-created_at' },
+      });
+      if (!isMountedRef.current) {
+        return;
+      }
+      setPaymentRecords(extractResults<PaymentRecordEntry>(response.data));
+    } catch (err) {
+      if (!isMountedRef.current) {
+        return;
+      }
+      setPaymentRecords([]);
+      setPaymentRecordsError(extractErrorMessage(err));
+    } finally {
+      if (isMountedRef.current) {
+        setPaymentRecordsLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadProfile();
+    fetchRegistrations();
+    fetchPaymentRecords();
+    let activeCheck = () => isMountedRef.current;
+    reloadRecurrencePlans({ activeCheck });
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchPaymentRecords, fetchRegistrations, loadProfile, reloadRecurrencePlans]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isMountedRef.current) {
+        fetchRegistrations();
+        fetchPaymentRecords();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchPaymentRecords, fetchRegistrations]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      fetchRegistrations();
+      fetchPaymentRecords();
+    }, 30000);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [fetchPaymentRecords, fetchRegistrations]);
 
   useEffect(() => {
     if (!isEditingProfile) {
@@ -765,6 +960,30 @@ const DonorProfile = () => {
       }
     };
   }, [fromCartReview, navigate, pendingCartCount]);
+
+  const paymentRecordsByRegistration = useMemo(() => {
+    const sortedRecords = [...paymentRecords].sort((a, b) => {
+      const left = a.created_at ?? '';
+      const right = b.created_at ?? '';
+      return right.localeCompare(left);
+    });
+    const map = new Map<number, PaymentRecordEntry[]>();
+    for (const record of sortedRecords) {
+      const registrationId = record.registration;
+      if (typeof registrationId !== 'number') {
+        continue;
+      }
+      const bucket = map.get(registrationId);
+      if (bucket) {
+        bucket.push(record);
+      } else {
+        map.set(registrationId, [record]);
+      }
+    }
+    return map;
+  }, [paymentRecords]);
+
+  const paymentRecordsLoaded = !paymentRecordsLoading;
 
   const startAddingNew = () => {
     setFormData(createInitialFormState(profile ?? undefined));
@@ -1959,6 +2178,12 @@ const DonorProfile = () => {
               </span>
             </div>
 
+            {paymentRecordsError && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+                Unable to load payment status updates. {paymentRecordsError}
+              </div>
+            )}
+
             {fromCartReview && pendingCartCount > 0 && (
               <div className="mt-4 space-y-2 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
                 <p className="font-semibold">
@@ -2059,13 +2284,19 @@ const DonorProfile = () => {
               <div className="mt-6">
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-4">
-                  {registrations.map((registration) => {
-                    const isEditingRegistration = editingRegistrationId === registration.id;
-                    return (
-                      <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex justify-between items-start mb-3">
-                          <h3 className="text-base font-medium text-indigo-700">
-                            {resolvePoojaId(registration)}
+                {registrations.map((registration) => {
+                  const isEditingRegistration = editingRegistrationId === registration.id;
+                  const statusLabel = getRegistrationStatusLabel(
+                    registration,
+                    paymentRecordsByRegistration,
+                    paymentRecordsLoaded,
+                  );
+                  const statusClasses = getRegistrationStatusBadgeClasses(statusLabel);
+                  return (
+                    <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="text-base font-medium text-indigo-700">
+                          {resolvePoojaId(registration)}
                           </h3>
                           <button
                             type="button"
@@ -2074,6 +2305,13 @@ const DonorProfile = () => {
                           >
                             Edit Date
                           </button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
                         
                         <dl className="space-y-2 text-sm">
@@ -2170,12 +2408,19 @@ const DonorProfile = () => {
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
+                          <th scope="col" className="px-4 py-3 text-left font-semibold">Status</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {registrations.map((registration, index) => {
                           const isEditingRegistration = editingRegistrationId === registration.id;
+                          const statusLabel = getRegistrationStatusLabel(
+                            registration,
+                            paymentRecordsByRegistration,
+                            paymentRecordsLoaded,
+                          );
+                          const statusClasses = getRegistrationStatusBadgeClasses(statusLabel);
                           return (
                             <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
                               <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
@@ -2225,6 +2470,13 @@ const DonorProfile = () => {
                                 title={formatRegistrationTimeline(registration)}
                               >
                                 {formatRegistrationTimeline(registration)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
+                                >
+                                  {statusLabel}
+                                </span>
                               </td>
                               <td className="px-4 py-3 text-right min-w-[160px]">
                                 {isEditingRegistration ? (
@@ -2354,12 +2606,17 @@ const DonorProfile = () => {
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 {recurrencePlans.map((plan) => {
                   const memberNames = getPlanMemberNames(plan.metadata);
-                  const planPaused = Boolean(plan.pause_from || plan.pause_until);
-                  const pauseWindow = resolvePauseWindow(plan);
-                  const pauseStartValue = pauseWindow.start;
-                  const pauseEndValue = pauseWindow.end;
-                  const actionLoading = planActionLoading[plan.id] ?? false;
+                  const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
+                  const pauseDuration = pauseDurationSelection[plan.id] ?? 1;
+                  const currentAction = planActionState[plan.id] ?? null;
+                  const actionLoading = Boolean(currentAction);
                   const isRecurringPlan = plan.recurrence_kind === 'recurring';
+                  const selectedPauseReason = pauseReasonSelections[plan.id] ?? PAUSE_REASON_OPTIONS[0];
+                  const isPlanActive = plan.is_active && isRecurringPlan;
+                  const cancellationDate =
+                    isRecord(plan.metadata) && typeof plan.metadata.canceled_at === 'string'
+                      ? plan.metadata.canceled_at
+                      : null;
                   return (
                     <div
                       key={plan.id}
@@ -2387,10 +2644,23 @@ const DonorProfile = () => {
                     </div>
 
                     <div className="mt-4 space-y-2 text-sm text-slate-700">
-                      <p className="text-xs uppercase tracking-wider text-slate-500">Schedule</p>
-                      <p className="text-base font-semibold text-slate-900">
-                        {formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency)}
-                      </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-slate-500">Schedule</p>
+                          <p className="text-base font-semibold text-slate-900">
+                            {formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency)}
+                          </p>
+                        </div>
+                        {isRecurringPlan && (
+                          <button
+                            type="button"
+                            onClick={() => startEditingPlan(plan)}
+                            className="rounded border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:bg-slate-100"
+                          >
+                            Edit plan
+                          </button>
+                        )}
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-xs text-slate-500">Next occurrence</p>
@@ -2414,6 +2684,11 @@ const DonorProfile = () => {
                           : plan.pause_until
                             ? `Paused until ${formatDate(plan.pause_until)}.`
                             : `Pause scheduled from ${formatDate(plan.pause_from)}.`}
+                        {pauseReasonLabel && (
+                          <p className="mt-1 text-xs font-normal text-orange-700">
+                            Handling: {pauseReasonLabel}
+                          </p>
+                        )}
                       </div>
                     )}
                     {memberNames.length > 0 && (
@@ -2423,15 +2698,6 @@ const DonorProfile = () => {
                     )}
                     {isRecurringPlan && (
                       <div className="mt-4 space-y-3">
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => startEditingPlan(plan)}
-                            className="rounded border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:bg-slate-100"
-                          >
-                            Edit plan
-                          </button>
-                        </div>
                         {editingPlanId === plan.id && (
                           <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                             <div className="grid gap-3 sm:grid-cols-2">
@@ -2495,60 +2761,194 @@ const DonorProfile = () => {
                             </div>
                           </div>
                         )}
-                        {planPaused ? (
-                          <button
-                            type="button"
-                            onClick={() => handleResumePlan(plan.id)}
-                            disabled={actionLoading}
-                            className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
-                          >
-                            {actionLoading ? 'Resuming...' : 'Resume plan'}
-                          </button>
+                        {isPlanActive ? (
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => togglePauseForm(plan.id)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelPlan(plan)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
+                              </button>
+                            </div>
+                            {activePausePlanId === plan.id && (
+                              <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="space-y-1 text-sm text-slate-500">
+                                  <label
+                                    htmlFor={`pause-reason-${plan.id}`}
+                                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                  >
+                                    Pause handling
+                                  </label>
+                                  <select
+                                    id={`pause-reason-${plan.id}`}
+                                    value={selectedPauseReason}
+                                    onChange={(event) =>
+                                      setPauseReasonSelections((prev) => ({
+                                        ...prev,
+                                        [plan.id]: event.target.value,
+                                      }))
+                                    }
+                                    className="w-full max-w-[320px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  >
+                                    {PAUSE_REASON_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="space-y-1 text-sm text-slate-500">
+                                  <label
+                                    htmlFor={`pause-months-${plan.id}`}
+                                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                  >
+                                    Pause duration (months)
+                                  </label>
+                                  <select
+                                    id={`pause-months-${plan.id}`}
+                                    value={pauseDuration}
+                                    onChange={(event) =>
+                                      setPauseDurationSelection((prev) => ({
+                                        ...prev,
+                                        [plan.id]: Number(event.target.value),
+                                      }))
+                                    }
+                                    className="w-full max-w-[220px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  >
+                                    {PAUSE_MONTH_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option} month{option > 1 ? 's' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePausePlan(plan, selectedPauseReason)}
+                                  disabled={actionLoading}
+                                  className="w-full rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-wait disabled:opacity-70"
+                                >
+                                  {currentAction === 'pause' ? 'Pausing...' : 'Pause plan'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="space-y-3">
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <div className="space-y-1 text-sm text-slate-500">
-                                <label htmlFor={`pause-start-${plan.id}`} className="text-xs font-semibold uppercase tracking-wide">
-                                  Pause start
-                                </label>
-                                <input
-                                  id={`pause-start-${plan.id}`}
-                                  type="date"
-                                  min={todayIso}
-                                  value={pauseStartValue}
-                                  onChange={(event) => handlePauseInputChange(plan.id, 'start', event.target.value)}
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                />
+                            {cancellationDate && (
+                              <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
+                                Canceled on {formatDate(cancellationDate)}
                               </div>
-                              <div className="space-y-1 text-sm text-slate-500">
-                                <label htmlFor={`pause-end-${plan.id}`} className="text-xs font-semibold uppercase tracking-wide">
-                                  Pause end
-                                </label>
-                                <input
-                                  id={`pause-end-${plan.id}`}
-                                  type="date"
-                                  min={pauseStartValue || todayIso}
-                                  value={pauseEndValue}
-                                  onChange={(event) => handlePauseInputChange(plan.id, 'end', event.target.value)}
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                />
-                              </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => togglePauseForm(plan.id)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                {activePausePlanId === plan.id ? 'Hide pause details' : 'Edit pause details'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResumePlan(plan.id)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+                              >
+                                {currentAction === 'resume' ? 'Resuming...' : 'Resume plan'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelPlan(plan)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70"
+                              >
+                                {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handlePausePlan(plan)}
-                              disabled={!pauseEndValue || actionLoading}
-                              className="w-full rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-wait disabled:opacity-70"
-                            >
-                              {actionLoading ? 'Pausing...' : 'Pause plan'}
-                            </button>
+                            {activePausePlanId === plan.id && (
+                              <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  Update pause window
+                                </p>
+                                <div className="space-y-1 text-sm text-slate-500">
+                                  <label
+                                    htmlFor={`pause-months-${plan.id}`}
+                                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                  >
+                                    Pause duration (months)
+                                  </label>
+                                  <select
+                                    id={`pause-months-${plan.id}`}
+                                    value={pauseDuration}
+                                    onChange={(event) =>
+                                      setPauseDurationSelection((prev) => ({
+                                        ...prev,
+                                        [plan.id]: Number(event.target.value),
+                                      }))
+                                    }
+                                    className="w-full max-w-[220px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  >
+                                    {PAUSE_MONTH_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option} month{option > 1 ? 's' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="space-y-1 text-sm text-slate-500">
+                                  <label
+                                    htmlFor={`pause-reason-${plan.id}`}
+                                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                  >
+                                    Pause handling
+                                  </label>
+                                  <select
+                                    id={`pause-reason-${plan.id}`}
+                                    value={selectedPauseReason}
+                                    onChange={(event) =>
+                                      setPauseReasonSelections((prev) => ({
+                                        ...prev,
+                                        [plan.id]: event.target.value,
+                                      }))
+                                    }
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  >
+                                    {PAUSE_REASON_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePausePlan(plan, selectedPauseReason)}
+                                  disabled={actionLoading}
+                                  className="w-full rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-wait disabled:opacity-70"
+                                >
+                                  {currentAction === 'pause' ? 'Updating...' : 'Update pause'}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     )}
                   </div>
-                  );
-                })}
+                );
+              })}
               </div>
             )}
           </section>

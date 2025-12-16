@@ -3,6 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import api, { extractResults } from '../../lib/api';
+import { nakshatraOptions } from '../../data/nakshatraOptions';
+import { rasiOptions } from '../../data/familyAttributes';
+import { useMasterDataStore } from '../../store/masterData';
 
 const generateHeaderCode = (name: string) => {
   const baseSlug = name
@@ -70,11 +73,6 @@ type DayOptionFormValues = {
   category: string;
 };
 
-type TamilDayOptionFormValues = {
-  code: string;
-  description: string;
-};
-
 type PoojaOptionFormValues = {
   code: string;
   poojaDescription: string;
@@ -106,15 +104,20 @@ const AdminMasterPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil'>('pooja');
+  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra'>('pooja');
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const originalDayOrderRef = useRef<DayOption[]>([]);
+  const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
+  const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+  const createGothraOption = useMasterDataStore((state) => state.createGothraOption);
+  const isGothraSaving = useMasterDataStore((state) => state.isGothraSaving);
+  const isGothraLoading = useMasterDataStore((state) => state.isGothraLoading);
+  const [newGothraName, setNewGothraName] = useState('');
 
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
-  const tamilDayForm = useForm<TamilDayOptionFormValues>({ defaultValues: { code: '', description: '' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
   const poojaForm = useForm<PoojaOptionFormValues>({
     defaultValues: { code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' },
@@ -159,9 +162,7 @@ const AdminMasterPage = () => {
     () => dayOptions.filter((option) => option.category !== 'tamil_star'),
     [dayOptions],
   );
-  const tamilDayOptions = useMemo(() => dayOptions.filter((option) => option.category === 'tamil_star'), [dayOptions]);
-  const isEditingEnglishDay = Boolean(editingDay && editingDay.category !== 'tamil_star');
-  const isEditingTamilDay = editingDay?.category === 'tamil_star';
+  const isEditingEnglishDay = Boolean(editingDay);
 
   const headerCount = parentCandidates.length;
   const totalPoojaEntries = useMemo(
@@ -275,7 +276,7 @@ const AdminMasterPage = () => {
       },
       { 
         label: 'Tamil Nakshatras', 
-        value: tamilDayOptions.length, 
+        value: nakshatraOptions.length, 
         helper: 'Tamil star references',
         icon: (
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -284,7 +285,7 @@ const AdminMasterPage = () => {
         )
       },
     ],
-    [headerCount, totalPoojaEntries, poojaOptions.length, englishDayOptions.length, tamilDayOptions.length],
+    [headerCount, totalPoojaEntries, poojaOptions.length, englishDayOptions.length],
   );
 
   const formatCategoryLabel = (value: string) => {
@@ -318,6 +319,22 @@ const AdminMasterPage = () => {
       return 'Network error - no response from server';
     }
     return 'Unknown error occurred';
+  };
+
+  const handleAddGothra = async () => {
+    const trimmed = newGothraName.trim();
+    if (!trimmed) {
+      setNotice('Enter a gothra name before saving.');
+      return;
+    }
+    try {
+      await createGothraOption(trimmed);
+      setNewGothraName('');
+      setNotice(`Gothra ${trimmed} added successfully.`);
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error adding gothra: ${errorMessage}`);
+    }
   };
 
   const fetchAllPages = async <T,>(initialUrl: string): Promise<T[]> => {
@@ -398,25 +415,22 @@ const AdminMasterPage = () => {
     load();
   }, []);
 
+  useEffect(() => {
+    loadGothraOptions();
+  }, [loadGothraOptions]);
+
   const resetEnglishDayForm = () => {
     dayForm.reset({ code: '', description: '', category: 'weekday' });
-  };
-
-  const resetTamilDayForm = () => {
-    tamilDayForm.reset({ code: '', description: '' });
   };
 
   const clearDayEditing = () => {
     setEditingDay(null);
     resetEnglishDayForm();
-    resetTamilDayForm();
   };
 
   const onCreateDayOption = async (values: DayOptionFormValues) => {
     setIsSubmitting(true);
-    const payload = editingDay && editingDay.category !== 'tamil_star'
-      ? values
-      : { ...values, category: 'weekday' };
+    const payload = editingDay ? values : { ...values, category: 'weekday' };
     try {
       if (editingDay && editingDay.category !== 'tamil_star') {
         await api.put(`/pooja/day-options/${editingDay.id}/`, payload);
@@ -435,36 +449,9 @@ const AdminMasterPage = () => {
     }
   };
 
-  const onCreateTamilDayOption = async (values: TamilDayOptionFormValues) => {
-    setIsSubmitting(true);
-    const payload = { ...values, category: 'tamil_star' };
-    try {
-      if (editingDay && editingDay.category === 'tamil_star') {
-        await api.put(`/pooja/day-options/${editingDay.id}/`, payload);
-        setNotice('Tamil day option updated successfully.');
-      } else {
-        await api.post('/pooja/day-options/', payload);
-        setNotice('Tamil day option saved successfully.');
-      }
-      clearDayEditing();
-      load();
-    } catch (err: any) {
-      const errorMessage = extractErrorMessage(err);
-      setNotice(`Error saving Tamil day option: ${errorMessage}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleEditDay = (day: DayOption) => {
     setEditingDay(day);
-    if (day.category === 'tamil_star') {
-      tamilDayForm.reset({ code: day.code, description: day.description });
-      resetEnglishDayForm();
-    } else {
-      dayForm.reset({ code: day.code, description: day.description, category: day.category });
-      resetTamilDayForm();
-    }
+    dayForm.reset({ code: day.code, description: day.description, category: day.category });
   };
 
   const handleDeleteDay = async (day: DayOption) => {
@@ -969,7 +956,37 @@ const AdminMasterPage = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                     </svg>
-                    Tamil Day Codes
+                    List of Nakshatras
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('rasi')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'rasi'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v6m3-3H9" />
+                    </svg>
+                    List of Rasi
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('gothra')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'gothra'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    List of Gothram
                   </div>
                 </button>
               </nav>
@@ -1594,7 +1611,7 @@ const AdminMasterPage = () => {
                         <input
                           className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
                           placeholder="Enter code"
-                          disabled={isEditingTamilDay || isSubmitting}
+                          disabled={isSubmitting}
                           {...dayForm.register('code', { required: true })}
                         />
                       </div>
@@ -1603,14 +1620,14 @@ const AdminMasterPage = () => {
                         <input
                           className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
                           placeholder="Enter description"
-                          disabled={isEditingTamilDay || isSubmitting}
+                          disabled={isSubmitting}
                           {...dayForm.register('description', { required: true })}
                         />
                       </div>
                       <div className="flex flex-wrap items-center gap-3 pt-2">
                         <button
                           type="submit"
-                          disabled={isEditingTamilDay || isSubmitting}
+                          disabled={isSubmitting}
                           className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -1714,141 +1731,119 @@ const AdminMasterPage = () => {
             <div className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-slate-900">Day Options — Tamil Codes</h2>
+                  <h2 className="text-xl font-bold text-slate-900">List of Nakshatras</h2>
                   <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <span>{tamilDayOptions.length} codes</span>
+                    <span>{nakshatraOptions.length} stars</span>
                   </div>
                 </div>
               </div>
-              
-              <div className="flex flex-col lg:flex-row gap-8">
-                <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-semibold text-slate-900">{isEditingTamilDay ? 'Edit Tamil Day' : 'Add Tamil Day'}</h3>
-                    </div>
-                    <p className="mb-4 text-sm text-slate-600">Capture nakshatra shortcuts and their descriptions.</p>
-                    <form onSubmit={tamilDayForm.handleSubmit(onCreateTamilDayOption)} className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Code</label>
-                        <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
-                          placeholder="Enter code"
-                          disabled={isEditingEnglishDay || isSubmitting}
-                          {...tamilDayForm.register('code', { required: true })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Description</label>
-                        <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200 disabled:bg-slate-100"
-                          placeholder="Enter description"
-                          disabled={isEditingEnglishDay || isSubmitting}
-                          {...tamilDayForm.register('description', { required: true })}
-                        />
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <button
-                          type="submit"
-                          disabled={isEditingEnglishDay || isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          {isEditingTamilDay ? 'Update Tamil Day Option' : 'Save Tamil Day Option'}
-                        </button>
-                        {isEditingTamilDay && (
-                          <button
-                            type="button"
-                            onClick={clearDayEditing}
-                            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </form>
-                  </div>
-                </aside>
 
-                <div className="flex-1">
-                  <ul className="space-y-3">
-                    {tamilDayOptions.map((day) => (
-                      <li
-                        key={day.id}
-                        draggable
-                        onDragStart={(event) => handleDayDragStart(event, day.id)}
-                        onDragOver={(event) => handleDayDragOver(event, day.id)}
-                        onDragEnd={handleDayDragEnd}
-                        onDrop={(event) => event.preventDefault()}
-                        aria-grabbed={draggingDayId === day.id}
-                        className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-300 ${
-                          draggingDayId === day.id
-                            ? 'cursor-grabbing border-orange-400 bg-orange-50 shadow-md'
-                            : 'cursor-grab border-slate-200 hover:border-orange-300 hover:shadow-md'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-800">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-900">
-                              {day.description}{' '}
-                              <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{day.code}</span>
-                            </p>
-                            <span className="mt-2 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
-                              {formatCategoryLabel(day.category)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleEditDay(day)}
-                            disabled={isSubmitting}
-                            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDay(day)}
-                            disabled={isSubmitting}
-                            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:opacity-50"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  {tamilDayOptions.length === 0 && (
-                    <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                      </svg>
-                      <h3 className="mt-4 text-lg font-medium text-slate-900">No Tamil day options yet</h3>
-                      <p className="mt-2 text-sm text-slate-500">Add nakshatra codes to enable Tamil calendar workflows.</p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-slate-500">
+                    All 27 Tamil nakshatras listed for quick reference.
+                  </p>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Static list
+                  </p>
+                </div>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {nakshatraOptions.map((star, index) => (
+                    <div
+                      key={star}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                    >
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
+                        {index + 1}
+                      </span>
+                      <span>{star}</span>
                     </div>
-                  )}
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+          {activeTab === 'rasi' && (
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-900">List of Rasi</h2>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>{rasiOptions.length} entries</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-slate-500">
+                    Tamil day codes reference the 12 rasis by default.
+                  </p>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Read-only list
+                  </p>
+                </div>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {rasiOptions.map((rasi, index) => (
+                    <div
+                      key={rasi}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                    >
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
+                        {index + 1}
+                      </span>
+                      <span>{rasi}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {activeTab === 'gothra' && (
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-900">List of Gothram</h2>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>{gothraOptions.length} entries</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr,auto]">
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="Enter new gothra name"
+                    value={newGothraName}
+                    onChange={(event) => setNewGothraName(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddGothra}
+                    disabled={isGothraSaving}
+                    className="flex items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isGothraSaving ? 'Saving...' : 'Add Gothram'}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <p>New gothram entries are persisted for all donor-facing forms.</p>
+                  {isGothraLoading && <p className="text-slate-400">Refreshing gothra list…</p>}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {gothraOptions.map((name, index) => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                    >
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
+                        {index + 1}
+                      </span>
+                      <span>{name}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

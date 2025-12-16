@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import { RecurrenceSelection, RecurrenceFrequency } from '../types/recurrence';
 import { useNavigate } from 'react-router-dom';
+import { nakshatraOptions } from '../data/nakshatraOptions';
 
 /* -------------------------------------------------------------------------- */
 /*                               Reusable Select                              */
@@ -830,9 +831,9 @@ type DayOccurrenceState =
   | { status: 'needsStar'; key: string; message: string }
   | { status: 'manual'; key: string; message: string };
 
-const buildOccurrenceKey = (dayOptionId: number | null, tamilStarId: string | null | undefined) => {
+const buildOccurrenceKey = (dayOptionId: number | null, tamilStarValue: string | null | undefined) => {
   if (!dayOptionId) return 'none';
-  const starPart = tamilStarId ? tamilStarId : 'na';
+  const starPart = tamilStarValue ? tamilStarValue : 'na';
   return `${dayOptionId}:${starPart}`;
 };
 
@@ -994,7 +995,7 @@ const PoojaRegistrationPage = () => {
       items: cartItems,
       totalAmount: cartTotalAmount,
     });
-    navigate('/profile?fromCart=1');
+    navigate('/payments/general?fromCart=1');
   }, [cartItems, cartKey, cartTotalAmount, navigate, setGeneralPayment]);
   const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
@@ -1419,11 +1420,55 @@ const PoojaRegistrationPage = () => {
   );
 
   // Filter Tamil star options
-  const tamilStarOptions = useMemo(() => {
+  const tamilStarDayOptions = useMemo(() => {
     return dayOptions
       .filter(option => option.category === 'tamil_star')
       .sort((a, b) => a.description.localeCompare(b.description));
   }, [dayOptions]);
+
+  const tamilStarOptionByLabel = useMemo(() => {
+    const map = new Map<string, DayOption>();
+    tamilStarDayOptions.forEach((option) => {
+      const label = getTamilStarLabel(option).trim();
+      if (label) {
+        map.set(label, option);
+      }
+    });
+    return map;
+  }, [tamilStarDayOptions]);
+
+  const canonicalTamilStarChoices = useMemo(
+    () =>
+      nakshatraOptions.map((star) => {
+        const normalized = star.trim();
+        const matching = normalized ? tamilStarOptionByLabel.get(normalized) : undefined;
+        const value = normalized || star;
+        return {
+          key: normalized || star,
+          label: matching ? formatDayOptionLabel(matching) : value,
+          value,
+          disabled: !matching,
+        };
+      }),
+    [tamilStarOptionByLabel],
+  );
+
+  const resolveTamilStarOptionFromSelection = useCallback(
+    (value?: string | null) => {
+      if (!value) {
+        return undefined;
+      }
+      const numericId = Number(value);
+      if (!Number.isNaN(numericId)) {
+        const byId = dayOptionMap.get(numericId);
+        if (byId) {
+          return byId;
+        }
+      }
+      return tamilStarOptionByLabel.get(value.trim());
+    },
+    [dayOptionMap, tamilStarOptionByLabel],
+  );
 
   const resolvePostPrasadam = (poojaId: number, matchingItem?: CartItem): boolean => {
     if (Object.prototype.hasOwnProperty.call(prasadamSelectionMap, poojaId)) {
@@ -1851,7 +1896,7 @@ const PoojaRegistrationPage = () => {
   );
 
   const fetchOccurrenceForRow = useCallback(
-    async (poojaId: number, option: DayOption | undefined, options: { tamilStarId?: string | null } = {}) => {
+    async (poojaId: number, option: DayOption | undefined, options: { tamilStarValue?: string | null } = {}) => {
       if (!option) {
         setDayOccurrenceMap((prev) => {
           if (!(poojaId in prev)) return prev;
@@ -1864,8 +1909,8 @@ const PoojaRegistrationPage = () => {
 
       const code = (option.code || '').toUpperCase();
       const requiresStar = code === 'CS';
-      const tamilStarId = requiresStar ? options.tamilStarId ?? null : null;
-      const stateKey = buildOccurrenceKey(option.id, tamilStarId);
+      const tamilStarValue = requiresStar ? options.tamilStarValue ?? null : null;
+      const stateKey = buildOccurrenceKey(option.id, tamilStarValue);
       const existing = dayOccurrenceMap[poojaId];
 
       if (existing && existing.key === stateKey) {
@@ -1891,7 +1936,7 @@ const PoojaRegistrationPage = () => {
         return;
       }
 
-      if (requiresStar && !tamilStarId) {
+      if (requiresStar && !tamilStarValue) {
         setDayOccurrenceMap((prev) => {
           const current = prev[poojaId];
           if (current && current.key === stateKey && current.status === 'needsStar') {
@@ -1918,8 +1963,13 @@ const PoojaRegistrationPage = () => {
 
       try {
         const params: Record<string, string> = { start_date: todayIso };
-        if (tamilStarId) {
-          params.tamil_star_id = tamilStarId;
+        if (tamilStarValue) {
+          const numericValue = Number(tamilStarValue);
+          if (!Number.isNaN(numericValue)) {
+            params.tamil_star_id = String(numericValue);
+          } else {
+            params.tamil_star = tamilStarValue;
+          }
         }
         const { data } = await api.get(`/pooja/day-options/${option.id}/next-occurrence/`, { params });
         const upcomingOccurrences: UpcomingOccurrence[] = Array.isArray(data?.meta?.upcoming_occurrences)
@@ -2023,8 +2073,8 @@ const PoojaRegistrationPage = () => {
         return;
       }
       const code = (option.code || '').toUpperCase();
-      const tamilStarId = code === 'CS' ? (tamilStarSelectionMap[row.pooja.id] ?? null) : undefined;
-      fetchOccurrenceForRow(row.pooja.id, option, { tamilStarId });
+      const tamilStarValue = code === 'CS' ? (tamilStarSelectionMap[row.pooja.id] ?? null) : undefined;
+      fetchOccurrenceForRow(row.pooja.id, option, { tamilStarValue });
     });
   }, [masterRows, dayOptionMap, fetchOccurrenceForRow, tamilStarSelectionMap, resolveSelectedDayId]);
 
@@ -2110,7 +2160,7 @@ const PoojaRegistrationPage = () => {
     setTableMessage(null);
 
     fetchOccurrenceForRow(poojaId, selectedOption, {
-      tamilStarId: normalizedCode === 'CS' ? null : undefined,
+      tamilStarValue: normalizedCode === 'CS' ? null : undefined,
     });
   };
 
@@ -2127,7 +2177,7 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    fetchOccurrenceForRow(poojaId, option, { tamilStarId: value || null });
+    fetchOccurrenceForRow(poojaId, option, { tamilStarValue: value || null });
   };
 
   const applySelectionToggle = (current: string[], value: string): string[] => {
@@ -2478,7 +2528,7 @@ const PoojaRegistrationPage = () => {
     const selectedStarForRow = tamilStarSelectionMap[row.pooja.id] ?? selectedTamilStar;
     const selectedTamilStarOption =
       selectedStarForRow && chosenDayOption?.code === 'CS'
-        ? dayOptionMap.get(Number(selectedStarForRow))
+        ? resolveTamilStarOptionFromSelection(selectedStarForRow)
         : undefined;
     const postPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
     const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
@@ -2760,7 +2810,7 @@ const PoojaRegistrationPage = () => {
       selectedPooja ? tamilStarSelectionMap[selectedPooja.id] ?? selectedTamilStar : selectedTamilStar;
     const selectedTamilStarOption =
       selectedStarForSelected && chosenDayOption?.code === 'CS'
-        ? dayOptionMap.get(Number(selectedStarForSelected))
+        ? resolveTamilStarOptionFromSelection(selectedStarForSelected)
         : undefined;
 
     const primaryEntry =
@@ -3296,21 +3346,25 @@ const PoojaRegistrationPage = () => {
                                     />
                                     {selectedDayOption?.code === 'CS' && (
                                       <div className="mt-2">
-                                        <select
-                                          value={tamilStarSelectionMap[row.pooja.id] ?? ''}
-                                          onChange={(event) =>
-                                            handleTamilStarSelection(row.pooja.id, event.target.value)
-                                          }
-                                          className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
-                                          aria-label="Select your star"
+                                    <select
+                                      value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                      onChange={(event) =>
+                                        handleTamilStarSelection(row.pooja.id, event.target.value)
+                                      }
+                                      className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
+                                      aria-label="Select your star"
+                                    >
+                                      <option value="">Select your star</option>
+                                      {canonicalTamilStarChoices.map((choice) => (
+                                        <option
+                                          key={choice.key}
+                                          value={choice.value}
+                                          disabled={choice.disabled}
                                         >
-                                          <option value="">Select your star</option>
-                                          {tamilStarOptions.map((option) => (
-                                            <option key={option.id} value={String(option.id)}>
-                                              {formatDayOptionLabel(option)}
-                                            </option>
-                                          ))}
-                                        </select>
+                                          {choice.label}
+                                        </option>
+                                      ))}
+                                    </select>
                                       </div>
                                     )}
                                     {requiresChartDetails && (
@@ -3408,42 +3462,27 @@ const PoojaRegistrationPage = () => {
                                 <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs">
                                   <p className="text-gray-500 font-semibold uppercase tracking-wide">Schedule</p>
                                   <div className="flex flex-wrap items-center gap-4 text-gray-700">
-                                    <label className="inline-flex items-center">
-                                      <input
-                                        type="radio"
-                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                        checked={recurrenceSelection?.kind === 'recurring'}
-                                        onChange={() =>
-                                          applyRecurrenceSelection(row.pooja.id, {
-                                            kind: 'recurring',
-                                            frequency:
-                                              recurrenceSelection?.kind === 'recurring'
-                                                ? recurrenceSelection.frequency
-                                                : 'monthly',
-                                          })
-                                        }
-                                      />
-                                      <span className="ml-2">Recurring</span>
-                                    </label>
-                                    <label className="inline-flex items-center">
-                                      <input
-                                        type="radio"
-                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                        checked={recurrenceSelection?.kind === 'one_time_extra'}
-                                        onChange={() =>
-                                          applyRecurrenceSelection(row.pooja.id, {
-                                            kind: 'one_time_extra',
-                                            oneTimeDate:
-                                              recurrenceSelection?.kind === 'one_time_extra'
-                                                ? recurrenceSelection.oneTimeDate
-                                                : undefined,
-                                          })
-                                        }
-                                      />
-                                      <span className="ml-2">One-time extra</span>
-                                    </label>
-                                  </div>
-                                  <p className="mt-1 text-[0.65rem] text-gray-500">Leave both options unchecked for a one-time booking.</p>
+                                <label className="inline-flex items-center">
+                                  <input
+                                    type="radio"
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                    checked={recurrenceSelection?.kind === 'recurring'}
+                                    onChange={() =>
+                                      applyRecurrenceSelection(row.pooja.id, {
+                                        kind: 'recurring',
+                                        frequency:
+                                          recurrenceSelection?.kind === 'recurring'
+                                            ? recurrenceSelection.frequency
+                                            : 'monthly',
+                                      })
+                                    }
+                                  />
+                                  <span className="ml-2">Recurring</span>
+                                </label>
+                              </div>
+                              <p className="mt-1 text-[0.65rem] text-gray-500">
+                                Select Recurring to enable a schedule; leave this unchecked for a one-time booking.
+                              </p>
                                   {recurrenceSelection ? (
                                     <>
                                       {recurrenceSelection.kind === 'recurring' ? (
@@ -3684,9 +3723,9 @@ const PoojaRegistrationPage = () => {
                                       aria-label="Select your star"
                                     >
                                       <option value="">Select your star</option>
-                                      {tamilStarOptions.map((option) => (
-                                        <option key={option.id} value={String(option.id)}>
-                                          {formatDayOptionLabel(option)}
+                                      {canonicalTamilStarChoices.map((choice) => (
+                                        <option key={choice.key} value={choice.value} disabled={choice.disabled}>
+                                          {choice.label}
                                         </option>
                                       ))}
                                     </select>
@@ -3820,25 +3859,10 @@ const PoojaRegistrationPage = () => {
                                   />
                                   <span className="ml-2">Recurring</span>
                                 </label>
-                                <label className="inline-flex items-center">
-                                  <input
-                                    type="radio"
-                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                    checked={recurrenceSelection?.kind === 'one_time_extra'}
-                                    onChange={() =>
-                                      applyRecurrenceSelection(row.pooja.id, {
-                                        kind: 'one_time_extra',
-                                        oneTimeDate:
-                                          recurrenceSelection?.kind === 'one_time_extra'
-                                            ? recurrenceSelection.oneTimeDate
-                                            : undefined,
-                                      })
-                                    }
-                                  />
-                                  <span className="ml-2">One-time extra</span>
-                                </label>
                               </div>
-                              <p className="mt-1 text-[0.65rem] text-gray-500">Leave both options unchecked for a one-time booking.</p>
+                              <p className="mt-1 text-[0.65rem] text-gray-500">
+                                Select Recurring to enable a schedule; leave this unchecked for a one-time booking.
+                              </p>
                               {recurrenceSelection ? (
                                 <>
                                   {recurrenceSelection.kind === 'recurring' ? (

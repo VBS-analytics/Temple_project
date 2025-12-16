@@ -1,13 +1,15 @@
 """URL routes for accounts API."""
 
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 
 from .views import (
+    DashboardMetricsView,
     DonorDetailView,
     DonorListView,
-    DashboardMetricsView,
     FamilyMemberDetailView,
     FamilyMemberView,
+    GothraOptionViewSet,
     LoginView,
     PasswordResetView,
     ProfileView,
@@ -15,6 +17,9 @@ from .views import (
     RequestOtpView,
     VerifyOtpView,
 )
+
+router = DefaultRouter()
+router.register('gothra-options', GothraOptionViewSet, basename='gothra-options')
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
@@ -29,3 +34,5 @@ urlpatterns = [
     path('donors/<int:pk>/', DonorDetailView.as_view(), name='donor-detail'),
     path('dashboard-metrics/', DashboardMetricsView.as_view(), name='dashboard-metrics'),
 ]
+
+urlpatterns += router.urls

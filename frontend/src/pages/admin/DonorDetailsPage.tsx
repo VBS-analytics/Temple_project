@@ -1,8 +1,9 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { indianCities } from '../../data/indianCities';
-import { gothraOptions, rasiOptions, tamilStarOptions } from '../../data/familyAttributes';
+import { rasiOptions, tamilStarOptions } from '../../data/familyAttributes';
 import api from '../../lib/api';
+import { useMasterDataStore } from '../../store/masterData';
 
 interface DonorProfile {
   donor_id?: string | null;
@@ -350,6 +351,12 @@ const DonorDetailsPage = () => {
   const [customNumberValues, setCustomNumberValues] = useState<Record<number, string>>({});
   const [customNumberSavingIds, setCustomNumberSavingIds] = useState<Set<number>>(() => new Set());
   const [customNumberErrors, setCustomNumberErrors] = useState<Record<number, string>>({});
+  const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
+  const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+
+  useEffect(() => {
+    loadGothraOptions();
+  }, [loadGothraOptions]);
   const cityStateLookup = useMemo(() => {
     const map = new Map<string, string>();
     indianCities.forEach((city) => {

@@ -182,3 +182,16 @@ class FamilyMember(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.relationship or 'member'})"
+
+
+class GothraOption(models.Model):
+    name = models.CharField(max_length=128, unique=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("display_order", "name")
+
+    def __str__(self) -> str:
+        return self.name

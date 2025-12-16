@@ -6,7 +6,7 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import DonorProfile, FamilyMember, OtpPurpose, OtpToken, User
+from .models import DonorProfile, FamilyMember, GothraOption, OtpPurpose, OtpToken, User
 
 
 def build_phone_candidates(phone_number: str | None) -> list[str]:
@@ -91,6 +91,13 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = validated_data.pop("user")
         return FamilyMember.objects.create(user=user, **validated_data)
+
+
+class GothraOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GothraOption
+        fields = ("id", "name", "display_order")
+        read_only_fields = ("id", "display_order")
 
 
 class UserSerializer(serializers.ModelSerializer):

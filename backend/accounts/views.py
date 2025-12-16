@@ -1,11 +1,12 @@
 """API views for user authentication and profile management."""
 
-from rest_framework import permissions, status
+from django.db.models import Max
+from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import DonorProfile, FamilyMember, User, UserRole
+from .models import DonorProfile, FamilyMember, GothraOption, User, UserRole
 from .serializers import (
     AdminDonorUserUpdateSerializer,
     DonorProfileSerializer,
@@ -17,6 +18,7 @@ from .serializers import (
     ProfileUpdateSerializer,
     RegisterSerializer,
     UserSerializer,
+    GothraOptionSerializer,
 )
 
 
@@ -237,3 +239,22 @@ class DashboardMetricsView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class GothraOptionPermission(permissions.BasePermission):
+    """Allow anyone to read gothra options but restrict writes to admins."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return bool(request.user and request.user.is_authenticated and request.user.role == UserRole.ADMIN)
+
+
+class GothraOptionViewSet(viewsets.ModelViewSet):
+    queryset = GothraOption.objects.order_by("display_order", "name")
+    serializer_class = GothraOptionSerializer
+    permission_classes = (GothraOptionPermission,)
+
+    def perform_create(self, serializer):
+        max_order = GothraOption.objects.aggregate(Max("display_order")).get("display_order__max") or 0
+        serializer.save(display_order=max_order + 1)

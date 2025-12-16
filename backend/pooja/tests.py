@@ -52,6 +52,25 @@ class DayOptionOccurrenceViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("start_date", response.data["detail"])
 
+    @patch("pooja.views.get_calendar_service")
+    def test_occurrence_endpoint_accepts_tamil_star_label(self, mock_service_factory):
+        mock_service = Mock()
+        mock_service.next_occurrence.return_value = OccurrenceResult(
+            date=date(2025, 11, 3),
+            description="Monday, 03 Nov 2025",
+            meta={"note": "Tamil star booking"},
+        )
+        mock_service_factory.return_value = mock_service
+
+        star_option = PoojaDayOption.objects.create(code="CS", description="Choose Your Star", category="code")
+        url = reverse("pooja-day-options-next-occurrence", kwargs={"pk": star_option.id})
+        response = self.client.get(url, {"tamil_star": "அசுவினி"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["day_option_code"], "CS")
+        mock_service.next_occurrence.assert_called_once_with("CS", date(2025, 10, 16), tamil_star_labels=["அசுவினி"])
+
 
 class CalendarCodeAliasTests(SimpleTestCase):
     def test_alias_codes_map_to_canonical_values(self):

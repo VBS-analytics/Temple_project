@@ -41,6 +41,24 @@ def _calculate_next_occurrence(base_date: date, frequency: RecurrenceFrequency) 
     return _add_months(base_date, months)
 
 
+def calculate_next_recurring_occurrence(plan: RecurringPoojaPlan, reference_date: Optional[date] = None) -> Optional[date]:
+    if plan.recurrence_kind != RecurrenceKind.RECURRING:
+        return None
+    frequency_value = plan.recurrence_frequency or RecurrenceFrequency.MONTHLY
+    try:
+        frequency = RecurrenceFrequency(frequency_value)
+    except (ValueError, TypeError):
+        frequency = RecurrenceFrequency.MONTHLY
+    reference = reference_date or timezone.localdate()
+    if plan.next_occurrence and plan.next_occurrence > reference:
+        return plan.next_occurrence
+    base = plan.last_occurrence or plan.start_date or reference
+    next_occurrence = _calculate_next_occurrence(base, frequency)
+    while next_occurrence <= reference:
+        next_occurrence = _calculate_next_occurrence(next_occurrence, frequency)
+    return next_occurrence
+
+
 
 def _build_plan_metadata(registration: PoojaRegistration) -> Dict[str, Any]:
     members = [

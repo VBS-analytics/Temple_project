@@ -35,6 +35,31 @@ interface RegistrationRecord {
   created_at?: string | null;
   updated_at?: string | null;
   members?: RegistrationMember[] | null;
+  isRecurringPlan?: boolean;
+  recurringPlanId?: number | null;
+}
+
+interface RecurringPlanRecord {
+  id: number;
+  pooja_option_name?: string | null;
+  pooja_option_code?: string | null;
+  day_option_description?: string | null;
+  recurrence_kind?: 'recurring' | 'one_time_extra';
+  recurrence_frequency?: string | null;
+  start_date?: string | null;
+  next_occurrence?: string | null;
+  last_occurrence?: string | null;
+  one_time_date?: string | null;
+  amount?: string | null;
+  is_active?: boolean;
+  pause_from?: string | null;
+  pause_until?: string | null;
+  metadata?: {
+    members?: Array<{ name?: string | null | undefined }>;
+  } | null;
+  donor_name?: string | null;
+  donor_phone?: string | null;
+  donor_email?: string | null;
 }
 
 type RegistrationBuckets = Record<DayBucketKey, RegistrationRecord[]>;
@@ -307,7 +332,87 @@ const resolveMemberRasi = (member: RegistrationMember | null | undefined) =>
 const resolveMemberGothra = (member: RegistrationMember | null | undefined) =>
   readMemberField(member, MEMBER_FIELD_ALIASES.gothra);
 
-                      
+const titleCaseLabel = (value: string) =>
+  value
+    .split(' ')
+    .filter(Boolean)
+    .map((segment) => (segment ? `${segment.charAt(0).toUpperCase()}${segment.slice(1).toLowerCase()}` : ''))
+    .join(' ');
+
+const formatCurrency = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') return '—';
+  const numeric = typeof value === 'string' ? Number(value) : Number(value);
+  if (Number.isNaN(numeric)) {
+    return String(value);
+  }
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(numeric);
+};
+
+const resolveRecurringFrequencyLabel = (plan: RecurringPlanRecord) => {
+  const frequency = plan.recurrence_frequency?.trim();
+  if (frequency && plan.recurrence_kind === 'recurring') {
+    return `${titleCaseLabel(frequency.replace(/_/g, ' '))} recurring`;
+  }
+  if (plan.recurrence_kind === 'one_time_extra') {
+    return 'One-time extra';
+  }
+  if (frequency) {
+    return titleCaseLabel(frequency.replace(/_/g, ' '));
+  }
+  return 'Recurring plan';
+};
+
+const resolveRecurringPlanScheduleLabel = (plan: RecurringPlanRecord) => {
+  const dateValue = plan.next_occurrence ?? plan.one_time_date ?? plan.start_date;
+  return dateValue ? formatDateDisplay(dateValue) : 'Schedule pending';
+};
+
+const resolveRecurringPlanMemberNames = (plan: RecurringPlanRecord) => {
+  const members = plan.metadata?.members ?? [];
+  const names = members
+    .map((member) => (member?.name ?? '').trim())
+    .filter((memberName) => memberName.length > 0);
+
+  if (names.length === 0) {
+    return 'Devotee details unavailable';
+  }
+
+  return names.join(', ');
+};
+
+const convertRecurringPlanToRegistration = (plan: RecurringPlanRecord): RegistrationRecord => {
+  const planDate = plan.next_occurrence ?? plan.one_time_date ?? plan.start_date ?? '';
+  const formattedDate = planDate || undefined;
+  const members =
+    plan.metadata?.members?.map((member, index) => ({
+      id: index + 1,
+      name: member?.name ?? undefined,
+      family_name: member?.family_name ?? undefined,
+      tamil_star: member?.tamil_star ?? undefined,
+      rasi: member?.rasi ?? undefined,
+      gothra: member?.gothra ?? undefined,
+      date_of_birth: member?.date_of_birth ?? undefined,
+    })) ?? undefined;
+
+  return {
+    id: plan.id * -1,
+    pooja_reg_id: `RP-${plan.id}`,
+    start_date: formattedDate,
+    pooja_option_name: plan.pooja_option_name,
+    day_option_description: plan.day_option_description,
+    donor_name: plan.donor_name,
+    created_at: plan.start_date ?? planDate ?? new Date().toISOString(),
+    updated_at: plan.next_occurrence ?? formattedDate,
+    members,
+    isRecurringPlan: true,
+    recurringPlanId: plan.id,
+  };
+};
+
 const formatDevoteesForExport = (members?: RegistrationMember[] | null) => {
   const validMembers = Array.isArray(members) ? members.filter(Boolean) : [];
   if (validMembers.length === 0) return 'No devotee details available';
@@ -370,6 +475,40 @@ const PoojaDetailsPage = () => {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [updatedPoojaDates, setUpdatedPoojaDates] = useState<Map<number, UpdatedPoojaDate>>(new Map());
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table'); // Added for responsive view toggle
+  const [recurringPlans, setRecurringPlans] = useState<RecurringPlanRecord[]>([]);
+  const [recurringPlansLoading, setRecurringPlansLoading] = useState(false);
+  const [recurringPlansError, setRecurringPlansError] = useState<string | null>(null);
+
+  const recordMatchesFilters = useCallback(
+    (record: RegistrationRecord, normalizedQuery: string) => {
+      if (postPrasadamOnly && !record.post_prasadam) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const poojaName = record.pooja_option_name?.toLowerCase() ?? '';
+      const donorName = record.donor_name?.toLowerCase() ?? '';
+      const poojaId = resolvePoojaId(record).toLowerCase();
+      const dayOption = record.day_option_description?.toLowerCase() ?? '';
+      const members = Array.isArray(record.members) ? record.members : [];
+      const memberMatch = members.some((member) => {
+        const name = typeof member?.name === 'string' ? member.name.toLowerCase() : '';
+        return name.includes(normalizedQuery);
+      });
+
+      return (
+        poojaName.includes(normalizedQuery) ||
+        donorName.includes(normalizedQuery) ||
+        poojaId.includes(normalizedQuery) ||
+        dayOption.includes(normalizedQuery) ||
+        memberMatch
+      );
+    },
+    [postPrasadamOnly],
+  );
 
   // Load updated pooja dates from localStorage on component mount
   useEffect(() => {
@@ -513,43 +652,47 @@ const PoojaDetailsPage = () => {
     [isPoojaDateValid, updatedPoojaDates],
   );
 
+  const filteredRecurringPlans = useMemo(() => {
+    if (recurringPlans.length === 0) {
+      return [];
+    }
+    if (!selectedDate) {
+      return recurringPlans;
+    }
+    return recurringPlans.filter((plan) => {
+      const planDate = plan.next_occurrence ?? plan.one_time_date ?? plan.start_date;
+      if (!planDate) {
+        return false;
+      }
+      return planDate.slice(0, 10) === selectedDate;
+    });
+  }, [recurringPlans, selectedDate]);
+
   const filteredBuckets = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const nextBuckets = buildEmptyBuckets();
 
     (Object.keys(buckets) as DayBucketKey[]).forEach((key) => {
       const decoratedRecords = buckets[key].map(applyPoojaDateOverride);
-      nextBuckets[key] = decoratedRecords.filter((record) => {
-        if (postPrasadamOnly && !record.post_prasadam) {
-          return false;
-        }
-
-        if (!query) {
-          return true;
-        }
-
-        const poojaName = record.pooja_option_name?.toLowerCase() ?? '';
-        const donorName = record.donor_name?.toLowerCase() ?? '';
-        const poojaId = resolvePoojaId(record).toLowerCase();
-        const dayOption = record.day_option_description?.toLowerCase() ?? '';
-        const members = Array.isArray(record.members) ? record.members : [];
-        const memberMatch = members.some((member) => {
-          const name = typeof member?.name === 'string' ? member.name.toLowerCase() : '';
-          return name.includes(query);
-        });
-
-        return (
-          poojaName.includes(query) ||
-          donorName.includes(query) ||
-          poojaId.includes(query) ||
-          dayOption.includes(query) ||
-          memberMatch
-        );
-      });
+      nextBuckets[key] = decoratedRecords.filter((record) => recordMatchesFilters(record, query));
     });
 
+    const recurringRegistrations = filteredRecurringPlans
+      .map(convertRecurringPlanToRegistration)
+      .filter((record) => recordMatchesFilters(record, query));
+
+    if (recurringRegistrations.length > 0) {
+      nextBuckets.all = sortRegistrations([...nextBuckets.all, ...recurringRegistrations]);
+    }
+
     return nextBuckets;
-  }, [applyPoojaDateOverride, buckets, postPrasadamOnly, searchQuery]);
+  }, [
+    applyPoojaDateOverride,
+    buckets,
+    filteredRecurringPlans,
+    recordMatchesFilters,
+    searchQuery,
+  ]);
 
   const flattenedFilteredRegistrations = useMemo(
     () =>
@@ -824,6 +967,38 @@ const PoojaDetailsPage = () => {
       active = false;
     };
   }, [selectedDate]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadRecurringPlans = async () => {
+      try {
+        setRecurringPlansLoading(true);
+        setRecurringPlansError(null);
+        const response = await api.get('pooja/recurrence/plans/', {
+          params: { page_size: 250 },
+        });
+        if (!active) return;
+        const plans = extractResults<RecurringPlanRecord>(response.data);
+        setRecurringPlans(plans);
+      } catch (err) {
+        if (active) {
+          setRecurringPlans([]);
+          setRecurringPlansError(extractErrorMessage(err));
+        }
+      } finally {
+        if (active) {
+          setRecurringPlansLoading(false);
+        }
+      }
+    };
+
+    loadRecurringPlans();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
 
   const applyRegistrationUpdate = useCallback(
@@ -1136,6 +1311,83 @@ const PoojaDetailsPage = () => {
     setPostPrasadamOnly(false);
   };
 
+  const renderRecurringPlanBanner = () => {
+    if (recurringPlansLoading) {
+      return (
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm text-slate-500">
+          <span className="h-3 w-3 animate-spin rounded-full border border-slate-300 border-t-slate-500"></span>
+          Loading recurring plans…
+        </div>
+      );
+    }
+
+    if (recurringPlansError) {
+      return (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm text-rose-700">
+          Unable to load recurring plans. {recurringPlansError}
+        </div>
+      );
+    }
+
+    if (filteredRecurringPlans.length === 0) {
+      return null;
+    }
+
+    const headingLabel = selectedDate
+      ? `Recurring plans on ${formatDateDisplay(selectedDate)}`
+      : 'Recurring plans';
+
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-slate-800">{headingLabel}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {formatNumber(filteredRecurringPlans.length)} plan
+            {filteredRecurringPlans.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        <div className="mt-3 space-y-3">
+          {filteredRecurringPlans.map((plan) => {
+            const planDateLabel = resolveRecurringPlanScheduleLabel(plan);
+            return (
+              <div
+                key={plan.id}
+                className="grid gap-2 rounded-xl border border-slate-100 bg-white/80 p-3 shadow-sm sm:grid-cols-[1fr_auto] sm:items-start"
+              >
+                <div className="space-y-1 text-sm text-slate-600">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {plan.pooja_option_name?.trim() || 'Unnamed plan'}
+                  </p>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    {resolveRecurringFrequencyLabel(plan)}
+                  </p>
+                  <p className="text-xs text-slate-500">Next occurrence: {planDateLabel}</p>
+                  <p className="text-xs text-slate-500">Amount: {formatCurrency(plan.amount)}</p>
+                  <p className="text-xs text-slate-500">
+                    Donor: {resolveDonorName(plan.donor_name)} {plan.donor_phone ? `• ${plan.donor_phone}` : ''}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Devotees: {resolveRecurringPlanMemberNames(plan)}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-2 text-right text-xs">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 font-semibold ${
+                      plan.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {plan.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-[11px] text-slate-400">Plan ID #{plan.id}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const handleQuickDateSelect = useCallback(
     (value: string) => {
       setSelectedDate(value);
@@ -1161,7 +1413,8 @@ const PoojaDetailsPage = () => {
       ? isPoojaDateValid(updatedPoojaDate.poojaDate)
       : false;
 
-    const isEditing = editingRegistrationId === registration.id;
+    const isRecurringPlan = Boolean(registration.isRecurringPlan);
+    const isEditing = !isRecurringPlan && editingRegistrationId === registration.id;
 
     return (
       <div className={`rounded-xl border ${statusMeta.rowAccentClass} bg-white p-4 shadow-sm transition-all duration-150 ${statusMeta.rowHoverClass} ${isEditing ? 'ring-2 ring-orange-400' : ''}`}>
@@ -1172,6 +1425,11 @@ const PoojaDetailsPage = () => {
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold leading-none ${statusMeta.badgeClass}`}>
                 {statusMeta.label}
               </span>
+              {isRecurringPlan && (
+                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  Recurring plan
+                </span>
+              )}
             </div>
             <div className="mt-1 text-sm text-slate-700">{formatDateDisplay(registration.start_date)}</div>
           </div>
@@ -1249,27 +1507,29 @@ const PoojaDetailsPage = () => {
               )}
             </div>
             
-            <button
-              type="button"
-              onClick={() => startEditingRegistrationDate(registration)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                className="h-3.5 w-3.5"
+            {!isRecurringPlan && (
+              <button
+                type="button"
+                onClick={() => startEditingRegistrationDate(registration)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.75 20.902 3 21.75l.848-3.75L16.862 4.487z"
-                />
-              </svg>
-              Edit Date
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  className="h-3.5 w-3.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.75 20.902 3 21.75l.848-3.75L16.862 4.487z"
+                  />
+                </svg>
+                Edit Date
+              </button>
+            )}
           </div>
           
           {isEditing && (
@@ -1607,6 +1867,7 @@ const PoojaDetailsPage = () => {
                 </button>
               </div>
             </div>
+            {renderRecurringPlanBanner()}
           </div>
         </div>
 
@@ -1792,24 +2053,24 @@ const PoojaDetailsPage = () => {
                                   </div>
                                 </td>
                               </tr>
-                              {registrations.map((registration) => {
-                                const members = Array.isArray(registration.members)
-                                  ? registration.members.filter(Boolean)
-                                  : [];
-                                const prasadamBadgeClass = registration.post_prasadam
-                                  ? 'inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600'
-                                  : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600';
-                                const registrationTimestamp = resolveRegistrationTimestamp(registration);
-                                const poojaStatus = resolvePoojaStatus(registration.start_date);
-                                const statusMeta = POOJA_STATUS_META[poojaStatus];
+                                {registrations.map((registration) => {
+                                  const members = Array.isArray(registration.members)
+                                    ? registration.members.filter(Boolean)
+                                    : [];
+                                  const prasadamBadgeClass = registration.post_prasadam
+                                    ? 'inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600'
+                                    : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600';
+                                  const registrationTimestamp = resolveRegistrationTimestamp(registration);
+                                  const poojaStatus = resolvePoojaStatus(registration.start_date);
+                                  const statusMeta = POOJA_STATUS_META[poojaStatus];
+                                  const isRecurringPlan = Boolean(registration.isRecurringPlan);
+                                  // Check if this registration has an updated pooja date and if it's still valid
+                                  const updatedPoojaDate = updatedPoojaDates.get(registration.id);
+                                  const shouldShowUpdatedBadge = updatedPoojaDate?.poojaDate
+                                    ? isPoojaDateValid(updatedPoojaDate.poojaDate)
+                                    : false;
 
-                                // Check if this registration has an updated pooja date and if it's still valid
-                                const updatedPoojaDate = updatedPoojaDates.get(registration.id);
-                                const shouldShowUpdatedBadge = updatedPoojaDate?.poojaDate
-                                  ? isPoojaDateValid(updatedPoojaDate.poojaDate)
-                                  : false;
-
-                                const isEditing = editingRegistrationId === registration.id;
+                                  const isEditing = !isRecurringPlan && editingRegistrationId === registration.id;
 
                                 return (
                                   <tr
@@ -1817,7 +2078,12 @@ const PoojaDetailsPage = () => {
                                     className={`bg-white transition-colors duration-150 ${statusMeta.rowHoverClass} ${isEditing ? 'ring-2 ring-orange-400 ring-inset' : ''}`}
                                   >
                                     <td className={`px-4 py-3 whitespace-nowrap border-l-4 ${statusMeta.rowAccentClass}`}>
-                                      <div className="text-sm font-bold text-slate-900">{resolvePoojaId(registration)}</div>
+                                      <div className="space-y-0.5">
+                                        <div className="text-sm font-bold text-slate-900">{resolvePoojaId(registration)}</div>
+                                        {isRecurringPlan && (
+                                          <span className="text-[11px] text-slate-500">Recurring plan</span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-4 py-3 align-top">
                                       <div className="space-y-2">
@@ -1874,7 +2140,7 @@ const PoojaDetailsPage = () => {
                                         )}
                                         
                                         {/* Edit button when not editing */}
-                                        {!isEditing && (
+                                        {!isEditing && !isRecurringPlan && (
                                           <button
                                             type="button"
                                             onClick={() => startEditingRegistrationDate(registration)}

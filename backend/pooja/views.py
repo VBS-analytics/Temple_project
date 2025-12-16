@@ -14,6 +14,8 @@ from rest_framework.views import APIView
 
 from accounts.models import User, UserRole
 
+from common.permissions import IsAdminRole, ReadOnlyOrAdmin
+
 from .models import (
     DailyMessage,
     DonorMessageTemplate,
@@ -25,6 +27,7 @@ from .models import (
     RecurringPoojaPlan,
 )
 from .services.calendar import get_calendar_service
+from .services.recurrence import calculate_next_recurring_occurrence
 from .serializers import (
     DailyMessageSerializer,
     DonorMessageTemplateSerializer,
@@ -38,22 +41,6 @@ from .serializers import (
     LandingPoojaRegistrationSerializer,
     PublicTodayPoojaRegistrationSerializer,
 )
-
-
-class IsAdminRole(permissions.BasePermission):
-    """Allows access only to users flagged as admin role."""
-
-    def has_permission(self, request, view):  # pragma: no cover - simple predicate
-        return bool(request.user and request.user.is_authenticated and request.user.role == UserRole.ADMIN)
-
-
-class ReadOnlyOrAdmin(permissions.BasePermission):
-    """Donors can read, only admins can modify."""
-
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return request.user and request.user.is_authenticated
-        return bool(request.user and request.user.is_authenticated and request.user.role == UserRole.ADMIN)
 
 
 class PoojaOptionViewSet(viewsets.ModelViewSet):
@@ -146,12 +133,15 @@ class PoojaDayOptionViewSet(viewsets.ModelViewSet):
 
         tamil_star_labels = None
         tamil_star_id = request.query_params.get("tamil_star_id")
+        tamil_star_label = request.query_params.get("tamil_star")
         if tamil_star_id is not None:
             try:
                 star_option = PoojaDayOption.objects.get(id=int(tamil_star_id), category="tamil_star")
                 tamil_star_labels = [star_option.description, star_option.code]
             except (ValueError, PoojaDayOption.DoesNotExist):
                 return Response({"detail": "Invalid tamil_star_id provided."}, status=status.HTTP_400_BAD_REQUEST)
+        elif tamil_star_label:
+            tamil_star_labels = [tamil_star_label]
 
         service = get_calendar_service()
         try:
@@ -340,7 +330,7 @@ class RecurringPoojaPlanViewSet(
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
-        qs = RecurringPoojaPlan.objects.select_related("pooja_option", "day_option")
+        qs = RecurringPoojaPlan.objects.select_related("donor", "pooja_option", "day_option")
         if self.request.user.role == UserRole.ADMIN:
             return qs.order_by("donor__name", "-next_occurrence", "-created_at")
         return qs.filter(donor=self.request.user).order_by("-next_occurrence", "-created_at")
@@ -366,6 +356,7 @@ class RecurringPoojaPlanViewSet(
         plan = self.get_object()
         pause_from_value = request.data.get("pause_from")
         pause_until_value = request.data.get("pause_until")
+        pause_reason_value = request.data.get("pause_reason")
         if not pause_until_value:
             return Response({"detail": "Provide a pause_until date."}, status=status.HTTP_400_BAD_REQUEST)
         pause_until = parse_date(pause_until_value)
@@ -379,6 +370,12 @@ class RecurringPoojaPlanViewSet(
             return Response({"detail": "Pause start must be today or later."}, status=status.HTTP_400_BAD_REQUEST)
         if pause_until <= pause_from:
             return Response({"detail": "Pause end must be after the pause start."}, status=status.HTTP_400_BAD_REQUEST)
+        metadata = dict(plan.metadata or {})
+        if pause_reason_value:
+            metadata["pause_reason"] = pause_reason_value
+        else:
+            metadata.pop("pause_reason", None)
+        plan.metadata = metadata
         plan.pause_from = pause_from
         plan.pause_until = pause_until
         plan.is_active = False
@@ -392,6 +389,28 @@ class RecurringPoojaPlanViewSet(
         plan.pause_until = None
         plan.pause_from = None
         plan.is_active = True
+        metadata = dict(plan.metadata or {})
+        metadata.pop("pause_reason", None)
+        metadata.pop("canceled_at", None)
+        plan.metadata = metadata
+        next_occurrence = calculate_next_recurring_occurrence(plan)
+        if next_occurrence:
+            plan.next_occurrence = next_occurrence
+        plan.save()
+        serializer = self.get_serializer(plan)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        plan = self.get_object()
+        plan.pause_from = None
+        plan.pause_until = None
+        plan.is_active = False
+        plan.next_occurrence = None
+        metadata = dict(plan.metadata or {})
+        metadata.pop("pause_reason", None)
+        metadata["canceled_at"] = timezone.localdate().isoformat()
+        plan.metadata = metadata
         plan.save()
         serializer = self.get_serializer(plan)
         return Response(serializer.data)
