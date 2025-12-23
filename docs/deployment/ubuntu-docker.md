@@ -1,6 +1,6 @@
 # Production deployment on Ubuntu
 
-The stack runs completely in Docker: PostgreSQL, Django/Gunicorn, and an Nginx container that serves the React build, proxies `/api` to Django, and exposes `/static` + `/media`. Follow the steps below on the Ubuntu host `172.21.12.77`.
+The stack runs completely in Docker: PostgreSQL, Django/Gunicorn, and an Nginx container that serves the React build, proxies `/api` to Django, and exposes `/static` + `/media`. Follow the steps below on the Ubuntu host where you plan to run the production stack.
 
 ## 1. Prerequisites
 - Ubuntu 22.04+ with sudo access and outbound internet.
@@ -30,7 +30,7 @@ The stack runs completely in Docker: PostgreSQL, Django/Gunicorn, and an Nginx c
   ```
 2. Update `.env.production` with:
    - A strong `DJANGO_SECRET_KEY`.
-   - `DJANGO_ALLOWED_HOSTS=172.21.12.77,localhost,backend,web` (add any DNS names you later assign).
+   - `DJANGO_ALLOWED_HOSTS=localhost,backend,web` (replace or supplement with the public hostname(s) you assign to this host later).
    - Non-default `POSTGRES_PASSWORD`.
    - Keep `VITE_API_BASE_URL=/api` so the React build talks to the same origin exposed by Nginx.
 
@@ -50,9 +50,9 @@ This performs:
 - The default admin (phone `9999999999`, password `adminpass`) is auto-seeded; change it immediately inside the Django admin.
 
 ## 4. Verification
-1. Browse to `http://172.21.12.77` from another machine on the LAN.
-2. Confirm the landing page renders and the browser network tab shows calls to `/api/...` succeeding (HTTP 200).
-3. Hit `http://172.21.12.77/admin/` and ensure you can sign in with the seeded admin, then change the password and create real accounts.
+1. Browse to `http://<your-hostname>` (or whichever domain you assigned to the Ubuntu host) from another machine on the LAN.
+2. Confirm the landing page renders and the calls to `/api/...` succeed (HTTP 200).
+3. Hit `http://<your-hostname>/admin/` and ensure you can sign in with the seeded admin, then change the password and create real accounts.
 
 ## 5. Managing the service
 - **Stop / start:** `docker compose -f docker-compose.prod.yml down` / `up -d`
@@ -84,4 +84,4 @@ This performs:
    sudo systemctl enable --now temple-platform
    ```
 
-With this setup, the application will keep running on `172.21.12.77` and can safely serve the ~10 internal users you expect. Adjust resource limits (CPU/memory) via Docker if the load grows.
+With this setup, the application will keep running on the host you configured and can safely serve the ~10 internal users you expect. Adjust resource limits (CPU/memory) via Docker if the load grows.

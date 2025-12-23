@@ -5,10 +5,11 @@ from __future__ import annotations
 import calendar
 import logging
 from datetime import date
+from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from ..models import (
@@ -18,6 +19,7 @@ from ..models import (
     RecurrenceKind,
     RecurringPoojaPlan,
 )
+from payments.models import PaymentRecord, PaymentStatus
 
 LOGGER = logging.getLogger(__name__)
 
@@ -57,6 +59,68 @@ def calculate_next_recurring_occurrence(plan: RecurringPoojaPlan, reference_date
     while next_occurrence <= reference:
         next_occurrence = _calculate_next_occurrence(next_occurrence, frequency)
     return next_occurrence
+
+
+def find_due_registration(plan: RecurringPoojaPlan, pause_start: Optional[date] = None) -> Optional[PoojaRegistration]:
+    """Return the registration that should be paid next for the provided plan."""
+    queryset = PoojaRegistration.objects.filter(
+        donor=plan.donor,
+        pooja_option=plan.pooja_option,
+    )
+    if plan.day_option_id is not None:
+        queryset = queryset.filter(day_option_id=plan.day_option_id)
+
+    next_date = plan.next_occurrence
+    if next_date:
+        registration = (
+            queryset.filter(start_date=next_date)
+            .order_by("-created_at")
+            .first()
+        )
+        if registration:
+            return registration
+
+    if pause_start:
+        nearby_registration = (
+            queryset.filter(start_date__gte=pause_start)
+            .order_by("start_date", "-created_at")
+            .first()
+        )
+        if nearby_registration:
+            return nearby_registration
+
+    if plan.origin_registration_id:
+        return plan.origin_registration
+    return None
+
+
+def sum_successful_payments(registration: PoojaRegistration | None) -> Decimal:
+    if registration is None:
+        return Decimal("0.00")
+    aggregate = PaymentRecord.objects.filter(
+        registration=registration,
+        status=PaymentStatus.SUCCESS,
+    ).aggregate(total=Sum("amount"))
+    return aggregate["total"] or Decimal("0.00")
+
+
+def get_plan_due_summary(
+    plan: RecurringPoojaPlan,
+    *,
+    pause_start: Optional[date] = None,
+) -> Optional[Dict[str, Any]]:
+    registration = find_due_registration(plan, pause_start)
+    if registration is None:
+        return None
+    total_amount = registration.total_amount or plan.amount or Decimal("0.00")
+    paid_amount = sum_successful_payments(registration)
+    due_amount = max(total_amount - paid_amount, Decimal("0.00"))
+    return {
+        "registration": registration,
+        "total_amount": total_amount,
+        "total_paid": paid_amount,
+        "due_amount": due_amount,
+    }
 
 
 
@@ -220,6 +284,20 @@ def _advance_plan(plan: RecurringPoojaPlan, processed_date: date) -> None:
         plan.next_occurrence = None
         plan.is_active = False
     plan.save()
+
+
+def prepare_recurring_registration(plan: RecurringPoojaPlan, *, reference_date: Optional[date] = None) -> Optional[PoojaRegistration]:
+    if plan.recurrence_kind != RecurrenceKind.RECURRING or not plan.is_active:
+        return None
+    target_date = plan.next_occurrence
+    if target_date is None:
+        return None
+    if plan.pause_from and plan.pause_until and plan.pause_from <= target_date <= plan.pause_until:
+        return None
+    registration = create_registration_from_plan(plan, due_date=target_date)
+    processed_date = reference_date or target_date
+    _advance_plan(plan, processed_date)
+    return registration
 
 
 def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:

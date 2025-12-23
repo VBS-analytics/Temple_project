@@ -6,12 +6,15 @@ import { loadPdfMake } from '../lib/pdfMakeLoader';
 
 import api, { extractResults } from '../lib/api';
 import { isAdmin, useAuthStore } from '../store/auth';
-import { MONTHLY_DONATION_AMOUNT } from '../config/globalConstants';
+import { DONATION_AMOUNT } from '../config/globalConstants';
 
 const TEMPLE_COUNT = 4;
 
 interface DonorRecord {
   members?: unknown[];
+  profile?: {
+    monthly_donation_amount?: number | string | null;
+  };
 }
 
 interface RegistrationMember {
@@ -24,6 +27,9 @@ interface RegistrationMember {
 }
 
 interface ProfilePayload {
+  profile?: {
+    monthly_donation_amount?: number | string | null;
+  };
   members?: RegistrationMember[];
 }
 
@@ -160,6 +166,22 @@ const WalletIcon = (props: SVGProps<SVGSVGElement>) => (
   </IconBase>
 );
 
+const CashIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <rect x="4" y="7" width="16" height="10" rx="2" />
+    <path d="M4 11h16" />
+    <circle cx="12" cy="12" r="2" />
+  </IconBase>
+);
+
+const PrasadamIcon = (props: SVGProps<SVGSVGElement>) => (
+  <IconBase {...props}>
+    <rect x="4" y="10" width="16" height="8" rx="2" />
+    <path d="M4 10l8-4 8 4" />
+    <path d="M12 10v9" />
+  </IconBase>
+);
+
 const RefreshIcon = (props: SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <path d="M1 4v6h6" />
@@ -189,6 +211,7 @@ const DashboardPage = () => {
   const [familyMemberCount, setFamilyMemberCount] = useState<number | null>(null);
   const [donorLoading, setDonorLoading] = useState(true);
   const [familyLoading, setFamilyLoading] = useState(true);
+  const [donationAmount, setDonationAmount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upcomingPoojaCount, setUpcomingPoojaCount] = useState<number | null>(null);
   const [prasadamRequestCount, setPrasadamRequestCount] = useState<number | null>(null);
@@ -274,14 +297,18 @@ const DashboardPage = () => {
       setDonorLoading(true);
       setFamilyLoading(true);
       setError(null);
+      setDonationAmount(null);
       const metricsResponse = await api.get('auth/dashboard-metrics/');
-      const { donor_count: donorValue, family_member_count: familyValue } =
+      const { donor_count: donorValue, family_member_count: familyValue, donation_amount: donationValue } =
         (metricsResponse.data ?? {}) as {
           donor_count?: unknown;
           family_member_count?: unknown;
+          donation_amount?: unknown;
         };
       setDonorCount(Number(donorValue) || 0);
       setFamilyMemberCount(Number(familyValue) || 0);
+      const parsedDonation = Number(donationValue);
+      setDonationAmount(Number.isFinite(parsedDonation) ? parsedDonation : DONATION_AMOUNT);
     } catch (err) {
       const axiosError = err as AxiosError;
       const statusCode = axiosError.response?.status;
@@ -290,6 +317,7 @@ const DashboardPage = () => {
         setError('You do not have permission to view metrics.');
         setDonorCount(null);
         setFamilyMemberCount(null);
+        setDonationAmount(DONATION_AMOUNT);
       } else {
         console.warn('Dashboard metrics endpoint unavailable, falling back to donor list aggregation', err);
         try {
@@ -305,6 +333,10 @@ const DashboardPage = () => {
             }
             return sum;
           }, 0);
+          const fallbackDonation = donors.reduce((sum, donor) => {
+            const rawValue = Number(donor.profile?.monthly_donation_amount ?? 0);
+            return sum + (Number.isFinite(rawValue) ? rawValue : 0);
+          }, 0);
 
           let combinedMembers = memberTotal;
           try {
@@ -316,11 +348,13 @@ const DashboardPage = () => {
 
           setDonorCount(donorTotal);
           setFamilyMemberCount(combinedMembers);
+          setDonationAmount(fallbackDonation);
         } catch (fallbackErr) {
           console.error('Failed to load donor metrics via fallback', fallbackErr);
           setError('Unable to load donor metrics right now.');
           setDonorCount(null);
           setFamilyMemberCount(null);
+          setDonationAmount(DONATION_AMOUNT);
         }
       }
     } finally {
@@ -336,6 +370,7 @@ const DashboardPage = () => {
       setDonorLoading(true);
       setFamilyLoading(true);
       setError(null);
+      setDonationAmount(null);
       setUpcomingPoojaCount(null);
       setPrasadamRequestCount(null);
 
@@ -347,6 +382,9 @@ const DashboardPage = () => {
       const profilePayload = (profileResponse.data ?? {}) as ProfilePayload;
       const profileMembers = Array.isArray(profilePayload.members) ? profilePayload.members : [];
       setFamilyMemberCount(profileMembers.length);
+      const profileDonationValue = Number(profilePayload.profile?.monthly_donation_amount ?? 0);
+      const sanitizedDonationValue = Number.isFinite(profileDonationValue) ? profileDonationValue : 0;
+      setDonationAmount(sanitizedDonationValue);
 
       const registrations = extractResults<TodayPoojaRecord>(registrationsResponse.data);
       setDonorCount(registrations.length);
@@ -373,6 +411,7 @@ const DashboardPage = () => {
       setError('Unable to load your dashboard metrics right now.');
       setDonorCount(null);
       setFamilyMemberCount(null);
+      setDonationAmount(null);
       setUpcomingPoojaCount(null);
       setPrasadamRequestCount(null);
       setTodayPoojas([]);
@@ -517,6 +556,8 @@ const DashboardPage = () => {
   };
 
   const loading = donorLoading || familyLoading;
+  const donationDisplayValue =
+    donationAmount === null ? (error ? 'N/A' : 'Loading...') : formatCurrency(donationAmount);
 
   const adminMetrics: {
     id: string;
@@ -552,9 +593,9 @@ const DashboardPage = () => {
     },
     {
       id: 'monthly-donations',
-      label: 'Monthly Donation Amount',
-      value: formatCurrency(MONTHLY_DONATION_AMOUNT),
-      description: 'Approximate monthly inflow (static for now).',
+      label: 'Donation Amount (by all the donors)',
+      value: donationDisplayValue,
+      description: 'Approximate monthly inflow (updated for recent pauses).',
       icon: WalletIcon,
       accent: 'bg-orange-100 text-orange-700',
     },
@@ -597,7 +638,15 @@ const DashboardPage = () => {
       label: 'Post Prasadam Requests',
       value: displayValue(prasadamRequestCount, donorLoading),
       description: 'Registrations where prasadam delivery was requested.',
-      icon: WalletIcon,
+      icon: PrasadamIcon,
+      accent: 'bg-orange-100 text-orange-700',
+    },
+    {
+      id: 'total-donation',
+      label: 'Total Donation',
+      value: donationDisplayValue,
+      description: 'Donations recorded through your account.',
+      icon: CashIcon,
       accent: 'bg-orange-100 text-orange-700',
     },
   ];

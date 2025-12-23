@@ -267,7 +267,7 @@ const recordRegistrations = async (items: CartItem[], transactionReference: stri
       registration: typeof registrationId === 'number' ? registrationId : undefined,
       amount: Number(item.amount) || 0,
       mode: 'upi',
-      status: 'pending',
+      status: 'success',
       transaction_reference: transactionReference,
       notes: payload.additional_notes ?? '',
     });

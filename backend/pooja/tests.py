@@ -1,13 +1,26 @@
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 from unittest.mock import Mock, patch
 
-from django.urls import reverse
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import User
-from .models import PoojaDayOption
+from accounts.models import DonorProfile, User
+from payments.models import PaymentMode, PaymentRecord, PaymentStatus
+from .models import (
+    DayOptionCategory,
+    PoojaDayOption,
+    PoojaOption,
+    PoojaRegistration,
+    RecurrenceFrequency,
+    RecurrenceKind,
+    RecurringPoojaPlan,
+)
+from .serializers import RecurringPoojaPlanSerializer
 from .services.calendar import OccurrenceResult, TempleCalendarService
+from .views import PAUSE_REASON_USE_FOR_TEMPLE
 
 
 SQLITE_DB_CONFIG = {
@@ -173,3 +186,132 @@ class PradoshamHelperTests(SimpleTestCase):
             occurrences = TempleCalendarService._upcoming_pradosham_occurrences(service, date(2025, 1, 10))
 
         self.assertEqual(occurrences, [date(2025, 1, 15), date(2025, 2, 1)])
+
+
+class RecurringPoojaPlanPauseTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(phone_number="9000000001", name="Pause Donor", password="secret")
+        DonorProfile.objects.create(user=self.user)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.pooja_option = PoojaOption.objects.create(code="RP1", name="Recurring Pooja")
+        self.day_option = PoojaDayOption.objects.create(
+            code="RDAY",
+            description="Recurring day",
+            category=DayOptionCategory.CODE,
+        )
+
+    def _create_plan(self) -> RecurringPoojaPlan:
+        plan = RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=timezone.localdate(),
+            next_occurrence=timezone.localdate() + timedelta(days=3),
+            amount=Decimal("250.00"),
+            is_active=True,
+        )
+        return plan
+
+    def _create_due_registration(self, plan: RecurringPoojaPlan) -> PoojaRegistration:
+        registration = PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=plan.next_occurrence,
+            total_amount=plan.amount,
+        )
+        plan.origin_registration = registration
+        plan.save(update_fields=["origin_registration"])
+        return registration
+
+    def _pause_plan(self, plan: RecurringPoojaPlan, reason: str):
+        pause_from = timezone.localdate()
+        pause_until = pause_from + timedelta(days=30)
+        url = reverse("pooja-recurrence-plans-pause", kwargs={"pk": plan.id})
+        return self.client.post(
+            url,
+            {
+                "pause_from": pause_from.isoformat(),
+                "pause_until": pause_until.isoformat(),
+                "pause_reason": reason,
+                "pause_months": 1,
+            },
+            format="json",
+        )
+
+    def test_pause_use_for_temple_credits_monthly_donation_when_paid(self):
+        plan = self._create_plan()
+        registration = self._create_due_registration(plan)
+        PaymentRecord.objects.create(
+            donor=self.user,
+            registration=registration,
+            amount=Decimal("300.00"),
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+        )
+
+        response = self._pause_plan(plan, PAUSE_REASON_USE_FOR_TEMPLE)
+
+        self.assertEqual(response.status_code, 200)
+        profile = DonorProfile.objects.get(user=self.user)
+        self.assertEqual(profile.monthly_donation_amount, Decimal("300.00"))
+
+    def test_pause_use_for_temple_does_not_credit_monthly_donation_when_unpaid(self):
+        plan = self._create_plan()
+        self._create_due_registration(plan)
+
+        response = self._pause_plan(plan, PAUSE_REASON_USE_FOR_TEMPLE)
+
+        self.assertEqual(response.status_code, 200)
+        profile = DonorProfile.objects.get(user=self.user)
+        self.assertEqual(profile.monthly_donation_amount, Decimal("0.00"))
+
+
+class RecurringPoojaPlanDueInfoTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(phone_number="9000000002", name="Due Donor", password="secret")
+        DonorProfile.objects.create(user=self.user)
+        self.pooja_option = PoojaOption.objects.create(code="RP2", name="Recurring Pooja Due")
+        self.day_option = PoojaDayOption.objects.create(
+            code="RDAY2",
+            description="Recurring day",
+            category=DayOptionCategory.CODE,
+        )
+
+    def test_due_registration_summary_includes_amounts_and_status(self):
+        plan = RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=timezone.localdate(),
+            next_occurrence=timezone.localdate() + timedelta(days=5),
+            amount=Decimal("250.00"),
+            is_active=True,
+        )
+        registration = PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=plan.next_occurrence,
+            total_amount=Decimal("250.00"),
+        )
+        PaymentRecord.objects.create(
+            donor=self.user,
+            registration=registration,
+            amount=Decimal("150.00"),
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+        )
+
+        serialized = RecurringPoojaPlanSerializer(plan)
+        due_data = serialized.data.get("due_registration")
+        self.assertIsNotNone(due_data)
+        self.assertEqual(due_data["id"], registration.id)
+        self.assertEqual(due_data["paid_amount"], "150.00")
+        self.assertEqual(due_data["due_amount"], "100.00")
+        self.assertFalse(due_data["is_paid"])

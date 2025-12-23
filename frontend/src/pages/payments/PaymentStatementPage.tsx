@@ -98,6 +98,28 @@ const parseNumeric = (value?: string | number | null) => {
   return Number.isNaN(numeric) ? 0 : numeric;
 };
 
+const getRecordTimestamp = (record: PaymentRecordEntry) => {
+  const parseTimestamp = (value?: string | null) => {
+    if (!value) {
+      return NaN;
+    }
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? NaN : parsed;
+  };
+
+  const createdAt = parseTimestamp(record.created_at);
+  if (!Number.isNaN(createdAt)) {
+    return createdAt;
+  }
+
+  const startDate = parseTimestamp(record.registration_start_date);
+  if (!Number.isNaN(startDate)) {
+    return startDate;
+  }
+
+  return 0;
+};
+
 const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
   record.registration_donor_name || '—';
 
@@ -376,20 +398,15 @@ const PaymentStatementPage = () => {
 
   const resolveStatusLabel = (record: PaymentRecordEntry) => {
     const status = record.status?.toLowerCase() ?? '';
+    const dueAmount = parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
+    const paidAmount = parseNumeric(record.amount);
+    const isFullyPaid = paidAmount > 0 && dueAmount <= 0;
+
     if ((record.registration_status ?? '').toLowerCase() === 'completed') {
       return 'Pooja Completed';
     }
-    if (status === 'success') {
-      return 'Payment Received';
-    }
-    if (status === 'pending') {
-      if (record.transaction_reference) {
-        return 'Admin action is pending';
-      }
+    if (status === 'pending' && !record.transaction_reference && !isFullyPaid) {
       return 'Payment not received';
-    }
-    if (status === 'failed' || status === 'refunded') {
-      return 'Admin action is pending';
     }
     return 'Admin action is pending';
   };
@@ -675,6 +692,14 @@ const PaymentStatementPage = () => {
     if (!filteredRecords.length) {
       return filteredRecords;
     }
+
+    const compareByTimestampDesc = (a: PaymentRecordEntry, b: PaymentRecordEntry) =>
+      getRecordTimestamp(b) - getRecordTimestamp(a);
+
+    if (isAdminUser) {
+      return [...filteredRecords].sort(compareByTimestampDesc);
+    }
+
     const adminActionPendingRecords = filteredRecords.filter(
       (record) => getStatusLabel(record) === 'Admin action is pending',
     );
@@ -682,7 +707,7 @@ const PaymentStatementPage = () => {
       (record) => getStatusLabel(record) !== 'Admin action is pending',
     );
     return [...otherRecords, ...adminActionPendingRecords];
-  }, [filteredRecords]);
+  }, [filteredRecords, isAdminUser, statusOverrideMap]);
 
   const totalPaid = useMemo(
     () => filteredRecords.reduce((sum, record) => sum + getDisplayedPaidAmountValue(record), 0),
