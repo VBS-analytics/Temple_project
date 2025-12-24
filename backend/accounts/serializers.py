@@ -52,8 +52,9 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "family_name",
             "notes",
             "custom_number",
+            "monthly_donation_amount",
         )
-        read_only_fields = ("donor_id",)
+        read_only_fields = ("donor_id", "monthly_donation_amount")
         extra_kwargs = {
             "gender": {"required": False, "allow_blank": True},
             "rasi": {"required": False, "allow_blank": True},

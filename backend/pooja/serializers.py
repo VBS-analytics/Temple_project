@@ -1,5 +1,7 @@
 """Serializers for pooja domain."""
 
+from decimal import Decimal
+
 from django.db import transaction
 from rest_framework import serializers
 
@@ -18,7 +20,7 @@ from .models import (
 )
 from accounts.models import UserRole
 
-from .services.recurrence import create_plan_from_registration
+from .services.recurrence import create_plan_from_registration, get_plan_due_summary
 
 
 class PoojaOptionSerializer(serializers.ModelSerializer):
@@ -349,6 +351,14 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
     donor_name = serializers.SerializerMethodField()
     donor_phone = serializers.SerializerMethodField()
     donor_email = serializers.SerializerMethodField()
+    origin_registration_created_at = serializers.DateTimeField(
+        source="origin_registration.created_at", read_only=True
+    )
+    origin_registration_updated_at = serializers.DateTimeField(
+        source="origin_registration.updated_at", read_only=True
+    )
+    origin_registration_id = serializers.IntegerField(read_only=True, required=False)
+    due_registration = serializers.SerializerMethodField()
 
     class Meta:
         model = RecurringPoojaPlan
@@ -371,6 +381,10 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
             "pause_from",
             "pause_until",
             "metadata",
+            "origin_registration_created_at",
+            "origin_registration_updated_at",
+            "origin_registration_id",
+            "due_registration",
         )
 
     def get_day_option_description(self, obj):
@@ -405,6 +419,25 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
         if donor is None:
             return None
         return getattr(donor, "email", None)
+
+    def get_due_registration(self, obj):
+        due_data = get_plan_due_summary(obj)
+        if due_data is None:
+            return None
+        registration = due_data["registration"]
+        due_amount = due_data["due_amount"]
+        total_amount = due_data["total_amount"]
+        paid_amount = due_data["total_paid"]
+        return {
+            "id": registration.id,
+            "pooja_reg_id": getattr(registration, "pooja_reg_id", None),
+            "start_date": registration.start_date,
+            "total_amount": str(total_amount),
+            "paid_amount": str(paid_amount),
+            "due_amount": str(due_amount),
+            "is_paid": due_amount <= Decimal("0.00"),
+            "status": registration.status,
+        }
 
 
 class RecurringPoojaPlanUpdateSerializer(serializers.ModelSerializer):

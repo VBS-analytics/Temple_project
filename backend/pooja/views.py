@@ -1,6 +1,7 @@
 """ViewSets for pooja master data and registrations."""
 
-from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import date, datetime
 
 from django.db import transaction
 from django.db.models import Max, Prefetch, Q
@@ -12,8 +13,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import User, UserRole
-
+from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole, ReadOnlyOrAdmin
 
 from .models import (
@@ -24,10 +24,16 @@ from .models import (
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
+    RecurrenceKind,
     RecurringPoojaPlan,
 )
 from .services.calendar import get_calendar_service
-from .services.recurrence import calculate_next_recurring_occurrence
+from .services.recurrence import (
+    calculate_next_recurring_occurrence,
+    find_due_registration,
+    prepare_recurring_registration,
+    sum_successful_payments,
+)
 from .serializers import (
     DailyMessageSerializer,
     DonorMessageTemplateSerializer,
@@ -41,6 +47,63 @@ from .serializers import (
     LandingPoojaRegistrationSerializer,
     PublicTodayPoojaRegistrationSerializer,
 )
+
+PAUSE_REASON_NO_POJA_NO_PAYMENT = "No Pooja and No Payment"
+PAUSE_REASON_USE_FOR_TEMPLE = "No Pooja and use the money for temple purpose"
+PAUSE_REASON_SAMY = "Continue the pooja with the Samy's names"
+
+
+def _is_registration_in_pause_window(registration, pause_start):
+    if registration is None:
+        return False
+    registration_date = getattr(registration, "start_date", None)
+    if registration_date is None:
+        return False
+    return registration_date >= pause_start
+
+
+def _round_to_whole_rupee(amount: Decimal) -> int:
+    return int(amount.to_integral_value(rounding=ROUND_HALF_UP))
+
+
+def _credit_custom_balance(user, amount: Decimal):
+    if amount <= Decimal("0.00"):
+        return
+    profile, _ = DonorProfile.objects.get_or_create(user=user)
+    profile.custom_number = (profile.custom_number or 0) + _round_to_whole_rupee(amount)
+    profile.save(update_fields=["custom_number"])
+
+
+def _credit_monthly_donation(user, amount: Decimal):
+    if amount <= Decimal("0.00"):
+        return
+    profile, _ = DonorProfile.objects.get_or_create(user=user)
+    profile.monthly_donation_amount = (profile.monthly_donation_amount or Decimal("0.00")) + amount
+    profile.save(update_fields=["monthly_donation_amount"])
+
+
+def _debit_monthly_donation(user, amount: Decimal):
+    if amount <= Decimal("0.00"):
+        return
+    profile, _ = DonorProfile.objects.get_or_create(user=user)
+    current_value = profile.monthly_donation_amount or Decimal("0.00")
+    updated_value = max(current_value - amount, Decimal("0.00"))
+    if updated_value == current_value:
+        return
+    profile.monthly_donation_amount = updated_value
+    profile.save(update_fields=["monthly_donation_amount"])
+
+
+def _debit_custom_balance(user, amount):
+    if amount is None or amount <= Decimal("0.00"):
+        return
+    deduction = _round_to_whole_rupee(amount)
+    if deduction <= 0:
+        return
+    profile, _ = DonorProfile.objects.get_or_create(user=user)
+    current_balance = profile.custom_number or 0
+    profile.custom_number = max(current_balance - deduction, 0)
+    profile.save(update_fields=["custom_number"])
 
 
 class PoojaOptionViewSet(viewsets.ModelViewSet):
@@ -329,8 +392,14 @@ class RecurringPoojaPlanViewSet(
     serializer_class = RecurringPoojaPlanSerializer
     permission_classes = (permissions.IsAuthenticated,)
 
+    def list(self, request, *args, **kwargs):
+        self._auto_resume_expired_pauses()
+        return super().list(request, *args, **kwargs)
+
     def get_queryset(self):
-        qs = RecurringPoojaPlan.objects.select_related("donor", "pooja_option", "day_option")
+        qs = RecurringPoojaPlan.objects.select_related(
+            "donor", "pooja_option", "day_option", "origin_registration"
+        )
         if self.request.user.role == UserRole.ADMIN:
             return qs.order_by("donor__name", "-next_occurrence", "-created_at")
         return qs.filter(donor=self.request.user).order_by("-next_occurrence", "-created_at")
@@ -343,6 +412,7 @@ class RecurringPoojaPlanViewSet(
     def get_object(self):
         plan = super().get_object()
         self._ensure_plan_access(plan)
+        self._reactivate_plan(plan)
         return plan
 
     def _ensure_plan_access(self, plan: RecurringPoojaPlan) -> None:
@@ -350,6 +420,45 @@ class RecurringPoojaPlanViewSet(
             return
         if plan.donor_id != self.request.user.id:
             raise PermissionDenied("You can only manage your own recurring plans.")
+
+    def _auto_resume_expired_pauses(self) -> None:
+        today = timezone.localdate()
+        queryset = self.filter_queryset(self.get_queryset())
+        expired_plans = queryset.filter(
+            pause_until__isnull=False,
+            pause_until__lt=today,
+            recurrence_kind=RecurrenceKind.RECURRING,
+        )
+        for plan in expired_plans:
+            self._reactivate_plan(plan, reference_date=today)
+
+    def _reactivate_plan(
+        self,
+        plan: RecurringPoojaPlan,
+        *,
+        reference_date=None,
+        force: bool = False,
+        additional_metadata_keys=None,
+    ) -> bool:
+        if plan.recurrence_kind != RecurrenceKind.RECURRING:
+            return False
+        today = reference_date or timezone.localdate()
+        if not force and (plan.pause_until is None or plan.pause_until >= today):
+            return False
+        plan.pause_from = None
+        plan.pause_until = None
+        plan.is_active = True
+        metadata = dict(plan.metadata or {})
+        metadata.pop("pause_reason", None)
+        metadata.pop("pause_handling_amount", None)
+        for key in additional_metadata_keys or ():
+            metadata.pop(key, None)
+        plan.metadata = metadata
+        next_occurrence = calculate_next_recurring_occurrence(plan, reference_date=today)
+        if next_occurrence:
+            plan.next_occurrence = next_occurrence
+        plan.save(update_fields=["pause_from", "pause_until", "is_active", "metadata", "next_occurrence"])
+        return True
 
     @action(detail=True, methods=["post"], url_path="pause")
     def pause(self, request, pk=None):
@@ -371,10 +480,21 @@ class RecurringPoojaPlanViewSet(
         if pause_until <= pause_from:
             return Response({"detail": "Pause end must be after the pause start."}, status=status.HTTP_400_BAD_REQUEST)
         metadata = dict(plan.metadata or {})
+        due_registration = find_due_registration(plan, pause_from)
+        paid_amount = sum_successful_payments(due_registration)
+        if pause_reason_value == PAUSE_REASON_NO_POJA_NO_PAYMENT:
+            _credit_custom_balance(plan.donor, paid_amount)
+        elif pause_reason_value == PAUSE_REASON_USE_FOR_TEMPLE:
+            if paid_amount > Decimal("0.00") and _is_registration_in_pause_window(due_registration, pause_from):
+                _credit_monthly_donation(plan.donor, paid_amount)
+        elif pause_reason_value == PAUSE_REASON_SAMY and paid_amount > Decimal("0.00"):
+            metadata["handled_for_samy"] = True
         if pause_reason_value:
             metadata["pause_reason"] = pause_reason_value
         else:
             metadata.pop("pause_reason", None)
+        if paid_amount > Decimal("0.00"):
+            metadata["pause_handling_amount"] = str(paid_amount)
         plan.metadata = metadata
         plan.pause_from = pause_from
         plan.pause_until = pause_until
@@ -386,18 +506,49 @@ class RecurringPoojaPlanViewSet(
     @action(detail=True, methods=["post"], url_path="resume")
     def resume(self, request, pk=None):
         plan = self.get_object()
-        plan.pause_until = None
-        plan.pause_from = None
-        plan.is_active = True
-        metadata = dict(plan.metadata or {})
-        metadata.pop("pause_reason", None)
-        metadata.pop("canceled_at", None)
-        plan.metadata = metadata
-        next_occurrence = calculate_next_recurring_occurrence(plan)
-        if next_occurrence:
-            plan.next_occurrence = next_occurrence
-        plan.save()
+        was_paused = bool(plan.pause_until or plan.pause_from or not plan.is_active)
+        pause_metadata = dict(plan.metadata or {})
+        pause_reason = pause_metadata.get("pause_reason")
+        pause_handling_amount = pause_metadata.get("pause_handling_amount")
+        pause_until = plan.pause_until
+        reactivated = self._reactivate_plan(
+            plan,
+            force=True,
+            additional_metadata_keys=("canceled_at",),
+        )
+        if reactivated and was_paused:
+            _debit_custom_balance(plan.donor, plan.amount)
+            if (
+                pause_reason == PAUSE_REASON_USE_FOR_TEMPLE
+                and pause_handling_amount
+                and pause_until
+                and pause_until > timezone.localdate()
+            ):
+                try:
+                    amount_to_reverse = Decimal(pause_handling_amount)
+                except (InvalidOperation, TypeError):
+                    amount_to_reverse = Decimal("0.00")
+                _debit_monthly_donation(plan.donor, amount_to_reverse)
         serializer = self.get_serializer(plan)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="prepare-payment")
+    def prepare_payment(self, request, pk=None):
+        plan = self.get_object()
+        if plan.recurrence_kind != RecurrenceKind.RECURRING or not plan.is_active:
+            return Response(
+                {"detail": "Only active recurring plans can be prepared for payment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        registration = prepare_recurring_registration(plan)
+        if registration is None:
+            return Response(
+                {
+                    "detail": "Unable to prepare the registration for payment at this time."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = PoojaRegistrationSerializer(registration, context={"request": request})
         return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="cancel")

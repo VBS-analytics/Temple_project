@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 
 import api, { extractResults } from '../lib/api';
@@ -14,6 +15,14 @@ interface PaymentRecord {
   notes?: string;
   created_at: string;
   pooja_option?: string;
+}
+
+interface RegistrationDetails {
+  id: number;
+  pooja_reg_id?: string | null;
+  pooja_option_name?: string | null;
+  start_date?: string | null;
+  total_amount?: string | null;
 }
 
 type FormValues = {
@@ -49,21 +58,55 @@ const formatHistoryDateTime = (value: string) => {
 
 const formatPaymentModeLabel = (mode: string) => mode.replace(/_/g, ' ');
 
+const formatDateOnly = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatCurrencyValue = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') {
+    return '₹ 0.00';
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return '₹ 0.00';
+  }
+  return `₹ ${numeric.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 const PaymentPage = () => {
   const [records, setRecords] = useState<PaymentRecord[]>([]);
   const [message, setMessage] = useState('');
+  const [registrationContext, setRegistrationContext] = useState<RegistrationDetails | null>(null);
+  const [registrationLoading, setRegistrationLoading] = useState(false);
+  const [registrationError, setRegistrationError] = useState('');
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
+    setValue,
   } = useForm<FormValues>({
     defaultValues: {
+      registration: null,
       amount: 0,
       mode: 'neft',
     },
   });
+  const [searchParams] = useSearchParams();
+  const registrationParam = searchParams.get('registration');
+  const suggestedAmountParam = searchParams.get('amount');
 
   const loadPayments = async () => {
     try {
@@ -78,10 +121,53 @@ const PaymentPage = () => {
     loadPayments();
   }, []);
 
+  useEffect(() => {
+    if (!registrationParam) {
+      setRegistrationContext(null);
+      setRegistrationError('');
+      setRegistrationLoading(false);
+      setValue('registration', null);
+      return;
+    }
+    const registrationId = Number(registrationParam);
+    if (!Number.isInteger(registrationId) || registrationId <= 0) {
+      setRegistrationContext(null);
+      setRegistrationError('Invalid registration reference.');
+      setRegistrationLoading(false);
+      setValue('registration', null);
+      return;
+    }
+    setRegistrationLoading(true);
+    setRegistrationError('');
+    api
+      .get(`/pooja/registrations/${registrationId}/`)
+      .then((response) => {
+        setRegistrationContext(response.data);
+        setValue('registration', registrationId);
+        const amountFromParam = suggestedAmountParam ? Number(suggestedAmountParam) : null;
+        if (amountFromParam && !Number.isNaN(amountFromParam)) {
+          setValue('amount', amountFromParam);
+        } else if (
+          response.data.total_amount &&
+          Number.isFinite(Number(response.data.total_amount))
+        ) {
+          setValue('amount', Number(response.data.total_amount));
+        }
+      })
+      .catch(() => {
+        setRegistrationContext(null);
+        setRegistrationError('Unable to load registration details.');
+        setValue('registration', null);
+      })
+      .finally(() => {
+        setRegistrationLoading(false);
+      });
+  }, [registrationParam, suggestedAmountParam, setValue]);
+
   const onSubmit = async (values: FormValues) => {
     setMessage('');
     try {
-      await api.post('/payments/records/', values);
+      await api.post('/payments/records/', { ...values, status: 'success' });
       setMessage('Payment recorded.');
       reset({ amount: 0, mode: 'neft', notes: '' });
       loadPayments();
@@ -96,8 +182,33 @@ const PaymentPage = () => {
       <section className="rounded-lg bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-800">Log Payment</h1>
         <p className="mt-1 text-sm text-slate-600">Capture offline payments against your regular commitments (Form-13).</p>
+        {registrationLoading && (
+          <p className="mt-3 text-sm text-slate-500">Loading registration details…</p>
+        )}
+        {!registrationLoading && registrationError && (
+          <div className="mt-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {registrationError}
+          </div>
+        )}
+        {!registrationLoading && registrationContext && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-900">
+                Registration {registrationContext.pooja_reg_id ?? `#${registrationContext.id}`}
+              </p>
+              <span className="text-xs uppercase tracking-wide text-slate-500">
+                {formatDateOnly(registrationContext.start_date)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">{registrationContext.pooja_option_name ?? 'Recurring pooja'}</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">
+              {formatCurrencyValue(registrationContext.total_amount)}
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-4 grid gap-4 md:grid-cols-2">
+          <input type="hidden" {...register('registration')} />
           <div className="md:col-span-1">
             <label className="mb-1 block text-sm font-medium text-slate-700">Amount (INR)</label>
             <input

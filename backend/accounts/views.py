@@ -1,6 +1,8 @@
 """API views for user authentication and profile management."""
 
-from django.db.models import Max
+from decimal import Decimal
+
+from django.db.models import Max, Sum
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
@@ -231,11 +233,14 @@ class DashboardMetricsView(APIView):
 
         donor_count = User.objects.filter(role=UserRole.DONOR).count()
         family_member_count = FamilyMember.objects.count()
+        donation_metrics = DonorProfile.objects.aggregate(total=Sum("monthly_donation_amount"))
+        donation_total = donation_metrics.get("total") or Decimal("0.00")
 
         return Response(
             {
                 "donor_count": donor_count,
                 "family_member_count": family_member_count,
+                "donation_amount": str(donation_total),
             },
             status=status.HTTP_200_OK,
         )

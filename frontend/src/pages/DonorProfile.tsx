@@ -7,8 +7,10 @@ import api, { extractResults } from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import type { CartItem } from '../store/cart';
+import type { RecurrenceKind } from '../types/recurrence';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { useMasterDataStore } from '../store/masterData';
+import { useCurrentBalance } from '../hooks/useCurrentBalance';
 
 // All interfaces remain the same
 interface ApiUser {
@@ -91,17 +93,40 @@ interface RegistrationMember {
   relationship?: string | null;
 }
 
+interface PlanDueRegistration {
+  id: number;
+  pooja_reg_id?: string | null;
+  start_date?: string | null;
+  total_amount?: string | null;
+  paid_amount?: string | null;
+  due_amount?: string | null;
+  is_paid?: boolean | null;
+  status?: string | null;
+}
+
+interface RegistrationCartItem {
+  recurrenceKind?: RecurrenceKind | null;
+  recurrenceFrequency?: string | null;
+  recurrenceOneTimeDate?: string | null;
+  recurrence_kind?: RecurrenceKind | null;
+}
+
 interface PoojaRegistration {
   id: number;
+  recurrence_kind?: RecurrenceKind | null;
+  recurrence_frequency?: string | null;
+  recurrence_one_time_date?: string | null;
   pooja_reg_id?: string | null;
   pooja_option_name?: string | null;
   start_date?: string | null;
   day_option_description?: string | null;
   post_prasadam?: boolean | null;
+  total_amount?: number | string | null;
   created_at?: string | null;
   updated_at?: string | null;
   members?: RegistrationMember[];
   status?: string | null;
+  cart_item?: RegistrationCartItem | null;
 }
 
 interface RecurringPlan {
@@ -109,7 +134,7 @@ interface RecurringPlan {
   pooja_option_name?: string | null;
   pooja_option_code?: string | null;
   day_option_description?: string | null;
-  recurrence_kind: 'recurring' | 'one_time_extra';
+  recurrence_kind: RecurrenceKind;
   recurrence_frequency?: string | null;
   start_date?: string | null;
   next_occurrence?: string | null;
@@ -120,6 +145,10 @@ interface RecurringPlan {
   pause_until?: string | null;
   pause_from?: string | null;
   metadata?: Record<string, unknown>;
+  due_registration?: PlanDueRegistration | null;
+  origin_registration_created_at?: string | null;
+  origin_registration_updated_at?: string | null;
+  origin_registration_id?: number | null;
 }
 
 interface PaymentRecordEntry {
@@ -135,7 +164,7 @@ interface PlanEditFormState {
   amount: string;
 }
 
-type PlanActionType = 'pause' | 'resume' | 'cancel';
+type PlanActionType = 'pause' | 'resume' | 'cancel' | 'prepare';
 
 const PLAN_FREQUENCY_OPTIONS = [
   { value: 'monthly', label: 'Monthly' },
@@ -187,6 +216,16 @@ const formatGender = (value?: string | null) => {
     .split(' ')
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(' ');
+};
+
+const formatCurrencyValue = (value?: number | null) => {
+  if (value == null) {
+    return '—';
+  }
+  return `₹ ${new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(value)}`;
 };
 
 const sortMembers = (list: FamilyMember[]) =>
@@ -319,6 +358,14 @@ const formatPlanAmount = (value?: string | number | null) => {
   return String(value);
 };
 
+const parseDecimalValue = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
 const formatCartAmount = (value?: string | number | null) => {
   if (value === null || value === undefined || value === '') {
     return '—';
@@ -376,20 +423,6 @@ const getRegistrationStatusLabel = (
   const records = recordsByRegistration.get(registration.id) ?? [];
   if (records.length === 0) {
     return STATUS_PAYMENT_NOT_RECEIVED_LABEL;
-  }
-  const latestRecord = records[0];
-  const normalizedPaymentStatus = (latestRecord.status ?? '').toLowerCase();
-  if (normalizedPaymentStatus === 'success') {
-    return STATUS_PAYMENT_RECEIVED_LABEL;
-  }
-  if (normalizedPaymentStatus === 'pending') {
-    if ((latestRecord.transaction_reference ?? '').trim().length > 0) {
-      return STATUS_ADMIN_PENDING_LABEL;
-    }
-    return STATUS_PAYMENT_NOT_RECEIVED_LABEL;
-  }
-  if (normalizedPaymentStatus === 'failed' || normalizedPaymentStatus === 'refunded') {
-    return STATUS_ADMIN_PENDING_LABEL;
   }
   return STATUS_ADMIN_PENDING_LABEL;
 };
@@ -493,6 +526,21 @@ const formatRegistrationTimeline = (registration: PoojaRegistration) => {
   return `${formatDateTime(updatedAt)}** updated`;
 };
 
+const formatPlanRegistrationTimeline = (
+  createdAt?: string | null,
+  updatedAt?: string | null,
+) => {
+  if (!createdAt) {
+    return '—';
+  }
+  const timelineRegistration: PoojaRegistration = {
+    id: 0,
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+  return formatRegistrationTimeline(timelineRegistration);
+};
+
 const DonorProfile = () => {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [profile, setProfile] = useState<ApiDonorProfile | null>(null);
@@ -538,6 +586,8 @@ const DonorProfile = () => {
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+  const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
+    useCurrentBalance();
 
   useEffect(() => {
     loadGothraOptions();
@@ -625,6 +675,7 @@ const DonorProfile = () => {
         });
         setActivePausePlanId(null);
         await reloadRecurrencePlans();
+        await refreshBalance();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
@@ -634,7 +685,7 @@ const DonorProfile = () => {
         }));
       }
     },
-    [reloadRecurrencePlans, todayIso, pauseDurationSelection],
+    [reloadRecurrencePlans, refreshBalance, todayIso, pauseDurationSelection],
   );
 
   const handleResumePlan = useCallback(
@@ -648,6 +699,7 @@ const DonorProfile = () => {
         await api.post(`pooja/recurrence/plans/${planId}/resume/`);
         setActivePausePlanId(null);
         await reloadRecurrencePlans();
+        await refreshBalance();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
@@ -657,7 +709,7 @@ const DonorProfile = () => {
         }));
       }
     },
-    [reloadRecurrencePlans],
+    [reloadRecurrencePlans, refreshBalance],
   );
 
   const handleCancelPlan = useCallback(
@@ -676,6 +728,7 @@ const DonorProfile = () => {
         await api.post(`pooja/recurrence/plans/${plan.id}/cancel/`);
         setActivePausePlanId(null);
         await reloadRecurrencePlans();
+        await refreshBalance();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
@@ -685,7 +738,53 @@ const DonorProfile = () => {
         }));
       }
     },
-    [reloadRecurrencePlans],
+    [reloadRecurrencePlans, refreshBalance],
+  );
+
+  const handlePrepareRecurringPayment = useCallback(
+    async (plan: RecurringPlan) => {
+      setPlanActionState((prev) => ({
+        ...prev,
+        [plan.id]: 'prepare',
+      }));
+      setRecurrenceError(null);
+      try {
+        const response = await api.post<PoojaRegistration>(`pooja/recurrence/plans/${plan.id}/prepare-payment/`);
+        await reloadRecurrencePlans();
+        const params = new URLSearchParams();
+        params.set('registration', String(response.data.id));
+        const amountValue = response.data.total_amount;
+        if (amountValue !== undefined && amountValue !== null) {
+          params.set('amount', String(amountValue));
+        } else if (plan.amount !== undefined && plan.amount !== null) {
+          params.set('amount', String(plan.amount));
+        }
+        navigate(`/payments/general?${params.toString()}`);
+      } catch (error) {
+        setRecurrenceError(extractErrorMessage(error));
+      } finally {
+        setPlanActionState((prev) => ({
+          ...prev,
+          [plan.id]: null,
+        }));
+      }
+    },
+    [navigate, reloadRecurrencePlans],
+  );
+
+  const handlePayRecurringPlan = useCallback(
+    (registration?: PlanDueRegistration) => {
+      if (!registration?.id) {
+        return;
+      }
+      const params = new URLSearchParams();
+      params.set('registration', String(registration.id));
+      if (registration.due_amount) {
+        params.set('amount', registration.due_amount);
+      }
+      navigate(`/payments/general?${params.toString()}`);
+    },
+    [navigate],
   );
 
   const startEditingPlan = useCallback((plan: RecurringPlan) => {
@@ -985,6 +1084,29 @@ const DonorProfile = () => {
 
   const paymentRecordsLoaded = !paymentRecordsLoading;
 
+  const visibleRegistrations = useMemo(() => {
+    const recurringRegistrationIds = new Set<number>();
+    for (const plan of recurrencePlans) {
+      if (plan.recurrence_kind === 'recurring' && typeof plan.origin_registration_id === 'number') {
+        recurringRegistrationIds.add(plan.origin_registration_id);
+      }
+    }
+    return registrations.filter((registration) => {
+      if (recurringRegistrationIds.has(registration.id)) {
+        return false;
+      }
+      const cartRecurrenceKind =
+        registration.cart_item?.recurrenceKind ?? registration.cart_item?.recurrence_kind;
+      const hasRecurrenceKind = Boolean(registration.recurrence_kind);
+      return !hasRecurrenceKind && !cartRecurrenceKind;
+    });
+  }, [registrations, recurrencePlans]);
+
+  const recurringPlansToShow = useMemo(
+    () => recurrencePlans.filter((plan) => plan.recurrence_kind === 'recurring'),
+    [recurrencePlans],
+  );
+
   const startAddingNew = () => {
     setFormData(createInitialFormState(profile ?? undefined));
     setFormError(null);
@@ -1211,9 +1333,22 @@ const DonorProfile = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-6 sm:py-8">
       <div className="mx-auto w-full max-w-[90rem] px-4 lg:px-8">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 sm:text-3xl">Donor Profile</h1>
-        <p className="mt-2 text-sm text-slate-500 sm:text-base">Review your donor details and manage your family members.</p>
+      <div className="mb-6 sm:mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 sm:text-3xl">Donor Profile</h1>
+          <p className="mt-2 text-sm text-slate-500 sm:text-base">Review your donor details and manage your family members.</p>
+        </div>
+        <div className="flex items-end gap-3 sm:text-right">
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</span>
+            <span className="text-lg font-semibold text-orange-600">
+              {balanceLoading ? 'Loading...' : balanceError ? 'Unavailable' : formatCurrencyValue(currentBalance)}
+            </span>
+            {balanceError && (
+              <span className="text-[0.7rem] text-rose-600 capitalize">{balanceError}</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -2170,11 +2305,11 @@ const DonorProfile = () => {
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Registered Pooja&apos;s</h2>
+                <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">One-time Registered Pooja&apos;s</h2>
                 <p className="text-sm text-slate-500">Review all pooja registrations linked to your account.</p>
               </div>
               <span className="inline-flex items-center justify-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600">
-                {registrations.length} {registrations.length === 1 ? 'Registration' : 'Registrations'}
+                {visibleRegistrations.length} {visibleRegistrations.length === 1 ? 'Registration' : 'Registrations'}
               </span>
             </div>
 
@@ -2276,7 +2411,7 @@ const DonorProfile = () => {
               <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {registrationsError}
               </div>
-            ) : registrations.length === 0 ? (
+            ) : visibleRegistrations.length === 0 ? (
               <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
                 No pooja registrations found for your account.
               </div>
@@ -2284,7 +2419,7 @@ const DonorProfile = () => {
               <div className="mt-6">
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-4">
-                {registrations.map((registration) => {
+                {visibleRegistrations.map((registration) => {
                   const isEditingRegistration = editingRegistrationId === registration.id;
                   const statusLabel = getRegistrationStatusLabel(
                     registration,
@@ -2413,7 +2548,7 @@ const DonorProfile = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
-                        {registrations.map((registration, index) => {
+                        {visibleRegistrations.map((registration, index) => {
                           const isEditingRegistration = editingRegistrationId === registration.id;
                           const statusLabel = getRegistrationStatusLabel(
                             registration,
@@ -2527,7 +2662,7 @@ const DonorProfile = () => {
                 </p>
               </div>
               <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                {recurrencePlans.length} {recurrencePlans.length === 1 ? 'Plan' : 'Plans'}
+                {recurringPlansToShow.length} {recurringPlansToShow.length === 1 ? 'Plan' : 'Plans'}
               </span>
             </div>
 
@@ -2598,13 +2733,13 @@ const DonorProfile = () => {
               <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {recurrenceError}
               </div>
-            ) : recurrencePlans.length === 0 ? (
+            ) : recurringPlansToShow.length === 0 ? (
               <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
                 No recurring plans found yet. Start by adding a recurring pooja from the registration page.
               </div>
             ) : (
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {recurrencePlans.map((plan) => {
+                {recurringPlansToShow.map((plan) => {
                   const memberNames = getPlanMemberNames(plan.metadata);
                   const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
                   const pauseDuration = pauseDurationSelection[plan.id] ?? 1;
@@ -2617,6 +2752,41 @@ const DonorProfile = () => {
                     isRecord(plan.metadata) && typeof plan.metadata.canceled_at === 'string'
                       ? plan.metadata.canceled_at
                       : null;
+                  const dueRegistration = plan.due_registration ?? null;
+                  const dueAmountValue = dueRegistration
+                    ? parseDecimalValue(dueRegistration.due_amount)
+                    : 0;
+                  const planAmountValue = parseDecimalValue(plan.amount);
+                  const paymentReadyLabel =
+                    dueRegistration && dueAmountValue <= 0 ? 'Payment up to date' : null;
+                  const upcomingLabel =
+                    !dueRegistration && !paymentReadyLabel
+                      ? 'Upcoming payment will appear here'
+                      : null;
+                  const statusLabel = paymentReadyLabel ?? upcomingLabel;
+                  const amountToPay =
+                    dueRegistration && dueAmountValue > 0 ? dueRegistration.due_amount : plan.amount ?? planAmountValue;
+                  const buttonAmountLabel = formatCartAmount(amountToPay ?? planAmountValue);
+                  const shouldShowPayButton = isRecurringPlan && plan.is_active;
+                  const preparingPayment = currentAction === 'prepare';
+                  const planRegistrationLabel =
+                    plan.origin_registration_created_at
+                      ? formatPlanRegistrationTimeline(
+                          plan.origin_registration_created_at,
+                          plan.origin_registration_updated_at,
+                        )
+                      : null;
+                  const planPaymentStatusLabel =
+                    dueRegistration && dueRegistration.id
+                      ? getRegistrationStatusLabel(
+                          { id: dueRegistration.id, status: dueRegistration.status ?? undefined } as PoojaRegistration,
+                          paymentRecordsByRegistration,
+                          paymentRecordsLoaded,
+                        )
+                      : null;
+                  const planPaymentStatusClasses = planPaymentStatusLabel
+                    ? getRegistrationStatusBadgeClasses(planPaymentStatusLabel)
+                    : null;
                   return (
                     <div
                       key={plan.id}
@@ -2633,6 +2803,11 @@ const DonorProfile = () => {
                         <p className="text-xs text-slate-500">
                           {plan.day_option_description?.trim() || '—'}
                         </p>
+                        {planRegistrationLabel && planRegistrationLabel !== '—' && (
+                          <p className="text-xs text-slate-500">
+                            Registered on {planRegistrationLabel}
+                          </p>
+                        )}
                       </div>
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -2696,6 +2871,122 @@ const DonorProfile = () => {
                         Members: {memberNames.join(', ')}
                       </p>
                     )}
+                    {dueRegistration && (
+                      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Due amount
+                          </p>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {formatCartAmount(dueRegistration.due_amount)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Paid amount
+                          </p>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {formatCartAmount(dueRegistration.paid_amount)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Scheduled for
+                          </p>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {dueRegistration.start_date ? formatDate(dueRegistration.start_date) : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                      <div className="mt-3 space-y-2">
+                        {planPaymentStatusLabel && planPaymentStatusClasses && (
+                          <div className="flex flex-wrap gap-2">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${planPaymentStatusClasses}`}
+                            >
+                              {planPaymentStatusLabel}
+                            </span>
+                          </div>
+                        )}
+                        {statusLabel && (
+                          <div
+                            className={`text-xs font-semibold uppercase tracking-wide ${
+                              paymentReadyLabel ? 'text-emerald-600' : 'text-slate-400'
+                            }`}
+                          >
+                            {statusLabel}
+                          </div>
+                        )}
+                      <div className="mt-1 flex flex-nowrap items-start gap-2">
+                        {shouldShowPayButton && (
+                          <div className="flex flex-col gap-1 self-start">
+                            <button
+                              type="button"
+                              onClick={() => handlePrepareRecurringPayment(plan)}
+                              disabled={actionLoading}
+                              className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+                            >
+                              {preparingPayment ? 'Preparing payment…' : 'Pay'}
+                            </button>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              {buttonAmountLabel}
+                            </span>
+                          </div>
+                        )}
+                        {isRecurringPlan && (
+                          <>
+                            {isPlanActive ? (
+                              <>
+                              <button
+                                type="button"
+                                onClick={() => togglePauseForm(plan.id)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause'}
+                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelPlan(plan)}
+                                  disabled={actionLoading}
+                                  className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                  {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                              <button
+                                type="button"
+                                onClick={() => togglePauseForm(plan.id)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                {activePausePlanId === plan.id ? 'Hide pause details' : 'Edit pause details'}
+                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResumePlan(plan.id)}
+                                  disabled={actionLoading}
+                                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+                                >
+                                  {currentAction === 'resume' ? 'Resuming...' : 'Resume plan'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelPlan(plan)}
+                                  disabled={actionLoading}
+                                  className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70"
+                                >
+                                  {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
                     {isRecurringPlan && (
                       <div className="mt-4 space-y-3">
                         {editingPlanId === plan.id && (
@@ -2762,25 +3053,7 @@ const DonorProfile = () => {
                           </div>
                         )}
                         {isPlanActive ? (
-                          <div className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => togglePauseForm(plan.id)}
-                                disabled={actionLoading}
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCancelPlan(plan)}
-                                disabled={actionLoading}
-                                className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
-                              </button>
-                            </div>
+                          <>
                             {activePausePlanId === plan.id && (
                               <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                                 <div className="space-y-1 text-sm text-slate-500">
@@ -2843,40 +3116,14 @@ const DonorProfile = () => {
                                 </button>
                               </div>
                             )}
-                          </div>
+                          </>
                         ) : (
-                          <div className="space-y-3">
+                          <>
                             {cancellationDate && (
                               <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
                                 Canceled on {formatDate(cancellationDate)}
                               </div>
                             )}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => togglePauseForm(plan.id)}
-                                disabled={actionLoading}
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {activePausePlanId === plan.id ? 'Hide pause details' : 'Edit pause details'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleResumePlan(plan.id)}
-                                disabled={actionLoading}
-                                className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
-                              >
-                                {currentAction === 'resume' ? 'Resuming...' : 'Resume plan'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCancelPlan(plan)}
-                                disabled={actionLoading}
-                                className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70"
-                              >
-                                {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
-                              </button>
-                            </div>
                             {activePausePlanId === plan.id && (
                               <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -2942,7 +3189,7 @@ const DonorProfile = () => {
                                 </button>
                               </div>
                             )}
-                          </div>
+                          </>
                         )}
                       </div>
                     )}

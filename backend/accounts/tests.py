@@ -1,9 +1,19 @@
+from decimal import Decimal
 from datetime import timedelta
 
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
-from .models import DonorProfile, OtpPurpose, OtpToken
+from .models import (
+    DonorProfile,
+    FamilyMember,
+    OtpPurpose,
+    OtpToken,
+    User,
+)
 from .serializers import RegisterSerializer
 
 SQLITE_DB_CONFIG = {
@@ -57,3 +67,56 @@ class RegisterSerializerTests(TestCase):
         self.assertEqual(profile.gender, "")
 
 # Create your tests here.
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class DashboardMetricsViewTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser(
+            phone_number="9000000000",
+            name="Admin",
+            password="adminpass",
+        )
+        self.client.force_authenticate(self.admin)
+
+        donor_one = User.objects.create_user(
+            phone_number="8000000001",
+            name="Donor One",
+            password="donorpass1",
+        )
+        donor_two = User.objects.create_user(
+            phone_number="8000000002",
+            name="Donor Two",
+            password="donorpass2",
+        )
+
+        profile_one = DonorProfile.objects.get(user=donor_one)
+        profile_one.monthly_donation_amount = Decimal("100.50")
+        profile_one.save(update_fields=["monthly_donation_amount"])
+
+        profile_two = DonorProfile.objects.get(user=donor_two)
+        profile_two.monthly_donation_amount = Decimal("50.00")
+        profile_two.save(update_fields=["monthly_donation_amount"])
+
+        FamilyMember.objects.create(user=donor_one, name="Member A")
+        FamilyMember.objects.create(user=donor_two, name="Member B")
+
+    def test_dashboard_metrics_include_donation_total(self):
+        response = self.client.get(reverse("dashboard-metrics"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["donor_count"], 2)
+        self.assertEqual(data["family_member_count"], 2)
+        self.assertEqual(data["donation_amount"], "150.50")
+
+    def test_dashboard_metrics_forbidden_to_non_admins(self):
+        donor_user = User.objects.create_user(
+            phone_number="8000000003",
+            name="Donor Three",
+            password="donorpass3",
+        )
+        client = APIClient()
+        client.force_authenticate(donor_user)
+        response = client.get(reverse("dashboard-metrics"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
