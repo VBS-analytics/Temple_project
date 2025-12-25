@@ -16,6 +16,7 @@ from .views import (
     RegisterView,
     RequestOtpView,
     VerifyOtpView,
+    BulkRegisterView,
 )
 
 router = DefaultRouter()
@@ -23,6 +24,7 @@ router.register('gothra-options', GothraOptionViewSet, basename='gothra-options'
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
+    path('bulk-register/', BulkRegisterView.as_view(), name='bulk-register'),
     path('login/', LoginView.as_view(), name='login'),
     path('request-otp/', RequestOtpView.as_view(), name='request-otp'),
     path('verify-otp/', VerifyOtpView.as_view(), name='verify-otp'),

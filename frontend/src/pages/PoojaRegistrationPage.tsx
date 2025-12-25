@@ -8,213 +8,7 @@ import { RecurrenceSelection, RecurrenceFrequency } from '../types/recurrence';
 import { useNavigate } from 'react-router-dom';
 import { nakshatraOptions } from '../data/nakshatraOptions';
 
-/* -------------------------------------------------------------------------- */
-/*                               Reusable Select                              */
-/* -------------------------------------------------------------------------- */
-
 type SSOption = { value: string; label: string };
-
-function SearchableSelect({
-  options,
-  value,
-  onChange,
-  placeholder = 'Select...',
-  className = '',
-  disabled = false,
-}: {
-  options: SSOption[];
-  value: string; // '' or a valid value
-  onChange: (next: string) => void; // pass '' to clear
-  placeholder?: string;
-  className?: string;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState<number>(-1);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-
-  const selected = useMemo(
-    () => options.find((o) => o.value === value) || null,
-    [options, value],
-  );
-
-  // Keep input text in sync with external value
-  useEffect(() => {
-    setQuery(selected?.label ?? '');
-  }, [selected?.label]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setActiveIndex(-1);
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-    };
-  }, [open]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q));
-  }, [options, query]);
-
-  const commit = (opt?: SSOption) => {
-    if (!opt) return;
-    onChange(opt.value);
-    setOpen(false);
-  };
-
-  // Adjust dropdown position if it goes off-screen
-  useEffect(() => {
-    if (!open || !dropdownRef.current || !containerRef.current) return;
-    
-    const dropdown = dropdownRef.current;
-    const container = containerRef.current;
-    const containerRect = container.getBoundingClientRect();
-    const dropdownRect = dropdown.getBoundingClientRect();
-    
-    // Check if dropdown goes off the right side of the screen
-    if (dropdownRect.right > window.innerWidth) {
-      dropdown.style.left = 'auto';
-      dropdown.style.right = '0';
-      dropdown.style.width = `${Math.min(400, window.innerWidth - containerRect.left)}px`;
-    }
-    
-    // Check if dropdown goes off the left side of the screen
-    if (dropdownRect.left < 0) {
-      dropdown.style.left = '0';
-      dropdown.style.right = 'auto';
-      dropdown.style.width = `${Math.min(400, containerRect.right)}px`;
-    }
-  }, [open, filtered]);
-
-  return (
-    <div className={`relative ${className}`} ref={containerRef}>
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={query}
-          disabled={disabled}
-          onMouseDown={(event) => {
-            if (disabled) return;
-            if (open && query === (selected?.label ?? '')) {
-              event.preventDefault();
-              setOpen(false);
-              setActiveIndex(-1);
-              return;
-            }
-            if (!open) {
-              setOpen(true);
-            }
-          }}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={(event) => {
-            const nextTarget = event.relatedTarget;
-            if (nextTarget && containerRef.current?.contains(nextTarget as Node)) {
-              return;
-            }
-            setActiveIndex(-1);
-            setOpen(false);
-          }}
-          onKeyDown={(e) => {
-            if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) {
-              setOpen(true);
-              return;
-            }
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActiveIndex((i) => Math.max(i - 1, 0));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              const target = filtered[activeIndex] ?? filtered[0];
-              commit(target);
-            } else if (e.key === 'Escape') {
-              setOpen(false);
-            }
-          }}
-          placeholder={placeholder}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-sm transition-all"
-          aria-autocomplete="list"
-          aria-expanded={open}
-          role="combobox"
-        />
-        {value && (
-          <button
-            type="button"
-            className="text-gray-400 hover:text-gray-600 text-sm transition-colors flex-shrink-0"
-            onClick={() => {
-              onChange('');
-              setQuery('');
-              setOpen(false);
-            }}
-            onMouseDown={(event) => event.preventDefault()}
-            aria-label="Clear selection"
-          >
-            ×
-          </button>
-        )}
-        <button
-          type="button"
-          className="text-gray-400 hover:text-gray-600 text-xs transition-colors flex-shrink-0"
-          onClick={() => setOpen((o) => !o)}
-          onMouseDown={(event) => event.preventDefault()}
-          aria-label="Toggle options"
-        >
-          ▾
-        </button>
-      </div>
-
-      {open && (
-        <div
-          ref={dropdownRef}
-          className="absolute z-50 mt-1 w-full max-w-md max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
-          role="listbox"
-          onMouseLeave={() => setActiveIndex(-1)}
-        >
-          {filtered.length === 0 && (
-            <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
-          )}
-          {filtered.map((opt, idx) => {
-            const active = idx === activeIndex;
-            const isSelected = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
-                  active ? 'bg-orange-50' : ''
-                } ${isSelected ? 'font-medium text-orange-900' : 'text-gray-700'}`}
-                onMouseEnter={() => setActiveIndex(idx)}
-                onMouseDown={(e) => e.preventDefault()} // keep focus on input
-                onClick={() => commit(opt)}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /*                           Multi Select Dropdown                            */
@@ -3334,37 +3128,40 @@ const PoojaRegistrationPage = () => {
                                   <span className="text-xs text-gray-500">Day option not required for this pooja</span>
                                 ) : (
                                   <div className="space-y-3">
-                                    <SearchableSelect
-                                      options={availableDayOptions.map((option) => ({
-                                        value: String(option.id),
-                                        label: formatDayOptionLabel(option),
-                                      }))}
-                                      value={effectiveDayId !== null ? String(effectiveDayId) : ''}
-                                      onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
-                                      placeholder="Select day option"
-                                      className="w-64"
-                                    />
-                                    {selectedDayOption?.code === 'CS' && (
-                                      <div className="mt-2">
                                     <select
-                                      value={tamilStarSelectionMap[row.pooja.id] ?? ''}
-                                      onChange={(event) =>
-                                        handleTamilStarSelection(row.pooja.id, event.target.value)
-                                      }
-                                      className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
-                                      aria-label="Select your star"
+                                      value={effectiveDayId !== null ? String(effectiveDayId) : ''}
+                                      onChange={(event) => handleDaySelectionChange(row.pooja.id, event.target.value)}
+                                      className="w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 shadow-sm transition"
+                                      aria-label="Select day option"
                                     >
-                                      <option value="">Select your star</option>
-                                      {canonicalTamilStarChoices.map((choice) => (
-                                        <option
-                                          key={choice.key}
-                                          value={choice.value}
-                                          disabled={choice.disabled}
-                                        >
-                                          {choice.label}
+                                      <option value="">Select day option</option>
+                                      {availableDayOptions.map((option) => (
+                                        <option key={option.id} value={String(option.id)}>
+                                          {formatDayOptionLabel(option)}
                                         </option>
                                       ))}
                                     </select>
+                                    {selectedDayOption?.code === 'CS' && (
+                                      <div className="mt-2">
+                                        <select
+                                          value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                          onChange={(event) =>
+                                            handleTamilStarSelection(row.pooja.id, event.target.value)
+                                          }
+                                          className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
+                                          aria-label="Select your star"
+                                        >
+                                          <option value="">Select your star</option>
+                                          {canonicalTamilStarChoices.map((choice) => (
+                                            <option
+                                              key={choice.key}
+                                              value={choice.value}
+                                              disabled={choice.disabled}
+                                            >
+                                              {choice.label}
+                                            </option>
+                                          ))}
+                                        </select>
                                       </div>
                                     )}
                                     {requiresChartDetails && (
@@ -3701,43 +3498,46 @@ const PoojaRegistrationPage = () => {
                               dayOptionDisabled ? (
                                 <span className="text-xs text-gray-500">Day option not required for this pooja</span>
                               ) : (
-                              <div className="space-y-3">
-                                <SearchableSelect
-                                  options={availableDayOptions.map((option) => ({
-                                    value: String(option.id),
-                                    label: formatDayOptionLabel(option),
-                                  }))}
-                                  value={effectiveDayId !== null ? String(effectiveDayId) : ''}
-                                  onChange={(val) => handleDaySelectionChange(row.pooja.id, val)}
-                                  placeholder="Select day option"
-                                  className="w-full"
-                                />
-                                {selectedDayOption?.code === 'CS' && (
-                                  <div className="mt-2">
-                                    <select
-                                      value={tamilStarSelectionMap[row.pooja.id] ?? ''}
-                                      onChange={(event) =>
-                                        handleTamilStarSelection(row.pooja.id, event.target.value)
-                                      }
-                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
-                                      aria-label="Select your star"
-                                    >
-                                      <option value="">Select your star</option>
-                                      {canonicalTamilStarChoices.map((choice) => (
-                                        <option key={choice.key} value={choice.value} disabled={choice.disabled}>
-                                          {choice.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
-                  {requiresChartDetails && (
-                    <div className="mt-3">
-                      {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
-                    </div>
-                  )}
-                              </div>
-                            )
+                                <div className="space-y-3">
+                                  <select
+                                    value={effectiveDayId !== null ? String(effectiveDayId) : ''}
+                                    onChange={(event) => handleDaySelectionChange(row.pooja.id, event.target.value)}
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 shadow-sm transition"
+                                    aria-label="Select day option"
+                                  >
+                                    <option value="">Select day option</option>
+                                    {availableDayOptions.map((option) => (
+                                      <option key={option.id} value={String(option.id)}>
+                                        {formatDayOptionLabel(option)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {selectedDayOption?.code === 'CS' && (
+                                    <div className="mt-2">
+                                      <select
+                                        value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                        onChange={(event) =>
+                                          handleTamilStarSelection(row.pooja.id, event.target.value)
+                                        }
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
+                                        aria-label="Select your star"
+                                      >
+                                        <option value="">Select your star</option>
+                                        {canonicalTamilStarChoices.map((choice) => (
+                                          <option key={choice.key} value={choice.value} disabled={choice.disabled}>
+                                            {choice.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                  {requiresChartDetails && (
+                                    <div className="mt-3">
+                                      {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
+                                    </div>
+                                  )}
+                                </div>
+                              )
                             ) : (
                               <span className="text-xs text-gray-500">Not configured</span>
                             )}
@@ -4100,13 +3900,10 @@ const PoojaRegistrationPage = () => {
                       </div>
                     ) : (
                       <>
-                        <SearchableSelect
-                          options={selectedPoojaDayOptions.map((option) => ({
-                            value: String(option.id),
-                            label: formatDayOptionLabel(option),
-                          }))}
+                        <select
                           value={selectedDayOptionId ? String(selectedDayOptionId) : ''}
-                          onChange={(val) => {
+                          onChange={(event) => {
+                            const val = event.target.value;
                             const valueNum = val ? Number(val) : null;
                             if (selectedPooja) {
                               handleDaySelectionChange(selectedPooja.id, val);
@@ -4114,9 +3911,16 @@ const PoojaRegistrationPage = () => {
                             setSelectedDayOptionId(valueNum);
                             setFormError('');
                           }}
-                          placeholder="Select day option"
-                          className="w-full"
-                        />
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 shadow-sm transition"
+                          aria-label="Select day option"
+                        >
+                          <option value="">Select day option</option>
+                          {selectedPoojaDayOptions.map((option) => (
+                            <option key={option.id} value={String(option.id)}>
+                              {formatDayOptionLabel(option)}
+                            </option>
+                          ))}
+                        </select>
                         {modalRequiresChartDetails && (
                           <div className="mt-3">
                             {renderPreferredDateGroupsEditor(selectedPooja.id, memberOptions)}

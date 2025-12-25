@@ -12,6 +12,7 @@ import PaymentPage from '../pages/payments/PaymentPage';
 import PaymentStatementPage from '../pages/payments/PaymentStatementPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
+import BulkDonorUploadPage from '../pages/admin/BulkDonorUploadPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
 import PoojaDetailsPage from '../pages/admin/PoojaDetailsPage';
 import LandingPage from '../pages/LandingPage';
@@ -74,6 +75,7 @@ const App = () => (
     <Route element={<ProtectedRoute requireAdmin />}>
       <Route element={<AppLayout />}>
         <Route path="/admin/master" element={<AdminMasterPage />} />
+        <Route path="/admin/bulk-upload" element={<BulkDonorUploadPage />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
         <Route path="/admin/donor-pooja-registrations" element={<Navigate to="/admin/donors" replace />} />
