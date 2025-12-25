@@ -64,6 +64,13 @@ class DonorProfileSerializer(serializers.ModelSerializer):
         return obj.donor_id
 
 
+PROFILE_FIELDS = [
+    field
+    for field in DonorProfileSerializer.Meta.fields
+    if field not in {"donor_id"}
+]
+
+
 class FamilyMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = FamilyMember
@@ -211,8 +218,8 @@ class OtpVerifySerializer(serializers.Serializer):
 class RegisterSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=15)
     name = serializers.CharField(max_length=255)
-    password = serializers.CharField(write_only=True)
-    confirm_password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False)
+    confirm_password = serializers.CharField(write_only=True, required=False)
     otp_code = serializers.CharField(max_length=6, required=False, allow_blank=True)
     email = serializers.EmailField(required=False, allow_blank=True)
 
@@ -233,11 +240,26 @@ class RegisterSerializer(serializers.Serializer):
     tamil_name = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
-        if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
-        if User.objects.filter(phone_number=attrs["phone_number"]).exists():
+        password = attrs.get("password")
+        confirm_password = attrs.get("confirm_password")
+        skip_otp = self.context.get("skip_otp", False)
+        allow_update = self.context.get("allow_update", False)
+        existing_user = User.objects.filter(phone_number=attrs["phone_number"]).first()
+        if existing_user and not allow_update:
             raise serializers.ValidationError({"phone_number": "Phone number already registered"})
-        if settings.REGISTRATION_OTP_ENABLED:
+        if not existing_user:
+            if not password or not confirm_password:
+                raise serializers.ValidationError({"password": "Password is required"})
+            if password != confirm_password:
+                raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        else:
+            attrs["existing_user"] = existing_user
+            if password or confirm_password:
+                if not password or not confirm_password:
+                    raise serializers.ValidationError({"password": "Both password fields must be provided to change the password"})
+                if password != confirm_password:
+                    raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        if settings.REGISTRATION_OTP_ENABLED and not skip_otp:
             otp_code = attrs.get("otp_code") or ""
             if not otp_code:
                 raise serializers.ValidationError({"otp_code": "OTP is required"})
@@ -254,28 +276,15 @@ class RegisterSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data):
         token = validated_data.pop("token", None)
-        validated_data.pop("confirm_password")
+        validated_data.pop("confirm_password", None)
         otp_code = validated_data.pop("otp_code", "")  # noqa: F841 - kept for audit/logging if needed
-
-        gender_marker = object()
-        gender_value = validated_data.pop("gender", gender_marker)
-
-        profile_fields = [
-            field
-            for field in DonorProfileSerializer.Meta.fields
-            if field not in {"donor_id"}
-        ]
-        profile_data = {field: validated_data.pop(field, "") for field in profile_fields if field in validated_data}
-        if gender_value is not gender_marker:
-            profile_data["gender"] = gender_value or ""
-
-        user = User.objects.create_user(
-            phone_number=validated_data.pop("phone_number"),
-            name=validated_data.pop("name"),
-            password=validated_data.pop("password"),
-            email=validated_data.pop("email", ""),
-        )
-        profile, _ = DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
+        profile_data = _build_profile_data(validated_data)
+        existing_user = validated_data.pop("existing_user", None)
+        if existing_user:
+            user = _update_existing_user(existing_user, validated_data)
+            profile, _ = DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
+        else:
+            user, profile = _create_user_and_profile(validated_data, profile_data)
         if token:
             token.mark_used()
         user.refresh_from_db()
@@ -290,6 +299,71 @@ class RegisterSerializer(serializers.Serializer):
                 "refresh": str(refresh),
             },
         }
+
+
+def _build_profile_data(validated_data: dict):
+    gender_marker = object()
+    gender_value = validated_data.pop("gender", gender_marker)
+    profile_data: dict[str, object] = {}
+    for field in PROFILE_FIELDS:
+        if field in validated_data:
+            profile_data[field] = validated_data.pop(field, "")
+    if gender_value is not gender_marker:
+        profile_data["gender"] = gender_value or ""
+    return profile_data
+
+
+def _update_existing_user(user: User, validated_data: dict):
+    name = validated_data.get("name")
+    email = validated_data.get("email")
+    password = validated_data.get("password")
+    if name and name != user.name:
+        user.name = name
+    if email is not None and email != user.email:
+        user.email = email
+    if password:
+        user.set_password(password)
+    user.save()
+    return user
+
+
+def _create_user_and_profile(validated_data: dict, profile_data: dict):
+    user = User.objects.create_user(
+        phone_number=validated_data.pop("phone_number"),
+        name=validated_data.pop("name"),
+        password=validated_data.pop("password"),
+        email=validated_data.pop("email", ""),
+    )
+    profile, _ = DonorProfile.objects.update_or_create(user=user, defaults=profile_data)
+    return user, profile
+
+
+class BulkDonorRecordSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=15)
+    name = serializers.CharField(max_length=255)
+    password = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    source_row = serializers.IntegerField(required=False)
+
+    address_line1 = serializers.CharField(required=False, allow_blank=True)
+    address_line2 = serializers.CharField(required=False, allow_blank=True)
+    address_line3 = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(required=False, allow_blank=True)
+    state = serializers.CharField(required=False, allow_blank=True)
+    postal_code = serializers.CharField(required=False, allow_blank=True)
+    gothra = serializers.CharField(required=False, allow_blank=True)
+    tamil_star = serializers.CharField(required=False, allow_blank=True)
+    rasi = serializers.CharField(required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    family_name = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    gender = serializers.CharField(required=False, allow_blank=True)
+    tamil_name = serializers.CharField(required=False, allow_blank=True)
+
+
+class BulkDonorUploadSerializer(serializers.Serializer):
+    records = BulkDonorRecordSerializer(many=True)
+    default_password = serializers.CharField(required=False, allow_blank=True)
 
 
 class PasswordResetSerializer(serializers.Serializer):

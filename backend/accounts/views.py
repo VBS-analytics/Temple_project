@@ -1,16 +1,18 @@
 """API views for user authentication and profile management."""
 
 from decimal import Decimal
+import secrets
 
 from django.db.models import Max, Sum
 from rest_framework import permissions, status, viewsets
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import DonorProfile, FamilyMember, GothraOption, User, UserRole
 from .serializers import (
     AdminDonorUserUpdateSerializer,
+    BulkDonorUploadSerializer,
     DonorProfileSerializer,
     FamilyMemberSerializer,
     LoginSerializer,
@@ -32,6 +34,94 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         payload = serializer.save()
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+
+
+def _generate_random_password(length: int = 10) -> str:
+    return "".join(secrets.choice(PASSWORD_ALPHABET) for _ in range(length))
+
+
+class BulkRegisterView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        if request.user.role != UserRole.ADMIN:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = BulkDonorUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        records = serializer.validated_data["records"]
+        default_password = (serializer.validated_data.get("default_password") or "").strip()
+
+        results = []
+        created_count = 0
+        updated_count = 0
+        failed_count = 0
+
+        for row_index, record in enumerate(records, start=1):
+            payload = dict(record)
+            source_row = payload.pop("source_row", None)
+            existing_user = User.objects.filter(phone_number=payload.get("phone_number")).first()
+            raw_password_value = payload.pop("password", "") or ""
+            provided_password = raw_password_value.strip()
+            payload.pop("confirm_password", None)
+            password_to_use = None
+            if existing_user:
+                if provided_password:
+                    password_to_use = provided_password
+                    payload["password"] = password_to_use
+                    payload["confirm_password"] = password_to_use
+            else:
+                password_to_use = provided_password or default_password or _generate_random_password()
+                payload["password"] = password_to_use
+                payload["confirm_password"] = password_to_use
+
+            register_serializer = RegisterSerializer(
+                data=payload, context={"skip_otp": True, "allow_update": True}
+            )
+            try:
+                register_serializer.is_valid(raise_exception=True)
+                is_update = bool(register_serializer.validated_data.get("existing_user"))
+                register_serializer.save()
+            except ValidationError as exc:
+                failed_count += 1
+                results.append(
+                    {
+                        "row": source_row or row_index,
+                        "phone_number": record.get("phone_number", ""),
+                        "status": "failed",
+                        "errors": exc.detail,
+                    }
+                )
+                continue
+
+            if is_update:
+                updated_count += 1
+                result_status = "updated"
+            else:
+                created_count += 1
+                result_status = "created"
+
+            result_entry: dict[str, object] = {
+                "row": source_row or row_index,
+                "phone_number": record.get("phone_number", ""),
+                "status": result_status,
+            }
+            if password_to_use:
+                result_entry["password"] = password_to_use
+            results.append(result_entry)
+
+        return Response(
+            {
+                "created_count": created_count,
+                "updated_count": updated_count,
+                "failed_count": failed_count,
+                "results": results,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class LoginView(APIView):
