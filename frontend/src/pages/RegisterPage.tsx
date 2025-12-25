@@ -31,6 +31,9 @@ const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
 }));
 
 const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
+const validNakshatraSet = new Set(
+  tamilStarOptions.map((option) => option.trim().toLowerCase())
+);
 
 interface FormValues {
   phone_number: string;
