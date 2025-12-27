@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import api, { extractResults } from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
+import { useCartStore } from '../store/cart';
 import type { CartItem } from '../store/cart';
 import type { RecurrenceKind } from '../types/recurrence';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
@@ -567,6 +568,7 @@ const DonorProfile = () => {
   const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
   const authUser = useAuthStore((state) => state.user);
   const cartKey = authUser ? String(authUser.id) : 'guest';
+  const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const paymentSnapshot = usePaymentStore((state) => state.lastGeneralPaymentByUser[cartKey] ?? null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -574,13 +576,23 @@ const DonorProfile = () => {
     () => new URLSearchParams(location.search).get('fromCart') === '1',
     [location.search],
   );
+  const mergedCartItems = useMemo(() => {
+    const itemsMap = new Map<string, CartItem>();
+    (paymentSnapshot?.items ?? []).forEach((item) => {
+      itemsMap.set(item.cartId, item);
+    });
+    cartItems.forEach((item) => {
+      itemsMap.set(item.cartId, item);
+    });
+    return Array.from(itemsMap.values());
+  }, [paymentSnapshot, cartItems]);
   const pendingRegistrations = useMemo(
-    () => (paymentSnapshot?.items ?? []).filter((item) => item.recurrenceKind !== 'recurring'),
-    [paymentSnapshot],
+    () => mergedCartItems.filter((item) => item.recurrenceKind !== 'recurring'),
+    [mergedCartItems],
   );
   const pendingRecurringPlans = useMemo(
-    () => (paymentSnapshot?.items ?? []).filter((item) => item.recurrenceKind === 'recurring'),
-    [paymentSnapshot],
+    () => mergedCartItems.filter((item) => item.recurrenceKind === 'recurring'),
+    [mergedCartItems],
   );
   const pendingCartCount = pendingRegistrations.length + pendingRecurringPlans.length;
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
