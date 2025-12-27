@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import api, { extractResults } from '../../lib/api';
 import { nakshatraOptions } from '../../data/nakshatraOptions';
 import { rasiOptions } from '../../data/familyAttributes';
-import { useMasterDataStore } from '../../store/masterData';
+import { GothraOptionPayload, useMasterDataStore } from '../../store/masterData';
 
 const generateHeaderCode = (name: string) => {
   const baseSlug = name
@@ -111,11 +111,15 @@ const AdminMasterPage = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const originalDayOrderRef = useRef<DayOption[]>([]);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
+  const gothraOptionEntries = useMasterDataStore((state) => state.gothraOptionEntries);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
   const createGothraOption = useMasterDataStore((state) => state.createGothraOption);
+  const updateGothraOption = useMasterDataStore((state) => state.updateGothraOption);
   const isGothraSaving = useMasterDataStore((state) => state.isGothraSaving);
   const isGothraLoading = useMasterDataStore((state) => state.isGothraLoading);
   const [newGothraName, setNewGothraName] = useState('');
+  const [editingGothraId, setEditingGothraId] = useState<number | null>(null);
+  const [editingGothraName, setEditingGothraName] = useState('');
 
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
@@ -337,6 +341,36 @@ const AdminMasterPage = () => {
     }
   };
 
+  const startEditingGothra = (entry: GothraOptionPayload) => {
+    setEditingGothraId(entry.id);
+    setEditingGothraName(entry.name);
+  };
+
+  const cancelEditingGothra = () => {
+    setEditingGothraId(null);
+    setEditingGothraName('');
+  };
+
+  const handleUpdateGothra = async (entry: GothraOptionPayload) => {
+    const trimmed = editingGothraName.trim();
+    if (!trimmed) {
+      setNotice('Enter a gothra name before saving.');
+      return;
+    }
+    if (trimmed === entry.name) {
+      cancelEditingGothra();
+      return;
+    }
+    try {
+      await updateGothraOption(entry.id, trimmed);
+      setNotice(`Gothra ${trimmed} updated successfully.`);
+      cancelEditingGothra();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating gothra: ${errorMessage}`);
+    }
+  };
+
   const fetchAllPages = async <T,>(initialUrl: string): Promise<T[]> => {
     const results: T[] = [];
     let nextUrl: string | null = initialUrl;
@@ -418,6 +452,13 @@ const AdminMasterPage = () => {
   useEffect(() => {
     loadGothraOptions();
   }, [loadGothraOptions]);
+
+  useEffect(() => {
+    if (editingGothraId && !gothraOptionEntries.some((entry) => entry.id === editingGothraId)) {
+      setEditingGothraId(null);
+      setEditingGothraName('');
+    }
+  }, [editingGothraId, gothraOptionEntries]);
 
   const resetEnglishDayForm = () => {
     dayForm.reset({ code: '', description: '', category: 'weekday' });
@@ -1833,17 +1874,65 @@ const AdminMasterPage = () => {
                   {isGothraLoading && <p className="text-slate-400">Refreshing gothra list…</p>}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {gothraOptions.map((name, index) => (
-                    <div
-                      key={name}
-                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
-                    >
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
-                        {index + 1}
-                      </span>
-                      <span>{name}</span>
-                    </div>
-                  ))}
+                  {gothraOptionEntries.map((entry, index) => {
+                    const isEditing = editingGothraId === entry.id;
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                      >
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                              value={editingGothraName}
+                              onChange={(event) => setEditingGothraName(event.target.value)}
+                            />
+                          ) : (
+                            <span className="block truncate">{entry.name}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateGothra(entry)}
+                                disabled={isGothraSaving}
+                                className="text-xs font-semibold text-orange-600 transition hover:text-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingGothra}
+                                disabled={isGothraSaving}
+                                className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEditingGothra(entry)}
+                              className="text-xs font-semibold text-slate-500 transition hover:text-slate-800"
+                              aria-label={`Edit gothra ${entry.name}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
+                                <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
