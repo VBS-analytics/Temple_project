@@ -1,5 +1,15 @@
 import clsx from 'clsx';
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChangeEvent,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
 import { useAuthStore } from '../store/auth';
@@ -7,6 +17,7 @@ import { usePaymentStore } from '../store/payments';
 import { RecurrenceSelection, RecurrenceFrequency } from '../types/recurrence';
 import { useNavigate } from 'react-router-dom';
 import { nakshatraOptions } from '../data/nakshatraOptions';
+import { createPortal } from 'react-dom';
 
 type SSOption = { value: string; label: string };
 
@@ -20,6 +31,7 @@ interface MemberMultiSelectProps {
   selectedValues: string[];
   onToggleValue: (value: string) => void;
   disabled?: boolean;
+  maxWidth?: string;
 }
 
 function MemberMultiSelect({
@@ -28,19 +40,71 @@ function MemberMultiSelect({
   selectedValues,
   onToggleValue,
   disabled = false,
+  maxWidth,
 }: MemberMultiSelectProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
   const selectedCount = selectedValues.length;
+  const portalContainer = typeof document !== 'undefined' ? document.body : null;
+
+  const updateDropdownPosition = useCallback(() => {
+    if (!containerRef.current || typeof window === 'undefined') {
+      setDropdownStyle(null);
+      return;
+    }
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const spacing = 12;
+    const viewportWidth = Math.max(window.innerWidth, document.documentElement.clientWidth || 0);
+    const availableWidth = Math.max(viewportWidth - spacing * 2, 80);
+    const width = Math.min(Math.max(containerRect.width || 200, 120), availableWidth);
+    const maxLeft = Math.max(spacing, viewportWidth - width - spacing);
+    const left = Math.min(Math.max(containerRect.left, spacing), maxLeft);
+    let top = containerRect.bottom + 6;
+    const maxTop = Math.max(spacing, window.innerHeight - spacing - 40);
+    top = Math.min(Math.max(top, spacing), maxTop);
+    setDropdownStyle({
+      position: 'fixed',
+      top,
+      left,
+      width,
+      minWidth: Math.min(containerRect.width || width, width),
+      zIndex: 1000,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setDropdownStyle(null);
+      return;
+    }
+    updateDropdownPosition();
+  }, [open, updateDropdownPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleScrollOrResize = () => updateDropdownPosition();
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [open, updateDropdownPosition]);
 
   useEffect(() => {
     if (!open) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
+      if (
+        containerRef.current &&
+        (containerRef.current.contains(event.target as Node) ||
+          dropdownRef.current?.contains(event.target as Node))
+      ) {
+        return;
       }
+      setOpen(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
@@ -57,32 +121,12 @@ function MemberMultiSelect({
     };
   }, [open]);
 
-  // Adjust dropdown position if it goes off-screen
-  useEffect(() => {
-    if (!open || !dropdownRef.current || !containerRef.current) return;
-    
-    const dropdown = dropdownRef.current;
-    const container = containerRef.current;
-    const containerRect = container.getBoundingClientRect();
-    const dropdownRect = dropdown.getBoundingClientRect();
-    
-    // Check if dropdown goes off the right side of the screen
-    if (dropdownRect.right > window.innerWidth) {
-      dropdown.style.left = 'auto';
-      dropdown.style.right = '0';
-      dropdown.style.width = `${Math.min(400, window.innerWidth - containerRect.left)}px`;
-    }
-    
-    // Check if dropdown goes off the left side of the screen
-    if (dropdownRect.left < 0) {
-      dropdown.style.left = '0';
-      dropdown.style.right = 'auto';
-      dropdown.style.width = `${Math.min(400, containerRect.right)}px`;
-    }
-  }, [open, options]);
-
   return (
-    <div className="relative w-full max-w-[240px] min-w-0" ref={containerRef}>
+    <div
+      className="relative w-full min-w-0"
+      ref={containerRef}
+      style={{ maxWidth: maxWidth ?? '240px' }}
+    >
       <button
         type="button"
         className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50 shadow-sm overflow-hidden"
@@ -92,37 +136,43 @@ function MemberMultiSelect({
         aria-expanded={open}
         title={label}
       >
-        <span className="truncate">{label}</span>
+        <span className="truncate" aria-hidden="true">
+          {label}
+        </span>
         <span className="ml-2 text-gray-400 flex-shrink-0">▾</span>
       </button>
       <p className="mt-1 text-xs text-gray-500">
         Devotees selected: {selectedCount} {selectedCount === 1 ? 'devotee' : 'devotees'}
       </p>
-      {open && (
-        <div
-          ref={dropdownRef}
-          className="absolute z-50 mt-1 w-full max-w-md max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
-        >
-          <ul className="py-1 text-sm">
-            {options.map((option) => {
-              const checked = selectedValues.includes(option.value);
-              return (
-                <li key={option.value}>
-                  <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors">
-                    <span className="pr-2 truncate">{option.label}</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 text-orange-600 focus:ring-orange-500 rounded flex-shrink-0"
-                      checked={checked}
-                      onChange={() => onToggleValue(option.value)}
-                    />
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+      {open &&
+        portalContainer &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="z-50 max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+            style={dropdownStyle ?? undefined}
+          >
+            <ul className="py-1 text-sm">
+              {options.map((option) => {
+                const checked = selectedValues.includes(option.value);
+                return (
+                  <li key={option.value}>
+                    <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors">
+                      <span className="pr-2 truncate">{option.label}</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 rounded flex-shrink-0"
+                        checked={checked}
+                        onChange={() => onToggleValue(option.value)}
+                      />
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
+          portalContainer,
+        )}
     </div>
   );
 }
@@ -454,6 +504,60 @@ const createChartPreferredDateGroup = (): ChartPreferredDateGroup => ({
   note: '',
   memberKeys: [],
 });
+
+const normalizeMemberKeys = (keys: string[]) =>
+  Array.from(new Set(keys.filter(Boolean))).sort();
+
+const resolveMemberSelectionKey = (member?: CartItem['members'][number]) => {
+  if (!member) return null;
+  if (member.selectionKey) {
+    return member.selectionKey;
+  }
+  if (member.id !== undefined && member.id !== null) {
+    return String(member.id);
+  }
+  return null;
+};
+
+const buildPreferredDateGroupFromCartItem = (item: CartItem): ChartPreferredDateGroup => ({
+  key: `cart-${item.cartId}`,
+  date: item.customDayDate ?? item.bookingDate ?? '',
+  note: item.customDayNote ?? '',
+  memberKeys: normalizeMemberKeys(
+    (Array.isArray(item.members) ? item.members : [])
+      .map(resolveMemberSelectionKey)
+      .filter((key): key is string => Boolean(key)),
+  ),
+});
+
+const arePreferredDateGroupsEqual = (
+  a?: ChartPreferredDateGroup[],
+  b?: ChartPreferredDateGroup[],
+): boolean => {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftGroup = left[index];
+    const rightGroup = right[index];
+    if (leftGroup.key !== rightGroup.key || leftGroup.date !== rightGroup.date || leftGroup.note !== rightGroup.note) {
+      return false;
+    }
+    const leftKeys = leftGroup.memberKeys;
+    const rightKeys = rightGroup.memberKeys;
+    if (leftKeys.length !== rightKeys.length) {
+      return false;
+    }
+    for (let keyIndex = 0; keyIndex < leftKeys.length; keyIndex += 1) {
+      if (leftKeys[keyIndex] !== rightKeys[keyIndex]) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
 
 const normalizePoojaName = (value?: string | null) => {
   if (!value) return '';
@@ -1849,6 +1953,52 @@ const PoojaRegistrationPage = () => {
   }, [cartItems]);
 
   useEffect(() => {
+    if (cartItems.length === 0) {
+      return;
+    }
+    const groupedItems = new Map<number, ChartPreferredDateGroup[]>();
+    cartItems.forEach((item) => {
+      const code = item.dayOptionCode?.trim().toUpperCase() ?? '';
+      if (code !== CHART_DAY_OPTION_CODE) {
+        return;
+      }
+      const groups = groupedItems.get(item.poojaId) ?? [];
+      groups.push(buildPreferredDateGroupFromCartItem(item));
+      groupedItems.set(item.poojaId, groups);
+    });
+
+    if (groupedItems.size === 0) {
+      return;
+    }
+
+    setChartPreferredDateGroupsMap((prev) => {
+      let changed = false;
+      const next: Record<number, ChartPreferredDateGroup[]> = { ...prev };
+      const remainingKeys = new Set(Object.keys(prev).map((key) => Number(key)));
+
+      groupedItems.forEach((groups, poojaId) => {
+        const sortedGroups = [...groups].sort((a, b) =>
+          (a.date ?? '').localeCompare(b.date ?? ''),
+        );
+        if (!arePreferredDateGroupsEqual(prev[poojaId], sortedGroups)) {
+          next[poojaId] = sortedGroups;
+          changed = true;
+        }
+        remainingKeys.delete(poojaId);
+      });
+
+      remainingKeys.forEach((poojaId) => {
+        if (Object.prototype.hasOwnProperty.call(next, poojaId)) {
+          delete next[poojaId];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [cartItems]);
+
+  useEffect(() => {
     masterRows.forEach((row) => {
       const dayOptionDisabled = isDayOptionDisabledPooja({
         name: row.pooja.name,
@@ -2849,6 +2999,7 @@ const PoojaRegistrationPage = () => {
                       selectedValues={group.memberKeys}
                       onToggleValue={(value) => togglePreferredDateGroupMember(poojaId, group.key, value)}
                       disabled={availableOptions.length === 0}
+                      maxWidth="100%"
                     />
                   );
                 })()}
@@ -3002,7 +3153,7 @@ const PoojaRegistrationPage = () => {
                         </th>
                         <th
                           scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[20%] sticky top-0 bg-gray-50 z-20"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[40%] sticky top-0 bg-gray-50 z-20"
                         >
                           Day Option
                         </th>
@@ -3122,7 +3273,7 @@ const PoojaRegistrationPage = () => {
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">
                               {row.uiLabel}
                             </td>
-                            <td className="px-4 py-3 text-sm overflow-visible">
+                            <td className="px-4 py-3 text-sm overflow-visible min-w-[420px]">
                               {availableDayOptions.length > 0 ? (
                                 dayOptionDisabled ? (
                                   <span className="text-xs text-gray-500">Day option not required for this pooja</span>
