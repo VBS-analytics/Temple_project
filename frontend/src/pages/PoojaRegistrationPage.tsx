@@ -1974,7 +1974,6 @@ const PoojaRegistrationPage = () => {
     setChartPreferredDateGroupsMap((prev) => {
       let changed = false;
       const next: Record<number, ChartPreferredDateGroup[]> = { ...prev };
-      const remainingKeys = new Set(Object.keys(prev).map((key) => Number(key)));
 
       groupedItems.forEach((groups, poojaId) => {
         const sortedGroups = [...groups].sort((a, b) =>
@@ -1982,14 +1981,6 @@ const PoojaRegistrationPage = () => {
         );
         if (!arePreferredDateGroupsEqual(prev[poojaId], sortedGroups)) {
           next[poojaId] = sortedGroups;
-          changed = true;
-        }
-        remainingKeys.delete(poojaId);
-      });
-
-      remainingKeys.forEach((poojaId) => {
-        if (Object.prototype.hasOwnProperty.call(next, poojaId)) {
-          delete next[poojaId];
           changed = true;
         }
       });
@@ -2459,6 +2450,7 @@ const PoojaRegistrationPage = () => {
     if (matchingItems.length > 0) {
       matchingItems.forEach((item) => removeFromCart(cartKey, item.cartId));
       setTableMessage({ status: 'info', text: `${row.uiLabel} removed from cart.` });
+      clearChartDetailsForPooja(row.pooja.id);
       return;
     }
 
