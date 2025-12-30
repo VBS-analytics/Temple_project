@@ -22,6 +22,7 @@ import Projects from '../pages/Projects';
 import About from '../pages/About';
 import DonorProfile from '../pages/DonorProfile';
 import CombinePaymentPage from '../pages/payments/CombinePaymentPage';
+import ReportPage from '../pages/ReportPage';
 import { useAuthStore } from '../store/auth';
 
 const HomeRoute = () => {
@@ -78,6 +79,7 @@ const App = () => (
         <Route path="/admin/bulk-upload" element={<BulkDonorUploadPage />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
+        <Route path="/reports" element={<ReportPage />} />
         <Route path="/admin/donor-pooja-registrations" element={<Navigate to="/admin/donors" replace />} />
       </Route>
     </Route>

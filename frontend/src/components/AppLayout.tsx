@@ -39,13 +39,12 @@ const AppLayout = () => {
       ? 'Admin command center'
       : 'Donor hub';
 
-    const navItems: NavItem[] = [
-      { to: '/dashboard', label: 'Dashboard', show: true, end: true },
-      { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
-      { to: '/admin/master', label: 'Admin', show: Boolean(user && isAdmin(user.role)) },
-      { to: '/admin/bulk-upload', label: 'Bulk Upload', show: Boolean(user && isAdmin(user.role)) },
-      { to: '/admin/donors', label: 'Donor Details', show: Boolean(user && isAdmin(user.role)) },
-      { to: '/admin/pooja-details', label: 'Pooja Details', show: Boolean(user && isAdmin(user.role)) },
+  const navItems: NavItem[] = [
+    { to: '/dashboard', label: 'Dashboard', show: true, end: true },
+    { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
+    { to: '/admin/master', label: 'Admin', show: Boolean(user && isAdmin(user.role)) },
+    { to: '/admin/bulk-upload', label: 'Bulk Upload', show: Boolean(user && isAdmin(user.role)) },
+    { to: '/admin/donors', label: 'Donor Details', show: Boolean(user && isAdmin(user.role)) },
     { to: '/pooja/register', label: 'Pooja Registration', show: true },
     { to: '/payments/general', label: 'Payment Page', show: true },
     { to: '/payments/combine', label: 'Combine Payment', show: true },
@@ -53,6 +52,12 @@ const AppLayout = () => {
       to: '/payments/statement',
       label: 'Payment Statement',
       show: Boolean(user),
+    },
+    { to: '/admin/pooja-details', label: 'Pooja Details', show: Boolean(user && isAdmin(user.role)) },
+    {
+      to: '/reports',
+      label: 'Report',
+      show: Boolean(user && isAdmin(user.role)),
     },
   ];
 
