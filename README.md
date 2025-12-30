@@ -32,17 +32,20 @@ A modern operations suite for the Kakkazhany Gramam temple unifying a content-ri
 - Phone-number based authentication with OTP registration, password reset, and JWT sessions stored via Zustand.
 - Dashboard with donor metrics, today's pooja roster, and one-click PDF exports for admins.
 - Profile management with family member directory, gothra/star metadata, and historical pooja registrations.
-- Pooja registration flow featuring searchable master data, Tamil-star aware day selection, member multi-select, cart staging, and persistence per user.
+- Pooja registration flow featuring searchable master data, a curated day-option dropdown for the CHRT selector alongside Tamil-star guidance, member multi-select, cart staging, and persistence per user.
 - Pooja cart checkout that posts registrations to the API and saves confirmations locally for quick reference.
 - Offline payment logging (Form-13) with configurable modes, month tagging, and history table.
 
 ### Admin console
 - Master data maintenance for pooja headers, pooja options, and day codes with drag-and-drop reordering of day options.
+- Bulk donor upload page (`/admin/bulk-upload`) that imports templated Excel rows, deduplicates by phone number, optionally seeds a default password, and reports created/updated/failed counts after calling `/api/auth/bulk-register/`.
+- Inline edit controls for the List of Gothram so administrators can rename entries without touching the database dumps.
 - Donor registry view that groups registrations by donor, surfaces profile data, and allows inline updates.
 - Pooja detail explorer with filters, rich table view, XLSX export (via `xlsx`) and PDF export (via `pdfmake`).
 - Dashboard KPIs for donor counts and family member totals, plus export of the day's pooja line-up.
 
 ### Backend services
+- Bulk donor import endpoint (`/api/auth/bulk-register/`) that accepts templated rows, skips OTP, applies default or per-row passwords, and returns row-level created/updated/failed statistics.
 - Custom `User` model keyed on `phone_number` with donor/admin roles and auto-generated `DonorProfile.donor_id`.
 - OTP token management supporting registration, login, and password reset flows.
 - Pooja registration pipeline with sequential `pooja_reg_id`, group member modelling, featured pooja media, and donor-specific message templates.
@@ -177,10 +180,11 @@ docker-compose.yml
 ### Admin Operations
 1. **Dashboard**: Review daily KPIs for donor counts, registrations, and payments.
 2. **Master Data**: Maintain pooja headers/options and reorder day codes via drag-and-drop.
-3. **Registration Review**: Filter by date, download XLSX/PDF reports, and reconcile offline payments.
-4. **Payments**: Record Form-13 entries with mode/status enums and track outstanding balances.
-5. **Content**: Update featured pooja media, gallery assets, and about page biographies as needed.
-6. **Astronomy Cache**: Monitor `backend/data/skyfield` for ephemeris freshness (downloads happen on demand).
+3. **Bulk Upload**: Use `/admin/bulk-upload` to onboard donors from Excel, deduplicate entries, and surface row-level outcomes before new accounts hit the roster.
+4. **Registration Review**: Filter by date, download XLSX/PDF reports, and reconcile offline payments.
+5. **Payments**: Record Form-13 entries with mode/status enums and track outstanding balances.
+6. **Content**: Update featured pooja media, gallery assets, and about page biographies as needed.
+7. **Astronomy Cache**: Monitor `backend/data/skyfield` for ephemeris freshness (downloads happen on demand).
 
 ### Back-Office Checklist
 1. Ensure database backups run nightly and store offsite.
