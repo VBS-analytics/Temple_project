@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 
 import api, { extractResults } from '../lib/api';
 import { loadPdfMake, PDF_TAMIL_FONT_NAME, testTamilFont, verifyTamilFont } from '../lib/pdfMakeLoader';
+import type { CartItem } from '../store/cart';
 
 interface DonorRecord {
   user: {
@@ -49,6 +50,13 @@ interface PoojaReportEntry {
   name?: string | null;
   phone_number?: string | null;
   pooja_date?: string | null;
+}
+
+interface CartSnapshotRecord {
+  donor_id?: number | null;
+  donor_name?: string | null;
+  donor_phone?: string | null;
+  items?: CartItem[] | null;
 }
 
 const formatFilenameDate = (value: Date) =>
@@ -234,6 +242,14 @@ const POOJA_REPORT_KEYS = [
 
 type PoojaReportKey = (typeof POOJA_REPORT_KEYS)[number];
 
+const POOJA_OPTION_NAMES: Record<PoojaReportKey, string> = {
+  saturdayNavagraha: '4 saturday navagraha pooja per month',
+  pradosha: '2 pradosha pooja per month',
+  tillOil: 'till oil for lamps',
+  nityaNeivedhyam: 'nitya neivedhyam',
+  gauSamrakshana: 'gau samrakshana seva',
+};
+
 const POOJA_REPORTS: Record<
   PoojaReportKey,
   {
@@ -243,6 +259,7 @@ const POOJA_REPORTS: Record<
     sheetName: string;
     emptyMessage: string;
     errorMessage: string;
+    poojaOptionName: string;
   }
 > = {
   saturdayNavagraha: {
@@ -252,6 +269,7 @@ const POOJA_REPORTS: Record<
     sheetName: 'Saturday Navagraha',
     emptyMessage: 'No donors have registered for the Saturday Navagraha Pooja yet.',
     errorMessage: 'Unable to download the Saturday Navagraha Pooja report right now.',
+    poojaOptionName: POOJA_OPTION_NAMES.saturdayNavagraha,
   },
   pradosha: {
     endpoint: 'pooja/registrations/pradosha-pooja-report/',
@@ -260,6 +278,7 @@ const POOJA_REPORTS: Record<
     sheetName: 'Pradosha Pooja',
     emptyMessage: 'No donors have registered for the Pradosha Pooja yet.',
     errorMessage: 'Unable to download the Pradosha Pooja report right now.',
+    poojaOptionName: POOJA_OPTION_NAMES.pradosha,
   },
   tillOil: {
     endpoint: 'pooja/registrations/till-oil-for-lamps-report/',
@@ -268,6 +287,7 @@ const POOJA_REPORTS: Record<
     sheetName: 'Till Oil for Lamps',
     emptyMessage: 'No donors have registered for the Till Oil for Lamps pooja yet.',
     errorMessage: 'Unable to download the Till Oil for Lamps report right now.',
+    poojaOptionName: POOJA_OPTION_NAMES.tillOil,
   },
   nityaNeivedhyam: {
     endpoint: 'pooja/registrations/nitya-neivedhyam-report/',
@@ -276,6 +296,7 @@ const POOJA_REPORTS: Record<
     sheetName: 'Nitya Neivedhyam',
     emptyMessage: 'No donors have registered for the Nitya Neivedhyam pooja yet.',
     errorMessage: 'Unable to download the Nitya Neivedhyam report right now.',
+    poojaOptionName: POOJA_OPTION_NAMES.nityaNeivedhyam,
   },
   gauSamrakshana: {
     endpoint: 'pooja/registrations/gau-samrakshana-seva-report/',
@@ -284,6 +305,7 @@ const POOJA_REPORTS: Record<
     sheetName: 'Gau Samrakshana Seva',
     emptyMessage: 'No donors have registered for the Gau Samrakshana Seva yet.',
     errorMessage: 'Unable to download the Gau Samrakshana report right now.',
+    poojaOptionName: POOJA_OPTION_NAMES.gauSamrakshana,
   },
 };
 
@@ -315,6 +337,43 @@ const triggerBlobDownload = (blob: Blob, filename: string) => {
   setTimeout(() => {
     URL.revokeObjectURL(url);
   }, 1000);
+};
+
+const normalizeText = (value?: string | null) => (value ?? '').trim().toLowerCase();
+
+const buildPendingCartRows = (snapshots: CartSnapshotRecord[], key: PoojaReportKey): PoojaReportRow[] => {
+  const targetName = POOJA_REPORTS[key].poojaOptionName;
+  if (!targetName) {
+    return [];
+  }
+
+  const normalizedTarget = normalizeText(targetName);
+  let sequence = 0;
+  const rows: PoojaReportRow[] = [];
+
+  snapshots.forEach((snapshot) => {
+    const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+    items.forEach((item) => {
+      const itemName = normalizeText(item.poojaName);
+      if (!itemName) {
+        return;
+      }
+      if (itemName !== normalizedTarget && !itemName.includes(normalizedTarget)) {
+        return;
+      }
+
+      sequence += 1;
+      rows.push({
+        'S.no': sequence,
+        'Temple Donor ID': snapshot.donor_id ?? '—',
+        Name: displayValue(snapshot.donor_name),
+        Phone: displayValue(snapshot.donor_phone),
+        'Pooja Date': displayValue(item.customDayDate ?? item.bookingDate ?? ''),
+      });
+    });
+  });
+
+  return rows;
 };
 
 // ✅ FIXED: Uses getBlob() (most reliable) + ensures tamil font is usable
@@ -636,12 +695,28 @@ const ReportPage = () => {
         const { data } = await api.get(report.endpoint);
         const registrations = extractResults<PoojaReportEntry>(data);
 
-        if (!registrations.length) {
+        let rows = buildPoojaReportRows(registrations);
+
+        if (!rows.length) {
+          try {
+            const cartResponse = await api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/');
+            const snapshots: CartSnapshotRecord[] = Array.isArray(cartResponse.data)
+              ? cartResponse.data
+              : [];
+            const pendingRows = buildPendingCartRows(snapshots, key);
+            if (pendingRows.length > 0) {
+              rows = pendingRows;
+            }
+          } catch (fallbackError) {
+            console.error('Failed to load pending cart snapshots', fallbackError);
+          }
+        }
+
+        if (!rows.length) {
           setExportError(report.emptyMessage);
           return;
         }
 
-        const rows = buildPoojaReportRows(registrations);
         const headerKeys = [...POOJA_REPORT_HEADERS];
         const filenameBase = `${report.filenamePrefix}-${formatFilenameDate(new Date())}`;
 

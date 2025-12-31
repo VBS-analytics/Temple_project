@@ -1,8 +1,9 @@
 import axios from 'axios';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import { loadPdfMake, PDF_TAMIL_FONT_NAME } from '../../lib/pdfMakeLoader';
+import type { CartItem } from '../../store/cart';
 import api, { extractResults } from '../../lib/api';
 
 const DAY_BUCKETS = [{ key: 'all', label: 'All Registrations' }] as const;
@@ -55,11 +56,28 @@ interface RecurringPlanRecord {
   pause_from?: string | null;
   pause_until?: string | null;
   metadata?: {
-    members?: Array<{ name?: string | null | undefined }>;
+    members?: Array<RegistrationMember | null | undefined> | null;
   } | null;
   donor_name?: string | null;
   donor_phone?: string | null;
   donor_email?: string | null;
+}
+
+interface CartSnapshotRecord {
+  donor_id?: number | null;
+  donor_name?: string | null;
+  donor_phone?: string | null;
+  items?: CartItem[] | null;
+  updated_at?: string | null;
+}
+
+interface PendingCartRow {
+  cartId: string;
+  poojaDate?: string | null;
+  tamilStar: string;
+  dayOption: string;
+  donorName: string;
+  postPrasadam: boolean;
 }
 
 type RegistrationBuckets = Record<DayBucketKey, RegistrationRecord[]>;
@@ -108,6 +126,7 @@ type StatusBreakdown = Record<PoojaStatusKey, number>;
 
 // Storage key for localStorage
 const UPDATED_POOJA_DATES_KEY = 'temple_pooja_updated_dates';
+const DAY_OPTION_PLACEHOLDER = 'Choose Your Date For Pooja';
 
 const buildEmptyBuckets = (): RegistrationBuckets => ({
   all: [],
@@ -256,16 +275,7 @@ const formatBooleanLabel = (value?: boolean | null) => (value ? 'Yes' : 'No');
 
 const formatNumber = (value: number) => value.toLocaleString('en-IN');
 
-const EXPORT_HEADERS = [
-  'Pooja ID',
-  'Pooja Date',
-  'Pooja Name',
-  'Day Option',
-  'Devotees',
-  'Post Prasadam',
-  'Registered By',
-  'Registration Date',
-] as const;
+const EXPORT_HEADERS = ['Pooja Date', 'Tamil Star', 'Day Option', 'Donor Name'] as const;
 
 type ExportHeader = (typeof EXPORT_HEADERS)[number];
 type ExportRow = Record<ExportHeader, string>;
@@ -352,6 +362,32 @@ const formatCurrency = (value?: string | number | null) => {
   }).format(numeric);
 };
 
+const buildCartMemberNames = (members?: CartItem['members']) => {
+  if (!members || members.length === 0) {
+    return '—';
+  }
+  const names = members
+    .map((member) => member?.name?.trim())
+    .filter((name): name is string => Boolean(name && name.length > 0));
+  return names.length > 0 ? names.join(', ') : '—';
+};
+
+const resolveCartItemServiceDate = (item: CartItem) => item.customDayDate ?? item.bookingDate ?? '';
+
+const resolveCartItemTamilStar = (item: CartItem) => {
+  const members = Array.isArray(item.members) ? item.members : [];
+  for (const member of members) {
+    const star = member?.tamilStar?.trim() || member?.tamil_star?.trim();
+    if (star) {
+      return star;
+    }
+  }
+  if (item.memberTamilStar) {
+    return item.memberTamilStar;
+  }
+  return '—';
+};
+
 const resolveRecurringFrequencyLabel = (plan: RecurringPlanRecord) => {
   const frequency = plan.recurrence_frequency?.trim();
   if (frequency && plan.recurrence_kind === 'recurring') {
@@ -369,6 +405,21 @@ const resolveRecurringFrequencyLabel = (plan: RecurringPlanRecord) => {
 const resolveRecurringPlanScheduleLabel = (plan: RecurringPlanRecord) => {
   const dateValue = plan.next_occurrence ?? plan.one_time_date ?? plan.start_date;
   return dateValue ? formatDateDisplay(dateValue) : 'Schedule pending';
+};
+
+const resolveCartItemDayOption = (item: CartItem) => {
+  const candidates = [
+    item.dayOptionDescription,
+    item.dayOptionCategory,
+    item.dayOptionCode,
+  ];
+  for (const rawValue of candidates) {
+    const trimmed = rawValue?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return DAY_OPTION_PLACEHOLDER;
 };
 
 const resolveRecurringPlanMemberNames = (plan: RecurringPlanRecord) => {
@@ -440,6 +491,17 @@ const resolveDonorName = (value?: string | null) => {
   return trimmed || 'Temple Admin';
 };
 
+const resolveRegistrationTamilStar = (registration: RegistrationRecord) => {
+  const members = Array.isArray(registration.members) ? registration.members : [];
+  for (const member of members) {
+    const star = resolveMemberTamilStar(member);
+    if (star) {
+      return star;
+    }
+  }
+  return '—';
+};
+
 const parseCreatedAt = (record: RegistrationRecord) => {
   if (!record.created_at) return Number.NaN;
   const timestamp = new Date(record.created_at).getTime();
@@ -474,10 +536,12 @@ const PoojaDetailsPage = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [updatedPoojaDates, setUpdatedPoojaDates] = useState<Map<number, UpdatedPoojaDate>>(new Map());
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table'); // Added for responsive view toggle
   const [recurringPlans, setRecurringPlans] = useState<RecurringPlanRecord[]>([]);
   const [recurringPlansLoading, setRecurringPlansLoading] = useState(false);
   const [recurringPlansError, setRecurringPlansError] = useState<string | null>(null);
+  const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
+  const [cartSnapshotsLoading, setCartSnapshotsLoading] = useState(false);
+  const [cartSnapshotsError, setCartSnapshotsError] = useState<string | null>(null);
 
   const recordMatchesFilters = useCallback(
     (record: RegistrationRecord, normalizedQuery: string) => {
@@ -703,90 +767,71 @@ const PoojaDetailsPage = () => {
     [filteredBuckets],
   );
 
-  const summaryStats = useMemo(() => {
-    const total = flattenedFilteredRegistrations.length;
+  const pendingCartRows = useMemo<PendingCartRow[]>(() => {
+    return cartSnapshots.flatMap((snapshot) => {
+      const donorName = snapshot.donor_name?.trim() || 'Donor';
+      return (Array.isArray(snapshot.items) ? snapshot.items : []).map((item) => ({
+        cartId: item.cartId,
+        poojaDate: resolveCartItemServiceDate(item),
+        tamilStar: resolveCartItemTamilStar(item),
+        dayOption: resolveCartItemDayOption(item),
+        donorName,
+        postPrasadam: Boolean(item.postPrasadam),
+      }));
+    });
+  }, [cartSnapshots]);
+
+  const filteredPendingCartRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return pendingCartRows.filter((row) => {
+      if (selectedDate) {
+        const dateIso = formatDateForInput(row.poojaDate || '');
+        if (!dateIso || dateIso !== selectedDate) {
+          return false;
+        }
+      }
+      if (postPrasadamOnly && !row.postPrasadam) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      const haystack = `${row.poojaDate ?? ''} ${row.dayOption ?? ''} ${row.tamilStar ?? ''} ${
+        row.donorName ?? ''
+      }`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [pendingCartRows, postPrasadamOnly, searchQuery, selectedDate]);
+
+  const pendingCartDonorCount = useMemo(() => {
     const donors = new Set<string>();
-    let postPrasadamCount = 0;
-    const baseToday = new Date();
-    baseToday.setHours(0, 0, 0, 0);
-    const todayIso = toLocalDateIso(baseToday);
-    const todayStart = baseToday.getTime();
-    let todayCount = 0;
-    let upcomingTimestamp = Number.POSITIVE_INFINITY;
-    let upcomingIso: string | null = null;
-
-    flattenedFilteredRegistrations.forEach((record) => {
-      donors.add(resolveDonorName(record.donor_name));
-      if (record.post_prasadam) {
-        postPrasadamCount += 1;
-      }
-
-      const startDateIso = typeof record.start_date === 'string' ? record.start_date.slice(0, 10) : null;
-      if (!startDateIso) {
-        return;
-      }
-
-      if (startDateIso === todayIso) {
-        todayCount += 1;
-      }
-
-      const startTime = Date.parse(`${startDateIso}T00:00:00`);
-      if (!Number.isNaN(startTime) && startTime >= todayStart && startTime < upcomingTimestamp) {
-        upcomingTimestamp = startTime;
-        upcomingIso = startDateIso;
+    filteredPendingCartRows.forEach((row) => {
+      if (row.donorName) {
+        donors.add(row.donorName);
       }
     });
+    return donors.size;
+  }, [filteredPendingCartRows]);
 
-    return {
-      total,
-      uniqueDonors: donors.size,
-      postPrasadam: postPrasadamCount,
-      postPrasadamRatio: total > 0 ? Math.round((postPrasadamCount / total) * 100) : 0,
-      upcomingLabel: upcomingIso ? formatDateDisplay(upcomingIso) : 'Not scheduled',
-      todayCount,
-    };
-  }, [flattenedFilteredRegistrations]);
-
-  const statusBreakdown = useMemo(() => {
-    const breakdown = buildEmptyStatusBreakdown();
-    flattenedFilteredRegistrations.forEach((record) => {
-      const statusKey = resolvePoojaStatus(record.start_date);
-      breakdown[statusKey] += 1;
-    });
-    return breakdown;
-  }, [flattenedFilteredRegistrations]);
-
-  const statusLegendEntries = useMemo(
-    () =>
-      (Object.keys(POOJA_STATUS_META) as PoojaStatusKey[]).map((statusKey) => {
-        const count = statusBreakdown[statusKey];
-        const share = summaryStats.total > 0 ? Math.round((count / summaryStats.total) * 100) : 0;
-        return {
-          key: statusKey,
-          count,
-          share,
-          ...POOJA_STATUS_META[statusKey],
-        };
-      }),
-    [statusBreakdown, summaryStats.total],
-  );
-
-  const filtersActive = Boolean(selectedDate || searchQuery.trim() || postPrasadamOnly);
+  const pendingCartSummaryLabel = useMemo(() => {
+    if (cartSnapshotsLoading) {
+      return 'Refreshing…';
+    }
+    const count = filteredPendingCartRows.length;
+    const donors = pendingCartDonorCount;
+    return `${count} pending item${count === 1 ? '' : 's'} from ${donors} donor${donors === 1 ? '' : 's'}`;
+  }, [cartSnapshotsLoading, filteredPendingCartRows.length, pendingCartDonorCount]);
 
   const buildExportRows = useCallback(() => {
-    if (flattenedFilteredRegistrations.length === 0) {
+    if (filteredPendingCartRows.length === 0) {
       return null;
     }
 
-    const rows: ExportRow[] = flattenedFilteredRegistrations.map((record) => ({
-      'Pooja ID': resolvePoojaId(record),
-      'Pooja Date': formatDateDisplay(record.start_date),
-      'Pooja Name': record.pooja_option_name?.trim() || 'N/A',
-      'Day Option': record.day_option_description?.trim() || 'N/A',
-      Devotees: formatDevoteesForExport(record.members),
-      'Post Prasadam': formatBooleanLabel(record.post_prasadam),
-      'Registered By': resolveDonorName(record.donor_name),
-      'Registration Date': formatDateTimeDisplay(record.created_at),
+    const rows: ExportRow[] = filteredPendingCartRows.map((row) => ({
+      'Pooja Date': formatDateDisplay(row.poojaDate),
+      'Tamil Star': row.tamilStar,
+      'Day Option': row.dayOption,
+      'Donor Name': row.donorName,
     }));
 
     const filenameDate = selectedDate || toLocalDateIso(new Date());
@@ -798,7 +843,7 @@ const PoojaDetailsPage = () => {
     const selectionLabel = selectionDetails.join(' | ') || 'All records';
 
     return { rows, filenameDate, selectionLabel };
-  }, [flattenedFilteredRegistrations, postPrasadamOnly, searchQuery, selectedDate]);
+  }, [filteredPendingCartRows, postPrasadamOnly, searchQuery, selectedDate]);
 
   const handleExcelDownload = useCallback(() => {
     const exportData = buildExportRows();
@@ -881,7 +926,7 @@ const PoojaDetailsPage = () => {
           {
             table: {
               headerRows: 1,
-              widths: ['auto', 'auto', 'auto', 'auto', '*', 'auto', 'auto', 'auto'],
+              widths: ['auto', 'auto', 'auto', '*'],
               body: tableBody,
             },
             layout: 'lightHorizontalLines',
@@ -895,6 +940,76 @@ const PoojaDetailsPage = () => {
       window.alert('Unable to generate PDF right now. Please try again later.');
     }
   }, [buildExportRows]);
+
+  const pendingRegistrationFallback = useMemo<RegistrationRecord[]>(() => {
+    return filteredPendingCartRows.map((row, index) => ({
+      id: -(index + 1),
+      start_date: row.poojaDate ?? null,
+      donor_name: row.donorName,
+      post_prasadam: row.postPrasadam,
+    }));
+  }, [filteredPendingCartRows]);
+
+  const registrationStatsSource = useMemo<RegistrationRecord[]>(() => {
+    return flattenedFilteredRegistrations.length > 0
+      ? flattenedFilteredRegistrations
+      : pendingRegistrationFallback;
+  }, [flattenedFilteredRegistrations, pendingRegistrationFallback]);
+
+  const summaryStats = useMemo(() => {
+    const total = registrationStatsSource.length;
+    const donors = new Set<string>();
+    let postPrasadamCount = 0;
+    const baseToday = new Date();
+    baseToday.setHours(0, 0, 0, 0);
+    const todayIso = toLocalDateIso(baseToday);
+    const todayStart = baseToday.getTime();
+    let todayCount = 0;
+    let upcomingTimestamp = Number.POSITIVE_INFINITY;
+    let upcomingIso: string | null = null;
+
+    registrationStatsSource.forEach((record) => {
+      donors.add(resolveDonorName(record.donor_name));
+      if (record.post_prasadam) {
+        postPrasadamCount += 1;
+      }
+
+      const startDateIso = typeof record.start_date === 'string' ? record.start_date.slice(0, 10) : null;
+      if (!startDateIso) {
+        return;
+      }
+
+      if (startDateIso === todayIso) {
+        todayCount += 1;
+      }
+
+      const startTime = Date.parse(`${startDateIso}T00:00:00`);
+      if (!Number.isNaN(startTime) && startTime >= todayStart && startTime < upcomingTimestamp) {
+        upcomingTimestamp = startTime;
+        upcomingIso = startDateIso;
+      }
+    });
+
+    return {
+      total,
+      uniqueDonors: donors.size,
+      postPrasadam: postPrasadamCount,
+      postPrasadamRatio: total > 0 ? Math.round((postPrasadamCount / total) * 100) : 0,
+      upcomingLabel: upcomingIso ? formatDateDisplay(upcomingIso) : 'Not scheduled',
+      todayCount,
+    };
+  }, [registrationStatsSource]);
+
+  const statusBreakdown = useMemo(() => {
+    const breakdown = buildEmptyStatusBreakdown();
+    registrationStatsSource.forEach((record) => {
+      const statusKey = resolvePoojaStatus(record.start_date);
+      breakdown[statusKey] += 1;
+    });
+    return breakdown;
+  }, [registrationStatsSource]);
+
+  const filtersActive = Boolean(selectedDate || searchQuery.trim() || postPrasadamOnly);
 
   useEffect(() => {
     let active = true;
@@ -994,6 +1109,39 @@ const PoojaDetailsPage = () => {
     };
 
     loadRecurringPlans();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadCartSnapshots = async () => {
+      try {
+        setCartSnapshotsLoading(true);
+        setCartSnapshotsError(null);
+        const response = await api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/');
+        if (!active) {
+          return;
+        }
+        const payload: CartSnapshotRecord[] = Array.isArray(response.data) ? response.data : [];
+        setCartSnapshots(payload);
+      } catch (err) {
+        console.error('Failed to load cart snapshots', err);
+        if (!active) {
+          return;
+        }
+        setCartSnapshots([]);
+        setCartSnapshotsError(extractErrorMessage(err));
+      } finally {
+        if (active) {
+          setCartSnapshotsLoading(false);
+        }
+      }
+    };
+
+    loadCartSnapshots();
 
     return () => {
       active = false;
@@ -1218,6 +1366,7 @@ const PoojaDetailsPage = () => {
     [statusBreakdown.pending, summaryStats.postPrasadam, summaryStats.todayCount],
   );
 
+
   const todayIso = toLocalDateIso(new Date());
   const tomorrowDate = new Date();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
@@ -1246,7 +1395,6 @@ const PoojaDetailsPage = () => {
     totalLoaded > 0
       ? `Showing ${formatNumber(summaryStats.total)} of ${formatNumber(totalLoaded)} registrations`
       : 'No registrations loaded yet';
-  const hasData = flattenedFilteredRegistrations.length > 0;
 
   const startEditingRegistrationDate = (record: RegistrationRecord) => {
     if (editSubmitting) {
@@ -1395,190 +1543,6 @@ const PoojaDetailsPage = () => {
     [setSelectedDate],
   );
 
-  // Responsive card view for registrations
-  const RegistrationCard = ({ registration }: { registration: RegistrationRecord }) => {
-    const members = Array.isArray(registration.members)
-      ? registration.members.filter(Boolean)
-      : [];
-    const prasadamBadgeClass = registration.post_prasadam
-      ? 'inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600'
-      : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600';
-    const registrationTimestamp = resolveRegistrationTimestamp(registration);
-    const poojaStatus = resolvePoojaStatus(registration.start_date);
-    const statusMeta = POOJA_STATUS_META[poojaStatus];
-    
-    // Check if this registration has an updated pooja date and if it's still valid
-    const updatedPoojaDate = updatedPoojaDates.get(registration.id);
-    const shouldShowUpdatedBadge = updatedPoojaDate?.poojaDate
-      ? isPoojaDateValid(updatedPoojaDate.poojaDate)
-      : false;
-
-    const isRecurringPlan = Boolean(registration.isRecurringPlan);
-    const isEditing = !isRecurringPlan && editingRegistrationId === registration.id;
-
-    return (
-      <div className={`rounded-xl border ${statusMeta.rowAccentClass} bg-white p-4 shadow-sm transition-all duration-150 ${statusMeta.rowHoverClass} ${isEditing ? 'ring-2 ring-orange-400' : ''}`}>
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-900">{resolvePoojaId(registration)}</span>
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold leading-none ${statusMeta.badgeClass}`}>
-                {statusMeta.label}
-              </span>
-              {isRecurringPlan && (
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                  Recurring plan
-                </span>
-              )}
-            </div>
-            <div className="mt-1 text-sm text-slate-700">{formatDateDisplay(registration.start_date)}</div>
-          </div>
-          <span className={prasadamBadgeClass}>
-            {formatBooleanLabel(registration.post_prasadam)}
-          </span>
-        </div>
-        
-        <div className="space-y-3">
-          <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase">Pooja Name</div>
-            <div className="text-sm font-medium text-slate-700 truncate">{registration.pooja_option_name?.trim() || 'N/A'}</div>
-          </div>
-          
-          <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase">Day Option</div>
-            <div className="text-sm text-slate-700 truncate">{registration.day_option_description?.trim() || 'N/A'}</div>
-          </div>
-          
-          <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase">Devotees</div>
-            <div className="space-y-2 mt-1">
-              {members.length === 0 ? (
-                <span className="text-xs text-slate-400 italic">No devotee details available</span>
-                  ) : (
-                    members.map((member, index) => {
-                      const name = (member?.name ?? '').trim() || 'N/A';
-                      const familyName = resolveMemberFamilyName(member) ?? 'N/A';
-                      const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
-                      const gothra = resolveMemberGothra(member) ?? 'N/A';
-                      const rasi = resolveMemberRasi(member) ?? 'N/A';
-                      const dob = formatDobDisplay(resolveMemberDob(member));
-                      
-                      return (
-                        <div key={member?.id ?? index} className="text-sm border-l-2 border-slate-200 pl-2 py-1">
-                          <div className="font-medium text-slate-800">{name}</div>
-                          <div className="grid grid-cols-2 gap-1 mt-1 text-xs text-slate-600">
-                            <div><span className="font-medium">DOB:</span> {dob}</div>
-                            <div><span className="font-medium">Family:</span> {familyName}</div>
-                            <div><span className="font-medium">Rasi:</span> {rasi}</div>
-                            <div><span className="font-medium">Tamil Star:</span> {tamilStar}</div>
-                            <div className="col-span-2"><span className="font-medium">Gothram:</span> {gothra}</div>
-                          </div>
-                        </div>
-                      );
-                    })
-              )}
-            </div>
-          </div>
-          
-          <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase">Registered By</div>
-            <div className="text-sm text-slate-700">{resolveDonorName(registration.donor_name)}</div>
-          </div>
-          
-          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-            <div className="text-xs text-slate-500">
-              {formatDateTimeDisplay(registrationTimestamp)}
-              {shouldShowUpdatedBadge && (
-                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="h-3.5 w-3.5"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Updated
-                </span>
-              )}
-            </div>
-            
-            {!isRecurringPlan && (
-              <button
-                type="button"
-                onClick={() => startEditingRegistrationDate(registration)}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  className="h-3.5 w-3.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.75 20.902 3 21.75l.848-3.75L16.862 4.487z"
-                  />
-                </svg>
-                Edit Date
-              </button>
-            )}
-          </div>
-          
-          {isEditing && (
-            <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-2 mt-2">
-              <div className="flex flex-col gap-2">
-                <input
-                  type="date"
-                  value={editDateValue}
-                  onChange={(e) => setEditDateValue(e.target.value)}
-                  className="w-full rounded-md border-orange-300 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                  disabled={editSubmitting}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={submitRegistrationDateUpdate}
-                    disabled={editSubmitting || !editDateValue}
-                    className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {editSubmitting ? (
-                      <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      'Save'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEditingRegistrationDate}
-                    disabled={editSubmitting}
-                    className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-              {editError && (
-                <p className="text-xs font-medium text-red-600">{editError}</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-4 sm:py-6 md:py-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-[110rem] flex-col gap-6 px-4 sm:px-6 lg:px-8 xl:px-10">
@@ -1691,125 +1655,175 @@ const PoojaDetailsPage = () => {
           ))}
         </div>
 
-        {/* Filters Section */}
-        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white px-4 sm:px-6 py-5 sm:py-7 shadow-xl ring-1 ring-slate-100">
-          <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-orange-50 to-transparent opacity-70" />
-          <div
-            className="pointer-events-none absolute -left-12 -top-12 h-32 w-32 rounded-full bg-orange-200/30 blur-3xl"
-            aria-hidden
-          />
-          <div className="relative z-10 space-y-4 sm:space-y-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Filters &amp; exports</p>
-                <p className="text-sm text-slate-500">
-                  Focus on a date, narrow results, and share schedules with the operations team.
-                </p>
+        {/* Pending cart snapshots */}
+        <section className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Pending cart registrations</h2>
+              <p className="text-sm text-slate-500">
+                Monitor donors who started registrations but haven’t recorded a payment yet.
+              </p>
+            </div>
+            <span className="text-xs uppercase tracking-wide text-slate-500">
+              {pendingCartSummaryLabel}
+            </span>
+          </div>
+          {/* Pending cart filters & exports */}
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white px-4 sm:px-6 py-5 sm:py-7 shadow-xl ring-1 ring-slate-100">
+            <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-orange-50 to-transparent opacity-70" />
+            <div
+              className="pointer-events-none absolute -left-12 -top-12 h-32 w-32 rounded-full bg-orange-200/30 blur-3xl"
+              aria-hidden
+            />
+            <div className="relative z-10 space-y-4 sm:space-y-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Filters &amp; exports</p>
+                  <p className="text-sm text-slate-500">
+                    Narrow pending carts, focus on a date, and share snapshots with the operations team.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <span className={`h-2 w-2 rounded-full ${filtersActive ? 'bg-orange-500' : 'bg-slate-300'}`} />
+                  {filtersActive ? 'Filters active' : 'Showing all records'}
+                </span>
               </div>
-              <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <span className={`h-2 w-2 rounded-full ${filtersActive ? 'bg-orange-500' : 'bg-slate-300'}`} />
-                {filtersActive ? 'Filters active' : 'Showing all records'}
-              </span>
-            </div>
 
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              {quickDateFilters.map((chip) => {
-                const isActive = selectedDate === chip.value || (!selectedDate && chip.value === '');
-                return (
-                  <button
-                    key={chip.label}
-                    type="button"
-                    onClick={() => handleQuickDateSelect(chip.value)}
-                    className={`group inline-flex items-center gap-2 rounded-2xl px-3 sm:px-4 py-2 text-left text-sm transition ${
-                      isActive
-                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/30'
-                        : 'bg-white/80 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
-                    }`}
-                    aria-pressed={isActive}
-                  >
-                    <span className="text-xs font-semibold uppercase tracking-wide">{chip.label}</span>
-                    <span className={`text-[11px] ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
-                      {chip.helper}
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                {quickDateFilters.map((chip) => {
+                  const isActive = selectedDate === chip.value || (!selectedDate && chip.value === '');
+                  return (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => handleQuickDateSelect(chip.value)}
+                      className={`group inline-flex items-center gap-2 rounded-2xl px-3 sm:px-4 py-2 text-left text-sm transition ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/30'
+                          : 'bg-white/80 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
+                      }`}
+                      aria-pressed={isActive}
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-wide">{chip.label}</span>
+                      <span className={`text-[11px] ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
+                        {chip.helper}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="md:col-span-2">
+                  <label htmlFor="pooja-search" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Search
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        className="h-5 w-5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.65 5.65a7.5 7.5 0 0010.998 10.999z"
+                        />
+                      </svg>
                     </span>
-                  </button>
-                );
-              })}
-            </div>
+                    <input
+                      id="pooja-search"
+                      type="text"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search by pooja name, donor, day option, or devotee"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-12 pr-4 text-sm text-slate-700 transition focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Tip: Start typing a devotee name to instantly filter matching families.
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="pooja-date" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Filter by date
+                  </label>
+                  <input
+                    id="pooja-date"
+                    type="date"
+                    value={selectedDate}
+                    onChange={(event) => setSelectedDate(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 transition focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">
+                    Showing: {selectedDate ? formatDateDisplay(selectedDate) : 'all loaded dates'}
+                  </p>
+                </div>
+                <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                      checked={postPrasadamOnly}
+                      onChange={(event) => setPostPrasadamOnly(event.target.checked)}
+                    />
+                    Post Prasadam only
+                  </label>
+                  <p className="text-xs text-slate-500">Prioritize devotees who expect postal delivery.</p>
+                </div>
+              </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="md:col-span-2">
-                <label htmlFor="pooja-search" className="block text-sm font-semibold text-slate-700 mb-2">
-                  Search
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <span className="text-sm font-medium text-slate-600">
+                  {filtersActive ? 'Active filters applied' : 'Showing all loaded records'}
+                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  {filtersActive && (
+                    <button
+                      type="button"
+                      onClick={handleClearFilters}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        className="h-4 w-4"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Clear filters
+                    </button>
+                  )}
+                  <button
+                    onClick={handleExcelDownload}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-rose-600 hover:to-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
+                  >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth={1.5}
-                      className="h-5 w-5"
+                      className="h-4 w-4"
                     >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.65 5.65a7.5 7.5 0 0010.998 10.999z"
+                        d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
                       />
                     </svg>
-                  </span>
-                  <input
-                    id="pooja-search"
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search by pooja name, donor, day option, or devotee"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-12 pr-4 text-sm text-slate-700 transition focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
-                  />
-                </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  Tip: Start typing a devotee name to instantly filter matching families.
-                </p>
-              </div>
-              <div>
-                <label htmlFor="pooja-date" className="block text-sm font-semibold text-slate-700 mb-2">
-                  Filter by date
-                </label>
-                <input
-                  id="pooja-date"
-                  type="date"
-                  value={selectedDate}
-                  onChange={(event) => setSelectedDate(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 transition focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
-                />
-                <p className="mt-2 text-xs text-slate-500">
-                  Showing: {selectedDate ? formatDateDisplay(selectedDate) : 'all loaded dates'}
-                </p>
-              </div>
-              <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                    checked={postPrasadamOnly}
-                    onChange={(event) => setPostPrasadamOnly(event.target.checked)}
-                  />
-                  Post Prasadam only
-                </label>
-                <p className="text-xs text-slate-500">Prioritize devotees who expect postal delivery.</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <span className="text-sm font-medium text-slate-600">
-                {filtersActive ? 'Active filters applied' : 'Showing all loaded records'}
-              </span>
-              <div className="flex flex-wrap items-center gap-3">
-                {filtersActive && (
+                    Download Excel
+                  </button>
                   <button
-                    type="button"
-                    onClick={handleClearFilters}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                    onClick={handlePdfDownload}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-rose-600 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -1819,570 +1833,64 @@ const PoojaDetailsPage = () => {
                       strokeWidth={1.5}
                       className="h-4 w-4"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Clear filters
-                  </button>
-                )}
-                <button
-                  onClick={handleExcelDownload}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-rose-600 hover:to-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    className="h-4 w-4"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
-                    />
-                  </svg>
-                  Download Excel
-                </button>
-                <button
-                  onClick={handlePdfDownload}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-rose-600 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    className="h-4 w-4"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7 5a2 2 0 012-2h6a2 2 0 012 2v14a2 2 0 01-2 2H9l-4-4V7a2 2 0 012-2z"
-                    />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 11h6M11 15h4" />
-                  </svg>
-                  Download PDF
-                </button>
-              </div>
-            </div>
-            {renderRecurringPlanBanner()}
-          </div>
-        </div>
-
-        {/* Table Section */}
-        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white/95 shadow-2xl ring-1 ring-slate-100">
-          <div
-            className="absolute inset-0 bg-gradient-to-br from-white via-white to-orange-50 opacity-80"
-            aria-hidden
-          />
-          <div className="relative z-10 w-full px-4 sm:px-6 py-4 sm:py-6">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center gap-4 py-16 sm:py-20">
-                <div className="h-16 w-16 animate-spin rounded-full border-4 border-orange-200 border-t-orange-600"></div>
-                <p className="text-lg font-medium text-slate-700">Loading pooja registrations...</p>
-                <p className="text-sm text-slate-500">Fetching the latest data from the temple admin API.</p>
-                <div className="w-full max-w-lg space-y-3">
-                  {[0, 1, 2].map((index) => (
-                    <div key={index} className="h-3 rounded-full bg-slate-200/80 animate-pulse"></div>
-                  ))}
-                </div>
-              </div>
-            ) : error ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50/80 p-6">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                       <path
-                        fillRule="evenodd"
-                        d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm12-3.75a.75.75 0 00-1.5 0v3.75a.75.75 0 001.5 0V8.25zm0 6.75a.75.75 0 10-1.5 0v.75a.75.75 0 001.5 0v-.75z"
-                        clipRule="evenodd"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M7 5a2 2 0 012-2h6a2 2 0 012 2v14a2 2 0 01-2 2H9l-4-4V7a2 2 0 012-2z"
                       />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 11h6M11 15h4" />
                     </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-red-800">{error}</p>
-                    <p className="text-xs text-red-600 mt-1">Please retry in a moment or refresh the page.</p>
-                  </div>
-                </div>
-              </div>
-            ) : hasData ? (
-              <div className="w-full space-y-4 sm:space-y-6">
-                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">Schedule status</p>
-                      <p className="text-xs text-slate-500">
-                        Live records grouped by when the pooja takes place.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 sm:gap-3">
-                      {statusLegendEntries.map((entry) => (
-                        <div
-                          key={entry.key}
-                          className={`flex min-w-[13rem] flex-1 flex-col gap-2 rounded-2xl px-4 py-3 text-left ${entry.legendClass}`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <span className={`h-3 w-3 rounded-full ${entry.dotClass}`}></span>
-                              <div className="text-sm font-semibold text-slate-900">{entry.label}</div>
-                            </div>
-                            <span className="text-base font-bold text-slate-900">{formatNumber(entry.count)}</span>
-                          </div>
-                          <p className="text-[11px] text-slate-600">{entry.description}</p>
-                          <div className="h-1.5 rounded-full bg-white/60">
-                            <span
-                              className={`block h-full rounded-full ${entry.dotClass}`}
-                              style={{ width: `${entry.share}%` }}
-                            ></span>
-                          </div>
-                          <span className="text-[11px] font-medium text-slate-500">
-                            {entry.share}% of view
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* View mode toggle for responsive design */}
-                <div className="flex justify-end mb-2">
-                  <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('table')}
-                      className={`px-3 py-2 text-xs font-medium rounded-l-lg ${
-                        viewMode === 'table'
-                          ? 'bg-orange-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      Table View
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('cards')}
-                      className={`px-3 py-2 text-xs font-medium rounded-r-lg ${
-                        viewMode === 'cards'
-                          ? 'bg-orange-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      Card View
-                    </button>
-                  </div>
-                </div>
-                
-                {viewMode === 'table' ? (
-                  <div
-                    className="overflow-auto rounded-2xl border border-slate-100 bg-white shadow-inner"
-                    style={{ maxHeight: '70vh' }}
-                  >
-                    <table className="min-w-[800px] w-full table-fixed divide-y divide-slate-200">
-                      <colgroup>
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '11%' }} />
-                        <col style={{ width: '17%' }} />
-                        <col style={{ width: '17%' }} />
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '11%' }} />
-                      </colgroup>
-                      <thead className="bg-slate-100/80 backdrop-blur">
-                        <tr>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Pooja ID
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Pooja Date
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Pooja Name
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Day Option
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Devotees
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Post Prasadam
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Registered By
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Registration Date
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
-                        {DAY_BUCKETS.map(({ key, label }) => {
-                          const registrations = filteredBuckets[key];
-                          if (registrations.length === 0) {
-                            return null;
-                          }
-                          const sectionLabel = selectedDate
-                            ? `Registrations for ${formatDateDisplay(selectedDate)}`
-                            : label;
-                          return (
-                            <Fragment key={key}>
-                              <tr className="bg-orange-50/80">
-                                <td colSpan={8} className="px-4 py-3">
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span className="text-sm font-bold text-orange-800">{sectionLabel}</span>
-                                    <span className="inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
-                                      <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={1.5}
-                                        className="h-3.5 w-3.5"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="M12 6v6l3 1.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                        />
-                                      </svg>
-                                      {formatNumber(registrations.length)} record(s)
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-                                {registrations.map((registration) => {
-                                  const members = Array.isArray(registration.members)
-                                    ? registration.members.filter(Boolean)
-                                    : [];
-                                  const prasadamBadgeClass = registration.post_prasadam
-                                    ? 'inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600'
-                                    : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600';
-                                  const registrationTimestamp = resolveRegistrationTimestamp(registration);
-                                  const poojaStatus = resolvePoojaStatus(registration.start_date);
-                                  const statusMeta = POOJA_STATUS_META[poojaStatus];
-                                  const isRecurringPlan = Boolean(registration.isRecurringPlan);
-                                  // Check if this registration has an updated pooja date and if it's still valid
-                                  const updatedPoojaDate = updatedPoojaDates.get(registration.id);
-                                  const shouldShowUpdatedBadge = updatedPoojaDate?.poojaDate
-                                    ? isPoojaDateValid(updatedPoojaDate.poojaDate)
-                                    : false;
-
-                                  const isEditing = !isRecurringPlan && editingRegistrationId === registration.id;
-
-                                return (
-                                  <tr
-                                    key={registration.id}
-                                    className={`bg-white transition-colors duration-150 ${statusMeta.rowHoverClass} ${isEditing ? 'ring-2 ring-orange-400 ring-inset' : ''}`}
-                                  >
-                                    <td className={`px-4 py-3 whitespace-nowrap border-l-4 ${statusMeta.rowAccentClass}`}>
-                                      <div className="space-y-0.5">
-                                        <div className="text-sm font-bold text-slate-900">{resolvePoojaId(registration)}</div>
-                                        {isRecurringPlan && (
-                                          <span className="text-[11px] text-slate-500">Recurring plan</span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 align-top">
-                                      <div className="space-y-2">
-                                        {/* Always show the original content */}
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="text-sm text-slate-700">{formatDateDisplay(registration.start_date)}</span>
-                                          <span
-                                            className={`inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold leading-none ${statusMeta.badgeClass}`}
-                                          >
-                                            {statusMeta.label}
-                                          </span>
-                                        </div>
-                                        
-                                        {/* Edit controls appear below when editing */}
-                                        {isEditing && (
-                                          <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                              <input
-                                                type="date"
-                                                value={editDateValue}
-                                                onChange={(e) => setEditDateValue(e.target.value)}
-                                                className="flex-1 rounded-md border-orange-300 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                                                disabled={editSubmitting}
-                                                autoFocus
-                                              />
-                                              <button
-                                                type="button"
-                                                onClick={submitRegistrationDateUpdate}
-                                                disabled={editSubmitting || !editDateValue}
-                                                className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                                              >
-                                                {editSubmitting ? (
-                                                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                  </svg>
-                                                ) : (
-                                                  'Save'
-                                                )}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={cancelEditingRegistrationDate}
-                                                disabled={editSubmitting}
-                                                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                                              >
-                                                Cancel
-                                              </button>
-                                            </div>
-                                            {editError && (
-                                              <p className="text-xs font-medium text-red-600">{editError}</p>
-                                            )}
-                                          </div>
-                                        )}
-                                        
-                                        {/* Edit button when not editing */}
-                                        {!isEditing && !isRecurringPlan && (
-                                          <button
-                                            type="button"
-                                            onClick={() => startEditingRegistrationDate(registration)}
-                                            className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
-                                          >
-                                            <svg
-                                              xmlns="http://www.w3.org/2000/svg"
-                                              viewBox="0 0 24 24"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              strokeWidth={1.5}
-                                              className="h-3.5 w-3.5"
-                                            >
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.75 20.902 3 21.75l.848-3.75L16.862 4.487z"
-                                              />
-                                            </svg>
-                                            Edit date
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                      <div
-                                        className="truncate text-sm font-medium text-slate-700"
-                                        title={registration.pooja_option_name ?? ''}
-                                      >
-                                        {registration.pooja_option_name?.trim() || 'N/A'}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                      <div
-                                        className="truncate text-sm text-slate-700"
-                                        title={registration.day_option_description ?? ''}
-                                      >
-                                        {registration.day_option_description?.trim() || 'N/A'}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                    <div className="space-y-1">
-                                      {members.length === 0 ? (
-                                        <span className="text-xs text-slate-400 italic">No devotee details available</span>
-                                      ) : (
-                                        members.map((member, index) => {
-                                          const name = (member?.name ?? '').trim() || 'N/A';
-                                          const familyName = resolveMemberFamilyName(member) ?? 'N/A';
-                                          const tamilStar = resolveMemberTamilStar(member) ?? 'N/A';
-                                          const gothra = resolveMemberGothra(member) ?? 'N/A';
-                                          const rasi = resolveMemberRasi(member) ?? 'N/A';
-                                          const dob = formatDobDisplay(resolveMemberDob(member));
-                                          
-                                          return (
-                                            <div key={member?.id ?? index} className="text-sm">
-                                              <div className="font-medium text-slate-800">{name}</div>
-                                              <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
-                                                <span className="inline-flex items-baseline gap-1">
-                                                  <span className="font-medium">DOB:</span>
-                                                  <span>{dob}</span>
-                                                </span>
-                                                <span className="inline-flex items-baseline gap-1">
-                                                  <span className="font-medium">Family:</span>
-                                                  <span>{familyName}</span>
-                                                </span>
-                                                <span className="inline-flex items-baseline gap-1">
-                                                  <span className="font-medium">Rasi:</span>
-                                                  <span>{rasi}</span>
-                                                </span>
-                                                <span className="inline-flex items-baseline gap-1">
-                                                  <span className="font-medium">Tamil Star:</span>
-                                                  <span>{tamilStar}</span>
-                                                </span>
-                                                <span className="inline-flex items-baseline gap-1">
-                                                  <span className="font-medium">Gothram:</span>
-                                                  <span>{gothra}</span>
-                                                </span>
-                                              </div>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <span className={prasadamBadgeClass}>
-                                        {formatBooleanLabel(registration.post_prasadam)}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 align-top">
-                                      <div className="flex flex-col gap-1 text-sm text-slate-700">
-                                        <span className="font-medium" title={registration.donor_name ?? ''}>
-                                          {resolveDonorName(registration.donor_name)}
-                                        </span>
-                                        {registration.post_prasadam && (
-                                          <span className="inline-flex items-center gap-1 text-xs text-amber-600 leading-snug">
-                                            <svg
-                                              xmlns="http://www.w3.org/2000/svg"
-                                              className="h-3.5 w-3.5 shrink-0"
-                                              viewBox="0 0 20 20"
-                                              fill="currentColor"
-                                            >
-                                              <path
-                                                fillRule="evenodd"
-                                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                                clipRule="evenodd"
-                                              />
-                                            </svg>
-                                            <span className="break-words">Ensure prasadam delivery</span>
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 align-top">
-                                      <div className="flex flex-col gap-1">
-                                        <span className="text-sm text-slate-700">
-                                          {formatDateTimeDisplay(registrationTimestamp)}
-                                        </span>
-                                        {shouldShowUpdatedBadge && (
-                                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                                            <svg
-                                              xmlns="http://www.w3.org/2000/svg"
-                                              viewBox="0 0 20 20"
-                                              fill="currentColor"
-                                              className="h-3.5 w-3.5"
-                                            >
-                                              <path
-                                                fillRule="evenodd"
-                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                                clipRule="evenodd"
-                                              />
-                                            </svg>
-                                            Pooja date updated
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  // Card view for mobile responsiveness
-                  <div className="space-y-4">
-                    {DAY_BUCKETS.map(({ key, label }) => {
-                      const registrations = filteredBuckets[key];
-                      if (registrations.length === 0) {
-                        return null;
-                      }
-                      const sectionLabel = selectedDate
-                        ? `Registrations for ${formatDateDisplay(selectedDate)}`
-                        : label;
-                      
-                      return (
-                        <div key={key} className="space-y-3">
-                          <div className="bg-orange-50/80 rounded-xl px-4 py-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-orange-800">{sectionLabel}</span>
-                              <span className="inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={1.5}
-                                  className="h-3.5 w-3.5"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M12 6v6l3 1.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                  />
-                                </svg>
-                                {formatNumber(registrations.length)} record(s)
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {registrations.map((registration) => (
-                              <RegistrationCard key={registration.id} registration={registration} />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 px-6 py-12 sm:py-16 text-center">
-                <div className="bg-gradient-to-br from-orange-100 to-rose-200 h-20 w-20 sm:h-24 sm:w-24 rounded-full flex items-center justify-center shadow-inner">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    className="h-10 w-10 sm:h-12 sm:w-12 text-orange-600"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl font-semibold text-slate-800 mb-2">No registrations match your filters</p>
-                  <p className="max-w-md text-slate-500 mx-auto text-sm">
-                    {filtersActive
-                      ? 'Try adjusting the date or removing filters to see more records.'
-                      : 'We surface registrations for the previous day, today, and tomorrow as bookings are created.'}
-                  </p>
-                </div>
-                {filtersActive && (
-                  <button
-                    onClick={handleClearFilters}
-                    className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-orange-600 to-rose-700 px-5 py-2.5 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-orange-700 hover:to-rose-800 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                      className="h-4 w-4"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Clear all filters
+                    Download PDF
                   </button>
-                )}
+                </div>
               </div>
-            )}
+              {renderRecurringPlanBanner()}
+            </div>
           </div>
-        </div>
+          {cartSnapshotsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <span className="h-3 w-3 animate-spin rounded-full border border-slate-200 border-t-orange-500"></span>
+              Loading cart snapshots…
+            </div>
+          ) : cartSnapshotsError ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-3 text-sm text-rose-800">
+              Unable to load cart snapshots. {cartSnapshotsError}
+            </div>
+          ) : filteredPendingCartRows.length === 0 ? (
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              No donors currently have pending cart items.
+            </div>
+          ) : (
+            <div className="overflow-auto rounded-2xl border border-slate-100 bg-slate-50/60">
+              <table className="min-w-full table-fixed text-sm">
+                <thead className="bg-white/80 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Pooja Date</th>
+                    <th className="px-4 py-3 text-left font-semibold">Tamil Star</th>
+                    <th className="px-4 py-3 text-left font-semibold">Day Option</th>
+                    <th className="px-4 py-3 text-left font-semibold">Donor Name</th>
+                    <th className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredPendingCartRows.map((row, idx) => (
+                    <tr key={`${row.cartId}-${idx}`}>
+                      <td className="px-4 py-3 text-slate-700">
+                        {formatDateDisplay(row.poojaDate)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{row.tamilStar}</td>
+                      <td className="px-4 py-3 text-slate-700">{row.dayOption}</td>
+                      <td className="px-4 py-3 text-slate-700">{row.donorName}</td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {row.postPrasadam ? 'Yes' : 'No'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

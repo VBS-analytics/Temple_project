@@ -2,6 +2,27 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { RecurrenceFrequency, RecurrenceKind } from '../types/recurrence';
 
+export interface CartMember {
+  id: number | null;
+  name: string | null;
+  relationship?: string | null;
+  gender?: string | null;
+  tamilStar?: string | null;
+  tamil_star?: string | null;
+  gothra?: string | null;
+  gothram?: string | null;
+  rasi?: string | null;
+  dob?: string | null;
+  date_of_birth?: string | null;
+  familyName?: string | null;
+  family_name?: string | null;
+  selectionKey?: string | null;
+  selection_key?: string | null;
+  donorName?: string | null;
+  donorPhone?: string | null;
+  donorId?: number | null;
+}
+
 export interface CartItem {
   cartId: string;
   poojaId: number;
@@ -36,21 +57,7 @@ export interface CartItem {
   recurrenceFrequency?: RecurrenceFrequency;
   recurrenceOneTimeDate?: string | null;
   targetDonorId?: number | null;
-  members?: Array<{
-    id: number | null;
-    name: string | null;
-    relationship?: string | null;
-    gender?: string | null;
-    tamilStar?: string | null;
-    gothra?: string | null;
-    rasi?: string | null;
-    dob?: string | null;
-    familyName?: string | null;
-    selectionKey?: string | null;
-    donorName?: string | null;
-    donorPhone?: string | null;
-    donorId?: number | null;
-  }>;
+  members?: CartMember[];
 }
 
 type CartCollection = Record<string, CartItem[]>;

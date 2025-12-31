@@ -6,6 +6,7 @@ import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
 import api, { extractResults } from '../../lib/api';
 import { loadPdfMake } from '../../lib/pdfMakeLoader';
+import type { CartItem } from '../../store/cart';
 import { isAdmin, useAuthStore } from '../../store/auth';
 import * as XLSX from 'xlsx';
 
@@ -39,6 +40,14 @@ interface PoojaRegistrationEntry {
   created_at?: string | null;
   status?: string | null;
   is_group_registration?: boolean | null;
+}
+
+interface CartSnapshotRecord {
+  donor_id?: number | null;
+  donor_name?: string | null;
+  donor_phone?: string | null;
+  items?: CartItem[] | null;
+  updated_at?: string | null;
 }
 
 const TIMEFRAME_FILTERS: { label: string; value: TimeframeOption }[] = [
@@ -118,6 +127,33 @@ const getRecordTimestamp = (record: PaymentRecordEntry) => {
   }
 
   return 0;
+};
+
+const convertSnapshotToRecords = (snapshot: CartSnapshotRecord): PaymentRecordEntry[] => {
+  const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+  return items.map((item) => {
+    const startDate = item.customDayDate ?? item.bookingDate ?? null;
+    const dueValue = Number(item.amount);
+    const numericDue = Number.isFinite(dueValue) ? dueValue : 0;
+    const uniqueId = `cart-${snapshot.donor_id ?? 'unknown'}-${item.cartId}`;
+    return {
+      id: uniqueId,
+      donor: snapshot.donor_id ?? null,
+      donor_name: snapshot.donor_name ?? null,
+      pooja_option: item.poojaName ?? item.poojaCode ?? 'Cart item',
+      registration: null,
+      registration_start_date: startDate,
+      registration_total_amount: numericDue,
+      pooja_due_amount: numericDue,
+      amount: 0,
+      transaction_reference: null,
+      status: 'pending',
+      registration_status: 'pending',
+      registration_donor_name: snapshot.donor_name ?? null,
+      registration_is_group_registration: Boolean(item.recurrenceKind),
+      created_at: snapshot.updated_at ?? startDate ?? null,
+    };
+  });
 };
 
 const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
@@ -212,6 +248,7 @@ const PaymentStatementPage = () => {
   const showDonorFilter = isAdminUser;
   const [statusOverrideMap, setStatusOverrideMap] = useState<Record<string, string>>({});
   const [clubOverrideMap, setClubOverrideMap] = useState<Record<string, string>>({});
+  const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
 
   const applyOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
     setStatusOverrideMap((prev) => {
@@ -381,6 +418,36 @@ const PaymentStatementPage = () => {
     };
   }, [appliedDonorFilter, registrationsVersion]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadCartSnapshots = async () => {
+      try {
+        const params: Record<string, string> = {};
+        if (appliedDonorFilter) {
+          params.phone = appliedDonorFilter;
+        }
+        const response = await api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/', {
+          params: Object.keys(params).length ? params : undefined,
+        });
+        if (!isMounted) {
+          return;
+        }
+        const payload: CartSnapshotRecord[] = Array.isArray(response.data) ? response.data : [];
+        setCartSnapshots(payload);
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+        console.error('Unable to load cart snapshots', err);
+        setCartSnapshots([]);
+      }
+    };
+    loadCartSnapshots();
+    return () => {
+      isMounted = false;
+    };
+  }, [appliedDonorFilter]);
+
   const handleApplyDonorFilter = () => {
     if (!isAdminUser || !canApplyDonorFilter) {
       return;
@@ -412,7 +479,7 @@ const PaymentStatementPage = () => {
   };
 
   const mergedRecords = useMemo(() => {
-    if (!records.length && !registrations.length) {
+    if (!records.length && !registrations.length && !cartSnapshots.length) {
       return [];
     }
     const paidRegistrationIds = new Set<number>();
@@ -443,8 +510,9 @@ const PaymentStatementPage = () => {
           registration_is_group_registration: registration.is_group_registration ?? false,
         }),
       );
-    return [...records, ...registrationRecords];
-  }, [records, registrations]);
+    const cartRecords = cartSnapshots.flatMap((snapshot) => convertSnapshotToRecords(snapshot));
+    return [...records, ...registrationRecords, ...cartRecords];
+  }, [records, registrations, cartSnapshots]);
 
   const range = useMemo(
     () => getTimeframeRange(referenceDateValue, timeframe),
