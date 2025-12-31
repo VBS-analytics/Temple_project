@@ -9,6 +9,7 @@ from .views import (
     DonorMessageTemplateViewSet,
     FeaturedPoojaViewSet,
     PoojaCartSnapshotAssignView,
+    PoojaCartSnapshotReportView,
     PoojaCartSnapshotView,
     PoojaDayOptionViewSet,
     PoojaOptionViewSet,
@@ -30,6 +31,7 @@ router.register('featured-poojas', FeaturedPoojaViewSet, basename='featured-pooj
 urlpatterns = [
     path('cart-snapshots/assign/', PoojaCartSnapshotAssignView.as_view(), name='pooja-cart-snapshots-assign'),
     path('cart-snapshots/', PoojaCartSnapshotView.as_view(), name='pooja-cart-snapshots'),
+    path('cart-snapshots/report/', PoojaCartSnapshotReportView.as_view(), name='pooja-cart-snapshots-report'),
     path('registrations/combine-lookup/', CombinePaymentLookupView.as_view(), name='pooja-registrations-combine-lookup'),
     path('registrations/recent-public/', RecentPoojaRegistrationsView.as_view(), name='pooja-registrations-recent-public'),
     path('registrations/today-public/', TodayPoojaRegistrationsPublicView.as_view(), name='pooja-registrations-today-public'),

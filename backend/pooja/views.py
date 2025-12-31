@@ -38,6 +38,7 @@ from .serializers import (
     DailyMessageSerializer,
     DonorMessageTemplateSerializer,
     FeaturedPoojaSerializer,
+    PoojaCartSnapshotReportSerializer,
     PoojaCartSnapshotSerializer,
     PoojaDayOptionSerializer,
     PoojaOptionSerializer,
@@ -816,6 +817,31 @@ class CombinePaymentLookupView(APIView):
             "items": items,
         }
         return Response(payload)
+
+
+class PoojaCartSnapshotReportView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def get(self, request):
+        donor_id_raw = request.query_params.get("donor_id")
+        donor_phone_raw = request.query_params.get("phone")
+        queryset = PoojaCartSnapshot.objects.select_related("donor").order_by("-updated_at")
+
+        if donor_id_raw:
+            try:
+                donor_id = int(donor_id_raw)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "donor_id must be an integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(donor_id=donor_id)
+        elif donor_phone_raw:
+            donor_phone = donor_phone_raw.strip()
+            queryset = queryset.filter(donor__phone_number__iexact=donor_phone)
+
+        serializer = PoojaCartSnapshotReportSerializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 class RecentPoojaRegistrationsView(APIView):
