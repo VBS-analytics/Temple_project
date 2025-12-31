@@ -20,6 +20,16 @@ interface DonorRecord {
     rasi?: string | null;
     tamil_star?: string | null;
     monthly_donation_amount?: number | string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_line3?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    notes?: string | null;
+    gender?: string | null;
+    date_of_birth?: string | null;
+    tamil_name?: string | null;
   };
   members?: {
     id?: number;
@@ -47,6 +57,39 @@ const formatFilenameDate = (value: Date) =>
 const displayValue = (value?: string | number | null) =>
   value === undefined || value === null || value === '' ? '—' : String(value);
 
+const formatDateValue = (value?: string | number | null) => {
+  if (!value) {
+    return '—';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatProfileAddress = (profile?: DonorRecord['profile']) => {
+  if (!profile) {
+    return '—';
+  }
+  const parts = [
+    profile.address_line1,
+    profile.address_line2,
+    profile.address_line3,
+    profile.city,
+    profile.state,
+    profile.postal_code,
+  ]
+    .map((part) => (part ?? '').trim())
+    .filter((part) => part.length > 0);
+
+  return parts.length > 0 ? parts.join(', ') : '—';
+};
+
 const FAMILY_NAME_UNKNOWN = 'Unknown Family';
 
 const sanitizeFilename = (value: string) =>
@@ -72,6 +115,10 @@ const createDonorSheetRows = (donor: DonorRecord): (string | number)[][] => {
     ['Rasi', displayValue(donor.profile?.rasi)],
     ['Gothra', displayValue(donor.profile?.gothra)],
     ['Tamil Star', displayValue(donor.profile?.tamil_star)],
+    ['Date of Birth', formatDateValue(donor.profile?.date_of_birth)],
+    ['Donor Header Text', displayValue(donor.profile?.notes)],
+    ['Gender', displayValue(donor.profile?.gender)],
+    ['Address', formatProfileAddress(donor.profile)],
     ['Monthly Donation Amount', displayValue(donor.profile?.monthly_donation_amount)],
   ];
 
@@ -271,32 +318,10 @@ const triggerBlobDownload = (blob: Blob, filename: string) => {
 };
 
 // ✅ FIXED: Uses getBlob() (most reliable) + ensures tamil font is usable
-const POOJA_REPORT_STATIC_CONTENT: Partial<Record<PoojaReportKey, string[]>> = {
-  saturdayNavagraha: [
-    'சனிக்கிழமை',
-    'சிவன் கோவிலில் நவக்கிரங்களுக்கு அபிஷேகம்+ வஸ்திரம்+ அர்சனை கல்  உபயம்',
-  ],
-  pradosha: ['ப்ரதோஷம் பூஜைக்கு  காணிக்கை கொடுத்த நம் குழு நபர்கள்'],
-};
-
-const buildReportSpecificContent = (key?: PoojaReportKey): Content[] => {
-  if (!key) return [];
-
-  const lines = POOJA_REPORT_STATIC_CONTENT[key];
-  if (!lines?.length) return [];
-
-  return lines.map((line) => ({
-    text: line,
-    style: 'subheader',
-    margin: [0, 0, 0, 8],
-  }));
-};
-
 const downloadPoojaReportPdf = async (
   rows: PoojaReportRow[],
   filenameBase: string,
   title: string,
-  reportKey?: PoojaReportKey,
 ) => {
   if (typeof window === 'undefined') {
     console.error('PDF download is only available in the browser');
@@ -334,10 +359,39 @@ const downloadPoojaReportPdf = async (
   });
 
   const headerContentLines: Content[] = [
-    { text: title, style: 'header' },
-    { text: `Records: ${rows.length}`, style: 'subheader' },
-    { text: `Generated on: ${generatedOn}`, style: 'subheader', margin: [0, 0, 0, 8] },
-    ...buildReportSpecificContent(reportKey),
+    {
+      columns: [
+        {
+          width: '*',
+          stack: [
+            { text: title, style: 'header' },
+            {
+              text: `Following list of donor for ${title}`,
+              style: 'subheader',
+              margin: [0, 0, 0, 8],
+            },
+          ],
+        },
+        {
+          width: 'auto',
+          stack: [
+            {
+              text: `Records: ${rows.length}`,
+              style: 'subheader',
+              alignment: 'right',
+            },
+            {
+              text: `Generated on: ${generatedOn}`,
+              style: 'subheader',
+              alignment: 'right',
+              margin: [0, 0, 0, 8],
+            },
+          ],
+        },
+      ],
+      columnGap: 32,
+      margin: [0, 0, 0, 12],
+    },
   ];
 
   const docDefinition: TDocumentDefinitions = {
@@ -427,7 +481,7 @@ const ReportPage = () => {
 
       const donorRows = donors.map((donor, index) => ({
         'S.no': index + 1,
-        'Temple Donor ID': displayValue(donor.profile?.donor_id ?? '—'),
+        'Donor ID': displayValue(donor.profile?.donor_id ?? '—'),
         'User ID': donor.user.id,
         Name: displayValue(donor.user.name),
         Phone: displayValue(donor.user.phone_number),
@@ -436,6 +490,10 @@ const ReportPage = () => {
         Rasi: displayValue(donor.profile?.rasi),
         Gothra: displayValue(donor.profile?.gothra),
         'Tamil Star': displayValue(donor.profile?.tamil_star),
+        'Date of Birth': formatDateValue(donor.profile?.date_of_birth),
+        'Donor Header Text': displayValue(donor.profile?.notes),
+        Gender: displayValue(donor.profile?.gender),
+        Address: formatProfileAddress(donor.profile),
         'Monthly Donation Amount': displayValue(donor.profile?.monthly_donation_amount),
       }));
 
@@ -458,7 +516,7 @@ const ReportPage = () => {
       const workbook = XLSX.utils.book_new();
       const donorHeaderKeys = [
         'S.no',
-        'Temple Donor ID',
+        'Donor ID',
         'User ID',
         'Name',
         'Phone',
@@ -467,6 +525,10 @@ const ReportPage = () => {
         'Rasi',
         'Gothra',
         'Tamil Star',
+        'Date of Birth',
+        'Donor Header Text',
+        'Gender',
+        'Address',
         'Monthly Donation Amount',
       ];
       const donorSheet = XLSX.utils.json_to_sheet(donorRows, { header: donorHeaderKeys });
@@ -591,7 +653,7 @@ const ReportPage = () => {
           return;
         }
 
-        await downloadPoojaReportPdf(rows, filenameBase, report.label, key);
+        await downloadPoojaReportPdf(rows, filenameBase, report.label);
       } catch (error) {
         console.error(`Failed to download ${report.label} report`, error);
         setExportError(error instanceof Error ? error.message : report.errorMessage);
