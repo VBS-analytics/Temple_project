@@ -258,7 +258,11 @@ const buildRegistrationPayload = (item: CartItem) => {
   return payload;
 };
 
-const recordRegistrations = async (items: CartItem[], transactionReference: string) => {
+const recordRegistrations = async (
+  items: CartItem[],
+  transactionReference: string,
+  paymentDate?: string,
+) => {
   for (const item of items) {
     const payload = buildRegistrationPayload(item);
     const response = await api.post('pooja/registrations/', payload);
@@ -269,6 +273,7 @@ const recordRegistrations = async (items: CartItem[], transactionReference: stri
       mode: 'upi',
       status: 'success',
       transaction_reference: transactionReference,
+      payment_month: paymentDate || undefined,
       notes: payload.additional_notes ?? '',
     });
   }
@@ -366,6 +371,7 @@ const PaymentPage = () => {
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
   const [transactionReference, setTransactionReference] = useState('');
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
@@ -424,6 +430,7 @@ const PaymentPage = () => {
     if (!paymentSnapshot) {
       setRegistrationError(null);
       setTransactionReference('');
+      setPaymentDate(new Date().toISOString().slice(0, 10));
     }
   }, [paymentSnapshot]);
 
@@ -531,8 +538,13 @@ const PaymentPage = () => {
     setTransactionReferenceError(null);
     setRegistrationError(null);
     setRegistrationInProgress(true);
+    const normalizedPaymentDate = paymentDate.trim();
     try {
-      await recordRegistrations(paymentSnapshot.items, trimmedReference);
+      await recordRegistrations(
+        paymentSnapshot.items,
+        trimmedReference,
+        normalizedPaymentDate || undefined,
+      );
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
       return;
@@ -863,26 +875,40 @@ const PaymentPage = () => {
                 </div>*/}
               </RevealableAccountSection>
             </div>
-            <div className="mt-6">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="transaction-reference">
-                Transaction ID or UPI ID
-              </label>
-              <input
-                id="transaction-reference"
-                type="text"
-                value={transactionReference}
-                onChange={(event) => {
-                  setTransactionReference(event.target.value);
-                  if (transactionReferenceError) {
-                    setTransactionReferenceError(null);
-                  }
-                }}
-                placeholder="Enter the transaction reference or UPI ID used"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
-              />
-              {transactionReferenceError && (
-                <p className="mt-2 text-sm text-rose-600">{transactionReferenceError}</p>
-              )}
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="transaction-reference">
+                  Transaction ID or UPI ID
+                </label>
+                <input
+                  id="transaction-reference"
+                  type="text"
+                  value={transactionReference}
+                  onChange={(event) => {
+                    setTransactionReference(event.target.value);
+                    if (transactionReferenceError) {
+                      setTransactionReferenceError(null);
+                    }
+                  }}
+                  placeholder="Enter the transaction reference or UPI ID used"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                />
+                {transactionReferenceError && (
+                  <p className="mt-2 text-sm text-rose-600">{transactionReferenceError}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="payment-date">
+                  Payment date
+                </label>
+                <input
+                  id="payment-date"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(event) => setPaymentDate(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                />
+              </div>
             </div>
           </div>
         )}
