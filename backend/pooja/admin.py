@@ -10,6 +10,7 @@ from .models import (
     PoojaOption,
     PoojaRegistration,
     PoojaRegistrationMember,
+    SpecialAnnouncement,
 )
 
 
@@ -29,6 +30,12 @@ class PoojaDayOptionAdmin(admin.ModelAdmin):
 
 @admin.register(DailyMessage)
 class DailyMessageAdmin(admin.ModelAdmin):
+    list_display = ("label",)
+    search_fields = ("label",)
+
+
+@admin.register(SpecialAnnouncement)
+class SpecialAnnouncementAdmin(admin.ModelAdmin):
     list_display = ("label",)
     search_fields = ("label",)
 

@@ -59,6 +59,20 @@ class DailyMessage(models.Model):
         return self.label
 
 
+class SpecialAnnouncement(models.Model):
+    label = models.CharField(max_length=64)
+    description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        verbose_name = "Special Announcement"
+        verbose_name_plural = "Special Announcements"
+
+    def __str__(self):
+        return self.label
+
+
 class DonorMessageTemplate(models.Model):
     donor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="daily_texts")
     preferred_date = models.DateField(null=True, blank=True)

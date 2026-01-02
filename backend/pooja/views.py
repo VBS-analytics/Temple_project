@@ -24,6 +24,7 @@ from .models import (
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
+    SpecialAnnouncement,
     RecurrenceKind,
     RecurringPoojaPlan,
 )
@@ -47,6 +48,7 @@ from .serializers import (
     RecurringPoojaPlanUpdateSerializer,
     LandingPoojaRegistrationSerializer,
     PublicTodayPoojaRegistrationSerializer,
+    SpecialAnnouncementSerializer,
 )
 
 PAUSE_REASON_NO_POJA_NO_PAYMENT = "No Pooja and No Payment"
@@ -251,6 +253,12 @@ class FeaturedPoojaViewSet(viewsets.ModelViewSet):
 class DailyMessageViewSet(viewsets.ModelViewSet):
     queryset = DailyMessage.objects.all()
     serializer_class = DailyMessageSerializer
+    permission_classes = (ReadOnlyOrAdmin,)
+
+
+class SpecialAnnouncementViewSet(viewsets.ModelViewSet):
+    queryset = SpecialAnnouncement.objects.all()
+    serializer_class = SpecialAnnouncementSerializer
     permission_classes = (ReadOnlyOrAdmin,)
 
 
