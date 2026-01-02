@@ -637,7 +637,7 @@ const DonorDetailsPage = () => {
   };
 
   const handleCustomNumberChange = (donorId: number, value: string) => {
-    if (value !== '' && !/^\d+$/.test(value)) {
+    if (value !== '' && !/^-?\d*$/.test(value)) {
       return;
     }
     setCustomNumberValues((prev) => ({ ...prev, [donorId]: value }));
@@ -1642,7 +1642,6 @@ const DonorDetailsPage = () => {
                               type="number"
                               inputMode="numeric"
                               step="1"
-                              min="0"
                               className="no-spinner w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none"
                               value={inlineCustomNumber}
                               onChange={(event) => handleCustomNumberChange(user.id, event.target.value)}
@@ -1924,7 +1923,6 @@ const DonorDetailsPage = () => {
                                       type="number"
                                       inputMode="numeric"
                                       step="1"
-                                      min="0"
                                       className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
                                       value={donorEditForm.custom_number}
                                       onChange={handleDonorEditChange}
