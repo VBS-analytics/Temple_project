@@ -16,6 +16,7 @@ from .views import (
     PoojaRegistrationViewSet,
     RecurringPoojaPlanViewSet,
     RecentPoojaRegistrationsView,
+    SpecialAnnouncementViewSet,
     TodayPoojaRegistrationsPublicView,
 )
 
@@ -23,6 +24,7 @@ router = DefaultRouter()
 router.register('options', PoojaOptionViewSet, basename='pooja-options')
 router.register('day-options', PoojaDayOptionViewSet, basename='pooja-day-options')
 router.register('daily-messages', DailyMessageViewSet, basename='pooja-daily-messages')
+router.register('special-announcements', SpecialAnnouncementViewSet, basename='pooja-special-announcements')
 router.register('donor-messages', DonorMessageTemplateViewSet, basename='pooja-donor-messages')
 router.register('registrations', PoojaRegistrationViewSet, basename='pooja-registrations')
 router.register('recurrence/plans', RecurringPoojaPlanViewSet, basename='pooja-recurrence-plans')

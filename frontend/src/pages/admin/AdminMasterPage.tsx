@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import api, { extractResults } from '../../lib/api';
@@ -67,6 +67,26 @@ interface PoojaOption {
   parent_id: number | null;
 }
 
+interface DailyMessageItem {
+  id: number;
+  label: string;
+  header_text: string;
+  footer_text: string;
+}
+
+interface DailyScheduleEntry {
+  id: number;
+  label: string;
+  description: string;
+  messageId?: number;
+}
+
+interface SpecialAnnouncementEntry {
+  id: number;
+  label: string;
+  description: string;
+}
+
 type DayOptionFormValues = {
   code: string;
   description: string;
@@ -80,6 +100,71 @@ type PoojaOptionFormValues = {
   minRate: string;
   maxRate: string;
   headerId: string;
+};
+
+const STATIC_DAILY_HEADER_TEXT: DailyScheduleEntry[] = [
+  {
+    id: 1,
+    label: 'Sunday',
+    description:
+      'ஞாயிறு  கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில்,  * பெருமாள் கோவில்',
+  },
+  {
+    id: 2,
+    label: 'Monday',
+    description:
+      'திங்கட் கிழமை கிழமை அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்',
+  },
+  {
+    id: 3,
+    label: 'Tuesday',
+    description:
+      'செவ்வாய்  கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்',
+  },
+  {
+    id: 4,
+    label: 'Wednesday',
+    description:
+      'கிழம அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்',
+  },
+  {
+    id: 5,
+    label: 'Thursday',
+    description:
+      'வியாழன் கிழமை அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்',
+  },
+  {
+    id: 6,
+    label: 'Friday',
+    description:
+      'வெள்ளி  கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்',
+  },
+  {
+    id: 7,
+    label: 'Saturday',
+    description:
+      'சனி கிழமை அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை',
+  },
+];
+
+const rebuildDailySchedule = (
+  messages: DailyMessageItem[],
+  previous: DailyScheduleEntry[],
+): DailyScheduleEntry[] => {
+  const messageById = new Map(messages.map((message) => [message.id, message]));
+  return STATIC_DAILY_HEADER_TEXT.map((staticEntry) => {
+    const previousEntry = previous.find((entry) => entry.id === staticEntry.id);
+    const candidateById =
+      previousEntry?.messageId != null ? messageById.get(previousEntry.messageId) : undefined;
+    const candidateByLabel = messages.find((message) => message.label === staticEntry.label);
+    const source = candidateById ?? candidateByLabel;
+    return {
+      id: staticEntry.id,
+      label: source?.label ?? previousEntry?.label ?? staticEntry.label,
+      description: source?.header_text ?? previousEntry?.description ?? staticEntry.description,
+      messageId: source?.id ?? previousEntry?.messageId,
+    };
+  });
 };
 
 type HeaderFormValues = {
@@ -104,7 +189,7 @@ const AdminMasterPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra'>('pooja');
+  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily'>('pooja');
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -120,6 +205,17 @@ const AdminMasterPage = () => {
   const [newGothraName, setNewGothraName] = useState('');
   const [editingGothraId, setEditingGothraId] = useState<number | null>(null);
   const [editingGothraName, setEditingGothraName] = useState('');
+  const [isDailyLoading, setIsDailyLoading] = useState(false);
+  const [dailyError, setDailyError] = useState('');
+  const [dailySchedule, setDailySchedule] = useState(STATIC_DAILY_HEADER_TEXT);
+  const [dailyScheduleSavingId, setDailyScheduleSavingId] = useState<number | null>(null);
+  const [editingDailyId, setEditingDailyId] = useState<number | null>(null);
+  const [editingDailyForm, setEditingDailyForm] = useState({ label: '', description: '' });
+  const [specialAnnouncements, setSpecialAnnouncements] = useState<SpecialAnnouncementEntry[]>([]);
+  const [specialError, setSpecialError] = useState('');
+  const [editingSpecialId, setEditingSpecialId] = useState<number | null>(null);
+  const [editingSpecialForm, setEditingSpecialForm] = useState({ label: '', description: '' });
+  const [newSpecialAnnouncement, setNewSpecialAnnouncement] = useState({ label: '', description: '' });
 
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
@@ -269,7 +365,7 @@ const AdminMasterPage = () => {
         )
       },
       { 
-        label: 'English Day Codes', 
+        label: 'Pooja Options', 
         value: englishDayOptions.length, 
         helper: 'Weekday & special day tags',
         icon: (
@@ -299,7 +395,7 @@ const AdminMasterPage = () => {
   };
 
   // Enhanced error handling utility
-  const extractErrorMessage = (error: any): string => {
+  const extractErrorMessage = useCallback((error: any): string => {
     if (error?.response?.data) {
       const errorData = error.response.data;
       if (typeof errorData === 'string') {
@@ -323,6 +419,150 @@ const AdminMasterPage = () => {
       return 'Network error - no response from server';
     }
     return 'Unknown error occurred';
+  }, []);
+
+  const loadDailyMessages = useCallback(async () => {
+    setIsDailyLoading(true);
+    setDailyError('');
+    try {
+      const response = await api.get('/pooja/daily-messages/', {
+        params: { page_size: 200, ordering: 'label' },
+      });
+      const messages = extractResults<DailyMessageItem>(response.data);
+      setDailySchedule((prev) => rebuildDailySchedule(messages, prev));
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      setDailyError(`Unable to load daily header text: ${errorMessage}`);
+    } finally {
+      setIsDailyLoading(false);
+    }
+  }, [extractErrorMessage]);
+
+  const loadSpecialAnnouncements = useCallback(async () => {
+    setSpecialError('');
+    try {
+      const response = await api.get('/pooja/special-announcements/', {
+        params: { page_size: 200, ordering: 'created_at' },
+      });
+      const announcements = extractResults<SpecialAnnouncementEntry>(response.data);
+      setSpecialAnnouncements(announcements);
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      setSpecialError(`Unable to load special announcements: ${errorMessage}`);
+    }
+  }, [extractErrorMessage]);
+
+  const startDailyEdit = (item: DailyScheduleEntry) => {
+    setEditingDailyId(item.id);
+    setEditingDailyForm({ label: item.label, description: item.description });
+  };
+
+  const cancelDailyEdit = () => {
+    setEditingDailyId(null);
+    setEditingDailyForm({ label: '', description: '' });
+  };
+
+  const saveDailyEdit = async (id: number) => {
+    const trimmedLabel = editingDailyForm.label.trim();
+    if (!trimmedLabel) {
+      setNotice('Day label cannot be empty.');
+      return;
+    }
+    const scheduleEntry = dailySchedule.find((entry) => entry.id === id);
+    if (!scheduleEntry) {
+      setNotice('Unable to find the selected schedule entry.');
+      return;
+    }
+    setDailyScheduleSavingId(id);
+    try {
+      if (scheduleEntry.messageId) {
+        await api.patch(`/pooja/daily-messages/${scheduleEntry.messageId}/`, {
+          label: trimmedLabel,
+          header_text: editingDailyForm.description,
+        });
+      } else {
+        await api.post('/pooja/daily-messages/', {
+          label: trimmedLabel,
+          header_text: editingDailyForm.description,
+          footer_text: '',
+        });
+      }
+      setDailySchedule((prev) =>
+        prev.map((entry) =>
+          entry.id === id
+            ? { ...entry, label: trimmedLabel, description: editingDailyForm.description }
+            : entry,
+        ),
+      );
+      setNotice('Daily schedule updated.');
+      cancelDailyEdit();
+      await loadDailyMessages();
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      setNotice(`Error updating daily schedule: ${errorMessage}`);
+    } finally {
+      setDailyScheduleSavingId(null);
+    }
+  };
+
+  const updateDailyFormField = (field: 'label' | 'description', value: string) => {
+    setEditingDailyForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const startSpecialEdit = (item: SpecialAnnouncementEntry) => {
+    setEditingSpecialId(item.id);
+    setEditingSpecialForm({ label: item.label, description: item.description });
+  };
+
+  const cancelSpecialEdit = () => {
+    setEditingSpecialId(null);
+    setEditingSpecialForm({ label: '', description: '' });
+  };
+
+  const saveSpecialEdit = async (id: number) => {
+    const trimmedLabel = editingSpecialForm.label.trim();
+    if (!trimmedLabel) {
+      setNotice('Announcement label cannot be empty.');
+      return;
+    }
+    try {
+      const response = await api.patch(`/pooja/special-announcements/${id}/`, {
+        label: trimmedLabel,
+        description: editingSpecialForm.description,
+      });
+      const updated: SpecialAnnouncementEntry = response.data;
+      setSpecialAnnouncements((prev) =>
+        prev.map((entry) =>
+          entry.id === id
+            ? { ...entry, label: updated.label, description: updated.description }
+            : entry,
+        ),
+      );
+      cancelSpecialEdit();
+      setNotice('Special announcement updated.');
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      setNotice(`Error updating special announcement: ${errorMessage}`);
+    }
+  };
+
+  const handleAddSpecialAnnouncement = async () => {
+    const label = newSpecialAnnouncement.label.trim();
+    const description = newSpecialAnnouncement.description.trim();
+    if (!label || !description) {
+      setNotice('Provide both label and description to add an announcement.');
+      return;
+    }
+    try {
+      const response = await api.post('/pooja/special-announcements/', { label, description });
+      const created: SpecialAnnouncementEntry = response.data;
+      setSpecialAnnouncements((prev) => [...prev, created]);
+      setNewSpecialAnnouncement({ label: '', description: '' });
+      setNotice('Special announcement added.');
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      setNotice(`Error adding special announcement: ${errorMessage}`);
+    }
   };
 
   const handleAddGothra = async () => {
@@ -452,6 +692,14 @@ const AdminMasterPage = () => {
   useEffect(() => {
     loadGothraOptions();
   }, [loadGothraOptions]);
+
+  useEffect(() => {
+    loadDailyMessages();
+  }, [loadDailyMessages]);
+
+  useEffect(() => {
+    loadSpecialAnnouncements();
+  }, [loadSpecialAnnouncements]);
 
   useEffect(() => {
     if (editingGothraId && !gothraOptionEntries.some((entry) => entry.id === editingGothraId)) {
@@ -982,7 +1230,7 @@ const AdminMasterPage = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    English Day Codes
+                    Pooja Options
                   </div>
                 </button>
                 <button
@@ -1028,6 +1276,21 @@ const AdminMasterPage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     List of Gothram
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('daily')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'daily'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 7h14M5 12h10M5 17h6" />
+                    </svg>
+                    Daily Pooja Header Text
                   </div>
                 </button>
               </nav>
@@ -1626,7 +1889,7 @@ const AdminMasterPage = () => {
             <div className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-slate-900">Day Options — English Codes</h2>
+                  <h2 className="text-xl font-bold text-slate-900">Daily Pooja Options</h2>
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <span>{englishDayOptions.length} codes</span>
                   </div>
@@ -1935,6 +2198,231 @@ const AdminMasterPage = () => {
                   })}
                 </div>
               </div>
+            </div>
+          )}
+          {activeTab === 'daily' && (
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-900">Daily Pooja Header Text</h2>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>{dailySchedule.length + specialAnnouncements.length} entries</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={loadDailyMessages}
+                    disabled={isDailyLoading}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 disabled:opacity-60"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 transition ${isDailyLoading ? 'animate-spin' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h5M20 20v-5h-5M5.64 5.64a9 9 0 0112.72 0M5.64 18.36a9 9 0 0012.72 0"
+                      />
+                    </svg>
+                    Refresh
+                  </button>
+                  <span className="text-xs text-slate-400">Live updates</span>
+                </div>
+              </div>
+              <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-900">Daily Schedule</h3>
+                  <span className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Temple Timing</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full table-fixed divide-y divide-slate-200 text-sm text-slate-700">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left w-1/4">Day</th>
+                        <th className="px-3 py-2 text-left">Details</th>
+                        <th className="px-3 py-2 text-right w-32">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {dailySchedule.map((item) => (
+                        <tr key={item.id} className="align-top">
+                          <td className="px-3 py-2">
+                            {editingDailyId === item.id ? (
+                              <input
+                                value={editingDailyForm.label}
+                                onChange={(event) => updateDailyFormField('label', event.target.value)}
+                                className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                              />
+                            ) : (
+                              <span className="font-semibold text-slate-900">{item.label}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {editingDailyId === item.id ? (
+                              <textarea
+                                value={editingDailyForm.description}
+                                rows={2}
+                                onChange={(event) =>
+                                  updateDailyFormField('description', event.target.value)
+                                }
+                                className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                              />
+                            ) : (
+                              <p className="whitespace-pre-line text-slate-700">{item.description}</p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-[0.25em]">
+                            {editingDailyId === item.id ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveDailyEdit(item.id)}
+                                  disabled={dailyScheduleSavingId === item.id}
+                                  className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelDailyEdit}
+                                  className="rounded-full border border-transparent px-2 py-1 text-[11px] font-semibold text-orange-600"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => startDailyEdit(item)}
+                                className="rounded-full border border-transparent px-2 py-1 text-[11px] font-semibold text-orange-600"
+                                aria-label={`Edit ${item.label}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
+                                  <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mt-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-900">Special Announcements</h3>
+                  <span className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">ADMSG</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {specialAnnouncements.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        {editingSpecialId === item.id ? (
+                          <input
+                            value={editingSpecialForm.label}
+                            onChange={(event) => setEditingSpecialForm((prev) => ({ ...prev, label: event.target.value }))}
+                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-900"
+                          />
+                        ) : (
+                          <p className="text-slate-500 uppercase tracking-wide">{item.label}</p>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {editingSpecialId === item.id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => saveSpecialEdit(item.id)}
+                                className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelSpecialEdit}
+                                className="rounded-full border border-transparent px-2 py-1 text-[10px] font-semibold text-orange-600"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startSpecialEdit(item)}
+                              className="rounded-full border border-transparent px-2 py-1 text-[10px] font-semibold text-orange-600"
+                              aria-label={`Edit ${item.label}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
+                                <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        {editingSpecialId === item.id ? (
+                          <textarea
+                            value={editingSpecialForm.description}
+                            onChange={(event) =>
+                              setEditingSpecialForm((prev) => ({ ...prev, description: event.target.value }))
+                            }
+                            rows={3}
+                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-900"
+                          />
+                        ) : (
+                          <p className="mt-1 font-semibold text-slate-900">{item.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {specialAnnouncements.length === 0 && !specialError && (
+                  <p className="text-sm text-slate-500">No special announcements configured yet.</p>
+                )}
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-700 space-y-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Add announcement</h4>
+                  <input
+                    value={newSpecialAnnouncement.label}
+                    onChange={(event) =>
+                      setNewSpecialAnnouncement((prev) => ({ ...prev, label: event.target.value }))
+                    }
+                    placeholder="Label"
+                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                  <textarea
+                    value={newSpecialAnnouncement.description}
+                    onChange={(event) =>
+                      setNewSpecialAnnouncement((prev) => ({ ...prev, description: event.target.value }))
+                    }
+                    rows={3}
+                    placeholder="Description"
+                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSpecialAnnouncement}
+                    className="flex items-center justify-center rounded-full bg-orange-600 px-4 py-2 text-xs font-semibold text-white"
+                  >
+                    Add announcement
+                  </button>
+                </div>
+              </div>
+
+              {specialError && <p className="text-sm text-red-500">{specialError}</p>}
+
+              {dailyError && <p className="text-sm text-red-500">{dailyError}</p>}
             </div>
           )}
         </div>

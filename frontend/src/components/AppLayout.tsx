@@ -18,6 +18,7 @@ const AppLayout = () => {
   useCartSync();
 
   const mainClassName = 'responsive-layout py-6 sm:py-8';
+  const isAdminUser = Boolean(user && isAdmin(user.role));
 
   const userInitials =
     user?.name
@@ -28,14 +29,14 @@ const AppLayout = () => {
       .join('') ?? 'TA';
 
   const userRoleLabel = user
-    ? isAdmin(user.role)
+    ? isAdminUser
       ? 'Temple Admin'
       : 'Donor'
     : 'Guest';
 
   const headerSubtitle = !user
     ? 'Temple operations portal'
-    : isAdmin(user.role)
+    : isAdminUser
       ? 'Admin command center'
       : 'Donor hub';
 
@@ -45,9 +46,9 @@ const AppLayout = () => {
     { to: '/admin/master', label: 'Admin', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/bulk-upload', label: 'Bulk Upload', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/donors', label: 'Donor Details', show: Boolean(user && isAdmin(user.role)) },
-    { to: '/pooja/register', label: 'Pooja Registration', show: true },
-    { to: '/payments/general', label: 'Payment Page', show: true },
-    { to: '/payments/combine', label: 'Combine Payment', show: true },
+    { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
+    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
+    { to: '/payments/combine', label: 'Combine Payment', show: !isAdminUser },
     {
       to: '/payments/statement',
       label: 'Payment Statement',

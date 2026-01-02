@@ -17,6 +17,7 @@ from .models import (
     RecurringPoojaPlan,
     RecurrenceFrequency,
     RecurrenceKind,
+    SpecialAnnouncement,
 )
 from accounts.models import UserRole
 
@@ -95,6 +96,13 @@ class DailyMessageSerializer(serializers.ModelSerializer):
             "header_text",
             "footer_text",
         )
+
+
+class SpecialAnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpecialAnnouncement
+        fields = ("id", "label", "description", "created_at")
+        read_only_fields = ("id", "created_at")
 
 
 class DonorMessageTemplateSerializer(serializers.ModelSerializer):
