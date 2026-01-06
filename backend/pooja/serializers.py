@@ -400,6 +400,7 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
             "pause_from",
             "pause_until",
             "metadata",
+            "cart_payload",
             "origin_registration_created_at",
             "origin_registration_updated_at",
             "origin_registration_id",

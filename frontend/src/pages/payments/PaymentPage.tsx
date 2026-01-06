@@ -331,6 +331,25 @@ const buildMemberSummaries = (item: CartItem): string[] => {
   });
 };
 
+const renderUpcomingOccurrenceList = (occurrences?: CartItem['dayOptionOccurrences']) => {
+  if (!occurrences || occurrences.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-4 text-xs uppercase tracking-wide text-slate-500">
+      <p className="text-[0.6rem] tracking-[0.3em] text-slate-500">UPCOMING DATES</p>
+      <div className="mt-1 space-y-1 text-sm font-semibold text-slate-700">
+        {occurrences.map((entry) => (
+          <p key={`${entry.date}-${entry.label ?? ''}`}>
+            {formatDate(entry.date)}
+            {entry.label ? ` • ${entry.label}` : ''}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const PaymentPage = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
@@ -773,6 +792,8 @@ const PaymentPage = () => {
                     <dd className="text-sm font-medium text-slate-800">{item.customDayNote?.trim() || '—'}</dd>
                   </div>
                 </dl>
+
+                {renderUpcomingOccurrenceList(item.dayOptionOccurrences)}
 
                 {(() => {
                   const memberLines = buildMemberSummaries(item);

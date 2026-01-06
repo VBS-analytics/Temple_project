@@ -2,9 +2,12 @@
 
 from decimal import Decimal
 
+from django.utils import timezone
+
 from rest_framework import serializers
 
 from .models import PaymentRecord
+from pooja.services.calendar import get_calendar_service
 
 
 class PaymentRecordSerializer(serializers.ModelSerializer):
@@ -30,6 +33,7 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
         read_only=True,
         default=False,
     )
+    upcoming_occurrences = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentRecord
@@ -45,16 +49,17 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
             "amount",
             "currency",
             "mode",
-            "status",
-            "transaction_reference",
-            "payment_month",
-            "notes",
-            "created_at",
-            "updated_at",
-            "registration_status",
-            "registration_donor_name",
-            "registration_is_group_registration",
-        )
+        "status",
+        "transaction_reference",
+        "payment_month",
+        "notes",
+        "created_at",
+        "updated_at",
+        "registration_status",
+        "registration_donor_name",
+        "registration_is_group_registration",
+        "upcoming_occurrences",
+    )
         read_only_fields = (
             "id",
             "donor",
@@ -65,10 +70,11 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
             "pooja_option",
             "created_at",
             "updated_at",
-            "registration_status",
-            "registration_donor_name",
-            "registration_is_group_registration",
-        )
+        "registration_status",
+        "registration_donor_name",
+        "registration_is_group_registration",
+        "upcoming_occurrences",
+    )
 
     def create(self, validated_data):
         request = self.context.get("request")
@@ -89,3 +95,19 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
         total_paid = sum((payment.amount or Decimal("0.00")) for payment in payments.all())
         due_value = Decimal(total_amount) - total_paid
         return max(due_value, Decimal("0.00"))
+
+    def get_upcoming_occurrences(self, obj):
+        registration = getattr(obj, "registration", None)
+        if registration is None:
+            return []
+        day_option = getattr(registration, "day_option", None)
+        if day_option is None or not day_option.code:
+            return []
+        reference_date = registration.start_date or timezone.localdate()
+        reference_date = max(reference_date, timezone.localdate())
+        service = get_calendar_service()
+        try:
+            occurrence = service.next_occurrence(day_option.code, reference_date)
+        except (ValueError, RuntimeError):
+            return []
+        return occurrence.meta.get("upcoming_occurrences") or []

@@ -463,6 +463,20 @@ const toCurrencyLabel = (value?: string | null) => {
 const CHART_DAY_OPTION_CODE = 'CHRT';
 const VARIABLE_AMOUNT_STEP = 50;
 const EXCLUSIVE_DAY_OPTION_CODES = new Set(['AST', 'PRD']);
+const ANY_DAY_OF_MONTH_CODE = 'AD';
+const ANY_DAY_OF_MONTH_DESCRIPTION = 'any day of month';
+
+const isAnyDayOfMonthOption = (option?: { code?: string | null; description?: string | null } | null) => {
+  if (!option) {
+    return false;
+  }
+  const code = option.code?.trim().toUpperCase();
+  if (code === ANY_DAY_OF_MONTH_CODE) {
+    return true;
+  }
+  const description = option.description?.trim().toLowerCase();
+  return description === ANY_DAY_OF_MONTH_DESCRIPTION;
+};
 
 const isChartDayOption = (option?: { code?: string | null } | null) => {
   if (!option?.code) return false;
@@ -755,6 +769,19 @@ const getOccurrenceMessage = (state?: DayOccurrenceState): string | undefined =>
     default:
       return undefined;
   }
+};
+
+const extractDayOptionOccurrences = (state?: DayOccurrenceState): UpcomingOccurrence[] | undefined => {
+  if (!state || state.status !== 'ready') {
+    return undefined;
+  }
+  if (state.occurrences && state.occurrences.length > 0) {
+    return state.occurrences;
+  }
+  if (state.date) {
+    return [{ date: state.date, label: state.label ?? undefined }];
+  }
+  return undefined;
 };
 
 const areRecurrenceSelectionsEqual = (
@@ -1805,6 +1832,16 @@ const PoojaRegistrationPage = () => {
         return;
       }
 
+      if (isAnyDayOfMonthOption(option)) {
+        setDayOccurrenceMap((prev) => {
+          if (!(poojaId in prev)) return prev;
+          const next = { ...prev };
+          delete next[poojaId];
+          return next;
+        });
+        return;
+      }
+
       const code = (option.code || '').toUpperCase();
       const requiresStar = code === 'CS';
       const tamilStarValue = requiresStar ? options.tamilStarValue ?? null : null;
@@ -2461,6 +2498,7 @@ const PoojaRegistrationPage = () => {
 
     const chosenDayOption = !dayOptionDisabled && selectedDayId ? dayOptionMap.get(selectedDayId) : undefined;
     const requiresChartDetails = !dayOptionDisabled && isChartDayOption(chosenDayOption);
+    const isAnyDayOfMonthSelected = !dayOptionDisabled && isAnyDayOfMonthOption(chosenDayOption);
     const selectedStarForRow = tamilStarSelectionMap[row.pooja.id] ?? selectedTamilStar;
     const selectedTamilStarOption =
       selectedStarForRow && chosenDayOption?.code === 'CS'
@@ -2473,9 +2511,9 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
+    const occurrenceState = dayOccurrenceMap[row.pooja.id];
     let resolvedBookingDate = '';
-    if (!requiresChartDetails) {
-      const occurrenceState = dayOccurrenceMap[row.pooja.id];
+    if (!requiresChartDetails && !isAnyDayOfMonthSelected) {
       if (defaultFirstDayDate) {
         resolvedBookingDate = defaultFirstDayDate;
       } else if (occurrenceState?.status === 'ready' && occurrenceState.date) {
@@ -2627,6 +2665,7 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
+    const dayOptionOccurrences = requiresChartDetails ? undefined : extractDayOptionOccurrences(occurrenceState);
     const recurrenceFields = buildRecurrenceFields(recurrenceSelection, resolvedBookingDate);
 
     const item = createCartItem({
@@ -2645,6 +2684,7 @@ const PoojaRegistrationPage = () => {
       dayOptionCode: chosenDayOption?.code ?? null,
       dayOptionDescription: chosenDayOption?.description ?? null,
       dayOptionCategory: chosenDayOption?.category ?? null,
+      dayOptionOccurrences,
       selectedTamilStarId: chosenDayOption?.code === 'CS' ? selectedStarForRow ?? null : null,
       selectedTamilStarLabel:
         chosenDayOption?.code === 'CS' && selectedTamilStarOption
@@ -3248,6 +3288,9 @@ const PoojaRegistrationPage = () => {
                         const showDefaultFirstDay =
                           Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
                         const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
+                        const isAnyDayOfMonthSelected =
+                          !dayOptionDisabled && selectedDayOption ? isAnyDayOfMonthOption(selectedDayOption) : false;
+                        const showNextOccurrence = !isAnyDayOfMonthSelected;
                         
                         return (
                         <tr
@@ -3330,48 +3373,50 @@ const PoojaRegistrationPage = () => {
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-700">
-                              {showDefaultFirstDay ? (
-                                <div className="space-y-1">
-                                  <span className="font-medium text-gray-900">
-                                    {nextFirstDayOccurrence?.label}
+                              {showNextOccurrence ? (
+                                showDefaultFirstDay ? (
+                                  <div className="space-y-1">
+                                    <span className="font-medium text-gray-900">
+                                      {nextFirstDayOccurrence?.label}
+                                    </span>
+                                    <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
+                                  </div>
+                                ) : (!dayOptionDisabled && effectiveDayId === null) ? (
+                                  <span className="text-xs text-gray-500">Select a day option</span>
+                                ) : !occurrenceState ? (
+                                  <span className="text-xs text-gray-500">Select a day option</span>
+                                ) : occurrenceState.status === 'loading' ? (
+                                  <span className="text-xs text-gray-600">Fetching date…</span>
+                                ) : occurrenceState.status === 'ready' ? (
+                                  <div className="space-y-2">
+                                    {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
+                                      ? occurrenceState.occurrences
+                                      : [{ date: occurrenceState.date, label: occurrenceState.label }]
+                                    ).map((entry, index) => (
+                                      <div
+                                        key={`${entry.date}-${index}`}
+                                        className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
+                                      >
+                                        <span className="font-medium text-gray-900">
+                                          {formatDisplayDate(entry.date)}
+                                        </span>
+                                        {entry.label && (
+                                          <span className="block text-xs text-gray-600">{entry.label}</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
+                                  </div>
+                                ) : occurrenceState.status === 'manual' ||
+                                  occurrenceState.status === 'needsStar' ||
+                                  occurrenceState.status === 'error' ? (
+                                  <span className="text-xs text-gray-600">
+                                    {occurrenceState.message}
                                   </span>
-                                  <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
-                                </div>
-                              ) : (!dayOptionDisabled && effectiveDayId === null) ? (
-                                <span className="text-xs text-gray-500">Select a day option</span>
-                              ) : !occurrenceState ? (
-                                <span className="text-xs text-gray-500">Select a day option</span>
-                              ) : occurrenceState.status === 'loading' ? (
-                                <span className="text-xs text-gray-600">Fetching date…</span>
-                              ) : occurrenceState.status === 'ready' ? (
-                                <div className="space-y-2">
-                                  {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
-                                    ? occurrenceState.occurrences
-                                    : [{ date: occurrenceState.date, label: occurrenceState.label }]
-                                  ).map((entry, index) => (
-                                    <div
-                                      key={`${entry.date}-${index}`}
-                                      className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
-                                    >
-                                      <span className="font-medium text-gray-900">
-                                        {formatDisplayDate(entry.date)}
-                                      </span>
-                                      {entry.label && (
-                                        <span className="block text-xs text-gray-600">{entry.label}</span>
-                                      )}
-                                    </div>
-                                  ))}
-                                  {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
-                                </div>
-                              ) : occurrenceState.status === 'manual' ||
-                                occurrenceState.status === 'needsStar' ||
-                                occurrenceState.status === 'error' ? (
-                                <span className="text-xs text-gray-600">
-                                  {occurrenceState.message}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-gray-500">Select a day option</span>
-                              )}
+                                ) : (
+                                  <span className="text-xs text-gray-500">Select a day option</span>
+                                )
+                              ) : null}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                               <div className="space-y-4">
@@ -3603,6 +3648,9 @@ const PoojaRegistrationPage = () => {
                     const showDefaultFirstDay =
                       Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
                     const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
+                    const isAnyDayOfMonthSelected =
+                      !dayOptionDisabled && selectedDayOption ? isAnyDayOfMonthOption(selectedDayOption) : false;
+                    const showNextOccurrence = !isAnyDayOfMonthSelected;
 
                     return (
                       <div
@@ -3701,53 +3749,55 @@ const PoojaRegistrationPage = () => {
                           </div>
 
                           {/* Next Occurrence Section */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Next Occurrence
-                            </label>
-                            {showDefaultFirstDay ? (
-                              <div className="space-y-1">
-                                <span className="font-medium text-gray-900">
-                                  {nextFirstDayOccurrence?.label}
+                          {showNextOccurrence && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Next Occurrence
+                              </label>
+                              {showDefaultFirstDay ? (
+                                <div className="space-y-1">
+                                  <span className="font-medium text-gray-900">
+                                    {nextFirstDayOccurrence?.label}
+                                  </span>
+                                  <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
+                                </div>
+                              ) : (!dayOptionDisabled && effectiveDayId === null) ? (
+                                <span className="text-xs text-gray-500">Select a day option</span>
+                              ) : !occurrenceState ? (
+                                <span className="text-xs text-gray-500">Select a day option</span>
+                              ) : occurrenceState.status === 'loading' ? (
+                                <span className="text-xs text-gray-600">Fetching date…</span>
+                              ) : occurrenceState.status === 'ready' ? (
+                                <div className="space-y-2">
+                                  {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
+                                    ? occurrenceState.occurrences
+                                    : [{ date: occurrenceState.date, label: occurrenceState.label }]
+                                  ).map((entry, index) => (
+                                    <div
+                                      key={`${entry.date}-${index}`}
+                                      className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
+                                    >
+                                      <span className="font-medium text-gray-900">
+                                        {formatDisplayDate(entry.date)}
+                                      </span>
+                                      {entry.label && (
+                                        <span className="block text-xs text-gray-600">{entry.label}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
+                                </div>
+                              ) : occurrenceState.status === 'manual' ||
+                                occurrenceState.status === 'needsStar' ||
+                                occurrenceState.status === 'error' ? (
+                                <span className="text-xs text-gray-600">
+                                  {occurrenceState.message}
                                 </span>
-                                <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
-                              </div>
-                            ) : (!dayOptionDisabled && effectiveDayId === null) ? (
-                              <span className="text-xs text-gray-500">Select a day option</span>
-                            ) : !occurrenceState ? (
-                              <span className="text-xs text-gray-500">Select a day option</span>
-                            ) : occurrenceState.status === 'loading' ? (
-                              <span className="text-xs text-gray-600">Fetching date…</span>
-                            ) : occurrenceState.status === 'ready' ? (
-                              <div className="space-y-2">
-                                {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
-                                  ? occurrenceState.occurrences
-                                  : [{ date: occurrenceState.date, label: occurrenceState.label }]
-                                ).map((entry, index) => (
-                                  <div
-                                    key={`${entry.date}-${index}`}
-                                    className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
-                                  >
-                                    <span className="font-medium text-gray-900">
-                                      {formatDisplayDate(entry.date)}
-                                    </span>
-                                    {entry.label && (
-                                      <span className="block text-xs text-gray-600">{entry.label}</span>
-                                    )}
-                                  </div>
-                                ))}
-                                {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
-                              </div>
-                            ) : occurrenceState.status === 'manual' ||
-                              occurrenceState.status === 'needsStar' ||
-                              occurrenceState.status === 'error' ? (
-                              <span className="text-xs text-gray-600">
-                                {occurrenceState.message}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-500">Select a day option</span>
-                            )}
-                          </div>
+                              ) : (
+                                <span className="text-xs text-gray-500">Select a day option</span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Amount Section */}
                           <div>

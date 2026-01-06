@@ -28,6 +28,7 @@ interface PaymentRecordEntry {
   registration_status?: string | null;
   registration_donor_name?: string | null;
   registration_is_group_registration?: boolean | null;
+  upcoming_occurrences?: { date: string; label?: string | null }[];
 }
 
 interface PoojaRegistrationEntry {
@@ -97,6 +98,29 @@ const formatDisplayDate = (value?: string | null) => {
     month: 'short',
     year: 'numeric',
   });
+};
+
+const formatUpcomingOccurrenceLabel = (occurrence: PaymentRecordEntry['upcoming_occurrences'][number]) => {
+  const labelParts = [formatDisplayDate(occurrence.date)];
+  if (occurrence.label) {
+    labelParts.push(occurrence.label);
+  }
+  return labelParts.join(' • ');
+};
+
+const renderUpcomingOccurrenceList = (occurrences?: PaymentRecordEntry['upcoming_occurrences']) => {
+  if (!occurrences || occurrences.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-1 space-y-0.5 text-[0.7rem] text-slate-500">
+      {occurrences.map((entry) => (
+        <p key={`${entry.date}-${entry.label ?? ''}`} className="text-slate-600">
+          {formatUpcomingOccurrenceLabel(entry)}
+        </p>
+      ))}
+    </div>
+  );
 };
 
 const parseNumeric = (value?: string | number | null) => {
@@ -604,6 +628,9 @@ const PaymentStatementPage = () => {
       'Donor ID': record.donor ?? '—',
       'Donor Name': record.donor_name ?? '—',
       Pooja: record.pooja_option ?? '—',
+      'Upcoming Dates': record.upcoming_occurrences
+        ? record.upcoming_occurrences.map((entry) => formatUpcomingOccurrenceLabel(entry)).join('; ')
+        : '—',
       'Pooja Date': record.registration_start_date
         ? formatDisplayDate(record.registration_start_date)
         : formatDisplayDate(record.created_at ?? ''),
@@ -788,30 +815,6 @@ const PaymentStatementPage = () => {
     [filteredRecords, statusOverrideMap],
   );
 
-  const clubPaymentCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    CLUB_OPTIONS.forEach((option) => {
-      counts[option] = 0;
-    });
-    filteredRecords.forEach((record) => {
-      const label = getClubSelectionLabel(record);
-      counts[label] = (counts[label] ?? 0) + 1;
-    });
-    return counts;
-  }, [filteredRecords, clubOverrideMap]);
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    STATUS_OPTIONS.forEach((option) => {
-      counts[option] = 0;
-    });
-    filteredRecords.forEach((record) => {
-      const label = getStatusLabel(record);
-      counts[label] = (counts[label] ?? 0) + 1;
-    });
-    return counts;
-  }, [filteredRecords, statusOverrideMap]);
-
   const rangeLabel = useMemo(
     () => buildRangeLabel(referenceDateValue, timeframe),
     [referenceDateValue, timeframe],
@@ -824,17 +827,37 @@ const PaymentStatementPage = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-800">Payment Statement</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {rangeLabel} • {filteredRecords.length} record
-          {filteredRecords.length === 1 ? '' : 's'}
-        </p>
-        {appliedDonorFilter && (
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Filtering for donor <span className="text-slate-700">{appliedDonorFilter}</span>
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h1 className="text-2xl font-semibold text-slate-800">Payment Statement</h1>
+          <p className="text-sm text-slate-500">
+            {rangeLabel} • {filteredRecords.length} record
+            {filteredRecords.length === 1 ? '' : 's'}
           </p>
-        )}
+          {appliedDonorFilter && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Filtering for donor <span className="text-slate-700">{appliedDonorFilter}</span>
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={loading || filteredRecords.length === 0}
+            className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Download PDF
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadExcel}
+            disabled={loading || filteredRecords.length === 0}
+            className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:text-slate-300"
+          >
+            Download Excel
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-orange-200 bg-white/80 p-4 shadow-sm">
@@ -893,25 +916,6 @@ const PaymentStatementPage = () => {
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={handleDownloadPdf}
-          disabled={loading || filteredRecords.length === 0}
-          className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          Download PDF
-        </button>
-        <button
-          type="button"
-          onClick={handleDownloadExcel}
-          disabled={loading || filteredRecords.length === 0}
-          className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:text-slate-300"
-        >
-          Download Excel
-        </button>
-      </div>
-
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-400">No of Pooja</p>
@@ -926,37 +930,6 @@ const PaymentStatementPage = () => {
           <p className="text-2xl font-semibold text-slate-800">{formatCurrency(totalDue)}</p>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Club Payments</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-600">
-            {CLUB_OPTIONS.map((option) => (
-              <div key={option} className="flex items-center justify-between">
-                <span className="text-slate-600">
-                  {option} club payment
-                </span>
-                <span className="text-base font-semibold text-slate-800">
-                  {clubPaymentCounts[option] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Status Counts</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-600">
-            {STATUS_OPTIONS.map((status) => (
-              <div key={status} className="flex items-center justify-between">
-                <span className="text-slate-600">{status}</span>
-                <span className="text-base font-semibold text-slate-800">
-                  {statusCounts[status] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="hidden rounded-t-2xl md:block">
           <div className="max-h-[720px] overflow-auto">
@@ -990,7 +963,10 @@ const PaymentStatementPage = () => {
                       <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
                       <td className="px-4 py-3 text-slate-600">{record.donor ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{record.donor_name || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{record.pooja_option || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <div>{record.pooja_option || '—'}</div>
+                        {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">
                         {formatDisplayDate(record.registration_start_date)}
                       </td>
@@ -1094,6 +1070,7 @@ const PaymentStatementPage = () => {
                     <span className="font-semibold text-slate-600">Pooja</span>
                     <span>{record.pooja_option || '—'}</span>
                   </div>
+                  {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
                   <div className="flex justify-between">
                     <span className="font-semibold text-slate-600">Pooja Date</span>
                     <span>{formatDisplayDate(record.registration_start_date)}</span>
