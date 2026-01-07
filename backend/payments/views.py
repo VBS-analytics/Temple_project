@@ -5,8 +5,8 @@ from rest_framework import permissions, viewsets
 
 from accounts.models import UserRole
 
-from .models import PaymentRecord
-from .serializers import PaymentRecordSerializer
+from .models import ExpenseRecord, PaymentRecord
+from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer
 
 
 class PaymentRecordViewSet(viewsets.ModelViewSet):
@@ -59,3 +59,27 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save()
+
+
+class ExpenseRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = ExpenseRecordSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_queryset(self):
+        queryset = ExpenseRecord.objects.all()
+        if self.request.user.role != UserRole.ADMIN:
+            queryset = queryset.filter(created_by=self.request.user)
+
+        month_param = self.request.query_params.get("month")
+        if month_param:
+            try:
+                year, month = map(int, month_param.split("-", 1))
+            except ValueError:
+                pass
+            else:
+                queryset = queryset.filter(transaction_date__year=year, transaction_date__month=month)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

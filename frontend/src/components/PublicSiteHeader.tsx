@@ -89,7 +89,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
         <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
           <Link to="/" className={clsx('min-w-0 flex-shrink text-left', brandTextClass)}>
             <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.24em]">
-              Kakkazhany Gramam
+              Kakkalani Gramam
             </p>
           </Link>
 
@@ -208,7 +208,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
           <div className="absolute inset-y-0 right-0 flex h-full w-full max-w-sm flex-col bg-white text-slate-900 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Kakkazhany Gramam</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Kakkalani Gramam</p>
               </div>
               <button
                 type="button"

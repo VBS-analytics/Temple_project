@@ -60,6 +60,11 @@ const AppLayout = () => {
       label: 'Report',
       show: Boolean(user && isAdmin(user.role)),
     },
+    {
+      to: '/admin/expenses',
+      label: 'Expenses',
+      show: Boolean(user && isAdmin(user.role)),
+    },
   ];
 
   return (

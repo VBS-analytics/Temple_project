@@ -262,12 +262,24 @@ const buildRegistrationPayload = (item: CartItem) => {
 const recordRegistrations = async (
   items: CartItem[],
   transactionReference: string,
+  amountPaid?: number,
   paymentDate?: string,
 ) => {
   for (const item of items) {
     const payload = buildRegistrationPayload(item);
     const response = await api.post('pooja/registrations/', payload);
     const registrationId = response.data?.id;
+    const amountNote =
+      typeof amountPaid === 'number' && Number.isFinite(amountPaid)
+        ? `Amount Paid: ₹ ${formatCurrency(amountPaid)}`
+        : null;
+    const noteParts: string[] = [];
+    if (payload.additional_notes) {
+      noteParts.push(payload.additional_notes);
+    }
+    if (amountNote) {
+      noteParts.push(amountNote);
+    }
     await api.post('payments/records/', {
       registration: typeof registrationId === 'number' ? registrationId : undefined,
       amount: Number(item.amount) || 0,
@@ -275,7 +287,7 @@ const recordRegistrations = async (
       status: 'success',
       transaction_reference: transactionReference,
       payment_month: paymentDate || undefined,
-      notes: payload.additional_notes ?? '',
+      notes: noteParts.join(' • '),
     });
   }
 };
@@ -399,11 +411,39 @@ const PaymentPage = () => {
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
   const [transactionReference, setTransactionReference] = useState('');
+  const [amountPaidError, setAmountPaidError] = useState<string | null>(null);
+  const [amountPaid, setAmountPaid] = useState('');
+  const [paymentDateError, setPaymentDateError] = useState<string | null>(null);
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
     useCurrentBalance();
+  const historyMonthOptions = useMemo(
+    () => buildHistoryMonthOptions(userHistory, (entry) => entry.completedAt || entry.createdAt),
+    [userHistory],
+  );
+
+  const filteredHistory = useMemo(
+    () =>
+      historyMonth
+        ? userHistory.filter((entry) => formatMonthKey(entry.completedAt || entry.createdAt) === historyMonth)
+        : [],
+    [historyMonth, userHistory],
+  );
+
+  const lastPaymentEntry = useMemo(
+    () => (userHistory.length > 0 ? userHistory[0] : null),
+    [userHistory],
+  );
+
+  const netPaymentAmount = Math.max(0, (paymentSnapshot?.totalAmount ?? 0) - (currentBalance ?? 0));
+  const lastPaymentAmountLabel = lastPaymentEntry
+    ? `₹ ${formatCurrency(lastPaymentEntry.totalAmount)}`
+    : '—';
+  const lastPaymentDateLabel = lastPaymentEntry?.completedAt
+    ? formatDate(lastPaymentEntry.completedAt)
+    : '—';
   const isAndroid = useMemo(
     () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent),
     [],
@@ -429,19 +469,6 @@ const PaymentPage = () => {
     [petalSeed],
   );
 
-  const historyMonthOptions = useMemo(
-    () => buildHistoryMonthOptions(userHistory, (entry) => entry.completedAt || entry.createdAt),
-    [userHistory],
-  );
-
-  const filteredHistory = useMemo(
-    () =>
-      historyMonth
-        ? userHistory.filter((entry) => formatMonthKey(entry.completedAt || entry.createdAt) === historyMonth)
-        : [],
-    [historyMonth, userHistory],
-  );
-
   useEffect(() => {
     if (paymentSnapshot) {
       setActiveTab('summary');
@@ -458,7 +485,10 @@ const PaymentPage = () => {
     if (!paymentSnapshot) {
       setRegistrationError(null);
       setTransactionReference('');
+      setAmountPaid('');
+      setAmountPaidError(null);
       setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentDateError(null);
     }
   }, [paymentSnapshot]);
 
@@ -543,6 +573,11 @@ const PaymentPage = () => {
   };
 
   const triggerPaymentDetails = () => {
+    const defaultAmount = netPaymentAmount > 0 ? netPaymentAmount.toFixed(2) : '0.00';
+    setAmountPaid(defaultAmount);
+    setAmountPaidError(null);
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setPaymentDateError(null);
     setShowPaymentDetails(true);
   };
 
@@ -563,16 +598,33 @@ const PaymentPage = () => {
       setTransactionReferenceError('Transaction ID or UPI ID is required.');
       return;
     }
+    const trimmedAmount = amountPaid.trim();
+    if (!trimmedAmount) {
+      setAmountPaidError('Amount Paid is required.');
+      return;
+    }
+    const parsedAmount = Number(trimmedAmount);
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      setAmountPaidError('Enter a valid amount paid.');
+      return;
+    }
+    const trimmedDate = paymentDate.trim();
+    if (!trimmedDate) {
+      setPaymentDateError('Payment date is required.');
+      return;
+    }
+    const parsedDate = new Date(trimmedDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      setPaymentDateError('Enter a valid payment date.');
+      return;
+    }
+
+    setAmountPaidError(null);
     setTransactionReferenceError(null);
     setRegistrationError(null);
     setRegistrationInProgress(true);
-    const normalizedPaymentDate = paymentDate.trim();
     try {
-      await recordRegistrations(
-        paymentSnapshot.items,
-        trimmedReference,
-        normalizedPaymentDate || undefined,
-      );
+      await recordRegistrations(paymentSnapshot.items, trimmedReference, parsedAmount, trimmedDate);
       emitPoojaDataUpdatedEvent();
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
@@ -738,7 +790,6 @@ const PaymentPage = () => {
     }
 
     const { items: snapshotItems, totalAmount: snapshotTotal, createdAt } = paymentSnapshot;
-    const netPaymentAmount = Math.max(0, snapshotTotal - (currentBalance ?? 0));
 
     return (
       <div className="space-y-6">
@@ -829,15 +880,27 @@ const PaymentPage = () => {
         {showPaymentDetails && (
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ring-1 ring-orange-100">
             <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</p>
-              <p className="text-2xl font-semibold text-slate-900">
-                {balanceLoading
-                  ? 'Loading…'
-                  : currentBalance !== null
-                    ? `₹ ${formatCurrency(currentBalance)}`
-                    : 'Not set'}
-              </p>
-              {balanceError && <p className="mt-1 text-xs text-rose-600">{balanceError}</p>}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</p>
+                  <p className="text-2xl font-semibold text-slate-900">
+                    {balanceLoading
+                      ? 'Loading…'
+                      : currentBalance !== null
+                        ? `₹ ${formatCurrency(currentBalance)}`
+                        : 'Not set'}
+                  </p>
+                  {balanceError && <p className="mt-1 text-xs text-rose-600">{balanceError}</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Amount</p>
+                  <p className="text-xl font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Date</p>
+                  <p className="text-xl font-semibold text-slate-900">{lastPaymentDateLabel}</p>
+                </div>
+              </div>
             </div>
             <h3 className="text-lg font-semibold text-slate-900">Complete Your Payment</h3>
             <p className="text-sm text-slate-600">Scan the QR code or use the account details to transfer the total amount.</p>
@@ -906,7 +969,7 @@ const PaymentPage = () => {
                 </div>*/}
               </RevealableAccountSection>
             </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="transaction-reference">
                   Transaction ID or UPI ID
@@ -929,16 +992,48 @@ const PaymentPage = () => {
                 )}
               </div>
               <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="amount-paid">
+                  Amount Paid
+                </label>
+                <input
+                  id="amount-paid"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={amountPaid}
+                  onChange={(event) => {
+                    setAmountPaid(event.target.value);
+                    if (amountPaidError) {
+                      setAmountPaidError(null);
+                    }
+                  }}
+                  placeholder="Enter the amount paid"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                />
+                {amountPaidError && (
+                  <p className="mt-2 text-sm text-rose-600">{amountPaidError}</p>
+                )}
+              </div>
+              <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="payment-date">
-                  Payment date
+                  Payment Date
                 </label>
                 <input
                   id="payment-date"
                   type="date"
                   value={paymentDate}
-                  onChange={(event) => setPaymentDate(event.target.value)}
+                  onChange={(event) => {
+                    setPaymentDate(event.target.value);
+                    if (paymentDateError) {
+                      setPaymentDateError(null);
+                    }
+                  }}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
                 />
+                {paymentDateError && (
+                  <p className="mt-2 text-sm text-rose-600">{paymentDateError}</p>
+                )}
               </div>
             </div>
           </div>

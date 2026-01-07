@@ -183,7 +183,7 @@ const ForgotPasswordPage = () => {
               className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
-                Kakkazhany Gramam
+                Kakkalani Gramam
               </p>
             </Link>
 
@@ -539,7 +539,7 @@ const ForgotPasswordPage = () => {
 
       {/* Footer */}
       <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-white/60 text-xs z-10">
-        <p>© {new Date().getFullYear()} Kakkazhany Gramam. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} Kakkalani Gramam. All rights reserved.</p>
       </footer>
 
       {/* Custom CSS for animations */}

@@ -14,6 +14,7 @@ import RegisterPage from '../pages/RegisterPage';
 import AdminMasterPage from '../pages/admin/AdminMasterPage';
 import BulkDonorUploadPage from '../pages/admin/BulkDonorUploadPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
+import ExpensesPage from '../pages/admin/ExpensesPage';
 import PoojaDetailsPage from '../pages/admin/PoojaDetailsPage';
 import LandingPage from '../pages/LandingPage';
 import Gallery from '../pages/Gallery';
@@ -80,6 +81,7 @@ const App = () => (
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
         <Route path="/reports" element={<ReportPage />} />
+        <Route path="/admin/expenses" element={<ExpensesPage />} />
         <Route path="/admin/donor-pooja-registrations" element={<Navigate to="/admin/donors" replace />} />
       </Route>
     </Route>

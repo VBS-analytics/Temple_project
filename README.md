@@ -1,6 +1,6 @@
 # Temple Donor Platform
 
-A modern operations suite for the Kakkazhany Gramam temple unifying a content-rich public website with donor and admin workspaces. The repository ships a Vite/React frontend, a Django REST API, and PostgreSQL, orchestrated with Docker for local development.
+A modern operations suite for the Kakkalani Gramam temple unifying a content-rich public website with donor and admin workspaces. The repository ships a Vite/React frontend, a Django REST API, and PostgreSQL, orchestrated with Docker for local development.
 
 ## Project Overview
 

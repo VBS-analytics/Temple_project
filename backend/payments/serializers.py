@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from .models import PaymentRecord
+from .models import ExpenseRecord, PaymentRecord
 from pooja.services.calendar import get_calendar_service
 
 
@@ -111,3 +111,22 @@ class PaymentRecordSerializer(serializers.ModelSerializer):
         except (ValueError, RuntimeError):
             return []
         return occurrence.meta.get("upcoming_occurrences") or []
+
+
+class ExpenseRecordSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.name", read_only=True)
+
+    class Meta:
+        model = ExpenseRecord
+        fields = (
+            "id",
+            "transaction_date",
+            "category",
+            "amount",
+            "notes",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_by", "created_by_name", "created_at", "updated_at")
