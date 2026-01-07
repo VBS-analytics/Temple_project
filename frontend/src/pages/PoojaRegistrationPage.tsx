@@ -961,6 +961,9 @@ const PoojaRegistrationPage = () => {
     setWarningPopup(null);
   }, [clearWarningTimer]);
 
+  // Temporarily hide the Next Occurrence UI while keeping the data logic intact.
+  const isNextOccurrenceVisible = false;
+
   useEffect(() => {
     setDaySelectionMap((prev) => {
       let changed = false;
@@ -3195,12 +3198,14 @@ const PoojaRegistrationPage = () => {
                         >
                           Devotees
                         </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Next Occurrence
-                        </th>
+                        {isNextOccurrenceVisible && (
+                          <th
+                            scope="col"
+                            className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%] sticky top-0 bg-gray-50 z-20"
+                          >
+                            Next Occurrence
+                          </th>
+                        )}
                         <th
                           scope="col"
                           className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
@@ -3372,52 +3377,54 @@ const PoojaRegistrationPage = () => {
                                 />
                               )}
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-700">
-                              {showNextOccurrence ? (
-                                showDefaultFirstDay ? (
-                                  <div className="space-y-1">
-                                    <span className="font-medium text-gray-900">
-                                      {nextFirstDayOccurrence?.label}
+                            {isNextOccurrenceVisible && (
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {showNextOccurrence ? (
+                                  showDefaultFirstDay ? (
+                                    <div className="space-y-1">
+                                      <span className="font-medium text-gray-900">
+                                        {nextFirstDayOccurrence?.label}
+                                      </span>
+                                      <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
+                                    </div>
+                                  ) : (!dayOptionDisabled && effectiveDayId === null) ? (
+                                    <span className="text-xs text-gray-500">Select a day option</span>
+                                  ) : !occurrenceState ? (
+                                    <span className="text-xs text-gray-500">Select a day option</span>
+                                  ) : occurrenceState.status === 'loading' ? (
+                                    <span className="text-xs text-gray-600">Fetching date…</span>
+                                  ) : occurrenceState.status === 'ready' ? (
+                                    <div className="space-y-2">
+                                      {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
+                                        ? occurrenceState.occurrences
+                                        : [{ date: occurrenceState.date, label: occurrenceState.label }]
+                                      ).map((entry, index) => (
+                                        <div
+                                          key={`${entry.date}-${index}`}
+                                          className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
+                                        >
+                                          <span className="font-medium text-gray-900">
+                                            {formatDisplayDate(entry.date)}
+                                          </span>
+                                          {entry.label && (
+                                            <span className="block text-xs text-gray-600">{entry.label}</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                      {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
+                                    </div>
+                                  ) : occurrenceState.status === 'manual' ||
+                                    occurrenceState.status === 'needsStar' ||
+                                    occurrenceState.status === 'error' ? (
+                                    <span className="text-xs text-gray-600">
+                                      {occurrenceState.message}
                                     </span>
-                                    <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
-                                  </div>
-                                ) : (!dayOptionDisabled && effectiveDayId === null) ? (
-                                  <span className="text-xs text-gray-500">Select a day option</span>
-                                ) : !occurrenceState ? (
-                                  <span className="text-xs text-gray-500">Select a day option</span>
-                                ) : occurrenceState.status === 'loading' ? (
-                                  <span className="text-xs text-gray-600">Fetching date…</span>
-                                ) : occurrenceState.status === 'ready' ? (
-                                  <div className="space-y-2">
-                                    {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
-                                      ? occurrenceState.occurrences
-                                      : [{ date: occurrenceState.date, label: occurrenceState.label }]
-                                    ).map((entry, index) => (
-                                      <div
-                                        key={`${entry.date}-${index}`}
-                                        className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
-                                      >
-                                        <span className="font-medium text-gray-900">
-                                          {formatDisplayDate(entry.date)}
-                                        </span>
-                                        {entry.label && (
-                                          <span className="block text-xs text-gray-600">{entry.label}</span>
-                                        )}
-                                      </div>
-                                    ))}
-                                    {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
-                                  </div>
-                                ) : occurrenceState.status === 'manual' ||
-                                  occurrenceState.status === 'needsStar' ||
-                                  occurrenceState.status === 'error' ? (
-                                  <span className="text-xs text-gray-600">
-                                    {occurrenceState.message}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-gray-500">Select a day option</span>
-                                )
-                              ) : null}
-                            </td>
+                                  ) : (
+                                    <span className="text-xs text-gray-500">Select a day option</span>
+                                  )
+                                ) : null}
+                              </td>
+                            )}
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                               <div className="space-y-4">
                                 <div>
@@ -3749,7 +3756,7 @@ const PoojaRegistrationPage = () => {
                           </div>
 
                           {/* Next Occurrence Section */}
-                          {showNextOccurrence && (
+                          {isNextOccurrenceVisible && showNextOccurrence && (
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Next Occurrence

@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../../lib/pdfMakeLoader';
 import api, { extractResults } from '../../lib/api';
 import { FALLBACK_DAILY_HEADERS } from '../../data/dailyHeaderText';
+import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 
 const TABLE_COLUMNS = [
   'Date',
@@ -22,7 +23,6 @@ const formatDateLabel = (date: Date) =>
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const SATURDAY_NAVAGRAHA_LABEL = 'Saturday Navagraha Pooja';
-const DAY_OPTION_PLACEHOLDER = 'choose your date for pooja';
 const DAY_OPTION_FALLBACK_LABEL = 'Any Day of Month';
 const DAY_OPTION_BADGE_CLASS =
   'rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-orange-600';
@@ -42,10 +42,7 @@ const mergeDayOptions = (options: DayOptionCalendarEntry[]) => {
 
 const normalizeDayOptionLabel = (option: DayOptionCalendarEntry) => {
   const description = option.description?.trim();
-  if (!description || description.toLowerCase() === DAY_OPTION_PLACEHOLDER) {
-    return DAY_OPTION_FALLBACK_LABEL;
-  }
-  return description;
+  return description || DAY_OPTION_FALLBACK_LABEL;
 };
 
 const buildMonthTabs = () => {
@@ -158,6 +155,7 @@ const PoojaDetailsPage = () => {
     }
     return buildMonthDates(selectedMonth.year, selectedMonth.monthIndex);
   }, [selectedMonth]);
+  const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
   const [tamilStars, setTamilStars] = useState<Record<string, string>>({});
   const [dayOptionsByDate, setDayOptionsByDate] = useState<
     Record<string, DayOptionCalendarEntry[]>
@@ -165,6 +163,14 @@ const PoojaDetailsPage = () => {
   const [donorCalendarByDate, setDonorCalendarByDate] = useState<Record<string, DonorCalendarSummary>>({});
   const [dailyMessageHeaders, setDailyMessageHeaders] = useState<Record<string, string>>({});
   const [specialAnnouncements, setSpecialAnnouncements] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const handleEvent = () => setCalendarRefreshToken((prev) => prev + 1);
+    window.addEventListener(POOJA_DATA_UPDATED_EVENT, handleEvent);
+    return () => window.removeEventListener(POOJA_DATA_UPDATED_EVENT, handleEvent);
+  }, []);
 
   const resolveDayOptionInfo = useCallback(
     (date: Date, dateKey: string) => {
@@ -245,9 +251,9 @@ const PoojaDetailsPage = () => {
   ]);
 
   const downloadFilenameBase = useMemo(() => {
-    const label = selectedMonth?.label?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase() ?? 'pooja-details';
-    return `pooja-details-${label}-${formatFilenameDate(new Date())}`;
-  }, [selectedMonth]);
+    const label = selectedMonth?.label?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase() ?? 'ubhayam-report';
+    return `ubhayam-report-${label}-${formatFilenameDate(new Date())}`;
+  }, [selectedMonth, calendarRefreshToken]);
 
   const triggerBlobDownload = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -270,7 +276,7 @@ const PoojaDetailsPage = () => {
       const pdfMakeInstance = await loadPdfMake();
       const ok = verifyTamilFont();
       if (!ok) {
-        console.error('Tamil font registration failed for Pooja details PDF');
+        console.error('Tamil font registration failed for Ubhayam report PDF');
         return;
       }
       const headerRow: TableCell[] = TABLE_COLUMNS.map((column) => ({
@@ -292,7 +298,7 @@ const PoojaDetailsPage = () => {
         pageMargins: [24, 24, 24, 24],
         defaultStyle: { font: PDF_TAMIL_FONT_NAME, fontSize: 10 },
         content: [
-          { text: 'Pooja Details Report', style: 'header' },
+          { text: 'Ubhayam Report', style: 'header' },
           {
             text: `${selectedMonth?.label ?? ''} • ${reportRows.length} row${reportRows.length === 1 ? '' : 's'}`,
             style: 'subheader',
@@ -341,7 +347,7 @@ const PoojaDetailsPage = () => {
       }
       console.error('PDF download method unavailable');
     } catch (error) {
-      console.error('Failed to generate pooja details PDF', error);
+      console.error('Failed to generate Ubhayam report PDF', error);
     }
   }, [reportRows, downloadFilenameBase, selectedMonth, triggerBlobDownload]);
 
@@ -353,7 +359,7 @@ const PoojaDetailsPage = () => {
       header: TABLE_COLUMNS.map((column) => column),
     });
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Pooja Details');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ubhayam Report');
     XLSX.writeFile(workbook, `${downloadFilenameBase}.xlsx`);
   }, [reportRows, downloadFilenameBase]);
 
@@ -387,7 +393,7 @@ const PoojaDetailsPage = () => {
     return () => {
       active = false;
     };
-  }, [selectedMonth]);
+  }, [selectedMonth, calendarRefreshToken]);
 
   useEffect(() => {
     if (!selectedMonth) {
@@ -423,7 +429,7 @@ const PoojaDetailsPage = () => {
     return () => {
       active = false;
     };
-  }, [selectedMonth]);
+  }, [selectedMonth, calendarRefreshToken]);
 
   useEffect(() => {
     if (!selectedMonth) {
@@ -471,7 +477,7 @@ const PoojaDetailsPage = () => {
     return () => {
       active = false;
     };
-  }, [selectedMonth]);
+  }, [selectedMonth, calendarRefreshToken]);
 
   useEffect(() => {
     let active = true;
@@ -598,10 +604,10 @@ const PoojaDetailsPage = () => {
           <div className="flex flex-col gap-4">
             <div>
               <div className="text-sm font-medium uppercase tracking-wide text-orange-600">
-                Pooja Details
+                Ubhayam Report
               </div>
               <p className="mt-1 text-base font-semibold text-slate-700">
-                View the template columns for the Pooja details report.
+                View the template columns for the Ubhayam report.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

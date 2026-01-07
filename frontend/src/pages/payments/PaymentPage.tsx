@@ -12,6 +12,7 @@ import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
 import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
+import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 import type { CartItem } from '../../store/cart';
 import RevealableAccountSection from '../../components/RevealableAccountSection';
 
@@ -277,6 +278,14 @@ const recordRegistrations = async (
       notes: payload.additional_notes ?? '',
     });
   }
+};
+
+const emitPoojaDataUpdatedEvent = () => {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return;
+  }
+  const event = new CustomEvent(POOJA_DATA_UPDATED_EVENT);
+  window.dispatchEvent(event);
 };
 
 const buildRegistrationErrorMessage = (error: unknown) => {
@@ -564,6 +573,7 @@ const PaymentPage = () => {
         trimmedReference,
         normalizedPaymentDate || undefined,
       );
+      emitPoojaDataUpdatedEvent();
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
       return;
