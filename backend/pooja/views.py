@@ -1103,9 +1103,9 @@ class PoojaDonorCalendarView(APIView):
             if option is not None:
                 return build_day_option_payload(option)
             raw_code = item.get("dayOptionCode") or ""
-            raw_description = item.get("dayOptionDescription") or item.get("dayOptionLabel") or raw_code or "Custom day option"
+            raw_description = item.get("dayOptionDescription") or item.get("dayOptionLabel") or raw_code or ""
             description_value = raw_description.strip() if isinstance(raw_description, str) else str(raw_description or "").strip()
-            label = description_value or "Custom day option"
+            label = description_value or ""
             return {
                 "id": next(snapshot_option_counter),
                 "code": raw_code,
