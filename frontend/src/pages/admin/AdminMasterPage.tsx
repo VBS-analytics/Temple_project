@@ -1039,10 +1039,10 @@ const AdminMasterPage = () => {
   }, [notice]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white pb-16">
+    <div className="min-h-screen bg-slate-50 pb-16">
       <div className="mx-auto max-w-full px-4 pt-6 sm:px-6 lg:px-8">
         {/* Header Section */}
-        <header className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-orange-700 via-rose-700 to-slate-900 p-5 sm:p-6 md:p-8 text-white shadow-2xl ring-1 ring-black/5">
+        <header className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-600 to-slate-900 p-5 sm:p-6 md:p-8 text-white shadow-2xl ring-1 ring-black/5">
           <div
             className="pointer-events-none absolute inset-0 opacity-40"
             style={{
@@ -1075,7 +1075,7 @@ const AdminMasterPage = () => {
                 </span>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Master Data Control</h1>
-                  <p className="mt-2 max-w-2xl text-sm sm:text-base text-orange-100/90">
+                  <p className="mt-2 max-w-2xl text-sm sm:text-base text-indigo-100/90">
                     Configure headers, pooja catalog items, and day codes that power bookings and rituals.
                   </p>
                 </div>
@@ -1306,7 +1306,7 @@ const AdminMasterPage = () => {
                 {/* Sidebar Forms - Hidden on mobile, shown when menu is open */}
                 <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
                   {/* Header Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
                       <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1354,7 +1354,7 @@ const AdminMasterPage = () => {
                   </div>
 
                   {/* Pooja Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
                       <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1488,7 +1488,7 @@ const AdminMasterPage = () => {
                           key={option.id}
                           className="rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all duration-300 hover:border-orange-300 hover:shadow-md"
                         >
-                          <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 to-white px-4 sm:px-6 py-4">
+                          <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 sm:px-6 py-4">
                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                               <div className="flex items-center gap-3">
                                 <button
@@ -1847,7 +1847,7 @@ const AdminMasterPage = () => {
               
               <div className="flex flex-col lg:flex-row gap-8">
                 <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center gap-2">
                       <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

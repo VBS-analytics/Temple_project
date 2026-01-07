@@ -179,7 +179,7 @@ const LoginPage = () => {
                 className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
               >
                 <p className="text-sm sm:text-base font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
-                  Kakkazhany Gramam
+                  Kakkalani Gramam
                 </p>
               </Link>
               
@@ -287,7 +287,7 @@ const LoginPage = () => {
       )}
 
       {/* MAIN */}
-      <div className="relative z-10 flex min-h-screen items-start justify-center px-4 pb-16 pt-20 sm:pt-24 sm:px-6 lg:px-10">
+      <div className="relative z-10 flex items-center justify-center px-4 py-10 sm:py-12 sm:px-6 lg:px-10">
         <div className="w-full max-w-screen-2xl">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
             {/* Left Column - Content */}
@@ -561,7 +561,7 @@ const LoginPage = () => {
       
       {/* Footer */}
       <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-white/60 text-xs z-10">
-        <p>© {new Date().getFullYear()} Kakkazhany Gramam. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} Kakkalani Gramam. All rights reserved.</p>
       </footer>
       
       {/* Custom CSS for animations */}

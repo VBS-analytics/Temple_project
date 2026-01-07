@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import PublicSiteHeader from "../components/PublicSiteHeader";
 
 /**
- * Kakkazhany Gramam – About Page
+ * Kakkalani Gramam – About Page
  * ------------------------------------------------------
  * • Single-file React component ready to drop into a Vite/CRA app
  * • TailwindCSS styling, responsive, a11y-friendly
@@ -467,7 +467,7 @@ function CoreGroupSection() {
     <section className="space-y-6">
       <SectionHeader
         title="Core Group Families & Contacts"
-        subtitle="Coordinators representing each core family for Kakkazhany Gramam."
+        subtitle="Coordinators representing each core family for Kakkalani Gramam."
       />
       <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-sky-100 text-left text-sm text-gray-700">
@@ -543,7 +543,7 @@ function FamilyTreeSection() {
   return (
     <section id="family-tree" className="space-y-6">
       <SectionHeader
-        title="Kakkazhany Gramam Family Tree"
+        title="Kakkalani Gramam Family Tree"
         subtitle={activeTree?.subtitle}
       />
       <div className="flex flex-wrap justify-center gap-3">
@@ -646,7 +646,7 @@ export default function AboutPage() {
       sectionContent = (
         <MemberCard
           id="founder-members"
-          title="Kakkazhany Gramam Group Founder Members"
+          title="Kakkalani Gramam Group Founder Members"
           langSubtitle="கக்காழணி கிராமம் குழு நிறுவனர் உறுப்பினர்கள்"
           members={founderMembers}
           after={
@@ -655,7 +655,7 @@ export default function AboutPage() {
                 <span className="w-28 h-28 rounded-xl overflow-hidden shadow-sm border border-sky-100 flex-shrink-0 bg-white">
                   <img
                     src="/images/Kakkalany-Gramam-Founder-Members-images/RS_Mani_family.png"
-                    alt="RS Mani family meeting at Kakkazhany village"
+                    alt="RS Mani family meeting at Kakkalani village"
                     className="w-full h-full object-cover"
                     loading="lazy"
                     onError={(e) => {
@@ -669,7 +669,7 @@ export default function AboutPage() {
                   </h3>
                   <p className="mt-1 text-sm text-sky-900">
                     R.S. Mani family, Radhachandran / Sriram family, Rema &amp; Lakshmi met
-                    Srichu &amp; Rajendran at Kakkazhany village in Jan 2021 when the thought
+                    Srichu &amp; Rajendran at Kakkalani village in Jan 2021 when the thought
                     process to collect the family tree began.
                   </p>
                 </div>
@@ -683,7 +683,7 @@ export default function AboutPage() {
       sectionContent = (
         <MemberCard
           id="committee-members"
-          title="Kakkazhany Gramam Managing Committee Members"
+          title="Kakkalani Gramam Managing Committee Members"
           langSubtitle="கக்காழணி கிராமம் நிர்வாக குழு உறுப்பினர்கள்"
           members={managingCommitteeMembers}
         />
@@ -712,11 +712,11 @@ export default function AboutPage() {
           {/* Hero */}
           <header className="space-y-4 text-center">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-              Kakkazhany Gramam
+              Kakkalani Gramam
             </h1>
             <p className="mx-auto max-w-2xl text-gray-600">
               Honouring the people who laid the foundation and continue to guide
-              the Kakkazhany Gramam community.
+              the Kakkalani Gramam community.
             </p>
           </header>
 
@@ -743,7 +743,7 @@ export default function AboutPage() {
 
           {/* Footer */}
           <footer className="text-center text-xs text-gray-500">
-            <p>© {new Date().getFullYear()} Kakkazhany Gramam. Built with ❤ for the community.</p>
+            <p>© {new Date().getFullYear()} Kakkalani Gramam. Built with ❤ for the community.</p>
           </footer>
         </div>
       </main>

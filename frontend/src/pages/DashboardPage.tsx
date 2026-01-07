@@ -658,7 +658,7 @@ const DashboardPage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50">
+    <div className="min-h-screen bg-slate-50">
       <div className="responsive-layout py-6 sm:py-8">
         {/* Header Section */}
         <div className="mb-8 sm:mb-10">

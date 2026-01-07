@@ -3064,7 +3064,7 @@ const PoojaRegistrationPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8">
+    <div className="min-h-screen bg-slate-50 py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8">
       {warningPopup && (
         <div className="fixed bottom-6 right-6 z-50 flex pointer-events-none">
           <div className="pointer-events-auto w-full max-w-sm xl:max-w-md">

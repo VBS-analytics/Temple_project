@@ -405,7 +405,7 @@ const RegisterPage = () => {
               className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
             >
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
-                Kakkazhany Gramam
+                Kakkalani Gramam
               </p>
             </Link>
 
@@ -474,7 +474,7 @@ const RegisterPage = () => {
       </header>
 
       {/* MAIN */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-14 pt-28 sm:px-6 lg:px-10 lg:pt-36">
+      <div className="relative z-10 flex items-center justify-center px-4 py-12 sm:px-6 lg:px-10 lg:py-16">
         <div className="w-full max-w-screen-2xl">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             {/* Left Column - Content */}
@@ -1547,7 +1547,7 @@ const RegisterPage = () => {
 
       {/* Footer */}
       <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-white/60 text-xs z-10">
-        <p>© {new Date().getFullYear()} Kakkazhany Gramam. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} Kakkalani Gramam. All rights reserved.</p>
       </footer>
 
       {/* Custom CSS for animations */}

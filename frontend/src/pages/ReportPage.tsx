@@ -4,7 +4,7 @@ import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interface
 import * as XLSX from 'xlsx';
 
 import api, { extractResults } from '../lib/api';
-import { loadPdfMake, PDF_TAMIL_FONT_NAME, testTamilFont, verifyTamilFont } from '../lib/pdfMakeLoader';
+import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../lib/pdfMakeLoader';
 import type { CartItem } from '../store/cart';
 
 interface DonorRecord {
@@ -57,6 +57,26 @@ interface CartSnapshotRecord {
   donor_name?: string | null;
   donor_phone?: string | null;
   items?: CartItem[] | null;
+  updated_at?: string | null;
+}
+
+interface PaymentRecordExportEntry {
+  id?: number | string | null;
+  donor?: number | null;
+  donor_name?: string | null;
+  pooja_option?: string | null;
+  registration?: number | null;
+  registration_start_date?: string | null;
+  amount?: string | number | null;
+  pooja_due_amount?: string | number | null;
+  status?: string | null;
+  transaction_reference?: string | null;
+  mode?: string | null;
+  payment_month?: string | null;
+  created_at?: string | null;
+  registration_status?: string | null;
+  registration_donor_name?: string | null;
+  registration_is_group_registration?: boolean | null;
 }
 
 const formatFilenameDate = (value: Date) =>
@@ -78,6 +98,27 @@ const formatDateValue = (value?: string | number | null) => {
     month: 'short',
     year: 'numeric',
   });
+};
+
+const formatBooleanValue = (value?: boolean | null) =>
+  value === undefined || value === null ? '—' : value ? 'Yes' : 'No';
+
+const asNumericValue = (value?: string | number | null) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const joinCartMemberNames = (members?: CartItem['members']) => {
+  if (!members?.length) {
+    return '—';
+  }
+  const names = members
+    .map((member) => (member?.name ?? '').trim())
+    .filter((name) => name.length > 0);
+  return names.length ? names.join('; ') : '—';
 };
 
 const formatProfileAddress = (profile?: DonorRecord['profile']) => {
@@ -326,6 +367,133 @@ const buildPoojaReportRows = (registrations: PoojaReportEntry[]): PoojaReportRow
     'Pooja Date': displayValue(registration.pooja_date),
   }));
 
+const CART_SNAPSHOT_HEADERS = [
+  'S.no',
+  'Donor ID',
+  'Donor Name',
+  'Donor Phone',
+  'Cart Item ID',
+  'Pooja Name',
+  'Pooja Code',
+  'Booking Date',
+  'Custom Date',
+  'Custom Note',
+  'Day Option',
+  'Day Category',
+  'Amount',
+  'Post Prasadam',
+  'Recurrence Kind',
+  'Recurrence Frequency',
+  'Target Donor ID',
+  'Members',
+  'Snapshot Updated At',
+] as const;
+
+const PAYMENT_COMPLETED_HEADERS = [
+  'S.no',
+  'Payment ID',
+  'Donor ID',
+  'Donor Name',
+  'Registration ID',
+  'Pooja Option',
+  'Start Date',
+  'Amount Paid',
+  'Due Amount',
+  'Payment Mode',
+  'Payment Status',
+  'Transaction Reference',
+  'Payment Month',
+  'Registration Status',
+  'Registered By',
+  'Group Registration',
+  'Recorded At',
+] as const;
+
+const buildCartSnapshotRows = (snapshots: CartSnapshotRecord[]) => {
+  const output: Record<string, string | number | null>[] = [];
+  let sequence = 0;
+  snapshots.forEach((snapshot) => {
+    const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+    items.forEach((item) => {
+      sequence += 1;
+      output.push({
+        'S.no': sequence,
+        'Donor ID': snapshot.donor_id ?? '—',
+        'Donor Name': displayValue(snapshot.donor_name),
+        'Donor Phone': displayValue(snapshot.donor_phone),
+        'Cart Item ID': displayValue(item.cartId),
+        'Pooja Name': displayValue(item.poojaName),
+        'Pooja Code': displayValue(item.poojaCode),
+        'Booking Date': formatDateValue(item.bookingDate),
+        'Custom Date': formatDateValue(item.customDayDate),
+        'Custom Note': displayValue(item.customDayNote),
+        'Day Option': displayValue(item.dayOptionDescription),
+        'Day Category': displayValue(item.dayOptionCategory),
+        Amount: asNumericValue(item.amount),
+        'Post Prasadam': formatBooleanValue(item.postPrasadam),
+        'Recurrence Kind': displayValue(item.recurrenceKind),
+        'Recurrence Frequency': displayValue(item.recurrenceFrequency),
+        'Target Donor ID': item.targetDonorId ?? '—',
+        Members: joinCartMemberNames(item.members),
+        'Snapshot Updated At': formatDateValue(snapshot.updated_at),
+      });
+    });
+  });
+  return output;
+};
+
+const buildPaymentCompletedRows = (records: PaymentRecordExportEntry[]) =>
+  records.map((record, index) => ({
+    'S.no': index + 1,
+    'Payment ID': record.id ?? '—',
+    'Donor ID': record.donor ?? '—',
+    'Donor Name': displayValue(record.donor_name),
+    'Registration ID': record.registration ?? '—',
+    'Pooja Option': displayValue(record.pooja_option),
+    'Start Date': formatDateValue(record.registration_start_date),
+    'Amount Paid': asNumericValue(record.amount),
+    'Due Amount': asNumericValue(record.pooja_due_amount),
+    'Payment Mode': displayValue(record.mode),
+    'Payment Status': displayValue(record.status),
+    'Transaction Reference': displayValue(record.transaction_reference),
+    'Payment Month': formatDateValue(record.payment_month),
+    'Registration Status': displayValue(record.registration_status),
+    'Registered By': displayValue(record.registration_donor_name),
+    'Group Registration': formatBooleanValue(record.registration_is_group_registration),
+    'Recorded At': formatDateValue(record.created_at),
+  }));
+
+const fetchAllPayments = async (params: Record<string, string | number> = {}) => {
+  const pageSize = 250;
+  let page = 1;
+  const records: PaymentRecordExportEntry[] = [];
+
+  while (true) {
+    const { data } = await api.get('payments/records/', {
+      params: {
+        ...params,
+        page,
+        page_size: pageSize,
+      },
+    });
+
+    const pageResults = extractResults<PaymentRecordExportEntry>(data);
+    if (!pageResults.length) {
+      break;
+    }
+
+    records.push(...pageResults);
+
+    const hasNext = Boolean(data?.next);
+    if (!hasNext || pageResults.length < pageSize) {
+      break;
+    }
+    page += 1;
+  }
+
+  return records;
+};
+
 const triggerBlobDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -510,6 +678,7 @@ const downloadPoojaReportPdf = async (
 const ReportPage = () => {
   const [exportingDonorDatabase, setExportingDonorDatabase] = useState(false);
   const [exportingDonorDetails, setExportingDonorDetails] = useState(false);
+  const [exportingPoojaRegistrationDatabase, setExportingPoojaRegistrationDatabase] = useState(false);
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -642,6 +811,53 @@ const ReportPage = () => {
     }
   }, [exportingDonorDatabase, fetchDonors]);
 
+  const handlePoojaRegistrationDatabaseDownload = useCallback(async () => {
+    if (exportingPoojaRegistrationDatabase) return;
+
+    setExportError(null);
+    setExportingPoojaRegistrationDatabase(true);
+
+    try {
+      const [cartResponse, completedPayments] = await Promise.all([
+        api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/'),
+        fetchAllPayments({ status: 'success' }),
+      ]);
+      const snapshots: CartSnapshotRecord[] = Array.isArray(cartResponse.data)
+        ? cartResponse.data
+        : [];
+      const cartRows = buildCartSnapshotRows(snapshots);
+      const paymentRows = buildPaymentCompletedRows(completedPayments);
+
+      if (!cartRows.length && !paymentRows.length) {
+        setExportError('No cart snapshots or completed payments are available at the moment.');
+        return;
+      }
+
+      const timestamp = formatFilenameDate(new Date());
+
+      const cartWorkbook = XLSX.utils.book_new();
+      const cartSheet = XLSX.utils.json_to_sheet(cartRows, { header: CART_SNAPSHOT_HEADERS });
+      XLSX.utils.book_append_sheet(cartWorkbook, cartSheet, 'Cart Snapshot');
+      downloadWorkbook(cartWorkbook, `pooja-cart-snapshots-${timestamp}.xlsx`);
+
+      const paymentWorkbook = XLSX.utils.book_new();
+      const paymentSheet = XLSX.utils.json_to_sheet(paymentRows, { header: PAYMENT_COMPLETED_HEADERS });
+      XLSX.utils.book_append_sheet(paymentWorkbook, paymentSheet, 'Paid Registrations');
+      downloadWorkbook(paymentWorkbook, `pooja-registrations-paid-${timestamp}.xlsx`);
+    } catch (error) {
+      const detail =
+        (error as AxiosError<{ detail?: string | null }>)?.response?.data?.detail ?? null;
+      console.error('Failed to download pooja registration database', error);
+      if (typeof detail === 'string' && detail.length > 0) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the pooja registration database right now.');
+      }
+    } finally {
+      setExportingPoojaRegistrationDatabase(false);
+    }
+  }, [exportingPoojaRegistrationDatabase]);
+
   const handleDonorDetailsDownload = useCallback(async () => {
     if (exportingDonorDetails) return;
 
@@ -749,6 +965,12 @@ const ReportPage = () => {
     [exportingDonorDetails],
   );
 
+  const registrationDatabaseLabel = useMemo(
+    () =>
+      exportingPoojaRegistrationDatabase ? 'Preparing download…' : 'Pooja Registration Database',
+    [exportingPoojaRegistrationDatabase],
+  );
+
   const openReportFormatDialog = useCallback(
     (key: PoojaReportKey) => {
       if (exportingReports[key]) return;
@@ -819,6 +1041,15 @@ const ReportPage = () => {
             className="rounded-full bg-orange-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-70 disabled:hover:bg-orange-600"
           >
             {buttonLabel}
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePoojaRegistrationDatabaseDownload}
+            disabled={exportingPoojaRegistrationDatabase}
+            className="rounded-full border border-orange-600 px-5 py-2 text-sm font-semibold text-orange-600 transition hover:border-orange-700 hover:text-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-60 disabled:hover:border-orange-600"
+          >
+            {registrationDatabaseLabel}
           </button>
 
           <button

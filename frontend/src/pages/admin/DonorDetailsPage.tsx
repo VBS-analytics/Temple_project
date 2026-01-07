@@ -1097,7 +1097,7 @@ const DonorDetailsPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-rose-50 to-white p-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full flex flex-col items-center">
           <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mb-6"></div>
           <h3 className="text-xl font-semibold text-slate-800 mb-2">Loading Donor Details</h3>
@@ -1109,7 +1109,7 @@ const DonorDetailsPage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-rose-50 to-white p-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full">
           <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1130,7 +1130,7 @@ const DonorDetailsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white p-3 sm:p-4 md:p-6">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-4 md:p-6">
       <div className="responsive-layout">
         {/* Header Section */}
         <header className="mb-6 sm:mb-8 md:mb-10">

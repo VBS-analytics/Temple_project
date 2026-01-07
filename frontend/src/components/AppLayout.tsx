@@ -60,26 +60,31 @@ const AppLayout = () => {
       label: 'Report',
       show: Boolean(user && isAdmin(user.role)),
     },
+    {
+      to: '/admin/expenses',
+      label: 'Expenses',
+      show: Boolean(user && isAdmin(user.role)),
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-orange-50">
+    <div className="min-h-screen bg-slate-50">
       {/* HEADER */}
-      <header className="border-b border-orange-200 bg-gradient-to-r from-orange-100 via-white to-rose-100/70">
+      <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 shadow-sm">
         <div className="responsive-layout flex flex-col gap-4 py-3">
 
             {/* TOP ROW */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               {/* LOGO */}
               <Link to="/" className="flex items-center gap-3 text-left">
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-lg font-semibold text-white shadow-sm">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-lg font-semibold text-white shadow-sm">
                   TD
                 </span>
                 <span>
                   <span className="block text-lg font-semibold text-slate-900">
                     Temple Donor Portal
                   </span>
-                  <span className="block text-xs font-medium uppercase tracking-wide text-orange-600">
+                  <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
                     {headerSubtitle.toUpperCase()}
                   </span>
                 </span>
@@ -87,12 +92,12 @@ const AppLayout = () => {
 
               {/* ACTIONS */}
               <div className="notranslate flex items-center gap-3" translate="no">
-                <div className="hidden h-10 w-px bg-orange-200 md:block" />
+                <div className="hidden h-10 w-px bg-slate-200 md:block" />
 
                 <div className="flex items-center gap-3">
                   {/* USER CARD */}
-                  <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-white px-3 py-1.5 shadow-sm">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-700">
+                  <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-600">
                       {userInitials}
                     </span>
                     <div className="flex flex-col">
@@ -109,7 +114,7 @@ const AppLayout = () => {
                   <button
                     type="button"
                     onClick={clear}
-                    className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                    className="rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-600 hover:to-purple-700"
                   >
                     Logout
                   </button>
@@ -118,7 +123,7 @@ const AppLayout = () => {
             </div>
 
             {/* NAVIGATION */}
-            <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-orange-200 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
+            <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-slate-200 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
               {navItems
                 .filter((item) => item.show)
                 .map((item) => (
@@ -130,8 +135,8 @@ const AppLayout = () => {
                       clsx(
                         'relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition',
                         isActive
-                          ? 'bg-orange-600 text-white shadow-[0_12px_20px_-14px_rgba(234,88,12,0.9)]'
-                          : 'text-slate-600 hover:bg-orange-50 hover:text-orange-600'
+                          ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-[0_12px_20px_-14px_rgba(79,70,229,0.6)]'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                       )
                     }
                   >

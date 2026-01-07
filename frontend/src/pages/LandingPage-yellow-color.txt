@@ -84,7 +84,7 @@ const heroHighlights = [
   },
   {
     title: "How to Reach",
-    primary: "Kakkazhany Gramam Busstop: 12 km",
+    primary: "Kakkalani Gramam Busstop: 12 km",
     secondary: "",
     cta: "Get directions",
     href: "#visit",
@@ -237,7 +237,7 @@ const newsUpdates = [
   },
   {
     date: "Apr 10, 2024",
-    title: "Renovation works begin at Kakkazhany Gramam - Pillayar Koil",
+    title: "Renovation works begin at Kakkalani Gramam - Pillayar Koil",
     excerpt:
       "Structural restoration and mural conservation initiated to preserve the heritage for future generations.",
     href: "#",
@@ -418,7 +418,7 @@ const LandingPage = () => {
                 காக்காழநி கிராமம்
               </p>
               <p className="text-xs text-amber-200">
-                Kakkazhany Gramam Temple
+                Kakkalani Gramam Temple
               </p>
             </a>
 
@@ -633,7 +633,7 @@ const LandingPage = () => {
               <h2 className="text-4xl md:text-5xl font-bold text-amber-900 mb-4">Temple Information</h2>
               <div className="w-24 h-1 bg-gradient-to-r from-amber-600 to-amber-700 mx-auto mb-6"></div>
               <p className="text-lg text-amber-800 max-w-2xl mx-auto">
-                Everything you need to know for your visit to Kakkazhany Gramam Temple
+                Everything you need to know for your visit to Kakkalani Gramam Temple
               </p>
             </div>
             
@@ -803,7 +803,7 @@ const LandingPage = () => {
                       </div>
                       <div>
                         <h4 className="font-semibold text-amber-900">Location</h4>
-                        <p className="text-sm text-amber-700">Kakkazhany Gramam, Agraharam</p>
+                        <p className="text-sm text-amber-700">Kakkalani Gramam, Agraharam</p>
                       </div>
                     </div>
                   </div>
@@ -1032,7 +1032,7 @@ const LandingPage = () => {
               <h2 className="text-4xl md:text-5xl font-bold mb-4">Support Our Temple</h2>
               <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-500 mx-auto mb-6"></div>
               <p className="text-xl mb-8 text-amber-100">
-                Preserve the legacy of Kakkazhany Gramam Temple for future generations
+                Preserve the legacy of Kakkalani Gramam Temple for future generations
               </p>
               <p className="mb-8 text-amber-100 max-w-2xl mx-auto leading-relaxed">
                 Contributions maintain daily poojas, heritage conservation, annadanam, and cultural outreach. Join hands to safeguard centuries of devotion and artistry.
@@ -1057,8 +1057,8 @@ const LandingPage = () => {
         <div className="container mx-auto px-6 relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h3 className="text-lg font-bold text-amber-100 mb-4">Kakkazhany Gramam Temple</h3>
-              <p className="text-sm mb-2 text-amber-200">Kakkazhany Gramam, Agraharam, Tamil Nadu 625001</p>
+              <h3 className="text-lg font-bold text-amber-100 mb-4">Kakkalani Gramam Temple</h3>
+              <p className="text-sm mb-2 text-amber-200">Kakkalani Gramam, Agraharam, Tamil Nadu 625001</p>
               <p className="text-sm mb-2 text-amber-200">Phone: +91 9999900000</p>
               <p className="text-sm text-amber-200">Email: crgrpkakkalany@gmail.com</p>
             </div>
@@ -1104,7 +1104,7 @@ const LandingPage = () => {
           </div>
           
           <div className="mt-8 pt-8 border-t border-amber-700 text-center text-sm text-amber-200">
-            <p>&copy; {new Date().getFullYear()} Kakkazhany Gramam Temple, Agraharam. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Kakkalani Gramam Temple, Agraharam. All rights reserved.</p>
           </div>
         </div>
       </footer>
