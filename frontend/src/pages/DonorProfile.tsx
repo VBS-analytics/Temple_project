@@ -1343,7 +1343,7 @@ const DonorProfile = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-white py-6 sm:py-8">
+    <div className="min-h-screen bg-slate-50 py-6 sm:py-8">
       <div className="mx-auto w-full max-w-[90rem] px-4 lg:px-8">
       <div className="mb-6 sm:mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
