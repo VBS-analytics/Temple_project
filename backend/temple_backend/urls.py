@@ -5,7 +5,10 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.static import serve
 
+from temple_backend.views import health_check
+
 urlpatterns = [
+    path('health/', health_check, name='health'),
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
     path('api/pooja/', include('pooja.urls')),

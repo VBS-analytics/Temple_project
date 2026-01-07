@@ -1,12 +1,18 @@
 """ViewSets for pooja master data and registrations."""
 
+from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from itertools import count
+import calendar
+from typing import Any
 
 from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -18,17 +24,19 @@ from common.permissions import IsAdminRole, ReadOnlyOrAdmin
 
 from .models import (
     DailyMessage,
+    DayOptionCategory,
     DonorMessageTemplate,
     FeaturedPooja,
     PoojaCartSnapshot,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
+    PoojaStatus,
     SpecialAnnouncement,
     RecurrenceKind,
     RecurringPoojaPlan,
 )
-from .services.calendar import get_calendar_service
+from .services.calendar import TempleCalendarService, get_calendar_service
 from .services.recurrence import (
     calculate_next_recurring_occurrence,
     find_due_registration,
@@ -73,6 +81,16 @@ def _is_registration_in_pause_window(registration, pause_start):
 
 def _round_to_whole_rupee(amount: Decimal) -> int:
     return int(amount.to_integral_value(rounding=ROUND_HALF_UP))
+
+
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        parsed = value.split("T", 1)[0]
+        return date.fromisoformat(parsed)
+    except ValueError:
+        return None
 
 
 def _credit_custom_balance(user, amount: Decimal):
@@ -850,6 +868,429 @@ class PoojaCartSnapshotReportView(APIView):
 
         serializer = PoojaCartSnapshotReportSerializer(queryset, many=True)
         return Response(serializer.data)
+
+
+CALENDAR_DAY_OPTION_CANONICAL_CODES = {
+    "gregorian_1st",
+    "tamil_1st",
+    "first_tuesday",
+    "last_saturday",
+    "weekly_sunday",
+    "sashti",
+    "second_ashtami",
+    "pradosham",
+    "pournami",
+    "amavasya",
+    "sankata_chaturthi",
+    "chaturthi",
+}
+
+
+def _collect_tithi_dates_in_range(service: TempleCalendarService, start: date, end: date, targets: tuple[int, ...]) -> list[date]:
+    occurrences = service._collect_tithi_dates(start, end, targets)
+    return service._compress_consecutive_dates(occurrences)
+
+
+def _collect_tamil_month_starts(service: TempleCalendarService, start: date, end: date) -> list[date]:
+    dates: list[date] = []
+    cursor = start
+    while cursor <= end:
+        if service._is_tamil_month_start(cursor):
+            dates.append(cursor)
+        cursor += timedelta(days=1)
+    return dates
+
+
+def _collect_dates_for_canonical(service: TempleCalendarService, canonical: str, start: date, end: date) -> list[date]:
+    if canonical == "gregorian_1st":
+        return [start]
+    if canonical == "tamil_1st":
+        return _collect_tamil_month_starts(service, start, end)
+    if canonical == "first_tuesday":
+        candidate = service._first_weekday_of_month(start, weekday=1)
+        return [candidate] if start <= candidate <= end else []
+    if canonical == "last_saturday":
+        candidate = service._last_weekday_of_month(start, weekday=5)
+        return [candidate] if start <= candidate <= end else []
+    if canonical == "weekly_sunday":
+        return service._weekday_window(start, end, weekday=6)
+    if canonical == "sashti":
+        return _collect_tithi_dates_in_range(service, start, end, targets=(6, 21))
+    if canonical == "second_ashtami":
+        occurrences = service._upcoming_ashtami_window(start)
+        return [occurrence_date for occurrence_date in occurrences if start <= occurrence_date <= end]
+    if canonical == "pradosham":
+        return _collect_tithi_dates_in_range(service, start, end, targets=(13, 28))
+    if canonical == "pournami":
+        return _collect_tithi_dates_in_range(service, start, end, targets=(15,))
+    if canonical == "amavasya":
+        return _collect_tithi_dates_in_range(service, start, end, targets=(30,))
+    if canonical == "sankata_chaturthi":
+        return _collect_tithi_dates_in_range(service, start, end, targets=(19,))
+    if canonical == "chaturthi":
+        return _collect_tithi_dates_in_range(service, start, end, targets=(4,))
+    return []
+
+
+@method_decorator(cache_page(60 * 60), name="dispatch")
+class PoojaDayOptionCalendarView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def get(self, request):
+        today = timezone.localdate()
+        try:
+            year = int(request.query_params.get("year", today.year))
+        except (TypeError, ValueError):
+            year = today.year
+        if year < 1 or year > 9999:
+            year = today.year
+        try:
+            month = int(request.query_params.get("month", today.month))
+        except (TypeError, ValueError):
+            month = today.month
+        if month < 1:
+            month = 1
+        elif month > 12:
+            month = 12
+
+        first_day = date(year, month, 1)
+        service = get_calendar_service()
+        last_day = service._month_end(first_day)
+
+        canonical_options: dict[str, list[PoojaDayOption]] = {}
+        for option in PoojaDayOption.objects.order_by("display_order", "id"):
+            canonical = TempleCalendarService._canonicalize_code(option.code)
+            if canonical in CALENDAR_DAY_OPTION_CANONICAL_CODES:
+                canonical_options.setdefault(canonical, []).append(option)
+
+        date_to_options: dict[date, list[PoojaDayOption]] = {}
+        cursor = first_day
+        while cursor <= last_day:
+            date_to_options[cursor] = []
+            cursor += timedelta(days=1)
+
+        for canonical, options in canonical_options.items():
+            for occurrence in _collect_dates_for_canonical(service, canonical, first_day, last_day):
+                if occurrence in date_to_options:
+                    date_to_options[occurrence].extend(options)
+
+        for options in date_to_options.values():
+            options.sort(key=lambda opt: (opt.display_order, opt.code))
+
+        payload_dates = []
+        cursor = first_day
+        while cursor <= last_day:
+            payload_dates.append(
+                {
+                    "date": cursor.isoformat(),
+                    "day_options": [
+                        {
+                            "id": opt.id,
+                            "code": opt.code,
+                            "description": opt.description,
+                            "display_order": opt.display_order,
+                            "category": opt.category,
+                        }
+                        for opt in date_to_options[cursor]
+                    ],
+                }
+            )
+            cursor += timedelta(days=1)
+
+        return Response({"year": year, "month": month, "dates": payload_dates})
+
+
+class TamilNakshatraCalendarView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def get(self, request):
+        today = timezone.localdate()
+        try:
+            year = int(request.query_params.get("year", today.year))
+        except (TypeError, ValueError):
+            year = today.year
+        if year < 1 or year > 9999:
+            year = today.year
+        try:
+            month = int(request.query_params.get("month", today.month))
+        except (TypeError, ValueError):
+            month = today.month
+        if month < 1:
+            month = 1
+        elif month > 12:
+            month = 12
+        cursor = date(year, month, 1)
+        results = []
+        service = get_calendar_service()
+        while cursor.month == month:
+            results.append(
+                {
+                    "date": cursor.isoformat(),
+                    "index": service.nakshatra_index_on(cursor),
+                    "tamil_star": service.nakshatra_name_on(cursor),
+                    "tamil_star_native": service.nakshatra_native_name_on(cursor),
+                }
+            )
+            cursor += timedelta(days=1)
+        return Response(results)
+
+
+class PoojaDonorCalendarView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def get(self, request):
+        today = timezone.localdate()
+        try:
+            year = int(request.query_params.get("year", today.year))
+        except (TypeError, ValueError):
+            year = today.year
+        if year < 1 or year > 9999:
+            year = today.year
+        try:
+            month = int(request.query_params.get("month", today.month))
+        except (TypeError, ValueError):
+            month = today.month
+        if month < 1:
+            month = 1
+        elif month > 12:
+            month = 12
+
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
+        service = get_calendar_service()
+        canonical_occurrences_cache: dict[str, list[date]] = {}
+        debug_mode = request.query_params.get("debug") == "1"
+        debug_info: list[dict[str, Any]] = [] if debug_mode else []
+        snapshot_option_counter = count(-1, -1)
+
+        queryset = (
+            PoojaRegistration.objects.filter(
+                donor__isnull=False,
+                status__in=(PoojaStatus.PENDING, PoojaStatus.CONFIRMED, PoojaStatus.COMPLETED),
+            )
+            .filter(
+                Q(start_date__range=(first_day, last_day))
+                | Q(start_date__isnull=True, created_at__date__range=(first_day, last_day))
+            )
+            .select_related("donor", "day_option")
+            .order_by("start_date", "created_at", "donor__name", "donor__id")
+        )
+
+        donors_by_date: dict[date, list[dict[str, str]]] = defaultdict(list)
+        seen_donor_ids: dict[date, set[int]] = defaultdict(set)
+        day_options_by_date: dict[date, dict[int, dict[str, Any]]] = defaultdict(dict)
+
+        def build_day_option_payload(option: PoojaDayOption | None) -> dict[str, Any] | None:
+            if option is None or option.id is None:
+                return None
+            return {
+                "id": option.id,
+                "code": option.code or "",
+                "description": option.description or "",
+                "category": option.category or "",
+                "display_order": option.display_order or 0,
+            }
+
+        def build_snapshot_day_option_payload(item: dict[str, Any]) -> dict[str, Any] | None:
+            option = None
+            option_id = item.get("dayOptionId")
+            if option_id:
+                option = PoojaDayOption.objects.filter(id=option_id).first()
+            if option is None:
+                day_option_code = item.get("dayOptionCode")
+                if day_option_code:
+                    option = PoojaDayOption.objects.filter(code=day_option_code).first()
+            if option is not None:
+                return build_day_option_payload(option)
+            raw_code = item.get("dayOptionCode") or ""
+            raw_description = item.get("dayOptionDescription") or item.get("dayOptionLabel") or raw_code or "Custom day option"
+            description_value = raw_description.strip() if isinstance(raw_description, str) else str(raw_description or "").strip()
+            label = description_value or "Custom day option"
+            return {
+                "id": next(snapshot_option_counter),
+                "code": raw_code,
+                "description": label,
+                "category": item.get("dayOptionCategory") or DayOptionCategory.CODE,
+                "display_order": 0,
+            }
+
+        def record_day_option_entry(target_date: date | None, payload: dict[str, Any] | None):
+            if target_date is None or payload is None:
+                return
+            option_id = payload.get("id")
+            if option_id is None:
+                return
+            entries = day_options_by_date[target_date]
+            entries.setdefault(option_id, payload)
+
+        for registration in queryset:
+            registration_date = registration.start_date or (
+                registration.created_at.date() if registration.created_at else None
+            )
+            donor = registration.donor
+            if registration_date is None or donor is None:
+                continue
+            donor_payload = {
+                "name": donor.name or "",
+                "phone_number": donor.phone_number or "",
+            }
+
+            def add_donor_for_date(target_date: date | None, day_option_for_date: dict[str, Any] | None = None) -> bool:
+                if target_date is None or target_date < first_day or target_date > last_day:
+                    return False
+                if donor.id in seen_donor_ids[target_date]:
+                    return False
+                seen_donor_ids[target_date].add(donor.id)
+                donors_by_date[target_date].append(donor_payload)
+                record_day_option_entry(target_date, day_option_for_date)
+                return True
+
+            day_option = getattr(registration, "day_option", None)
+            day_option_payload = build_day_option_payload(day_option)
+            add_donor_for_date(registration_date, day_option_payload)
+            if day_option:
+                canonical_code = TempleCalendarService._canonicalize_code(day_option.code or "")
+                if canonical_code in CALENDAR_DAY_OPTION_CANONICAL_CODES:
+                    occurrences = canonical_occurrences_cache.get(canonical_code)
+                    if occurrences is None:
+                        occurrences = _collect_dates_for_canonical(service, canonical_code, first_day, last_day)
+                        canonical_occurrences_cache[canonical_code] = occurrences
+                    anchor_date = registration_date or (
+                        registration.created_at.date() if registration.created_at else first_day
+                    )
+                    anchor_date = anchor_date if anchor_date >= first_day else first_day
+                    for occurrence_date in occurrences:
+                        if occurrence_date < anchor_date:
+                            continue
+                        add_donor_for_date(occurrence_date, day_option_payload)
+                    if debug_mode:
+                        debug_info.append(
+                            {
+                                "registration": registration.id,
+                                "day_option_code": day_option.code,
+                                "canonical_code": canonical_code,
+                                "occurrences": [occurrence_date.isoformat() for occurrence_date in occurrences],
+                                "anchor_date": anchor_date.isoformat(),
+                            }
+                        )
+
+        cart_snapshots = PoojaCartSnapshot.objects.select_related("donor")
+        for snapshot in cart_snapshots:
+            donor = getattr(snapshot, "donor", None)
+            if donor is None:
+                continue
+            for item in snapshot.items or []:
+                registration_date = _parse_iso_date(item.get("customDayDate") or item.get("bookingDate"))
+                if registration_date is None or not (first_day <= registration_date <= last_day):
+                    continue
+                if donor.id in seen_donor_ids[registration_date]:
+                    continue
+                seen_donor_ids[registration_date].add(donor.id)
+                donors_by_date[registration_date].append(
+                    {
+                        "name": donor.name or "",
+                        "phone_number": donor.phone_number or "",
+                    }
+                )
+                snapshot_option_payload = build_snapshot_day_option_payload(item)
+                record_day_option_entry(registration_date, snapshot_option_payload)
+                # Include additional upcoming occurrence dates stored on the cart
+                occurrences = item.get("dayOptionOccurrences")
+                if isinstance(occurrences, list):
+                    for occurrence in occurrences:
+                        occurrence_date = _parse_iso_date(occurrence.get("date"))
+                        if occurrence_date is None or not (first_day <= occurrence_date <= last_day):
+                            continue
+                        if donor.id in seen_donor_ids[occurrence_date]:
+                            continue
+                        seen_donor_ids[occurrence_date].add(donor.id)
+                        donors_by_date[occurrence_date].append(
+                            {
+                                "name": donor.name or "",
+                                "phone_number": donor.phone_number or "",
+                            }
+                        )
+                        record_day_option_entry(occurrence_date, snapshot_option_payload)
+
+        recurring_plans = (
+            RecurringPoojaPlan.objects.filter(
+                is_active=True,
+                recurrence_kind=RecurrenceKind.RECURRING,
+            )
+            .select_related("donor")
+            .order_by("donor__name", "donor__id")
+        )
+        for plan in recurring_plans:
+            donor = getattr(plan, "donor", None)
+            if donor is None:
+                continue
+            payload = getattr(plan, "cart_payload", {}) or {}
+            plan_day_option_payload = build_day_option_payload(plan.day_option)
+            occurrences = payload.get("dayOptionOccurrences")
+            added = False
+            if isinstance(occurrences, list):
+                for entry in occurrences:
+                    occurrence_date = _parse_iso_date(entry.get("date"))
+                    if (
+                        occurrence_date is None
+                        or occurrence_date < first_day
+                        or occurrence_date > last_day
+                        or donor.id in seen_donor_ids[occurrence_date]
+                    ):
+                        continue
+                    seen_donor_ids[occurrence_date].add(donor.id)
+                    donors_by_date[occurrence_date].append(
+                        {
+                            "name": donor.name or "",
+                            "phone_number": donor.phone_number or "",
+                        }
+                    )
+                    added = True
+                    record_day_option_entry(occurrence_date, plan_day_option_payload)
+            if added:
+                continue
+            target_date = plan.next_occurrence
+            if (
+                target_date is None
+                or target_date < first_day
+                or target_date > last_day
+                or donor.id in seen_donor_ids[target_date]
+            ):
+                continue
+            seen_donor_ids[target_date].add(donor.id)
+            donors_by_date[target_date].append(
+                {
+                    "name": donor.name or "",
+                    "phone_number": donor.phone_number or "",
+                }
+            )
+            record_day_option_entry(target_date, plan_day_option_payload)
+
+        payload_dates = []
+        cursor = first_day
+        while cursor <= last_day:
+            donors = donors_by_date.get(cursor, [])
+            names = [donor["name"].strip() for donor in donors if donor["name"].strip()]
+            phones = [donor["phone_number"].strip() for donor in donors if donor["phone_number"].strip()]
+            names_label = ", ".join(names) if names else ""
+            phones_label = ", ".join(phones) if phones else ""
+            day_option_entries = list(day_options_by_date.get(cursor, {}).values())
+            day_option_entries.sort(key=lambda opt: (opt.get("display_order", 0), opt.get("code") or ""))
+            payload_dates.append(
+                {
+                    "date": cursor.isoformat(),
+                    "donors": donors,
+                    "donor_names": names_label,
+                    "donor_phones": phones_label,
+                    "day_options": day_option_entries,
+                }
+            )
+            cursor += timedelta(days=1)
+
+        response_payload = {"year": year, "month": month, "dates": payload_dates}
+        if debug_mode:
+            response_payload["debug"] = debug_info
+        return Response(response_payload)
 
 
 class RecentPoojaRegistrationsView(APIView):

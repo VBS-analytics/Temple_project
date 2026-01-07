@@ -54,7 +54,7 @@ const AppLayout = () => {
       label: 'Payment Statement',
       show: Boolean(user),
     },
-    { to: '/admin/pooja-details', label: 'Pooja Details', show: Boolean(user && isAdmin(user.role)) },
+    { to: '/admin/pooja-details', label: 'Ubhayam Report', show: Boolean(user && isAdmin(user.role)) },
     {
       to: '/reports',
       label: 'Report',

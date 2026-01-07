@@ -12,6 +12,7 @@ import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
 import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
+import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 import type { CartItem } from '../../store/cart';
 import RevealableAccountSection from '../../components/RevealableAccountSection';
 
@@ -279,6 +280,14 @@ const recordRegistrations = async (
   }
 };
 
+const emitPoojaDataUpdatedEvent = () => {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return;
+  }
+  const event = new CustomEvent(POOJA_DATA_UPDATED_EVENT);
+  window.dispatchEvent(event);
+};
+
 const buildRegistrationErrorMessage = (error: unknown) => {
   if (!error) {
     return 'Unable to register the poojas right now.';
@@ -329,6 +338,25 @@ const buildMemberSummaries = (item: CartItem): string[] => {
     ].filter(Boolean);
     return attributes.length > 0 ? `${name} — ${attributes.join(' • ')}` : name;
   });
+};
+
+const renderUpcomingOccurrenceList = (occurrences?: CartItem['dayOptionOccurrences']) => {
+  if (!occurrences || occurrences.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-4 text-xs uppercase tracking-wide text-slate-500">
+      <p className="text-[0.6rem] tracking-[0.3em] text-slate-500">UPCOMING DATES</p>
+      <div className="mt-1 space-y-1 text-sm font-semibold text-slate-700">
+        {occurrences.map((entry) => (
+          <p key={`${entry.date}-${entry.label ?? ''}`}>
+            {formatDate(entry.date)}
+            {entry.label ? ` • ${entry.label}` : ''}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const PaymentPage = () => {
@@ -545,6 +573,7 @@ const PaymentPage = () => {
         trimmedReference,
         normalizedPaymentDate || undefined,
       );
+      emitPoojaDataUpdatedEvent();
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
       return;
@@ -773,6 +802,8 @@ const PaymentPage = () => {
                     <dd className="text-sm font-medium text-slate-800">{item.customDayNote?.trim() || '—'}</dd>
                   </div>
                 </dl>
+
+                {renderUpcomingOccurrenceList(item.dayOptionOccurrences)}
 
                 {(() => {
                   const memberLines = buildMemberSummaries(item);

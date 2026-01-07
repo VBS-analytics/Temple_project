@@ -249,7 +249,7 @@ class TempleCalendarService:
             return result
         if code == "pournami":
             target = self._next_tithi(start, targets=(15,))
-            return self._format_result(target, "Pournami (Full moon)")
+            return self._format_result(target, "On Pournami day of month")
         if code == "amavasya":
             target = self._next_tithi(start, targets=(30,))
             return self._format_result(target, "Amavasya (New moon)")
@@ -298,6 +298,7 @@ class TempleCalendarService:
             "SHT": "sashti",
             "2AS": "second_ashtami",
             "KAS": "second_ashtami",
+            "STR14": "second_ashtami",
             "PRM": "pournami",
             "POURNAMI": "pournami",
             "AMV": "amavasya",
@@ -531,7 +532,7 @@ class TempleCalendarService:
         return int(math.floor(sidereal_lon / (360.0 / 27.0))) % 27
 
     def _nakshatra_name(self, index: int) -> str:
-        tamil_names = [
+        english_names = [
             "Ashwini",
             "Bharani",
             "Krittika",
@@ -560,9 +561,55 @@ class TempleCalendarService:
             "Uttara Bhadrapada",
             "Revati",
         ]
-        if 0 <= index < len(tamil_names):
-            return tamil_names[index]
+        if 0 <= index < len(english_names):
+            return english_names[index]
         return f"Nakshatra #{index + 1}"
+
+    def _nakshatra_native_name(self, index: int) -> str:
+        tamil_names_native = [
+            "அசுவினி",
+            "பரணி",
+            "கிருத்திகை",
+            "ரோகிணி",
+            "மிருகசீரிடம்",
+            "திருவாதிரை",
+            "புனர்பூசம்",
+            "பூசம்",
+            "ஆயில்யம்",
+            "மகம்",
+            "பூரம்",
+            "உத்தரம்",
+            "அஸ்தம்",
+            "சித்திரை",
+            "சுவாதி",
+            "விசாகம்",
+            "அனுஷம்",
+            "கேட்டை",
+            "மூலம்",
+            "பூராடம்",
+            "உத்திராடம்",
+            "திருவோணம்",
+            "அவிட்டம்",
+            "சதயம்",
+            "பூரட்டாதி",
+            "உத்திரட்டாதி",
+            "ரேவதி",
+        ]
+        if 0 <= index < len(tamil_names_native):
+            return tamil_names_native[index]
+        return f"Nakshatra #{index + 1}"
+
+    def nakshatra_index_on(self, day: date) -> int:
+        """Return the nakshatra index (0-26) for the given date."""
+        return self._nakshatra_on(day)
+
+    def nakshatra_name_on(self, day: date) -> str:
+        """Return the nakshatra name for the given date."""
+        return self._nakshatra_name(self._nakshatra_on(day))
+
+    def nakshatra_native_name_on(self, day: date) -> str:
+        """Return the Tamil nakshatra name for the given date."""
+        return self._nakshatra_native_name(self._nakshatra_on(day))
 
     # ------------------------- Astronomical helpers ------------------------ #
 

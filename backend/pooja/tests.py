@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -7,13 +7,15 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import DonorProfile, User
+from accounts.models import DonorProfile, User, UserRole
 from payments.models import PaymentMode, PaymentRecord, PaymentStatus
 from .models import (
     DayOptionCategory,
+    PoojaCartSnapshot,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
+    PoojaStatus,
     RecurrenceFrequency,
     RecurrenceKind,
     RecurringPoojaPlan,
@@ -83,6 +85,290 @@ class DayOptionOccurrenceViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["day_option_code"], "CS")
         mock_service.next_occurrence.assert_called_once_with("CS", date(2025, 10, 16), tamil_star_labels=["அசுவினி"])
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class PoojaDayOptionCalendarViewTests(TestCase):
+    class DummyCalendarService:
+        def _month_end(self, start):
+            return date(start.year, start.month, 31)
+
+        def _collect_tithi_dates(self, start, end, targets):
+            data = {
+                (15,): [date(2025, 1, 25)],
+            }
+            return data.get(tuple(targets), [])
+
+        def _compress_consecutive_dates(self, occurrences):
+            return occurrences
+
+        def _is_tamil_month_start(self, day):
+            return day.day == 15
+
+        def _first_weekday_of_month(self, start, *, weekday):
+            if weekday == 1:
+                return date(start.year, start.month, 7)
+            return start
+
+        def _last_weekday_of_month(self, start, *, weekday):
+            if weekday == 5:
+                return date(start.year, start.month, 25)
+            return start
+
+        def _weekday_window(self, window_start, window_end, weekday):
+            occurrences = []
+            cursor = window_start
+            while cursor <= window_end:
+                if cursor.weekday() == weekday:
+                    occurrences.append(cursor)
+                cursor += timedelta(days=1)
+            return occurrences
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            phone_number="9000000005",
+            name="Calendar Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    @patch("pooja.views.get_calendar_service")
+    def test_calendar_view_maps_day_options(self, mock_service_factory):
+        mock_service_factory.return_value = self.DummyCalendarService()
+        option_fe, _ = PoojaDayOption.objects.get_or_create(
+            code="FE",
+            defaults={"description": "1st day of English Month", "category": "code", "display_order": 1},
+        )
+        option_tu, _ = PoojaDayOption.objects.get_or_create(
+            code="1TU",
+            defaults={"description": "1st Tuesday of the month", "category": "code", "display_order": 2},
+        )
+        option_sun, _ = PoojaDayOption.objects.get_or_create(
+            code="SUN",
+            defaults={"description": "Every Sunday", "category": "code", "display_order": 3},
+        )
+        option_prm, _ = PoojaDayOption.objects.get_or_create(
+            code="PRM",
+            defaults={"description": "On Pournami day of month", "category": "code", "display_order": 4},
+        )
+
+        response = self.client.get(reverse("pooja-calendar-day-options"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["year"], 2025)
+        self.assertEqual(payload["month"], 1)
+
+        mapping = {entry["date"]: entry["day_options"] for entry in payload["dates"]}
+        self.assertTrue(any(option["code"] == option_fe.code for option in mapping["2025-01-01"]))
+        self.assertTrue(any(option["code"] == option_tu.code for option in mapping["2025-01-07"]))
+        sunday_codes = [option["code"] for option in mapping["2025-01-05"]]
+        self.assertIn(option_sun.code, sunday_codes)
+        self.assertTrue(any(option["code"] == option_prm.code for option in mapping["2025-01-25"]))
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class PoojaDonorCalendarViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            phone_number="9000000010",
+            name="Calendar Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        self.pooja_option = PoojaOption.objects.create(code="CA", name="Calendar Activity")
+
+    def _create_registration(self, donor, tz_datetime, start_date_value=None, day_option=None):
+        registration = PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            status=PoojaStatus.PENDING,
+            start_date=start_date_value,
+            day_option=day_option,
+        )
+        PoojaRegistration.objects.filter(pk=registration.pk).update(
+            start_date=start_date_value,
+            created_at=tz_datetime,
+            updated_at=tz_datetime,
+        )
+        registration.refresh_from_db()
+        return registration
+
+    def test_donors_grouped_by_registration_date(self):
+        donor_one = User.objects.create_user(phone_number="9000000011", name="Donor One", password="secret")
+        donor_two = User.objects.create_user(phone_number="9000000012", name="Donor Two", password="secret")
+        second_day_donor = User.objects.create_user(phone_number="9000000013", name="Other Donor", password="secret")
+
+        registration_date = timezone.make_aware(datetime(2025, 1, 10, 9, 0))
+        self._create_registration(donor_one, registration_date, start_date_value=date(2025, 1, 10))
+        self._create_registration(
+            donor_two,
+            timezone.make_aware(datetime(2025, 1, 10, 12, 0)),
+            start_date_value=date(2025, 1, 10),
+        )
+        self._create_registration(
+            second_day_donor,
+            timezone.make_aware(datetime(2025, 1, 11, 8, 0)),
+            start_date_value=date(2025, 1, 11),
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["year"], 2025)
+        self.assertEqual(payload["month"], 1)
+
+        january_tenth = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-10")
+        self.assertEqual(len(january_tenth["donors"]), 2)
+        self.assertCountEqual(
+            [donor["name"] for donor in january_tenth["donors"]],
+            ["Donor One", "Donor Two"],
+        )
+        self.assertCountEqual(
+            [donor["phone_number"] for donor in january_tenth["donors"]],
+            ["9000000011", "9000000012"],
+        )
+        self.assertEqual(january_tenth["donor_names"], "Donor One, Donor Two")
+        self.assertEqual(january_tenth["donor_phones"], "9000000011, 9000000012")
+
+        january_eleventh = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-11")
+        self.assertEqual(len(january_eleventh["donors"]), 1)
+        self.assertEqual(january_eleventh["donors"][0]["phone_number"], "9000000013")
+        self.assertEqual(january_eleventh["donor_names"], "Other Donor")
+        self.assertEqual(january_eleventh["donor_phones"], "9000000013")
+
+    def test_registration_day_option_is_exposed(self):
+        donor = User.objects.create_user(
+            phone_number="9000000021",
+            name="Day Option Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="CYD",
+            description="Choose Your Date For Pooja",
+            category=DayOptionCategory.CODE,
+        )
+        registration_date = date(2025, 2, 14)
+        tz_datetime = timezone.make_aware(datetime(2025, 2, 10, 9, 0))
+        self._create_registration(
+            donor,
+            tz_datetime,
+            start_date_value=registration_date,
+            day_option=day_option,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "2"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        feb_entry = next(entry for entry in payload["dates"] if entry["date"] == "2025-02-14")
+        self.assertTrue(feb_entry["day_options"])
+        self.assertTrue(any(option["code"] == day_option.code for option in feb_entry["day_options"]))
+        self.assertTrue(any(option["description"] == day_option.description for option in feb_entry["day_options"]))
+
+    def test_cart_snapshot_donors_are_included(self):
+        snapshot_donor = User.objects.create_user(
+            phone_number="9000000014",
+            name="Snapshot Donor",
+            password="secret",
+        )
+        PoojaCartSnapshot.objects.create(
+            donor=snapshot_donor,
+            items=[
+                {
+                    "cartId": "snapshot-1",
+                    "bookingDate": "2025-01-12",
+                    "poojaId": 99,
+                    "poojaName": "Snapshot Pooja",
+                }
+            ],
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        snapshot_entry = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-12")
+        self.assertEqual(snapshot_entry["donor_names"], "Snapshot Donor")
+        self.assertEqual(snapshot_entry["donor_phones"], "9000000014")
+
+    def test_cart_snapshot_day_option_is_exposed(self):
+        snapshot_donor = User.objects.create_user(
+            phone_number="9000000015",
+            name="Snapshot Option Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="CYD",
+            description="Choose Your Date For Pooja",
+            category=DayOptionCategory.CODE,
+        )
+        PoojaCartSnapshot.objects.create(
+            donor=snapshot_donor,
+            items=[
+                {
+                    "cartId": "snapshot-2",
+                    "bookingDate": "2025-01-13",
+                    "poojaId": 101,
+                    "poojaName": "Snapshot Pooja",
+                    "dayOptionId": day_option.id,
+                    "dayOptionCode": day_option.code,
+                    "dayOptionDescription": day_option.description,
+                    "dayOptionCategory": day_option.category,
+                }
+            ],
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        entry = next(item for item in payload["dates"] if item["date"] == "2025-01-13")
+        self.assertTrue(entry["day_options"])
+        self.assertTrue(any(option["description"] == day_option.description for option in entry["day_options"]))
+
+    @patch("pooja.views.get_calendar_service")
+    def test_multi_occurrence_day_option_shows_all_dates(self, mock_service_factory):
+        class DummyService:
+            def _collect_tithi_dates(self, start, end, targets):
+                if tuple(targets) == (8, 23):
+                    return [date(2026, 1, 10), date(2026, 1, 25)]
+                return []
+
+            def _compress_consecutive_dates(self, occurrences):
+                return occurrences
+
+        mock_service_factory.return_value = DummyService()
+        donor = User.objects.create_user(
+            phone_number="9000000020",
+            name="Multi Occurrence Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="AST",
+            description="Second Ashtami",
+            category="code",
+        )
+        registration_date = date(2026, 1, 10)
+        tz_datetime = timezone.make_aware(datetime(2026, 1, 6, 9, 0))
+        self._create_registration(
+            donor,
+            tz_datetime,
+            start_date_value=registration_date,
+            day_option=day_option,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        tenth_entry = next(entry for entry in payload["dates"] if entry["date"] == "2026-01-10")
+        self.assertEqual(tenth_entry["donor_names"], "Multi Occurrence Donor")
+        self.assertEqual(tenth_entry["donor_phones"], "9000000020")
+        twentyfifth_entry = next(entry for entry in payload["dates"] if entry["date"] == "2026-01-25")
+        self.assertEqual(twentyfifth_entry["donor_names"], "Multi Occurrence Donor")
+        self.assertEqual(twentyfifth_entry["donor_phones"], "9000000020")
 
 
 class CalendarCodeAliasTests(SimpleTestCase):

@@ -6,6 +6,7 @@ import api, { extractResults } from '../../lib/api';
 import { nakshatraOptions } from '../../data/nakshatraOptions';
 import { rasiOptions } from '../../data/familyAttributes';
 import { GothraOptionPayload, useMasterDataStore } from '../../store/masterData';
+import { DailyScheduleEntry, STATIC_DAILY_HEADER_TEXT } from '../../data/dailyHeaderText';
 
 const generateHeaderCode = (name: string) => {
   const baseSlug = name
@@ -74,13 +75,6 @@ interface DailyMessageItem {
   footer_text: string;
 }
 
-interface DailyScheduleEntry {
-  id: number;
-  label: string;
-  description: string;
-  messageId?: number;
-}
-
 interface SpecialAnnouncementEntry {
   id: number;
   label: string;
@@ -101,51 +95,6 @@ type PoojaOptionFormValues = {
   maxRate: string;
   headerId: string;
 };
-
-const STATIC_DAILY_HEADER_TEXT: DailyScheduleEntry[] = [
-  {
-    id: 1,
-    label: 'Sunday',
-    description:
-      'ஞாயிறு  கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில்,  * பெருமாள் கோவில்',
-  },
-  {
-    id: 2,
-    label: 'Monday',
-    description:
-      'திங்கட் கிழமை கிழமை அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்',
-  },
-  {
-    id: 3,
-    label: 'Tuesday',
-    description:
-      'செவ்வாய்  கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்',
-  },
-  {
-    id: 4,
-    label: 'Wednesday',
-    description:
-      'கிழம அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்',
-  },
-  {
-    id: 5,
-    label: 'Thursday',
-    description:
-      'வியாழன் கிழமை அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்',
-  },
-  {
-    id: 6,
-    label: 'Friday',
-    description:
-      'வெள்ளி  கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்',
-  },
-  {
-    id: 7,
-    label: 'Saturday',
-    description:
-      'சனி கிழமை அர்சனை  -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை',
-  },
-];
 
 const rebuildDailySchedule = (
   messages: DailyMessageItem[],

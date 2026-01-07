@@ -40,6 +40,10 @@ export interface CartItem {
   dayOptionCode?: string | null;
   dayOptionDescription?: string | null;
   dayOptionCategory?: string | null;
+  dayOptionOccurrences?: {
+    date: string;
+    label?: string | null;
+  }[];
   selectedTamilStarId?: string | null;
   selectedTamilStarLabel?: string | null;
   customDayDate?: string | null;
