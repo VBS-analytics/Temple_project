@@ -178,8 +178,28 @@ const PoojaDetailsPage = () => {
         (option) => option.category !== 'tamil_star',
       );
       const donorOptions = donorCalendarByDate[dateKey]?.dayOptions ?? [];
+      const merged = mergeDayOptions([...calendarOptions, ...donorOptions]);
+      const normalizedEntries = merged.map((option) => ({
+        option,
+        label: normalizeDayOptionLabel(option),
+      }));
+      const hasActualOption = normalizedEntries.some(
+        (entry) => entry.label !== DAY_OPTION_FALLBACK_LABEL,
+      );
+      const filteredEntries = hasActualOption
+        ? normalizedEntries.filter((entry) => entry.label !== DAY_OPTION_FALLBACK_LABEL)
+        : normalizedEntries;
+      const seenLabels = new Set<string>();
+      const dedupedOptions: DayOptionCalendarEntry[] = [];
+      filteredEntries.forEach((entry) => {
+        if (seenLabels.has(entry.label)) {
+          return;
+        }
+        seenLabels.add(entry.label);
+        dedupedOptions.push(entry.option);
+      });
       return {
-        combined: mergeDayOptions([...calendarOptions, ...donorOptions]),
+        combined: dedupedOptions,
         showSaturdayLabel: date.getDay() === 6,
       };
     },
