@@ -188,7 +188,17 @@ const PoojaDetailsPage = () => {
 
   const buildDayOptionText = useCallback(
     (info: { combined: DayOptionCalendarEntry[]; showSaturdayLabel: boolean }) => {
-      const labels = info.combined.map((option) => normalizeDayOptionLabel(option));
+      if (info.combined.length === 0 && !info.showSaturdayLabel) {
+        return DAY_OPTION_FALLBACK_LABEL;
+      }
+      const rawLabels = info.combined.map((option) => normalizeDayOptionLabel(option));
+      const hasNonFallback = rawLabels.some((label) => label !== DAY_OPTION_FALLBACK_LABEL);
+      const filteredLabels = hasNonFallback
+        ? rawLabels.filter((label) => label !== DAY_OPTION_FALLBACK_LABEL)
+        : rawLabels;
+      const labels: string[] = filteredLabels.filter(
+        (label, index) => filteredLabels.indexOf(label) === index,
+      );
       if (info.showSaturdayLabel) {
         labels.push(SATURDAY_NAVAGRAHA_LABEL);
       }
