@@ -459,6 +459,14 @@ const PaymentStatementPage = () => {
 
   useEffect(() => {
     let isMounted = true;
+
+    if (!isAdminUser) {
+      setCartSnapshots([]);
+      return () => {
+        isMounted = false;
+      };
+    }
+
     const loadCartSnapshots = async () => {
       try {
         const params: Record<string, string> = {};
@@ -485,7 +493,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [appliedDonorFilter, cartSnapshotsVersion]);
+  }, [appliedDonorFilter, cartSnapshotsVersion, isAdminUser]);
 
   const handleApplyDonorFilter = () => {
     if (!isAdminUser || !canApplyDonorFilter) {

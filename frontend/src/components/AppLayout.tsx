@@ -40,17 +40,8 @@ const AppLayout = () => {
       ? 'Admin command center'
       : 'Donor hub';
 
-  const navItems: NavItem[] = [
+  const adminNavItems: NavItem[] = [
     { to: '/dashboard', label: 'Dashboard', show: true, end: true },
-    { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
-    { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
-    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
-    { to: '/payments/combine', label: 'Combine Payment', show: !isAdminUser },
-    {
-      to: '/payments/statement',
-      label: 'Payment Statement',
-      show: Boolean(user),
-    },
     { to: '/admin/master', label: 'Admin Master', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/bulk-upload', label: 'Bulk Upload', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/donors', label: 'Donor Details', show: Boolean(user && isAdmin(user.role)) },
@@ -65,7 +56,27 @@ const AppLayout = () => {
       label: 'Pooja & Expenses Reports',
       show: Boolean(user && isAdmin(user.role)),
     },
+    {
+      to: '/payments/statement',
+      label: 'Payment Statement',
+      show: Boolean(user),
+    },
   ];
+
+  const donorNavItems: NavItem[] = [
+    { to: '/dashboard', label: 'Dashboard', show: true, end: true },
+    { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
+    { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
+    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
+    { to: '/payments/combine', label: 'Combine Payment', show: !isAdminUser },
+    {
+      to: '/payments/statement',
+      label: 'Payment Statement',
+      show: Boolean(user),
+    },
+  ];
+
+  const navItems = isAdminUser ? adminNavItems : donorNavItems;
 
   return (
     <div className="min-h-screen bg-slate-50">
