@@ -268,3 +268,40 @@ class PoojaCartSnapshot(models.Model):
 
     def __str__(self):
         return f"Cart snapshot for {self.donor} ({len(self.items)} items)"
+
+
+class PoojaCartSnapshotExportBatch(models.Model):
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="cart_snapshot_exports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        creator = self.created_by or "Unknown admin"
+        return f"Cart snapshot export {self.created_at.isoformat()} by {creator}"
+
+
+class PoojaCartSnapshotExportEntry(models.Model):
+    batch = models.ForeignKey(
+        PoojaCartSnapshotExportBatch,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    donor_id = models.PositiveIntegerField(null=True)
+    donor_name = models.CharField(max_length=255, blank=True)
+    donor_phone = models.CharField(max_length=32, blank=True)
+    items = models.JSONField(default=list, blank=True)
+    source_updated_at = models.DateTimeField(null=True)
+
+    class Meta:
+        ordering = ("donor_id", "id")
+
+    def __str__(self):
+        label = self.donor_name or f"Donor {self.donor_id or 'unknown'}"
+        return f"{label} snapshot for batch {self.batch_id}"
