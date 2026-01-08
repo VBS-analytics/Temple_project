@@ -1,11 +1,16 @@
 """Payment API views."""
 
+from django.db import transaction
 from django.db.models import Q
-from rest_framework import permissions, viewsets
+from django.utils import timezone
+from rest_framework import permissions, status, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from accounts.models import UserRole
+from accounts.models import User, UserRole
+from common.permissions import IsAdminRole
 
-from .models import ExpenseRecord, PaymentRecord
+from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer
 
 
@@ -83,3 +88,164 @@ class ExpenseRecordViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+
+class CombinePaymentMappingView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def _group_timestamps(self, first, second):
+        if first is None:
+            return second
+        if second is None:
+            return first
+        return second if second > first else first
+
+    def _entry_payload(self, main_user, parent_mappings, saved_at):
+        saved_at_value = saved_at or timezone.now()
+        return {
+            "main_donor": {
+                "id": main_user.id,
+                "name": main_user.name,
+                "phone": main_user.phone_number,
+            },
+            "parent_donors": [
+                {
+                    "id": mapping.parent_donor.id,
+                    "name": mapping.parent_donor.name,
+                    "phone": mapping.parent_donor.phone_number,
+                }
+                for mapping in parent_mappings
+            ],
+            "saved_at": saved_at_value.isoformat(),
+        }
+
+    def get(self, request):
+        mappings = (
+            CombinePaymentMapping.objects.select_related("main_donor", "parent_donor")
+            .order_by("-updated_at", "-created_at")
+            .all()
+        )
+        grouped: dict[int, dict] = {}
+        for mapping in mappings:
+            saved_at = mapping.updated_at or mapping.created_at
+            entry = grouped.get(mapping.main_donor_id)
+            if entry is None:
+                entry = {
+                    "main_user": mapping.main_donor,
+                    "parent_mappings": [],
+                    "saved_at": saved_at,
+                }
+                grouped[mapping.main_donor_id] = entry
+            entry["parent_mappings"].append(mapping)
+            entry["saved_at"] = self._group_timestamps(entry["saved_at"], saved_at)
+
+        payload = [
+            self._entry_payload(group["main_user"], group["parent_mappings"], group["saved_at"])
+            for group in grouped.values()
+        ]
+        return Response(payload)
+
+    def post(self, request):
+        main_phone = (request.data.get("main_phone") or "").strip()
+        parent_phones = request.data.get("parent_phones") or []
+
+        if not main_phone:
+            return Response(
+                {"detail": "Main donor phone number is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not isinstance(parent_phones, list):
+            return Response(
+                {"detail": "parent_phones must be a list of phone numbers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cleaned_parents = [phone.strip() for phone in parent_phones if phone and phone.strip()]
+        cleaned_parents = list(dict.fromkeys(cleaned_parents))
+        if not cleaned_parents:
+            return Response(
+                {"detail": "Provide at least one parent donor phone number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        main_user = User.objects.filter(phone_number__iexact=main_phone).first()
+        if main_user is None:
+            return Response({"detail": "Main donor not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        parent_users = []
+        for parent_phone in cleaned_parents:
+            if parent_phone.casefold() == main_user.phone_number.casefold():
+                continue
+            parent_user = User.objects.filter(phone_number__iexact=parent_phone).first()
+            if parent_user is None:
+                return Response(
+                    {"detail": f"Parent donor not found: {parent_phone}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            parent_users.append(parent_user)
+
+        if not parent_users:
+            return Response(
+                {"detail": "Valid parent donor phone numbers are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            CombinePaymentMapping.objects.filter(main_donor=main_user).exclude(
+                parent_donor__in=parent_users
+            ).delete()
+
+            for parent_user in parent_users:
+                CombinePaymentMapping.objects.get_or_create(
+                    main_donor=main_user,
+                    parent_donor=parent_user,
+                )
+
+        mapping_list = list(
+            CombinePaymentMapping.objects.filter(main_donor=main_user).select_related("parent_donor")
+        )
+        if mapping_list:
+            timestamp_candidates = [
+                mapping.updated_at or mapping.created_at or timezone.now() for mapping in mapping_list
+            ]
+            saved_at = max(timestamp_candidates)
+        else:
+            saved_at = timezone.now()
+        payload = self._entry_payload(main_user, mapping_list, saved_at)
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        main_phone = (request.data.get("main_phone") or request.query_params.get("main_phone") or "").strip()
+        parent_phones = request.data.get("parent_phones") or []
+
+        if not main_phone:
+            return Response(
+                {"detail": "Main donor phone number is required for deletion."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        main_user = User.objects.filter(phone_number__iexact=main_phone).first()
+        if main_user is None:
+            return Response({"detail": "Main donor not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        cleaned_parents = []
+        if isinstance(parent_phones, list):
+            cleaned_parents = [phone.strip() for phone in parent_phones if phone and phone.strip()]
+        parent_users = []
+        for parent_phone in cleaned_parents:
+            user = User.objects.filter(phone_number__iexact=parent_phone).first()
+            if user:
+                parent_users.append(user)
+
+        queryset = CombinePaymentMapping.objects.filter(main_donor=main_user)
+        if parent_users:
+            queryset = queryset.filter(parent_donor__in=parent_users)
+        deleted, _ = queryset.delete()
+        if deleted == 0:
+            return Response(
+                {"detail": "No matching mappings found to delete."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

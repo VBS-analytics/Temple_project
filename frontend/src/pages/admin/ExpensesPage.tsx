@@ -261,11 +261,6 @@ const ExpenseForm = ({ onSave, isSaving }: { onSave: (payload: ExpenseFormPayloa
                 disabled={isSaving}
                 className={`w-full rounded-xl border-2 ${focusedField === 'transactionDate' ? 'border-indigo-500 shadow-lg' : 'border-gray-200'} bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed`}
               />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
             </div>
           </div>
 
@@ -292,11 +287,6 @@ const ExpenseForm = ({ onSave, isSaving }: { onSave: (payload: ExpenseFormPayloa
                   )),
                 )}
               </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
             </div>
             {selectedCategoryGroup && (
               <div className="mt-2 flex items-center text-xs text-gray-500">
@@ -504,74 +494,6 @@ const RecordedExpensesList = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-6 text-white">
-        <h2 className="text-2xl font-bold mb-2">Expense Overview</h2>
-        <p className="text-indigo-100 mb-6">Your recent temple expenses at a glance</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
-            <p className="text-indigo-100 text-sm font-medium">Total Expenses</p>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totalExpenses)}</p>
-          </div>
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
-            <p className="text-indigo-100 text-sm font-medium">Transactions</p>
-            <p className="text-2xl font-bold mt-1">{expenses.length}</p>
-          </div>
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
-            <p className="text-indigo-100 text-sm font-medium">Categories</p>
-            <p className="text-2xl font-bold mt-1">{categoryGroups.length}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Category Breakdown</h2>
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-            Latest entry shown first
-          </span>
-        </div>
-        
-        <div className="space-y-4">
-          {categoryGroups.map((group) => {
-            const percentage = totalExpenses > 0 ? (group.total / totalExpenses) * 100 : 0;
-            const colorClasses = {
-              purple: 'bg-purple-500',
-              blue: 'bg-blue-500',
-              green: 'bg-green-500',
-              gray: 'bg-gray-500',
-            };
-            
-            return (
-              <div key={group.title} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow duration-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center">
-                    <div className={`w-10 h-10 rounded-lg ${colorClasses[group.color as keyof typeof colorClasses]} flex items-center justify-center text-white mr-3`}>
-                      <span className="text-lg">{group.icon}</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{group.title}</p>
-                      <p className="text-sm text-gray-500">{group.expenses.length} transaction{group.expenses.length !== 1 ? 's' : ''}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-lg text-gray-900">{formatCurrency(group.total)}</p>
-                    <p className="text-sm text-gray-500">{percentage.toFixed(1)}%</p>
-                  </div>
-                </div>
-                
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full ${colorClasses[group.color as keyof typeof colorClasses]}`}
-                    style={{ width: `${percentage}%` }}
-                  ></div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Transactions</h2>
         
@@ -860,7 +782,7 @@ const ExpensesPage = () => {
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Temple Expense Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Expense Management</h1>
           <p className="text-gray-600">Track and manage all temple expenses efficiently</p>
         </div>
         

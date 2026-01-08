@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import api from '../lib/api';
+import { POOJA_CART_SNAPSHOT_UPDATED_EVENT } from '../constants/events';
 import { useAuthStore } from '../store/auth';
 import { useCartStore } from '../store/cart';
 import { usePaymentStore } from '../store/payments';
@@ -17,6 +18,21 @@ const parseCartAmount = (value?: number | string | null) => {
 const computeTotalAmount = (items: CartItem[]) =>
   items.reduce((sum, item) => sum + parseCartAmount(item.amount), 0);
 
+const SNAPSHOT_VERSION_INIT = Number.NEGATIVE_INFINITY;
+
+const parseSnapshotVersion = (value?: string | null) => {
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const emitCartSnapshotUpdatedEvent = () => {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return;
+  }
+  const event = new CustomEvent(POOJA_CART_SNAPSHOT_UPDATED_EVENT);
+  window.dispatchEvent(event);
+};
+
 const useCartSync = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
@@ -26,6 +42,7 @@ const useCartSync = () => {
   const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
 
   const serialized = useMemo(() => JSON.stringify(items), [items]);
+  const snapshotVersionRef = useRef<number>(SNAPSHOT_VERSION_INIT);
 
   useEffect(() => {
     if (!user || user.role !== 'donor') {
@@ -46,6 +63,10 @@ const useCartSync = () => {
   }, [cartKey, serialized, user?.id, user?.role]);
 
   useEffect(() => {
+    snapshotVersionRef.current = SNAPSHOT_VERSION_INIT;
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!user || user.role !== 'donor') {
       return;
     }
@@ -55,6 +76,11 @@ const useCartSync = () => {
         const { data } = await api.get('pooja/cart-snapshots/');
         if (cancelled) return;
         const snapshotItems: CartItem[] = Array.isArray(data?.items) ? data.items : [];
+        const snapshotVersion = parseSnapshotVersion(data?.updated_at);
+        if (snapshotVersion <= snapshotVersionRef.current) {
+          return;
+        }
+        snapshotVersionRef.current = snapshotVersion;
         setItemsForUser(cartKey, snapshotItems);
         if (snapshotItems.length > 0) {
           setGeneralPayment({
@@ -65,6 +91,7 @@ const useCartSync = () => {
         } else {
           clearGeneralPayment(cartKey);
         }
+        emitCartSnapshotUpdatedEvent();
       } catch (err) {
         if (import.meta.env.DEV) {
           console.warn('Failed to load cart snapshot', err);

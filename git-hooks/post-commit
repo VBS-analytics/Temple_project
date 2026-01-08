@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+if ! "$REPO_ROOT/scripts/db_backup.sh"; then
+  echo "Post-commit backup failed; see $REPO_ROOT/backups/backup.log for details." >&2
+fi
