@@ -28,6 +28,8 @@ from .models import (
     DonorMessageTemplate,
     FeaturedPooja,
     PoojaCartSnapshot,
+    PoojaCartSnapshotExportBatch,
+    PoojaCartSnapshotExportEntry,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -47,7 +49,7 @@ from .serializers import (
     DailyMessageSerializer,
     DonorMessageTemplateSerializer,
     FeaturedPoojaSerializer,
-    PoojaCartSnapshotReportSerializer,
+    PoojaCartSnapshotExportEntrySerializer,
     PoojaCartSnapshotSerializer,
     PoojaDayOptionSerializer,
     PoojaOptionSerializer,
@@ -848,25 +850,64 @@ class CombinePaymentLookupView(APIView):
 class PoojaCartSnapshotReportView(APIView):
     permission_classes = (IsAdminRole,)
 
+    def _create_export_batch(self, user, snapshots):
+        batch = PoojaCartSnapshotExportBatch.objects.create(created_by=user)
+        entries = []
+        snapshot_list = list(snapshots)
+        for snapshot in snapshot_list:
+            donor = getattr(snapshot, "donor", None)
+            entries.append(
+                PoojaCartSnapshotExportEntry(
+                    batch=batch,
+                    donor_id=getattr(snapshot, "donor_id", None),
+                    donor_name=(getattr(donor, "name", "") or ""),
+                    donor_phone=(getattr(donor, "phone_number", "") or ""),
+                    items=list(snapshot.items or []),
+                    source_updated_at=snapshot.updated_at,
+                )
+            )
+        if entries:
+            PoojaCartSnapshotExportEntry.objects.bulk_create(entries)
+        return batch
+
     def get(self, request):
         donor_id_raw = request.query_params.get("donor_id")
         donor_phone_raw = request.query_params.get("phone")
-        queryset = PoojaCartSnapshot.objects.select_related("donor").order_by("-updated_at")
+        batch_id_raw = request.query_params.get("batch_id")
 
-        if donor_id_raw:
+        batch = None
+        if batch_id_raw:
             try:
-                donor_id = int(donor_id_raw)
+                batch_id = int(batch_id_raw)
             except (TypeError, ValueError):
                 return Response(
-                    {"detail": "donor_id must be an integer."},
+                    {"detail": "batch_id must be an integer."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            queryset = queryset.filter(donor_id=donor_id)
-        elif donor_phone_raw:
-            donor_phone = donor_phone_raw.strip()
-            queryset = queryset.filter(donor__phone_number__iexact=donor_phone)
+            batch = PoojaCartSnapshotExportBatch.objects.filter(id=batch_id).first()
+            if batch is None:
+                return Response(
+                    {"detail": "Export batch not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            queryset = PoojaCartSnapshot.objects.select_related("donor").order_by("-updated_at")
+            if donor_id_raw:
+                try:
+                    donor_id = int(donor_id_raw)
+                except (TypeError, ValueError):
+                    return Response(
+                        {"detail": "donor_id must be an integer."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                queryset = queryset.filter(donor_id=donor_id)
+            elif donor_phone_raw:
+                donor_phone = donor_phone_raw.strip()
+                queryset = queryset.filter(donor__phone_number__iexact=donor_phone)
+            batch = self._create_export_batch(request.user, queryset)
 
-        serializer = PoojaCartSnapshotReportSerializer(queryset, many=True)
+        entries = batch.entries.order_by("donor_id", "id")
+        serializer = PoojaCartSnapshotExportEntrySerializer(entries, many=True)
         return Response(serializer.data)
 
 

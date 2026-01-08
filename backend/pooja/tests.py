@@ -12,6 +12,7 @@ from payments.models import PaymentMode, PaymentRecord, PaymentStatus
 from .models import (
     DayOptionCategory,
     PoojaCartSnapshot,
+    PoojaCartSnapshotExportBatch,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -601,3 +602,56 @@ class RecurringPoojaPlanDueInfoTests(TestCase):
         self.assertEqual(due_data["paid_amount"], "150.00")
         self.assertEqual(due_data["due_amount"], "100.00")
         self.assertFalse(due_data["is_paid"])
+
+
+class PoojaCartSnapshotReportViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            phone_number="9000000016",
+            name="Export Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+
+    def _create_snapshot(self, donor, items):
+        return PoojaCartSnapshot.objects.create(donor=donor, items=items)
+
+    def test_export_creates_batch_and_returns_snapshots(self):
+        donor = User.objects.create_user(phone_number="9000000025", name="Snapshot Donor", password="secret")
+        items = [{"cartId": "snapshot-1"}]
+        self._create_snapshot(donor, items)
+
+        url = reverse("pooja-cart-snapshots-report")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["donor_id"], donor.id)
+        self.assertEqual(payload[0]["items"], items)
+
+        batch = PoojaCartSnapshotExportBatch.objects.first()
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch.entries.count(), 1)
+
+    def test_batch_id_reuses_saved_export(self):
+        donor = User.objects.create_user(phone_number="9000000030", name="Batch Donor", password="secret")
+        snapshot = self._create_snapshot(donor, [{"cartId": "initial"}])
+
+        first_response = self.client.get(reverse("pooja-cart-snapshots-report"))
+        self.assertEqual(first_response.status_code, 200)
+        batch = PoojaCartSnapshotExportBatch.objects.first()
+        self.assertIsNotNone(batch)
+        original_items = first_response.json()[0]["items"]
+
+        snapshot.items = [{"cartId": "updated"}]
+        snapshot.save()
+
+        batch_url = f"{reverse('pooja-cart-snapshots-report')}?batch_id={batch.id}"
+        second_response = self.client.get(batch_url)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(second_response.json()[0]["items"], original_items)
+        self.assertEqual(PoojaCartSnapshotExportBatch.objects.count(), 1)

@@ -10,6 +10,7 @@ from .models import (
     DonorMessageTemplate,
     FeaturedPooja,
     PoojaCartSnapshot,
+    PoojaCartSnapshotExportEntry,
     PoojaDayOption,
     PoojaOption,
     PoojaRegistration,
@@ -288,13 +289,11 @@ class PoojaCartSnapshotSerializer(serializers.ModelSerializer):
         return value
 
 
-class PoojaCartSnapshotReportSerializer(serializers.ModelSerializer):
-    donor_id = serializers.IntegerField(source="donor.id", read_only=True)
-    donor_name = serializers.CharField(source="donor.name", read_only=True, allow_blank=True, allow_null=True)
-    donor_phone = serializers.CharField(source="donor.phone_number", read_only=True, allow_blank=True, allow_null=True)
+class PoojaCartSnapshotExportEntrySerializer(serializers.ModelSerializer):
+    updated_at = serializers.DateTimeField(source="source_updated_at", read_only=True)
 
     class Meta:
-        model = PoojaCartSnapshot
+        model = PoojaCartSnapshotExportEntry
         fields = ("donor_id", "donor_name", "donor_phone", "items", "updated_at")
         read_only_fields = ("donor_id", "donor_name", "donor_phone", "items", "updated_at")
 
