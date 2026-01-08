@@ -48,6 +48,43 @@ class PaymentRecord(models.Model):
         return f"Payment {self.pk} - {self.donor}"
 
 
+class CombinePaymentMapping(models.Model):
+    main_donor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="combine_payment_mappings",
+    )
+    parent_donor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="combine_payment_children",
+    )
+    main_donor_phone = models.CharField(max_length=15, blank=True)
+    main_donor_name = models.CharField(max_length=255, blank=True)
+    parent_donor_phone = models.CharField(max_length=15, blank=True)
+    parent_donor_name = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("main_donor", "parent_donor"), name="unique_main_parent_mapping"),
+        ]
+        ordering = ("-updated_at", "-created_at")
+
+    def __str__(self):
+        return f"{self.main_donor} ← {self.parent_donor}"
+
+    def save(self, *args, **kwargs):
+        if self.main_donor:
+            self.main_donor_phone = self.main_donor.phone_number
+            self.main_donor_name = self.main_donor.name
+        if self.parent_donor:
+            self.parent_donor_phone = self.parent_donor.phone_number
+            self.parent_donor_name = self.parent_donor.name
+        super().save(*args, **kwargs)
+
+
 class ExpenseRecord(models.Model):
     transaction_date = models.DateField()
     category = models.CharField(max_length=128)

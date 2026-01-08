@@ -42,29 +42,29 @@ const AppLayout = () => {
 
   const navItems: NavItem[] = [
     { to: '/dashboard', label: 'Dashboard', show: true, end: true },
-    { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
-    { to: '/admin/master', label: 'Admin', show: Boolean(user && isAdmin(user.role)) },
+    { to: '/admin/master', label: 'Admin Master', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/bulk-upload', label: 'Bulk Upload', show: Boolean(user && isAdmin(user.role)) },
     { to: '/admin/donors', label: 'Donor Details', show: Boolean(user && isAdmin(user.role)) },
-    { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
-    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
-    { to: '/payments/combine', label: 'Combine Payment', show: !isAdminUser },
+    {
+      to: '/admin/combine-payment-donor',
+      label: 'Combine Payment - Donor',
+      show: Boolean(user && isAdmin(user.role)),
+    },
+    { to: '/admin/pooja-details', label: 'Ubhayam Report', show: Boolean(user && isAdmin(user.role)) },
+    {
+      to: '/reports',
+      label: 'Pooja & Expenses Reports',
+      show: Boolean(user && isAdmin(user.role)),
+    },
     {
       to: '/payments/statement',
       label: 'Payment Statement',
       show: Boolean(user),
     },
-    { to: '/admin/pooja-details', label: 'Ubhayam Report', show: Boolean(user && isAdmin(user.role)) },
-    {
-      to: '/reports',
-      label: 'Report',
-      show: Boolean(user && isAdmin(user.role)),
-    },
-    {
-      to: '/admin/expenses',
-      label: 'Expenses',
-      show: Boolean(user && isAdmin(user.role)),
-    },
+    { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
+    { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
+    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
+    { to: '/payments/combine', label: 'Combine Payment', show: !isAdminUser },
   ];
 
   return (

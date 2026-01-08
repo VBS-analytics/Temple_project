@@ -9,6 +9,7 @@ import { loadPdfMake } from '../../lib/pdfMakeLoader';
 import type { CartItem } from '../../store/cart';
 import { isAdmin, useAuthStore } from '../../store/auth';
 import * as XLSX from 'xlsx';
+import { POOJA_CART_SNAPSHOT_UPDATED_EVENT } from '../../constants/events';
 
 type TimeframeOption = 'day' | 'week' | 'month' | 'year';
 
@@ -273,6 +274,7 @@ const PaymentStatementPage = () => {
   const [statusOverrideMap, setStatusOverrideMap] = useState<Record<string, string>>({});
   const [clubOverrideMap, setClubOverrideMap] = useState<Record<string, string>>({});
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
+  const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
 
   const applyOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
     setStatusOverrideMap((prev) => {
@@ -324,6 +326,19 @@ const PaymentStatementPage = () => {
     } catch {
       // no-op
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const handleSnapshotUpdated = () => {
+      setCartSnapshotsVersion((prev) => prev + 1);
+    };
+    window.addEventListener(POOJA_CART_SNAPSHOT_UPDATED_EVENT, handleSnapshotUpdated);
+    return () => {
+      window.removeEventListener(POOJA_CART_SNAPSHOT_UPDATED_EVENT, handleSnapshotUpdated);
+    };
   }, []);
 
   const updateStatus = async (record: PaymentRecordEntry, label: string) => {
@@ -470,7 +485,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [appliedDonorFilter]);
+  }, [appliedDonorFilter, cartSnapshotsVersion]);
 
   const handleApplyDonorFilter = () => {
     if (!isAdminUser || !canApplyDonorFilter) {
