@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
+
 import clsx from 'clsx';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import useCartSync from '../hooks/useCartSync';
 import { isAdmin, useAuthStore } from '../store/auth';
+import { useCombineAccessStore } from '../store/combineAccess';
 
 type NavItem = {
   to: string;
@@ -16,6 +19,12 @@ const AppLayout = () => {
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
   useCartSync();
+
+  const { canCombine, fetchAccess, resetAccess } = useCombineAccessStore((state) => ({
+    canCombine: state.canCombine,
+    fetchAccess: state.fetchAccess,
+    resetAccess: state.resetAccess,
+  }));
 
   const mainClassName = 'responsive-layout py-6 sm:py-8';
   const isAdminUser = Boolean(user && isAdmin(user.role));
@@ -68,7 +77,11 @@ const AppLayout = () => {
     { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
     { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
     { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
-    { to: '/payments/combine', label: 'Combine Payment', show: !isAdminUser },
+    {
+      to: '/payments/combine',
+      label: 'Combine Payment',
+      show: !isAdminUser && canCombine === true,
+    },
     {
       to: '/payments/statement',
       label: 'Payment Statement',
@@ -77,6 +90,16 @@ const AppLayout = () => {
   ];
 
   const navItems = isAdminUser ? adminNavItems : donorNavItems;
+
+  useEffect(() => {
+    if (!user || isAdminUser) {
+      resetAccess();
+      return;
+    }
+    if (canCombine === null) {
+      fetchAccess();
+    }
+  }, [user?.id, isAdminUser, canCombine, fetchAccess, resetAccess]);
 
   return (
     <div className="min-h-screen bg-slate-50">

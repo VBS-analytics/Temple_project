@@ -890,6 +890,16 @@ const PaymentPage = () => {
                 )}
               </div>
             </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment amount</p>
+                <p className="text-lg font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment date</p>
+                <p className="text-lg font-semibold text-slate-900">{lastPaymentDateLabel}</p>
+              </div>
+            </div>
           </div>
         )}
 

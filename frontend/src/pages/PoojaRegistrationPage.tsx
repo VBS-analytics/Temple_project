@@ -3264,7 +3264,7 @@ const PoojaRegistrationPage = () => {
                           ? `Remove ${row.uiLabel} from cart`
                           : `Add ${row.uiLabel} to cart`;
                         const iconClasses = inCart
-                          ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
+                          ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300'
                           : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
                           const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
                           const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
@@ -3626,7 +3626,7 @@ const PoojaRegistrationPage = () => {
                       ? `Remove ${row.uiLabel} from cart`
                       : `Add ${row.uiLabel} to cart`;
                     const iconClasses = inCart
-                      ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300'
+                      ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300'
                       : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
                     const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
                     const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
