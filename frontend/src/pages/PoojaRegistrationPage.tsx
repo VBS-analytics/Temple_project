@@ -203,6 +203,7 @@ interface PoojaOption {
   is_active: boolean;
   is_group_header: boolean;
   parent_id: number | null;
+  display_order?: number | null;
 }
 
 interface DayOption {
@@ -1565,13 +1566,18 @@ const PoojaRegistrationPage = () => {
       }
     });
 
-    const compareByCode = (a: PoojaOption, b: PoojaOption) =>
-      a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+    const compareByDisplayOrder = (a: PoojaOption, b: PoojaOption) => {
+      const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+      if (orderDiff !== 0) {
+        return orderDiff;
+      }
+      return a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+    };
 
     const topLevel = poojaOptions
       .filter((option) => option.parent_id === null)
       .slice()
-      .sort(compareByCode);
+      .sort(compareByDisplayOrder);
 
     const buildRow = (option: PoojaOption, parent?: PoojaOption): MasterRow | null => {
       if (!option.is_active || option.is_group_header) {
@@ -1605,7 +1611,7 @@ const PoojaRegistrationPage = () => {
 
       const children = (childrenMap.get(option.id) ?? [])
         .slice()
-        .sort(compareByCode);
+        .sort(compareByDisplayOrder);
 
       children.forEach((child) => {
         const parent = optionMap.get(child.parent_id ?? 0) ?? option;
@@ -3575,6 +3581,16 @@ const PoojaRegistrationPage = () => {
                             </span>
                             <div className="min-w-0">
                               <h3 className="text-lg font-bold leading-snug text-gray-900">{row.uiLabel}</h3>
+                              {row.parentName && (
+                                <div className="mt-1 flex flex-wrap items-center gap-1 text-[0.65rem]">
+                                  <span className="text-[0.55rem] font-semibold uppercase tracking-wide text-gray-400">
+                                    Alignment
+                                  </span>
+                                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                                    {row.parentName}
+                                  </span>
+                                </div>
+                              )}
                               <p className="text-xs text-gray-500">
                                 {matchingItems.length > 0 ? 'Ready for payment' : 'Select options to add'}
                               </p>

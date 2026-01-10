@@ -66,6 +66,7 @@ interface PoojaOption {
   is_active: boolean;
   is_group_header: boolean;
   parent_id: number | null;
+  display_order?: number | null;
 }
 
 interface DailyMessageItem {
@@ -133,6 +134,9 @@ const AdminMasterPage = () => {
   const [editingHeader, setEditingHeader] = useState<PoojaOption | null>(null);
   const [editingPooja, setEditingPooja] = useState<PoojaOption | null>(null);
   const [draggingDayId, setDraggingDayId] = useState<number | null>(null);
+  const [draggingHeaderId, setDraggingHeaderId] = useState<number | null>(null);
+  const [draggingPoojaId, setDraggingPoojaId] = useState<number | null>(null);
+  const [draggingPoojaParentId, setDraggingPoojaParentId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -143,6 +147,8 @@ const AdminMasterPage = () => {
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const originalDayOrderRef = useRef<DayOption[]>([]);
+  const headerOrderSnapshotRef = useRef<number[]>([]);
+  const poojaOrderSnapshotRef = useRef<number[]>([]);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const gothraOptionEntries = useMasterDataStore((state) => state.gothraOptionEntries);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
@@ -187,7 +193,16 @@ const AdminMasterPage = () => {
       }
     });
 
-    const sortEntries = (items: PoojaOption[]) => items.slice().sort((a, b) => a.code.localeCompare(b.code));
+    const sortEntries = (items: PoojaOption[]) =>
+      items
+        .slice()
+        .sort((a, b) => {
+          const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.code.localeCompare(b.code);
+        });
 
     const topLevel = sortEntries(poojaOptions.filter((option) => option.parent_id === null));
 
@@ -781,6 +796,175 @@ const AdminMasterPage = () => {
       setNotice(`Error reordering day options: ${errorMessage}`);
       revertDayOrder();
     }
+  };
+
+  const arraysEqual = (a: number[], b: number[]) =>
+    a.length === b.length && a.every((value, index) => value === b[index]);
+
+  const applySiblingOrder = (parentId: number | null, order: number[]) => {
+    setPoojaOptions((prev) => {
+      const updated = prev.map((item) => ({ ...item }));
+      const orderMap = new Map(order.map((id, index) => [id, index + 1]));
+      return updated.map((item) => {
+        if (item.parent_id !== parentId) {
+          return item;
+        }
+        const position = orderMap.get(item.id);
+        if (position === undefined) {
+          return item;
+        }
+        return { ...item, display_order: position };
+      });
+    });
+  };
+
+  const reorderWithinParent = (parentId: number | null, dragId: number, targetId: number) => {
+    setPoojaOptions((prev) => {
+      const updated = prev.map((item) => ({ ...item }));
+      const siblings = updated
+        .filter((item) => item.parent_id === parentId)
+        .slice()
+        .sort((a, b) => {
+          const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.code.localeCompare(b.code);
+        });
+
+      const dragIndex = siblings.findIndex((item) => item.id === dragId);
+      const targetIndex = siblings.findIndex((item) => item.id === targetId);
+      if (dragIndex === -1 || targetIndex === -1 || dragIndex === targetIndex) {
+        return prev;
+      }
+
+      const reordered = siblings.slice();
+      const [dragged] = reordered.splice(dragIndex, 1);
+      reordered.splice(targetIndex, 0, dragged);
+      const orderedIds = reordered.map((item) => item.id);
+
+      return updated.map((item) => {
+        if (item.parent_id !== parentId) {
+          return item;
+        }
+        const position = orderedIds.indexOf(item.id);
+        if (position === -1) {
+          return item;
+        }
+        return { ...item, display_order: position + 1 };
+      });
+    });
+  };
+
+  const persistSiblingOrder = async (
+    parentId: number | null,
+    snapshot: number[],
+    newOrder: number[],
+    successMessage: string,
+    errorLabel: string,
+  ) => {
+    if (arraysEqual(snapshot, newOrder)) {
+      return;
+    }
+
+    try {
+      await api.post('/pooja/options/reorder/', { parent_id: parentId, order: newOrder });
+      setNotice(successMessage);
+    } catch (err: any) {
+      applySiblingOrder(parentId, snapshot);
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`${errorLabel}: ${errorMessage}`);
+    }
+  };
+
+  const handleHeaderDragStart = (event: DragEvent<HTMLElement>, id: number) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(id));
+    headerOrderSnapshotRef.current = headerSections.map(({ option }) => option.id);
+    setDraggingHeaderId(id);
+  };
+
+  const handleHeaderDragOver = (event: DragEvent<HTMLElement>, overId: number) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (draggingHeaderId === null || draggingHeaderId === overId) {
+      return;
+    }
+    reorderWithinParent(null, draggingHeaderId, overId);
+  };
+
+  const handleHeaderDragEnd = async () => {
+    if (draggingHeaderId === null) {
+      return;
+    }
+
+    setDraggingHeaderId(null);
+    const snapshot = headerOrderSnapshotRef.current;
+    const newOrder = headerSections.map(({ option }) => option.id);
+    headerOrderSnapshotRef.current = [];
+
+    if (snapshot.length === 0 || arraysEqual(snapshot, newOrder)) {
+      return;
+    }
+
+    await persistSiblingOrder(
+      null,
+      snapshot,
+      newOrder,
+      'Pooja headers reordered successfully.',
+      'Error reordering headers',
+    );
+  };
+
+  const handlePoojaDragStart = (event: DragEvent<HTMLDivElement>, parentId: number, childId: number) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(childId));
+    setDraggingPoojaId(childId);
+    setDraggingPoojaParentId(parentId);
+    const section = groupedPoojas.find((section) => section.option.id === parentId);
+    poojaOrderSnapshotRef.current = section ? section.children.map((child) => child.id) : [];
+  };
+
+  const handlePoojaDragOver = (event: DragEvent<HTMLDivElement>, parentId: number, overId: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    if (draggingPoojaId === null || draggingPoojaParentId !== parentId || draggingPoojaId === overId) {
+      return;
+    }
+    reorderWithinParent(parentId, draggingPoojaId, overId);
+  };
+
+  const handlePoojaDragEnd = async () => {
+    if (draggingPoojaId === null || draggingPoojaParentId === null) {
+      setDraggingPoojaId(null);
+      setDraggingPoojaParentId(null);
+      return;
+    }
+
+    const parentId = draggingPoojaParentId;
+    const snapshot = poojaOrderSnapshotRef.current;
+    setDraggingPoojaId(null);
+    setDraggingPoojaParentId(null);
+    poojaOrderSnapshotRef.current = [];
+
+    const section = groupedPoojas.find((section) => section.option.id === parentId);
+    if (!section || snapshot.length === 0) {
+      return;
+    }
+
+    const newOrder = section.children.map((child) => child.id);
+    if (arraysEqual(snapshot, newOrder)) {
+      return;
+    }
+
+    await persistSiblingOrder(
+      parentId,
+      snapshot,
+      newOrder,
+      'Pooja entries reordered successfully.',
+      'Error reordering poojas',
+    );
   };
 
   const resetHeaderForm = () => {
@@ -1452,27 +1636,45 @@ const AdminMasterPage = () => {
                       {filteredHeaderSections.map(({ option, children }) => (
                         <article
                           key={option.id}
-                          className="rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all duration-300 hover:border-orange-300 hover:shadow-md"
+                          draggable
+                          onDragStart={(event) => handleHeaderDragStart(event, option.id)}
+                          onDragOver={(event) => handleHeaderDragOver(event, option.id)}
+                          onDragEnd={handleHeaderDragEnd}
+                          onDrop={(event) => event.preventDefault()}
+                          aria-grabbed={draggingHeaderId === option.id}
+                          className={`rounded-2xl border bg-white overflow-hidden transition-all duration-300 hover:border-orange-300 hover:shadow-md ${
+                            draggingHeaderId === option.id
+                              ? 'border-orange-400 shadow-lg cursor-grabbing'
+                              : 'border-slate-200 cursor-grab'
+                          }`}
                         >
                           <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 sm:px-6 py-4">
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => toggleHeaderCollapse(option.id)}
-                                  className="rounded-lg bg-orange-100 p-2 text-orange-700 hover:bg-orange-200 transition-colors"
-                                >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className={`h-5 w-5 transition-transform ${collapsedHeaders.has(option.id) ? '' : 'rotate-90'}`}
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => toggleHeaderCollapse(option.id)}
+                                    className="rounded-lg bg-orange-100 p-2 text-orange-700 hover:bg-orange-200 transition-colors"
                                   >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </button>
-                                <div>
-                                  <h3 className="text-lg font-bold text-orange-800">{option.name}</h3>
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className={`h-5 w-5 transition-transform ${collapsedHeaders.has(option.id) ? '' : 'rotate-90'}`}
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                  <span
+                                    className="text-slate-400 transition-colors hover:text-slate-600 cursor-grab"
+                                    aria-hidden="true"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 12h10M7 17h10" />
+                                    </svg>
+                                  </span>
+                                  <div>
+                                    <h3 className="text-lg font-bold text-orange-800">{option.name}</h3>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                                     <span className="rounded-full bg-orange-100 px-2.5 py-0.5 font-medium text-orange-800">
                                       Header
@@ -1529,7 +1731,17 @@ const AdminMasterPage = () => {
                                     return (
                                     <div
                                       key={child.id}
-                                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-orange-300 hover:shadow-md"
+                                      draggable
+                                      onDragStart={(event) => handlePoojaDragStart(event, option.id, child.id)}
+                                      onDragOver={(event) => handlePoojaDragOver(event, option.id, child.id)}
+                                      onDragEnd={handlePoojaDragEnd}
+                                      onDrop={(event) => event.preventDefault()}
+                                      aria-grabbed={draggingPoojaId === child.id}
+                                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border bg-white p-4 shadow-sm transition-all duration-300 ${
+                                        draggingPoojaId === child.id
+                                          ? 'border-orange-300 bg-orange-50 shadow-lg cursor-grabbing'
+                                          : 'border-slate-200 cursor-grab hover:border-orange-300 hover:shadow-md'
+                                      }`}
                                     >
                                       <div className="flex items-start gap-3">
                                         <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-800">
@@ -1537,13 +1749,25 @@ const AdminMasterPage = () => {
                                             {child.code ? child.code.substring(0, 2) : 'PK'}
                                           </span>
                                         </div>
-                                        <div>
-                                          <p className="font-medium text-slate-900">
-                                            {child.name}
-                                            {child.code ? (
-                                              <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{child.code}</span>
-                                            ) : null}
-                                          </p>
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2">
+                                            <span
+                                              className="text-slate-400 transition-colors hover:text-slate-600 cursor-grab"
+                                              aria-hidden="true"
+                                            >
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 12h10M7 17h10" />
+                                              </svg>
+                                            </span>
+                                            <p className="font-medium text-slate-900">
+                                              {child.name}
+                                              {child.code ? (
+                                                <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">
+                                                  {child.code}
+                                                </span>
+                                              ) : null}
+                                            </p>
+                                          </div>
                                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                                             {childRateLabel && (
                                               <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700">
