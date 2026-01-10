@@ -382,7 +382,10 @@ const LandingPage = () => {
 
       <main>
         {/* HERO */}
-        <section id="hero-map" className="relative pt-24 sm:pt-28 md:pt-32 text-white">
+        <section
+          id="hero-map"
+          className="relative pt-24 sm:pt-28 md:pt-32 text-white min-h-screen"
+        >
           <div className="absolute inset-0 z-0">
             <iframe
               title="Kakkalani Village 3D view"
@@ -425,7 +428,10 @@ const LandingPage = () => {
         </section>
 
         {/* TIMINGS */}
-        <section id="timings" className="relative -mt-12 sm:-mt-16 z-20 pb-12 sm:pb-16 pt-6 sm:pt-8 md:-mt-20">
+        <section
+          id="timings"
+          className="relative z-20 pb-12 sm:pb-16 pt-6 sm:pt-8 mt-12 sm:mt-16"
+        >
           <div className="responsive-layout md:px-10">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
               {heroHighlights.map((item) => (

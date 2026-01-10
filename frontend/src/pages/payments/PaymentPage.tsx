@@ -141,9 +141,6 @@ const buildMembersLabel = (members?: CartItem['members']) => {
   return names.join(', ');
 };
 
-const normalizeMemberValue = (value?: string | null) =>
-  typeof value === 'string' ? value.trim() : value ?? '';
-
 type RegistrationMemberPayload = {
   name: string;
   relationship?: string;
@@ -323,55 +320,6 @@ const buildRegistrationErrorMessage = (error: unknown) => {
     }
   }
   return 'Unable to register the poojas right now.';
-};
-
-const buildMemberSummaries = (item: CartItem): string[] => {
-  const normalizedMembers = Array.isArray(item.members) && item.members.length > 0
-    ? item.members
-    : [
-        {
-          id: null,
-          name: item.fullName?.trim() || 'Member',
-          relationship: item.memberRelationship ?? 'Self',
-          gender: item.memberGender ?? undefined,
-          tamilStar: item.memberTamilStar ?? undefined,
-          gothra: item.memberGothra ?? undefined,
-          rasi: item.memberRasi ?? undefined,
-          dob: item.memberDob ?? undefined,
-          familyName: item.memberFamilyName ?? undefined,
-        },
-      ];
-
-  return normalizedMembers.map((member) => {
-    const name = normalizeMemberValue(member?.name ?? '') || 'Member';
-    const attributes = [
-      normalizeMemberValue(member?.gender ?? ''),
-      normalizeMemberValue(member?.rasi ?? ''),
-      normalizeMemberValue(member?.tamilStar ?? ''),
-      normalizeMemberValue(member?.gothra ?? ''),
-      normalizeMemberValue(member?.familyName ?? ''),
-    ].filter(Boolean);
-    return attributes.length > 0 ? `${name} — ${attributes.join(' • ')}` : name;
-  });
-};
-
-const renderUpcomingOccurrenceList = (occurrences?: CartItem['dayOptionOccurrences']) => {
-  if (!occurrences || occurrences.length === 0) {
-    return null;
-  }
-  return (
-    <div className="mt-4 text-xs uppercase tracking-wide text-slate-500">
-      <p className="text-[0.6rem] tracking-[0.3em] text-slate-500">UPCOMING DATES</p>
-      <div className="mt-1 space-y-1 text-sm font-semibold text-slate-700">
-        {occurrences.map((entry) => (
-          <p key={`${entry.date}-${entry.label ?? ''}`}>
-            {formatDate(entry.date)}
-            {entry.label ? ` • ${entry.label}` : ''}
-          </p>
-        ))}
-      </div>
-    </div>
-  );
 };
 
 const PaymentPage = () => {
@@ -643,90 +591,59 @@ const PaymentPage = () => {
       );
     }
 
-    const { items: snapshotItems, totalAmount: snapshotTotal, createdAt } = paymentSnapshot;
+    const { items: snapshotItems, totalAmount: snapshotTotal } = paymentSnapshot;
 
     return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <div className="font-medium">
+            <p>
+              {snapshotItems.length} {snapshotItems.length === 1 ? 'pooja' : 'poojas'} saved
+            </p>
+            <p className="text-xs text-slate-500">Review and confirm before recording payment</p>
           </div>
-
-        <div className="rounded-2xl bg-orange-50 px-5 py-3 text-center sm:text-right">
-          <p className="text-xs font-medium uppercase tracking-wide text-orange-600">Total Amount</p>
-          <p className="text-2xl font-semibold text-orange-700">₹ {formatCurrency(snapshotTotal)}</p>
-        </div>
+          <div className="rounded-full bg-white px-4 py-2 text-right text-base font-semibold text-orange-600 shadow-sm">
+            ₹ {formatCurrency(snapshotTotal)}
+          </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {snapshotItems.map((item) => {
-            const amountLabel = item.amount ? `₹ ${formatCurrency(item.amount)}` : '—';
+            const amountLabel = item.amount ? `₹ ${formatCurrency(item.amount)}` : '₹ 0.00';
             const membersLabel = buildMembersLabel(item.members);
-            const selectedDate = item.customDayDate || item.bookingDate;
+            const quantity = item.members?.length && item.members.length > 0 ? item.members.length : 1;
+            const memberSummary = membersLabel ?? `${quantity} devotee${quantity === 1 ? '' : 's'}`;
+            const selectedDate = formatDate(item.customDayDate || item.bookingDate);
+            const notes = item.customDayNote?.trim();
 
             return (
-              <article
+              <div
                 key={`${paymentSnapshot.id}-${item.cartId}`}
-                className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm ring-1 ring-slate-100"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
               >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      {item.poojaCode ?? 'Pooja'}
-                    </p>
-                    <h3 className="text-lg font-semibold text-slate-900">{item.poojaName}</h3>
-                    {item.dayOptionDescription && (
-                      <p className="text-sm text-slate-500">{item.dayOptionDescription}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pooja Amount</p>
-                    <p className="text-xl font-semibold text-slate-900">{amountLabel}</p>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFromSummary(item.cartId)}
-                      className="mt-2 block text-xs font-semibold uppercase tracking-wide text-red-600 transition hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">
+                    {item.poojaCode ?? 'Pooja'}
+                  </p>
+                  <p className="text-base font-semibold text-slate-900">{item.poojaName}</p>
+                  <p className="text-xs text-slate-500">Date: {selectedDate}</p>
+                  <p className="text-xs text-slate-500">Members: {memberSummary}</p>
+                  {notes && <p className="text-xs text-slate-500">Notes: {notes}</p>}
                 </div>
 
-                <dl className="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service Date</dt>
-                    <dd className="text-sm font-medium text-slate-800">{formatDate(selectedDate)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quantity</dt>
-                    <dd className="text-sm font-medium text-slate-800">
-                      {item.members?.length && item.members.length > 0 ? item.members.length : 1}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notes</dt>
-                    <dd className="text-sm font-medium text-slate-800">{item.customDayNote?.trim() || '—'}</dd>
-                  </div>
-                </dl>
-
-                {renderUpcomingOccurrenceList(item.dayOptionOccurrences)}
-
-                {(() => {
-                  const memberLines = buildMemberSummaries(item);
-                  if (memberLines.length === 0) {
-                    return null;
-                  }
-                  return (
-                    <div className="mt-4 rounded-xl bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registered Members</p>
-                      <div className="space-y-1 text-sm font-medium text-slate-800">
-                        {memberLines.map((line, index) => (
-                          <p key={`${snapshotTotal}-${item.cartId}-${index}`}>{line}</p>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </article>
+                <div className="text-right">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">Amount</p>
+                  <p className="text-lg font-semibold text-orange-600">{amountLabel}</p>
+                  <p className="text-[0.65rem] text-slate-500">Qty {quantity}</p>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFromSummary(item.cartId)}
+                    className="mt-2 text-xs font-semibold uppercase tracking-wide text-red-600 transition hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -902,10 +819,12 @@ const PaymentPage = () => {
             </div>
           </div>
         )}
-
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-slate-600">
-            <p>Click Payment to reveal the bank transfer details. Once the transfer is complete, click Payment Completed to clear the record.</p>
+            <p>
+              Click Payment to reveal the bank transfer details. Once the transfer is complete, click Payment Completed
+              to clear the record.
+            </p>
           </div>
           {!showPaymentDetails ? (
             <div className="flex flex-wrap gap-3">

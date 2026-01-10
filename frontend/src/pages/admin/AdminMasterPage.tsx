@@ -88,7 +88,6 @@ type DayOptionFormValues = {
 };
 
 type PoojaOptionFormValues = {
-  code: string;
   poojaDescription: string;
   rate: string;
   minRate: string;
@@ -169,7 +168,7 @@ const AdminMasterPage = () => {
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
   const poojaForm = useForm<PoojaOptionFormValues>({
-    defaultValues: { code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' },
+    defaultValues: { poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' },
   });
 
   const parentCandidates = useMemo(() => poojaOptions.filter((option) => option.is_group_header), [poojaOptions]);
@@ -791,7 +790,7 @@ const AdminMasterPage = () => {
 
   const resetPoojaForm = () => {
     setEditingPooja(null);
-    poojaForm.reset({ code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' });
+    poojaForm.reset({ poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' });
   };
 
   const onSubmitHeader = async (values: HeaderFormValues) => {
@@ -833,7 +832,6 @@ const AdminMasterPage = () => {
 
   const onSubmitPooja = async (values: PoojaOptionFormValues) => {
     setIsSubmitting(true);
-    const rawCode = values.code.trim();
     const name = values.poojaDescription.trim();
     const rate = values.rate.trim();
     const minRate = values.minRate.trim();
@@ -841,8 +839,8 @@ const AdminMasterPage = () => {
     const headerIdValue = values.headerId.trim();
     const headerId = headerIdValue ? Number(headerIdValue) : null;
 
-    if (!rawCode || !name || !headerId) {
-      setNotice('Code, header and pooja description are required.');
+    if (!name || !headerId) {
+      setNotice('Header and pooja description are required.');
       setIsSubmitting(false);
       return;
     }
@@ -862,7 +860,7 @@ const AdminMasterPage = () => {
     }
 
     const payload: Record<string, any> = {
-      code: rawCode,
+      code: editingPooja?.code ?? generateHeaderCode(name),
       name,
       description: editingPooja?.description ?? '',
       default_amount: rate || null,
@@ -1306,159 +1304,127 @@ const AdminMasterPage = () => {
                 {/* Sidebar Forms - Hidden on mobile, shown when menu is open */}
                 <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
                   {/* Header Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3">
                       <h3 className="text-lg font-semibold text-slate-900">{editingHeader ? 'Edit Header' : 'Add Header'}</h3>
+                      <p className="text-sm text-slate-500">Group related poojas with a simple title.</p>
                     </div>
-                    <p className="mb-4 text-sm text-slate-600">Group pooja entries by rituals or themes.</p>
                     <form onSubmit={headerForm.handleSubmit(onSubmitHeader)} className="space-y-4">
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Header Title</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                           placeholder="Enter header name"
                           {...headerForm.register('headerName', { required: true })}
                         />
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-50"
+                          className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:opacity-50"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
                           {editingHeader ? 'Update Header' : 'Save Header'}
                         </button>
                         {editingHeader && (
                           <button
                             type="button"
                             onClick={resetHeaderForm}
-                            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
                             Cancel
                           </button>
                         )}
                       </div>
-                      {!editingHeader && <p className="text-xs text-slate-500">A header code will be generated automatically.</p>}
+                      {!editingHeader && <p className="text-xs text-slate-500">Header codes are generated automatically.</p>}
                     </form>
-                  </div>
+                  </section>
 
                   {/* Pooja Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3">
                       <h3 className="text-lg font-semibold text-slate-900">{editingPooja ? 'Edit Pooja Item' : 'Add Pooja Item'}</h3>
+                      <p className="text-sm text-slate-500">Create a pooja entry and assign it to a header.</p>
                     </div>
-                    <p className="mb-4 text-sm text-slate-600">Create individual pooja offerings and link them to headers.</p>
                     <form onSubmit={poojaForm.handleSubmit(onSubmitPooja)} className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">Code</label>
-                          <input
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                            placeholder="Enter code"
-                            {...poojaForm.register('code', { required: true })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">Header</label>
-                          <select
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                            {...poojaForm.register('headerId', { required: true })}
-                          >
-                            <option value="">Select header</option>
-                            {availableParentOptions.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-700">Header</label>
+                        <select
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
+                          {...poojaForm.register('headerId', { required: true })}
+                        >
+                          <option value="">Select header</option>
+                          {availableParentOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Pooja Description</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                           placeholder="Enter description"
                           {...poojaForm.register('poojaDescription', { required: true })}
                         />
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Rate</label>
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                           placeholder="Enter rate"
                           {...poojaForm.register('rate')}
                         />
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
                           <label className="text-sm font-medium text-slate-700">Minimum Rate</label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                             placeholder="Enter minimum rate"
                             {...poojaForm.register('minRate')}
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                           <label className="text-sm font-medium text-slate-700">Maximum Rate</label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                             placeholder="Enter maximum rate"
                             {...poojaForm.register('maxRate')}
                           />
                         </div>
                       </div>
                       <p className="text-xs text-slate-500">Code, header, description and at least one rate field are mandatory.</p>
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-50"
+                          className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:opacity-50"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
                           {editingPooja ? 'Update Pooja' : 'Save Pooja'}
                         </button>
                         {editingPooja && (
                           <button
                             type="button"
                             onClick={resetPoojaForm}
-                            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
                             Cancel
                           </button>
                         )}
                       </div>
                     </form>
-                  </div>
+                  </section>
                 </aside>
 
                 {/* Main Content */}

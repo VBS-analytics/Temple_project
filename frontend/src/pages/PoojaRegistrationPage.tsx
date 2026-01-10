@@ -141,7 +141,7 @@ function MemberMultiSelect({
         </span>
         <span className="ml-2 text-gray-400 flex-shrink-0">▾</span>
       </button>
-      <p className="mt-1 text-xs text-gray-500">
+      <p className="mt-1 text-xs text-gray-700">
         Devotees selected: {selectedCount} {selectedCount === 1 ? 'devotee' : 'devotees'}
       </p>
       {open &&
@@ -319,6 +319,29 @@ interface MasterRow {
   defaultAmount?: string | null;
   parentName?: string | null;
 }
+
+const POOJA_ICON_KEYWORDS: {
+  icon: string;
+  className: string;
+  keywords: string[];
+}[] = [
+  { icon: '🪔', className: 'bg-orange-100 text-orange-600', keywords: ['lamp', 'deepam', 'vilakku'] },
+  { icon: '🔥', className: 'bg-amber-100 text-amber-600', keywords: ['homa', 'fire', 'homam'] },
+  { icon: '🍚', className: 'bg-emerald-100 text-emerald-700', keywords: ['annadhanam', 'prasadam', 'donation'] },
+  { icon: '🕉️', className: 'bg-slate-100 text-slate-700', keywords: ['special', 'monthly', 'festival', 'ekadashi'] },
+  { icon: '🌙', className: 'bg-indigo-100 text-indigo-700', keywords: ['monthly', 'star', 'moon', 'nakshatra'] },
+  { icon: '🔥', className: 'bg-amber-100 text-amber-600', keywords: ['seva', 'charity', 'service'] },
+  { icon: '🧘', className: 'bg-purple-100 text-purple-700', keywords: ['bhajan', 'vigil', 'satsang'] },
+];
+const DEFAULT_POOJA_ICON = { icon: '⛩️', className: 'bg-slate-100 text-slate-800' };
+
+const resolvePoojaIcon = (row: MasterRow) => {
+  const sourceText = `${row.uiLabel} ${row.displayName} ${row.code}`.toLowerCase();
+  const match = POOJA_ICON_KEYWORDS.find((entry) =>
+    entry.keywords.some((keyword) => sourceText.includes(keyword)),
+  );
+  return match ?? DEFAULT_POOJA_ICON;
+};
 
 const CartAddIcon = ({ className = 'h-4 w-4' }: { className?: string }) => (
   <svg
@@ -571,6 +594,112 @@ const arePreferredDateGroupsEqual = (
     }
   }
   return true;
+};
+
+type PoojaCategoryKey = 'all' | 'general' | 'archana' | 'abishekam' | 'special';
+
+const POJA_CATEGORY_DEFINITIONS: {
+  key: PoojaCategoryKey;
+  label: string;
+  description: string;
+  keywords: string[];
+}[] = [
+  {
+    key: 'all',
+    label: 'All Poojas',
+    description: 'Browse every available pooja in the catalogue',
+    keywords: [],
+  },
+  {
+    key: 'general',
+    label: 'General Pooja',
+    description: 'General blessings, lamps, and everyday poojas',
+    keywords: ['general', 'general pooja', 'lamp', 'blessing', 'everyday'],
+  },
+  {
+    key: 'archana',
+    label: 'Archana Pooja',
+    description: 'Archana rituals, upacharas, and deity-specific namavalis',
+    keywords: ['archana', 'archanam', 'archanai', 'upachara', 'namavali'],
+  },
+  {
+    key: 'abishekam',
+    label: 'Abishekam Pooja',
+    description: 'Abishekam and abhishekam-style rituals for Shiva, Vishnu, Devi, and others',
+    keywords: ['abhishekam', 'abishekam', 'abhisekam', 'abisegam', 'abhishek'],
+  },
+  {
+    key: 'special',
+    label: 'Special Pooja',
+    description: 'Festival, utsav, and other special opportunity poojas',
+    keywords: ['special', 'festival', 'utsav', 'navaratri', 'ekadashi', 'special pooja'],
+  },
+];
+
+interface DeityFilterOption {
+  value: string;
+  label: string;
+  keywords: string[];
+}
+
+const DEITY_FILTER_OPTIONS: DeityFilterOption[] = [
+  { value: '', label: 'All Deities', keywords: [] },
+  {
+    value: 'pillayar',
+    label: 'Pillayar',
+    keywords: ['pillayar', 'ganesha', 'vinayaka', 'ganapathi'],
+  },
+  {
+    value: 'shivan-ambal',
+    label: 'Shivan & Ambal',
+    keywords: ['shiva', 'shivan', 'ambal', 'amman', 'shivambal', 'shivamba'],
+  },
+  {
+    value: 'murugan',
+    label: 'Murugan',
+    keywords: ['murugan', 'vel', 'skanda'],
+  },
+  {
+    value: 'kalabhairavar',
+    label: 'Kalabhairavar',
+    keywords: ['kalabhairavar', 'bhairava', 'kala bhairava', 'karnan'],
+  },
+  {
+    value: 'kasivishwanathar',
+    label: 'Kasivishwanathar',
+    keywords: ['kasivishwanathar', 'kasi', 'kasi vishwanathar', 'kashi vishwanath'],
+  },
+  {
+    value: 'ayyappan',
+    label: 'Ayyappan',
+    keywords: ['ayyappan', 'ayyappa', 'hariharaputra'],
+  },
+  {
+    value: 'saptakanni',
+    label: 'Saptakanni',
+    keywords: ['saptakanni', 'saptakanni amman', 'sapta kanni'],
+  },
+  {
+    value: 'lakshmi-narayanar',
+    label: 'Lakshmi-Narayanar',
+    keywords: ['lakshmi', 'narayanar', 'lakshmi narayanar', 'lakshmi narayana'],
+  },
+  {
+    value: 'aanjaneyar',
+    label: 'Aanjaneyar',
+    keywords: ['aanjaneyar', 'hanuman', 'anjaneyar', 'hanumantha'],
+  },
+];
+
+const VIEW_MODES = ['grid', 'list'] as const;
+type ViewMode = (typeof VIEW_MODES)[number];
+
+const toRowSearchText = (row: MasterRow) =>
+  `${row.code} ${row.uiLabel} ${row.displayName} ${row.pooja.name} ${row.pooja.description ?? ''}`.toLowerCase();
+
+const containsKeywords = (text: string, keywords: string[]) => {
+  if (keywords.length === 0) return true;
+  return keywords.some((keyword) => text.includes(keyword));
 };
 
 const normalizePoojaName = (value?: string | null) => {
@@ -878,6 +1007,11 @@ const PoojaRegistrationPage = () => {
   const [tableMessage, setTableMessage] = useState<{ status: 'info' | 'error'; text: string } | null>(null);
   const tableMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [warningPopup, setWarningPopup] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<PoojaCategoryKey>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deityFilter, setDeityFilter] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const isListView = viewMode === 'list';
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
   const addToCart = useCartStore((state) => state.addItem);
@@ -912,6 +1046,7 @@ const PoojaRegistrationPage = () => {
     formatCurrency(cartAmountBreakdown.recurringAmount.toString()) || '0';
   const formattedOneTimeAmount =
     formatCurrency(cartAmountBreakdown.oneTimeAmount.toString()) || '0';
+  const cartCountLabel = cartTotals.count === 1 ? 'pooja' : 'poojas';
   const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
   const navigate = useNavigate();
   const handleViewCart = useCallback(() => {
@@ -922,6 +1057,11 @@ const PoojaRegistrationPage = () => {
     });
     navigate('/payments/general?fromCart=1');
   }, [cartItems, cartKey, cartTotalAmount, navigate, setGeneralPayment]);
+  const handleClearFilters = useCallback(() => {
+    setSearchQuery('');
+    setDeityFilter('');
+    setSelectedCategory('all');
+  }, []);
   const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
@@ -960,6 +1100,8 @@ const PoojaRegistrationPage = () => {
     clearWarningTimer();
     setWarningPopup(null);
   }, [clearWarningTimer]);
+
+  const lastRemovedMemberSelectionRef = useRef<Record<number, string[]>>({});
 
   // Temporarily hide the Next Occurrence UI while keeping the data logic intact.
   const isNextOccurrenceVisible = false;
@@ -1477,6 +1619,24 @@ const PoojaRegistrationPage = () => {
     return rows;
   }, [poojaOptions]);
 
+  const selectedCategoryDefinition =
+    POJA_CATEGORY_DEFINITIONS.find((definition) => definition.key === selectedCategory) ??
+    POJA_CATEGORY_DEFINITIONS[0];
+  const selectedDeityOption =
+    DEITY_FILTER_OPTIONS.find((option) => option.value === deityFilter) ?? DEITY_FILTER_OPTIONS[0];
+
+  const filteredMasterRows = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return masterRows.filter((row) => {
+      const searchText = toRowSearchText(row);
+      const matchesSearch = !normalizedQuery || searchText.includes(normalizedQuery);
+      const matchesCategory = containsKeywords(searchText, selectedCategoryDefinition.keywords);
+      const matchesDeity = containsKeywords(searchText, selectedDeityOption.keywords);
+      return matchesSearch && matchesCategory && matchesDeity;
+    });
+  }, [masterRows, searchQuery, selectedCategoryDefinition, selectedDeityOption]);
+
   useEffect(() => {
     if (masterRows.length === 0 || dayOptionCodeMap.size === 0) {
       return;
@@ -1676,6 +1836,9 @@ const PoojaRegistrationPage = () => {
 
   useEffect(() => {
     const normalizedSet = new Set(normalizedSelectedMemberIds);
+    if (normalizedSet.size === 0) {
+      return;
+    }
     setChartPreferredDateGroupsMap((prev) => {
       let changed = false;
       const next: Record<number, ChartPreferredDateGroup[]> = {};
@@ -1736,9 +1899,42 @@ const PoojaRegistrationPage = () => {
         clearChartDetailsForPooja(poojaId);
         return;
       }
-      ensurePreferredDateGroups(poojaId, 1);
+      setChartPreferredDateGroupsMap((prev) => {
+        const existing = prev[poojaId];
+        if (existing && existing.length > 0) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [poojaId]: [createChartPreferredDateGroup()],
+        };
+      });
     },
-    [clearChartDetailsForPooja, dayOptionMap, ensurePreferredDateGroups],
+    [clearChartDetailsForPooja, dayOptionMap],
+  );
+
+  const hydrateChartPreferredDateGroupsFromCart = useCallback(
+    (poojaId: number, items: CartItem[]) => {
+      const chartGroups = items
+        .filter(
+          (item) => (item.dayOptionCode?.trim().toUpperCase() ?? '') === CHART_DAY_OPTION_CODE,
+        )
+        .map(buildPreferredDateGroupFromCartItem)
+        .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+      if (chartGroups.length === 0) {
+        return;
+      }
+      setChartPreferredDateGroupsMap((prev) => {
+        if (arePreferredDateGroupsEqual(prev[poojaId], chartGroups)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [poojaId]: chartGroups,
+        };
+      });
+    },
+    [],
   );
   const updatePreferredDateGroupField = useCallback(
     (poojaId: number, groupKey: string, field: 'date' | 'note', value: string) => {
@@ -2171,10 +2367,10 @@ const PoojaRegistrationPage = () => {
 
   const toggleMemberSelectionForRow = (row: MasterRow, value: string) => {
     setTableMessage(null);
-    const selectedDayId = resolveSelectedDayId(row.pooja.id);
-    const dayOptionDisabled = isDayOptionDisabledPooja({
-      name: row.pooja.name,
-      displayName: row.displayName,
+                    const selectedDayId = resolveSelectedDayId(row.pooja.id);
+                    const dayOptionDisabled = isDayOptionDisabledPooja({
+                      name: row.pooja.name,
+                      displayName: row.displayName,
       uiLabel: row.uiLabel,
     });
     const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
@@ -2455,6 +2651,7 @@ const PoojaRegistrationPage = () => {
     const effectiveDay = dayOptionDisabled ? null : selectedDay;
     const matchingItems = findCartItemsForRow(row, effectiveDay);
     const matchingItem = matchingItems[0];
+    hydrateChartPreferredDateGroupsFromCart(row.pooja.id, matchingItems);
     const presetMembers = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems) ?? [];
     const currentPrasadam = resolvePostPrasadam(row.pooja.id, matchingItem);
     setPrasadamSelectionMap((prev) => ({
@@ -2488,9 +2685,12 @@ const PoojaRegistrationPage = () => {
       dayOptionDisabled && isFirstDayPooja && nextFirstDayOccurrence ? nextFirstDayOccurrence.date : null;
 
     if (matchingItems.length > 0) {
+      const storedSelection = memberSelectionMap[row.pooja.id];
+      if (storedSelection && storedSelection.length > 0) {
+        lastRemovedMemberSelectionRef.current[row.pooja.id] = storedSelection;
+      }
       matchingItems.forEach((item) => removeFromCart(cartKey, item.cartId));
       setTableMessage({ status: 'info', text: `${row.uiLabel} removed from cart.` });
-      clearChartDetailsForPooja(row.pooja.id);
       return;
     }
 
@@ -2545,9 +2745,24 @@ const PoojaRegistrationPage = () => {
       return;
     }
     const mapSelection = memberSelectionMap[row.pooja.id];
-    const selectedMemberKeysRaw =
-      mapSelection && mapSelection.length > 0 ? mapSelection : selectedMemberIds;
-    const selectedMemberKeys = Array.from(new Set(selectedMemberKeysRaw));
+    const removedSelection = lastRemovedMemberSelectionRef.current[row.pooja.id];
+    const explicitSelection = mapSelection && mapSelection.length > 0 ? mapSelection : undefined;
+    const fallbackSelection = removedSelection && removedSelection.length > 0 ? removedSelection : undefined;
+    const selectedMemberKeys = Array.from(
+      new Set(explicitSelection ?? fallbackSelection ?? selectedMemberIds),
+    );
+    if (!explicitSelection && fallbackSelection) {
+      setMemberSelectionMap((prev) => {
+        const existing = prev[row.pooja.id];
+        if (existing && existing.length > 0) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [row.pooja.id]: fallbackSelection,
+        };
+      });
+    }
     if (selectedMemberKeys.length === 0) {
       showWarningPopup('Please select at least one devotee before adding this pooja.');
       return;
@@ -2662,9 +2877,8 @@ const PoojaRegistrationPage = () => {
         ...prev,
         [row.pooja.id]: postPrasadam,
       }));
-
-      clearChartDetailsForPooja(row.pooja.id);
       showTemporaryTableMessage(`${row.uiLabel} added to cart.`);
+      delete lastRemovedMemberSelectionRef.current[row.pooja.id];
       return;
     }
 
@@ -2725,6 +2939,7 @@ const PoojaRegistrationPage = () => {
 
     addToCart(cartKey, item);
     showTemporaryTableMessage(`${row.uiLabel} added to cart.`);
+    delete lastRemovedMemberSelectionRef.current[row.pooja.id];
   };
 
   const handleCloseModal = () => {
@@ -3064,7 +3279,8 @@ const PoojaRegistrationPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8">
+    <>
+      <div className="min-h-screen bg-slate-50 py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8 pb-24">
       {warningPopup && (
         <div className="fixed bottom-6 right-6 z-50 flex pointer-events-none">
           <div className="pointer-events-auto w-full max-w-sm xl:max-w-md">
@@ -3091,7 +3307,7 @@ const PoojaRegistrationPage = () => {
       <div className="responsive-layout">
         <div className="mb-6 sm:mb-8 md:mb-10">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Pooja Registration</h1>
-          <p className="text-base sm:text-lg text-gray-700">
+          <p className="text-sm sm:text-base text-gray-700">
             Browse our complete pooja catalogue and select your preferred options to book a pooja ceremony
           </p>
         </div>
@@ -3135,6 +3351,89 @@ const PoojaRegistrationPage = () => {
           </div>
 
           <div className="p-4 sm:p-6">
+            <div className="mb-4 space-y-2 border-b border-gray-100 pb-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {POJA_CATEGORY_DEFINITIONS.map((category) => {
+                    const isActive = selectedCategory === category.key;
+                    return (
+                      <button
+                        key={category.key}
+                        type="button"
+                        onClick={() => setSelectedCategory(category.key)}
+                        className={clsx(
+                          'rounded-full border px-3 py-1 text-xs font-semibold transition',
+                          isActive
+                            ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50',
+                        )}
+                      >
+                        {category.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400">
+                    View
+                  </span>
+                  {VIEW_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setViewMode(mode)}
+                      className={clsx(
+                        'rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide transition',
+                        viewMode === mode
+                          ? 'border-slate-600 bg-slate-900 text-white shadow'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-slate-300 hover:bg-gray-50',
+                      )}
+                    >
+                      {mode === 'grid' ? 'Grid' : 'List'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">{selectedCategoryDefinition.description}</p>
+                <div className="grid gap-2 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-[0.6rem] font-semibold uppercase text-gray-500">
+                    Search
+                  </label>
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search by name, code, or description"
+                    className="w-full rounded-2xl border border-gray-300 px-3 py-1.5 text-xs focus:border-orange-500 focus:ring focus:ring-orange-200 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[0.6rem] font-semibold uppercase text-gray-500">
+                    Filter by Deity
+                  </label>
+                  <select
+                    value={deityFilter}
+                    onChange={(event) => setDeityFilter(event.target.value)}
+                    className="w-full rounded-2xl border border-gray-300 bg-white px-3 py-1.5 text-xs focus:border-orange-500 focus:ring focus:ring-orange-200 focus:outline-none"
+                  >
+                    {DEITY_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col justify-between gap-1 text-xs text-gray-500">
+                  <span>
+                    Showing {filteredMasterRows.length} of {masterRows.length} poojas
+                  </span>
+                  <span>
+                    Category: {selectedCategoryDefinition.label} • Deity: {selectedDeityOption.label}
+                  </span>
+                </div>
+              </div>
+            </div>
             {isLoading && (
               <div className="flex flex-col gap-4">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -3156,7 +3455,7 @@ const PoojaRegistrationPage = () => {
             )}
 
             {!isLoading && !error && masterRows.length > 0 && (
-              <>
+              <div className="space-y-4">
                 {tableMessage && (
                   <div
                     className={`mb-4 rounded-lg p-3 text-sm font-medium ${
@@ -3168,224 +3467,211 @@ const PoojaRegistrationPage = () => {
                     {tableMessage.text}
                   </div>
                 )}
-                {/* Desktop Table View */}
-                <div className="hidden lg:block rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="max-h-[70vh] overflow-auto">
-                    <table className="min-w-full divide-y divide-gray-200 bg-white">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Code
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[15%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Pooja Name
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[40%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Day Option
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Devotees
-                        </th>
-                        {isNextOccurrenceVisible && (
-                          <th
-                            scope="col"
-                            className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[12%] sticky top-0 bg-gray-50 z-20"
-                          >
-                            Next Occurrence
-                          </th>
-                        )}
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Amount
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Prasadam
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-[7%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Add to Cart
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Registered By
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-[8%] sticky top-0 bg-gray-50 z-20"
-                        >
-                          Registration Date
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {masterRows.map((row) => {
-                        const selectedDayId = resolveSelectedDayId(row.pooja.id);
-                        const dayOptionDisabled = isDayOptionDisabledPooja({
-                          name: row.pooja.name,
-                          displayName: row.displayName,
-                          uiLabel: row.uiLabel,
-                        });
-                        const availableDayOptions = filterDayOptionsForNames({
-                          name: row.pooja.name,
-                          displayName: row.displayName,
-                          uiLabel: row.uiLabel,
-                        });
-                        const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
-                        const matchingItems = findCartItemsForRow(row, effectiveDayId);
-                        const matchingItem = matchingItems[0];
-                        const inCart = matchingItems.length > 0;
-                        const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
-                        const requiresChartDetails = isChartDayOption(selectedDayOption);
-                        const hideDevoteesForRow =
-                          !dayOptionDisabled && selectedDayOption ? isChartDayOption(selectedDayOption) : false;
-                        const occurrenceState = dayOccurrenceMap[row.pooja.id];
-                        const iconLabel = inCart
-                          ? `Remove ${row.uiLabel} from cart`
-                          : `Add ${row.uiLabel} to cart`;
-                        const iconClasses = inCart
-                          ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300'
-                          : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
-                          const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
-                          const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
-                          const memberButtonLabel = formatMemberLabel(
-                            row.pooja.id,
-                            memberKeysForDisplay,
-                            matchingItem,
-                          );
-                        const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
-                        const hasAdjustableAmount =
-                          Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
-                        const amountInputValue =
-                          amountSelectionMap[row.pooja.id] ??
-                          row.defaultAmount ??
-                          row.amountValue ??
-                          row.minAmount ??
-                          row.maxAmount ??
-                          '';
-                        const amountInputError =
-                          hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
-                        const isFirstDayPooja = isFirstDayEnglishMonthPooja({
-                          name: row.pooja.name,
-                          displayName: row.displayName,
-                          uiLabel: row.uiLabel,
-                        });
-                        const showDefaultFirstDay =
-                          Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
-                        const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
-                        const isAnyDayOfMonthSelected =
-                          !dayOptionDisabled && selectedDayOption ? isAnyDayOfMonthOption(selectedDayOption) : false;
-                        const showNextOccurrence = !isAnyDayOfMonthSelected;
-                        
-                        return (
-                        <tr
-                          key={row.pooja.id}
+                {filteredMasterRows.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-white/80 p-6 text-center text-sm text-gray-600">
+                    <p className="text-base font-semibold text-gray-900">
+                      No poojas found{' '}
+                      {selectedDeityOption.value ? `for ${selectedDeityOption.label}` : 'with the current filters'}.
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Try a different search term or deity filter to refresh the catalog.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClearFilters}
+                      className="mt-3 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                )}
+                {filteredMasterRows.length > 0 && (
+                  <div
+                    className={clsx(
+                      'grid',
+                      viewMode === 'grid' ? 'gap-5 lg:grid-cols-2' : 'gap-4 grid-cols-1',
+                    )}
+                  >
+                    {filteredMasterRows.map((row) => {
+                      const selectedDayId = resolveSelectedDayId(row.pooja.id);
+                      const dayOptionDisabled = isDayOptionDisabledPooja({
+                        name: row.pooja.name,
+                        displayName: row.displayName,
+                        uiLabel: row.uiLabel,
+                      });
+                      const availableDayOptions = filterDayOptionsForNames({
+                        name: row.pooja.name,
+                        displayName: row.displayName,
+                        uiLabel: row.uiLabel,
+                      });
+                    const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
+                    const matchingItems = findCartItemsForRow(row, effectiveDayId);
+                    const matchingItem = matchingItems[0];
+                    const inCart = matchingItems.length > 0;
+                    const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
+                    const requiresChartDetails = isChartDayOption(selectedDayOption);
+                    const hideDevoteesForRow =
+                      !dayOptionDisabled && selectedDayOption ? isChartDayOption(selectedDayOption) : false;
+                    const occurrenceState = dayOccurrenceMap[row.pooja.id];
+                    const iconLabel = inCart
+                      ? `Remove ${row.uiLabel} from cart`
+                      : `Add ${row.uiLabel} to cart`;
+                    const iconClasses = inCart
+                      ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300'
+                      : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
+                    const poojaIcon = resolvePoojaIcon(row);
+                    const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
+                    const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
+                    const memberButtonLabel = formatMemberLabel(
+                      row.pooja.id,
+                      memberKeysForDisplay,
+                      matchingItem,
+                    );
+                    const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
+                    const hasAdjustableAmount =
+                      Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
+                    const cartAmountValue =
+                      matchingItem && matchingItem.amount !== undefined
+                        ? String(matchingItem.amount)
+                        : undefined;
+                    const amountInputValue =
+                      amountSelectionMap[row.pooja.id] ??
+                      cartAmountValue ??
+                      row.defaultAmount ??
+                      row.amountValue ??
+                      row.minAmount ??
+                      row.maxAmount ??
+                      '';
+                    const amountInputError =
+                      hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
+                    const isFirstDayPooja = isFirstDayEnglishMonthPooja({
+                      name: row.pooja.name,
+                      displayName: row.displayName,
+                      uiLabel: row.uiLabel,
+                    });
+                    const showDefaultFirstDay =
+                      Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
+                    const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
+                    const isAnyDayOfMonthSelected =
+                      !dayOptionDisabled && selectedDayOption ? isAnyDayOfMonthOption(selectedDayOption) : false;
+                    const showNextOccurrence = !isAnyDayOfMonthSelected;
+
+                    return (
+                      <article
+                        key={row.pooja.id}
                         className={clsx(
-                          'transition-colors',
-                          inCart
-                            ? 'bg-emerald-200 text-emerald-900 hover:bg-emerald-300 ring-1 ring-emerald-400 shadow-inner'
-                            : 'hover:bg-gray-50',
+                          'flex flex-col rounded-3xl border bg-white shadow-[0_10px_25px_rgba(15,23,42,0.07)] transition hover:shadow-[0_10px_25px_rgba(0,0,0,0.12)]',
+                          inCart ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-gray-100',
+                          isListView && 'md:flex-row md:items-center md:gap-5 transition',
                         )}
+                      >
+                        <div className="flex items-start justify-between gap-4 px-4 py-3 md:px-5">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl font-semibold ${poojaIcon.className}`}
+                              aria-hidden="true"
+                            >
+                              {poojaIcon.icon}
+                            </span>
+                            <div className="min-w-0">
+                              <h3 className="text-lg font-bold leading-snug text-gray-900">{row.uiLabel}</h3>
+                              <p className="text-xs text-gray-500">
+                                {matchingItems.length > 0 ? 'Ready for payment' : 'Select options to add'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleCartItem(row)}
+                            className={clsx(iconClasses, 'transition hover:scale-105')}
+                            aria-label={iconLabel}
+                          >
+                            {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
+                          </button>
+                        </div>
+
+                        <div
+                          className={clsx(
+                            'grid gap-4 border-t border-gray-100 px-4 py-4 md:px-5',
+                            isListView ? 'md:grid-cols-2 md:gap-3' : 'md:grid-cols-[1.25fr_0.75fr]',
+                          )}
                         >
-                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {row.code}
-                            </td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                              {row.uiLabel}
-                            </td>
-                            <td className="px-4 py-3 text-sm overflow-visible min-w-[420px]">
-                              {availableDayOptions.length > 0 ? (
-                                dayOptionDisabled ? (
-                                  <span className="text-xs text-gray-500">Day option not required for this pooja</span>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <p className="text-[0.65rem] font-semibold uppercase text-gray-500">Day option</p>
+                                {availableDayOptions.length > 0 ? (
+                                  dayOptionDisabled ? (
+                                    <span className="text-xs text-gray-500">Not required for this pooja</span>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <select
+                                        value={effectiveDayId !== null ? String(effectiveDayId) : ''}
+                                        onChange={(event) => handleDaySelectionChange(row.pooja.id, event.target.value)}
+                                        className="w-full min-h-[44px] rounded-2xl border border-gray-300 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 transition"
+                                        aria-label="Select day option"
+                                      >
+                                        <option value="">Select day option</option>
+                                        {availableDayOptions.map((option) => (
+                                          <option key={option.id} value={String(option.id)}>
+                                            {formatDayOptionLabel(option)}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {selectedDayOption?.code === 'CS' && (
+                                        <div className="mt-2">
+                                          <select
+                                            value={tamilStarSelectionMap[row.pooja.id] ?? ''}
+                                            onChange={(event) =>
+                                              handleTamilStarSelection(row.pooja.id, event.target.value)
+                                            }
+                                            className="w-full min-h-[44px] rounded-2xl border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white transition"
+                                            aria-label="Select your star"
+                                          >
+                                            <option value="">Select your star</option>
+                                            {canonicalTamilStarChoices.map((choice) => (
+                                              <option key={choice.key} value={choice.value} disabled={choice.disabled}>
+                                                {choice.label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
                                 ) : (
-                                  <div className="space-y-3">
-                                    <select
-                                      value={effectiveDayId !== null ? String(effectiveDayId) : ''}
-                                      onChange={(event) => handleDaySelectionChange(row.pooja.id, event.target.value)}
-                                      className="w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 shadow-sm transition"
-                                      aria-label="Select day option"
-                                    >
-                                      <option value="">Select day option</option>
-                                      {availableDayOptions.map((option) => (
-                                        <option key={option.id} value={String(option.id)}>
-                                          {formatDayOptionLabel(option)}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {selectedDayOption?.code === 'CS' && (
-                                      <div className="mt-2">
-                                        <select
-                                          value={tamilStarSelectionMap[row.pooja.id] ?? ''}
-                                          onChange={(event) =>
-                                            handleTamilStarSelection(row.pooja.id, event.target.value)
-                                          }
-                                          className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
-                                          aria-label="Select your star"
-                                        >
-                                          <option value="">Select your star</option>
-                                          {canonicalTamilStarChoices.map((choice) => (
-                                            <option
-                                              key={choice.key}
-                                              value={choice.value}
-                                              disabled={choice.disabled}
-                                            >
-                                              {choice.label}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                    )}
-                                    {requiresChartDetails && (
-                                      <div className="mt-3">
-                                        {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              ) : (
-                                <span className="text-xs text-gray-500">Not configured</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-sm overflow-visible">
+                                  <span className="text-xs text-gray-500">Not configured</span>
+                                )}
+                              </div>
                               {!hideDevoteesForRow && (
-                                <MemberMultiSelect
-                                  label={memberButtonLabel}
-                                  options={memberOptions}
-                                  selectedValues={memberKeysForDisplay}
-                                  onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
-                                  disabled={memberOptions.length === 0}
-                                />
+                                <div className="space-y-2">
+                                  <p className="text-[0.65rem] font-semibold uppercase text-gray-500">Devotees</p>
+                                  <MemberMultiSelect
+                                    label={memberButtonLabel}
+                                    options={memberOptions}
+                                    selectedValues={memberKeysForDisplay}
+                                    onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
+                                    disabled={memberOptions.length === 0}
+                                  />
+                                </div>
                               )}
-                            </td>
-                            {isNextOccurrenceVisible && (
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {showNextOccurrence ? (
-                                  showDefaultFirstDay ? (
+                              {requiresChartDetails && (
+                                <div>
+                                  <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3">
+                                    {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
+                                  </div>
+                                </div>
+                              )}
+                              {isNextOccurrenceVisible && showNextOccurrence && (
+                                <div className="space-y-1 rounded-2xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                                  <p className="text-[0.65rem] font-semibold uppercase text-gray-500">
+                                    Next occurrence
+                                  </p>
+                                  {showDefaultFirstDay ? (
                                     <div className="space-y-1">
-                                      <span className="font-medium text-gray-900">
+                                      <span className="font-semibold text-gray-900">
                                         {nextFirstDayOccurrence?.label}
                                       </span>
-                                      <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
+                                      <span className="text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
                                     </div>
                                   ) : (!dayOptionDisabled && effectiveDayId === null) ? (
                                     <span className="text-xs text-gray-500">Select a day option</span>
@@ -3416,71 +3702,67 @@ const PoojaRegistrationPage = () => {
                                   ) : occurrenceState.status === 'manual' ||
                                     occurrenceState.status === 'needsStar' ||
                                     occurrenceState.status === 'error' ? (
-                                    <span className="text-xs text-gray-600">
-                                      {occurrenceState.message}
-                                    </span>
+                                    <span className="text-xs text-gray-600">{occurrenceState.message}</span>
                                   ) : (
                                     <span className="text-xs text-gray-500">Select a day option</span>
-                                  )
-                                ) : null}
-                              </td>
-                            )}
-                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                              <div className="space-y-4">
-                                <div>
-                                  {hasAdjustableAmount ? (
-                                    <div className="space-y-2">
-                                      <p className="text-xs text-gray-500">Range: {row.rateLabel}</p>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm text-gray-500">₹</span>
-                                        <input
-                                          type="number"
-                                          min={row.minAmount ?? undefined}
-                                          max={row.maxAmount ?? undefined}
-                                          step={VARIABLE_AMOUNT_STEP}
-                                          className="w-28 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                          value={amountInputValue}
-                                          onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
-                                        />
-                                      </div>
-                                      {amountInputError && (
-                                        <p className="text-xs text-red-600">{amountInputError}</p>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span>{row.rateLabel}</span>
                                   )}
                                 </div>
-                                <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs">
-                                  <p className="text-gray-500 font-semibold uppercase tracking-wide">Schedule</p>
-                                  <div className="flex flex-wrap items-center gap-4 text-gray-700">
-                                <label className="inline-flex items-center">
-                                  <input
-                                    type="radio"
-                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                    checked={recurrenceSelection?.kind === 'recurring'}
-                                    onChange={() =>
-                                      applyRecurrenceSelection(row.pooja.id, {
-                                        kind: 'recurring',
-                                        frequency:
-                                          recurrenceSelection?.kind === 'recurring'
-                                            ? recurrenceSelection.frequency
-                                            : 'monthly',
-                                      })
-                                    }
-                                  />
-                                  <span className="ml-2">Recurring</span>
-                                </label>
+                              )}
+                            </div>
+                            <div className="space-y-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-xs text-gray-700">
+                              <div className="space-y-2">
+                                <p className="text-[0.65rem] font-semibold uppercase text-gray-500">Amount</p>
+                                {hasAdjustableAmount ? (
+                                  <div className="space-y-2">
+                                    <p className="text-[0.6rem] text-gray-500">Range: {row.rateLabel}</p>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-500">₹</span>
+                                      <input
+                                        type="number"
+                                        min={row.minAmount ?? undefined}
+                                        max={row.maxAmount ?? undefined}
+                                        step={VARIABLE_AMOUNT_STEP}
+                                        className="w-full min-h-[44px] rounded-2xl border border-gray-300 px-3 py-1.5 text-xs focus:ring-orange-500 focus:border-orange-500"
+                                        value={amountInputValue}
+                                        onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
+                                      />
+                                    </div>
+                                    {amountInputError && (
+                                      <p className="text-xs text-red-600">{amountInputError}</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                    <p className="text-base font-semibold text-gray-900">{row.rateLabel}</p>
+                                )}
                               </div>
-                              <p className="mt-1 text-[0.65rem] text-gray-500">
-                                Select Recurring to enable a schedule; leave this unchecked for a one-time booking.
-                              </p>
+                              <div className="space-y-2">
+                                  <p className="text-[0.65rem] font-semibold uppercase text-gray-500">Schedule</p>
+                                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                                    <input
+                                      type="radio"
+                                      className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                      checked={recurrenceSelection?.kind === 'recurring'}
+                                      onChange={() =>
+                                        applyRecurrenceSelection(row.pooja.id, {
+                                          kind: 'recurring',
+                                          frequency:
+                                            recurrenceSelection?.kind === 'recurring'
+                                              ? recurrenceSelection.frequency
+                                              : 'monthly',
+                                        })
+                                      }
+                                    />
+                                    <span>Recurring</span>
+                                  </label>
+                                  <p className="text-[0.65rem] text-gray-500">
+                                    Select Recurring to enable a schedule; leave unchecked for a one-time booking.
+                                  </p>
                                   {recurrenceSelection ? (
                                     <>
                                       {recurrenceSelection.kind === 'recurring' ? (
-                                        <div className="space-y-2">
-                                          <div className="flex items-center gap-2 text-gray-600">
-                                            <span className="text-xs font-medium">Frequency:</span>
+                                        <div className="space-y-2 text-xs text-gray-600">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-semibold">Frequency:</span>
                                             <div className="flex items-center gap-1">
                                               <select
                                                 value={recurrenceSelection.frequency}
@@ -3490,14 +3772,14 @@ const PoojaRegistrationPage = () => {
                                                     frequency: event.target.value as RecurrenceFrequency,
                                                   })
                                                 }
-                                                className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
+                                            className="rounded-2xl border border-gray-300 bg-white px-2 py-1 text-xs min-h-[40px] focus:border-orange-500 focus:outline-none"
                                               >
                                                 <option value="monthly">Monthly</option>
                                                 <option value="quarterly">Quarterly</option>
                                                 <option value="annually">Annually</option>
                                               </select>
                                               <span
-                                                className="text-[0.65rem] font-semibold text-slate-500"
+                                                className="text-[0.6rem] font-semibold text-slate-500"
                                                 title={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
                                                 aria-label={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
                                               >
@@ -3505,19 +3787,15 @@ const PoojaRegistrationPage = () => {
                                               </span>
                                             </div>
                                           </div>
-                                          <p className="text-[0.65rem] text-gray-500">
-                                            {RECURRING_FREQUENCY_DESCRIPTIONS[recurrenceSelection.frequency]}
-                                          </p>
+                                          <p>{RECURRING_FREQUENCY_DESCRIPTIONS[recurrenceSelection.frequency]}</p>
                                         </div>
                                       ) : (
-                                        <div className="space-y-1">
-                                          <label className="block text-xs font-medium text-gray-600">
-                                            English month date
-                                          </label>
+                                        <div className="space-y-1 text-xs text-gray-600">
+                                          <label className="block font-medium text-gray-600">English month date</label>
                                           <input
                                             type="date"
                                             min={todayIso}
-                                            className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                          className="w-full rounded-2xl border border-gray-300 px-2 py-1 text-xs min-h-[44px] focus:ring-orange-500 focus:border-orange-500"
                                             value={recurrenceSelection.oneTimeDate ?? ''}
                                             onChange={(event) =>
                                               applyRecurrenceSelection(row.pooja.id, {
@@ -3530,7 +3808,7 @@ const PoojaRegistrationPage = () => {
                                       )}
                                       <button
                                         type="button"
-                                        className="mt-2 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-100"
+                                        className="text-xs font-semibold text-red-600"
                                         onClick={() => applyRecurrenceSelection(row.pooja.id)}
                                       >
                                         Clear schedule
@@ -3540,454 +3818,80 @@ const PoojaRegistrationPage = () => {
                                     <p className="text-xs text-gray-500">Choose a schedule to proceed.</p>
                                   )}
                                 </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              <div className="flex items-center justify-center space-x-4">
-                                <label className="inline-flex items-center">
-                                  <input
-                                    type="radio"
-                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                    checked={postPrasadamSelected === true}
-                                    onChange={() => {
-                                      setPrasadamSelectionMap((prev) => ({
-                                        ...prev,
-                                        [row.pooja.id]: true,
-                                      }));
-                                      setTableMessage(null);
-                                    }}
-                                  />
-                                  <span className="ml-2 text-gray-700">Yes</span>
-                                </label>
-                                <label className="inline-flex items-center">
-                                  <input
-                                    type="radio"
-                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                    checked={postPrasadamSelected === false}
-                                    onChange={() => {
-                                      setPrasadamSelectionMap((prev) => ({
-                                        ...prev,
-                                        [row.pooja.id]: false,
-                                      }));
-                                      setTableMessage(null);
-                                    }}
-                                  />
-                                  <span className="ml-2 text-gray-700">No</span>
-                                </label>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              <button
-                                type="button"
-                                onClick={() => toggleCartItem(row)}
-                                className={iconClasses}
-                                aria-label={iconLabel}
-                              >
-                                {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
-                              </button>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                              {user?.name?.trim() || user?.phone_number || '--'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                              {registrationDateLabel}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="lg:hidden space-y-4">
-                  {masterRows.map((row) => {
-                    const selectedDayId = resolveSelectedDayId(row.pooja.id);
-                    const dayOptionDisabled = isDayOptionDisabledPooja({
-                      name: row.pooja.name,
-                      displayName: row.displayName,
-                      uiLabel: row.uiLabel,
-                    });
-                    const availableDayOptions = filterDayOptionsForNames({
-                      name: row.pooja.name,
-                      displayName: row.displayName,
-                      uiLabel: row.uiLabel,
-                    });
-                    const effectiveDayId = dayOptionDisabled ? null : selectedDayId;
-                    const matchingItems = findCartItemsForRow(row, effectiveDayId);
-                    const matchingItem = matchingItems[0];
-                    const inCart = matchingItems.length > 0;
-                    const selectedDayOption = effectiveDayId ? dayOptionMap.get(effectiveDayId) : undefined;
-                    const requiresChartDetails = isChartDayOption(selectedDayOption);
-                    const hideDevoteesForRow = !dayOptionDisabled && isChartDayOption(selectedDayOption);
-                    const occurrenceState = dayOccurrenceMap[row.pooja.id];
-                    const iconLabel = inCart
-                      ? `Remove ${row.uiLabel} from cart`
-                      : `Add ${row.uiLabel} to cart`;
-                    const iconClasses = inCart
-                      ? 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300'
-                      : 'inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300';
-                    const resolvedMemberKeys = resolveSelectedMemberKeys(row.pooja.id, matchingItem, matchingItems);
-                    const memberKeysForDisplay = resolvedMemberKeys ?? fallbackMemberSelection;
-                    const memberButtonLabel = formatMemberLabel(
-                      row.pooja.id,
-                      memberKeysForDisplay,
-                      matchingItem,
-                    );
-                    const postPrasadamSelected = resolvePostPrasadam(row.pooja.id, matchingItem);
-                    const hasAdjustableAmount =
-                      Boolean(row.minAmount && row.maxAmount && row.minAmount !== row.maxAmount);
-                    const amountInputValue =
-                      amountSelectionMap[row.pooja.id] ??
-                      row.defaultAmount ??
-                      row.amountValue ??
-                      row.minAmount ??
-                      row.maxAmount ??
-                      '';
-                    const amountInputError =
-                      hasAdjustableAmount && amountInputValue ? validateRowAmount(row, amountInputValue) : null;
-                    const isFirstDayPooja = isFirstDayEnglishMonthPooja({
-                      name: row.pooja.name,
-                      displayName: row.displayName,
-                      uiLabel: row.uiLabel,
-                    });
-                    const showDefaultFirstDay =
-                      Boolean(isFirstDayPooja && !effectiveDayId && nextFirstDayOccurrence);
-                    const recurrenceSelection = resolveRecurrenceSelection(row.pooja.id);
-                    const isAnyDayOfMonthSelected =
-                      !dayOptionDisabled && selectedDayOption ? isAnyDayOfMonthOption(selectedDayOption) : false;
-                    const showNextOccurrence = !isAnyDayOfMonthSelected;
-
-                    return (
-                      <div
-                        key={row.pooja.id}
-                        className={clsx(
-                          'overflow-hidden rounded-lg',
-                          inCart
-                            ? 'bg-emerald-200 border border-emerald-400 shadow-xl text-emerald-900'
-                            : 'bg-white border border-gray-200 shadow-sm',
-                        )}
-                      >
-                        <div className="p-4 border-b border-gray-200 bg-gray-50">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium text-gray-900">{row.uiLabel}</h3>
-                              <p className="text-sm text-gray-600">Code: {row.code}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => toggleCartItem(row)}
-                              className={iconClasses}
-                              aria-label={iconLabel}
-                            >
-                              {inCart ? <CartRemoveIcon className="h-5 w-5" /> : <CartAddIcon className="h-5 w-5" />}
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <div className="p-4 space-y-4">
-                          {/* Day Option Section */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Day Option
-                            </label>
-                            {availableDayOptions.length > 0 ? (
-                              dayOptionDisabled ? (
-                                <span className="text-xs text-gray-500">Day option not required for this pooja</span>
-                              ) : (
-                                <div className="space-y-3">
-                                  <select
-                                    value={effectiveDayId !== null ? String(effectiveDayId) : ''}
-                                    onChange={(event) => handleDaySelectionChange(row.pooja.id, event.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 shadow-sm transition"
-                                    aria-label="Select day option"
-                                  >
-                                    <option value="">Select day option</option>
-                                    {availableDayOptions.map((option) => (
-                                      <option key={option.id} value={String(option.id)}>
-                                        {formatDayOptionLabel(option)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  {selectedDayOption?.code === 'CS' && (
-                                    <div className="mt-2">
-                                      <select
-                                        value={tamilStarSelectionMap[row.pooja.id] ?? ''}
-                                        onChange={(event) =>
-                                          handleTamilStarSelection(row.pooja.id, event.target.value)
-                                        }
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring focus:ring-orange-200 bg-white shadow-sm"
-                                        aria-label="Select your star"
-                                      >
-                                        <option value="">Select your star</option>
-                                        {canonicalTamilStarChoices.map((choice) => (
-                                          <option key={choice.key} value={choice.value} disabled={choice.disabled}>
-                                            {choice.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  )}
-                                  {requiresChartDetails && (
-                                    <div className="mt-3">
-                                      {renderPreferredDateGroupsEditor(row.pooja.id, memberOptions)}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-xs text-gray-500">Not configured</span>
-                            )}
-                          </div>
-
-                          {/* Devotees Section */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Devotees
-                            </label>
-                            <MemberMultiSelect
-                              label={memberButtonLabel}
-                              options={memberOptions}
-                              selectedValues={memberKeysForDisplay}
-                              onToggleValue={(value) => toggleMemberSelectionForRow(row, value)}
-                              disabled={memberOptions.length === 0}
-                            />
-                          </div>
-
-                          {/* Next Occurrence Section */}
-                          {isNextOccurrenceVisible && showNextOccurrence && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Next Occurrence
-                              </label>
-                              {showDefaultFirstDay ? (
-                                <div className="space-y-1">
-                                  <span className="font-medium text-gray-900">
-                                    {nextFirstDayOccurrence?.label}
-                                  </span>
-                                  <span className="block text-xs text-gray-600">{FIRST_DAY_NOTE_MESSAGE}</span>
-                                </div>
-                              ) : (!dayOptionDisabled && effectiveDayId === null) ? (
-                                <span className="text-xs text-gray-500">Select a day option</span>
-                              ) : !occurrenceState ? (
-                                <span className="text-xs text-gray-500">Select a day option</span>
-                              ) : occurrenceState.status === 'loading' ? (
-                                <span className="text-xs text-gray-600">Fetching date…</span>
-                              ) : occurrenceState.status === 'ready' ? (
-                                <div className="space-y-2">
-                                  {(occurrenceState.occurrences && occurrenceState.occurrences.length > 0
-                                    ? occurrenceState.occurrences
-                                    : [{ date: occurrenceState.date, label: occurrenceState.label }]
-                                  ).map((entry, index) => (
-                                    <div
-                                      key={`${entry.date}-${index}`}
-                                      className={index === 0 ? '' : 'pt-2 border-t border-gray-100'}
-                                    >
-                                      <span className="font-medium text-gray-900">
-                                        {formatDisplayDate(entry.date)}
-                                      </span>
-                                      {entry.label && (
-                                        <span className="block text-xs text-gray-600">{entry.label}</span>
-                                      )}
-                                    </div>
-                                  ))}
-                                  {occurrenceState.note && renderOccurrenceNote(occurrenceState.note)}
-                                </div>
-                              ) : occurrenceState.status === 'manual' ||
-                                occurrenceState.status === 'needsStar' ||
-                                occurrenceState.status === 'error' ? (
-                                <span className="text-xs text-gray-600">
-                                  {occurrenceState.message}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-gray-500">Select a day option</span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Amount Section */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Amount
-                            </label>
-                            {hasAdjustableAmount ? (
-                              <div className="space-y-2">
-                                <p className="text-xs text-gray-500">Range: {row.rateLabel}</p>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm text-gray-500">₹</span>
-                                  <input
-                                    type="number"
-                                    min={row.minAmount ?? undefined}
-                                    max={row.maxAmount ?? undefined}
-                                    step={VARIABLE_AMOUNT_STEP}
-                                    className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                    value={amountInputValue}
-                                    onChange={(event) => handleAmountChange(row.pooja.id, event.target.value)}
-                                  />
-                                </div>
-                                {amountInputError && (
-                                  <p className="text-xs text-red-600">{amountInputError}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <span>{row.rateLabel}</span>
-                            )}
-                          </div>
-
-                          {/* Recurrence Section */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Schedule
-                            </label>
-                            <div className="space-y-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs">
-                              <div className="flex flex-wrap items-center gap-4 text-gray-700">
-                                <label className="inline-flex items-center">
-                                  <input
-                                    type="radio"
-                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                    checked={recurrenceSelection?.kind === 'recurring'}
-                                    onChange={() =>
-                                      applyRecurrenceSelection(row.pooja.id, {
-                                        kind: 'recurring',
-                                        frequency:
-                                          recurrenceSelection?.kind === 'recurring'
-                                            ? recurrenceSelection.frequency
-                                            : 'monthly',
-                                      })
-                                    }
-                                  />
-                                  <span className="ml-2">Recurring</span>
-                                </label>
-                              </div>
-                              <p className="mt-1 text-[0.65rem] text-gray-500">
-                                Select Recurring to enable a schedule; leave this unchecked for a one-time booking.
-                              </p>
-                              {recurrenceSelection ? (
-                                <>
-                                  {recurrenceSelection.kind === 'recurring' ? (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2 text-gray-600">
-                                        <span className="text-xs font-medium">Frequency:</span>
-                                        <div className="flex items-center gap-1">
-                                          <select
-                                            value={recurrenceSelection.frequency}
-                                            onChange={(event) =>
-                                              applyRecurrenceSelection(row.pooja.id, {
-                                                kind: 'recurring',
-                                                frequency: event.target.value as RecurrenceFrequency,
-                                              })
-                                            }
-                                            className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
-                                          >
-                                            <option value="monthly">Monthly</option>
-                                            <option value="quarterly">Quarterly</option>
-                                            <option value="annually">Annually</option>
-                                          </select>
-                                          <span
-                                            className="text-[0.65rem] font-semibold text-slate-500"
-                                            title={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
-                                            aria-label={FREQUENCY_TOOLTIP[recurrenceSelection.frequency]}
-                                          >
-                                            ℹ
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <p className="text-[0.65rem] text-gray-500">
-                                        {RECURRING_FREQUENCY_DESCRIPTIONS[recurrenceSelection.frequency]}
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      <label className="block text-xs font-medium text-gray-600">English month date</label>
+                                <div className="space-y-2 rounded-2xl border border-gray-100 bg-white p-3 text-xs text-gray-600">
+                                  <p className="text-[0.65rem] font-semibold uppercase text-gray-500">Post Prasadam</p>
+                                  <div className="flex items-center gap-4">
+                                    <label className="inline-flex items-center gap-1">
                                       <input
-                                        type="date"
-                                        min={todayIso}
-                                        className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm focus:ring-orange-500 focus:border-orange-500"
-                                        value={recurrenceSelection.oneTimeDate ?? ''}
-                                        onChange={(event) =>
-                                          applyRecurrenceSelection(row.pooja.id, {
-                                            kind: 'one_time_extra',
-                                            oneTimeDate: event.target.value,
-                                          })
-                                        }
+                                        type="radio"
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                        checked={postPrasadamSelected === true}
+                                        onChange={() => {
+                                          setPrasadamSelectionMap((prev) => ({
+                                            ...prev,
+                                            [row.pooja.id]: true,
+                                          }));
+                                          setTableMessage(null);
+                                        }}
                                       />
-                                    </div>
-                                  )}
-                                  <button
-                                    type="button"
-                                    className="mt-2 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-100"
-                                    onClick={() => applyRecurrenceSelection(row.pooja.id)}
-                                  >
-                                    Clear schedule
-                                  </button>
-                                </>
-                              ) : (
-                                <p className="text-xs text-gray-500">Choose a schedule to proceed.</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Prasadam Section */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Post Prasadam
-                            </label>
-                            <div className="flex space-x-6">
-                              <label className="inline-flex items-center">
-                                <input
-                                  type="radio"
-                                  className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                  checked={postPrasadamSelected === true}
-                                  onChange={() => {
-                                    setPrasadamSelectionMap((prev) => ({
-                                      ...prev,
-                                      [row.pooja.id]: true,
-                                    }));
-                                    setTableMessage(null);
-                                  }}
-                                />
-                                <span className="ml-2 text-gray-700">Yes</span>
-                              </label>
-                              <label className="inline-flex items-center">
-                                <input
-                                  type="radio"
-                                  className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                                  checked={postPrasadamSelected === false}
-                                  onChange={() => {
-                                    setPrasadamSelectionMap((prev) => ({
-                                      ...prev,
-                                      [row.pooja.id]: false,
-                                    }));
-                                    setTableMessage(null);
-                                  }}
-                                />
-                                <span className="ml-2 text-gray-700">No</span>
-                              </label>
-                            </div>
-                          </div>
-
-                          {/* Registration Info */}
-                          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
-                            <div>
-                              <p className="text-xs text-gray-500">Registered By</p>
-                              <p className="text-sm text-gray-700 truncate">
-                                {user?.name?.trim() || user?.phone_number || '--'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Registration Date</p>
-                              <p className="text-sm text-gray-700">{registrationDateLabel}</p>
-                            </div>
-                          </div>
+                                      <span className="text-gray-700">Yes</span>
+                                    </label>
+                                    <label className="inline-flex items-center gap-1">
+                                      <input
+                                        type="radio"
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                        checked={postPrasadamSelected === false}
+                                        onChange={() => {
+                                          setPrasadamSelectionMap((prev) => ({
+                                            ...prev,
+                                            [row.pooja.id]: false,
+                                          }));
+                                          setTableMessage(null);
+                                        }}
+                                      />
+                                      <span className="text-gray-700">No</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
                         </div>
-                      </div>
+                      </article>
                     );
                   })}
                 </div>
-              </>
+                )}
+              </div>
             )}
 
+      </div>
+    </div>
+  </div>
+
+      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-40 flex justify-center sm:inset-x-6 sm:bottom-5 lg:inset-x-10">
+        <div
+          className="pointer-events-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm text-slate-700 shadow-xl backdrop-blur"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[0.55rem] uppercase tracking-[0.3em] text-slate-400">Cart summary</span>
+              <span className="font-semibold text-slate-700">
+                Added {cartTotals.count} {cartCountLabel}
+              </span>
+              <span className="font-semibold text-slate-900">Amount ₹ {formattedCartAmount}</span>
+              <span className="text-[0.65rem] text-slate-500 flex items-center gap-2">
+                <span>Recurring ₹ {formattedRecurringAmount}</span>
+                <span>One-time ₹ {formattedOneTimeAmount}</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleViewCart}
+              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+            >
+              View cart & Payment
+            </button>
           </div>
         </div>
       </div>
@@ -4235,6 +4139,7 @@ const PoojaRegistrationPage = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 
