@@ -20,9 +20,10 @@ class PoojaOption(models.Model):
         blank=True,
     )
     is_group_header = models.BooleanField(default=False)
+    display_order = models.PositiveIntegerField(default=0, db_index=True)
 
     class Meta:
-        ordering = ("parent_id", "code")
+        ordering = ("parent_id", "display_order", "code")
 
     def __str__(self):
         return f"{self.code} - {self.name}"

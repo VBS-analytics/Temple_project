@@ -144,39 +144,68 @@ class PoojaOptionViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
-            
-            # Delete all child items first if this is a header
+
             if instance.is_group_header:
-                # Use select_for_update to prevent race conditions
-                children = PoojaOption.objects.select_for_update().filter(parent_id=instance.id)
-                children.delete()
-            
+                PoojaOption.objects.filter(parent_id=instance.id).delete()
+
             instance.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-            
-        except PoojaOption.DoesNotExist:
-            return Response(
-                {"detail": "This pooja item no longer exists"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-    def destroy(self, request, *args, **kwargs):
-        try:
-            with transaction.atomic():
-                instance = self.get_object()
-                
-                # If this is a header, delete all children first
-                if instance.is_group_header:
-                    PoojaOption.objects.filter(parent_id=instance.id).delete()
-                
-                # Now delete the instance itself
-                instance.delete()
-                
-                return Response(status=status.HTTP_204_NO_CONTENT)
         except PoojaOption.DoesNotExist:
             return Response(
                 {"detail": "Pooja option no longer exists"},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def perform_create(self, serializer):
+        parent = serializer.validated_data.get("parent")
+        max_order = (
+            PoojaOption.objects.filter(parent=parent)
+            .aggregate(Max("display_order"))
+            .get("display_order__max")
+            or 0
+        )
+        serializer.save(display_order=max_order + 1)
+
+    @action(detail=False, methods=["post"], url_path="reorder")
+    def reorder(self, request):
+        ordered_ids = request.data.get("order")
+        parent_id = request.data.get("parent_id")
+
+        if parent_id is not None:
+            try:
+                parent_id = int(parent_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "parent_id must be an integer or null."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        if not isinstance(ordered_ids, list) or not all(isinstance(item, int) for item in ordered_ids):
+            return Response(
+                {"detail": "Order must be a list of integer IDs."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filters = {"parent__isnull": True} if parent_id is None else {"parent_id": parent_id}
+        sibling_ids = list(
+            PoojaOption.objects.filter(**filters).order_by("display_order", "code").values_list("id", flat=True)
+        )
+
+        if len(ordered_ids) != len(sibling_ids) or set(ordered_ids) != set(sibling_ids):
+            return Response(
+                {"detail": "Order list must include all siblings for the given parent."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                for position, option_id in enumerate(ordered_ids, start=1):
+                    PoojaOption.objects.filter(id=option_id).update(display_order=position)
+            return Response({"detail": "Pooja options reordered."})
+        except Exception as exc:
+            return Response(
+                {"detail": f"Unable to reorder options: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 

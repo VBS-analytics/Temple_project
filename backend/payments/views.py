@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
+from pooja.models import PoojaCartSnapshot
 
 from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer
@@ -249,3 +250,49 @@ class CombinePaymentMappingView(APIView):
             )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CombinePaymentAccessView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        main_user = request.user
+        parent_mappings = (
+            CombinePaymentMapping.objects.filter(main_donor=main_user)
+            .select_related("parent_donor")
+            .order_by("parent_donor_id")
+        )
+
+        if not parent_mappings.exists():
+            return Response({"can_combine": False, "parent_donors": []})
+
+        parent_ids = [mapping.parent_donor_id for mapping in parent_mappings]
+        snapshots = {
+            snapshot.donor_id: snapshot
+            for snapshot in PoojaCartSnapshot.objects.filter(donor_id__in=parent_ids)
+        }
+
+        parent_donors = []
+        for mapping in parent_mappings:
+            snapshot = snapshots.get(mapping.parent_donor_id)
+            parent_donors.append(
+                {
+                    "id": mapping.parent_donor.id,
+                    "name": mapping.parent_donor.name,
+                    "phone": mapping.parent_donor.phone_number,
+                    "items": snapshot.items if snapshot else [],
+                    "updated_at": snapshot.updated_at.isoformat() if snapshot else None,
+                }
+            )
+
+        return Response(
+            {
+                "can_combine": True,
+                "main_donor": {
+                    "id": main_user.id,
+                    "name": main_user.name,
+                    "phone": main_user.phone_number,
+                },
+                "parent_donors": parent_donors,
+            }
+        )

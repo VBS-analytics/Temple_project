@@ -398,6 +398,11 @@ const CURRENT_BALANCE_HEADERS: string[] = [
 
 const DATABASE_BUTTON_INFO = [
   {
+    label: 'Download Database',
+    description:
+      'Bundles a fresh `.sql.gz` dump of the live database together with the five most recent backups into a single `.tar.gz` archive for restoration.',
+  },
+  {
     label: 'Donor Database',
     description:
       'Exports all donors plus family members into XLSX files, including per-family workbooks for offline sharing.',
@@ -584,6 +589,26 @@ const triggerBlobDownload = (blob: Blob, filename: string) => {
   }, 1000);
 };
 
+const extractFilenameFromContentDisposition = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const sanitizedValue = value.trim();
+  const filenameStarMatch = sanitizedValue.match(/filename\*=UTF-8''([^;]+)/i);
+  if (filenameStarMatch?.[1]) {
+    try {
+      return decodeURIComponent(filenameStarMatch[1]);
+    } catch {
+      return filenameStarMatch[1];
+    }
+  }
+  const filenameMatch = sanitizedValue.match(/filename="([^"]+)"/i) ?? sanitizedValue.match(/filename=([^;]+)/i);
+  if (filenameMatch?.[1]) {
+    return filenameMatch[1].trim();
+  }
+  return null;
+};
+
 const normalizeText = (value?: string | null) => (value ?? '').trim().toLowerCase();
 
 const buildPendingCartRows = (snapshots: CartSnapshotRecord[], key: PoojaReportKey): PoojaReportRow[] => {
@@ -752,6 +777,7 @@ const downloadPoojaReportPdf = async (
 
 const ReportPage = () => {
   const [exportingDonorDatabase, setExportingDonorDatabase] = useState(false);
+  const [exportingDatabaseBackup, setExportingDatabaseBackup] = useState(false);
   const [exportingDonorDetails, setExportingDonorDetails] = useState(false);
   const [exportingPoojaRegistrationDatabase, setExportingPoojaRegistrationDatabase] = useState(false);
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
@@ -887,6 +913,62 @@ const ReportPage = () => {
       setExportingDonorDatabase(false);
     }
   }, [exportingDonorDatabase, fetchDonors]);
+
+  const handleDatabaseBackupDownload = useCallback(async () => {
+    if (exportingDatabaseBackup) return;
+
+    setExportError(null);
+    setExportingDatabaseBackup(true);
+
+    try {
+      const response = await api.get<Blob>('reports/database-download/', {
+        responseType: 'blob',
+      });
+
+      const blobData = response.data;
+      if (!(blobData instanceof Blob)) {
+        throw new Error('Received an invalid database backup file.');
+      }
+
+      const contentDispositionHeader =
+        response.headers['content-disposition'] ?? response.headers['Content-Disposition'] ?? null;
+      const headerFilename = extractFilenameFromContentDisposition(contentDispositionHeader);
+      const fallbackFilename = `temple-database-${formatFilenameDate(new Date())}.sql.gz`;
+      const rawFilename = headerFilename ?? fallbackFilename;
+      const downloadFilename = sanitizeFilename(rawFilename) || fallbackFilename;
+
+      triggerBlobDownload(blobData, downloadFilename);
+    } catch (error) {
+      console.error('Failed to download database backup', error);
+      let detail: string | null = null;
+      const axiosError = error as AxiosError<{ detail?: string | null }>;
+      const responseData = axiosError?.response?.data;
+
+      if (responseData instanceof Blob) {
+        try {
+          const text = await responseData.text();
+          try {
+            const parsed = JSON.parse(text);
+            detail = parsed?.detail ?? parsed?.message ?? text;
+          } catch {
+            detail = text;
+          }
+        } catch {
+          // ignore silently
+        }
+      } else if (responseData && typeof responseData === 'object') {
+        detail = (responseData as { detail?: string | null }).detail ?? null;
+      }
+
+      if (detail) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the database backup right now.');
+      }
+    } finally {
+      setExportingDatabaseBackup(false);
+    }
+  }, [exportingDatabaseBackup]);
 
   const handlePoojaRegistrationDatabaseDownload = useCallback(async () => {
     if (exportingPoojaRegistrationDatabase) return;
@@ -1072,6 +1154,11 @@ const ReportPage = () => {
     [exportingReports],
   );
 
+  const downloadDatabaseLabel = useMemo(
+    () => (exportingDatabaseBackup ? 'Preparing download…' : 'Download Database'),
+    [exportingDatabaseBackup],
+  );
+
   const buttonLabel = useMemo(
     () => (exportingDonorDatabase ? 'Preparing download…' : 'Donor Database'),
     [exportingDonorDatabase],
@@ -1209,6 +1296,15 @@ const ReportPage = () => {
             </div>
             <div></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <button
+                type="button"
+                onClick={handleDatabaseBackupDownload}
+                disabled={exportingDatabaseBackup}
+                className={OUTLINE_BUTTON_CLASSES}
+              >
+                {downloadDatabaseLabel}
+              </button>
+
               <button
                 type="button"
                 onClick={handleDonorDatabaseDownload}

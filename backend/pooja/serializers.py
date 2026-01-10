@@ -46,7 +46,9 @@ class PoojaOptionSerializer(serializers.ModelSerializer):
             "is_active",
             "is_group_header",
             "parent_id",
+            "display_order",
         )
+        read_only_fields = ("id", "display_order")
 
 
 class FeaturedPoojaSerializer(serializers.ModelSerializer):

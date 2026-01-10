@@ -59,8 +59,8 @@ const heroHighlights = [
     title: "How to Reach",
     primary: "Kakkalani Gramam Busstop: 12 km",
     secondary: "",
-    cta: "Get directions →",
-    href: "#visit",
+    cta: "View location on map →",
+    href: "#hero-map",
     icon: "📍",
   },
 ] as const;
@@ -382,12 +382,18 @@ const LandingPage = () => {
 
       <main>
         {/* HERO */}
-        <section className="relative pt-24 sm:pt-28 md:pt-32 text-white">
+        <section
+          id="hero-map"
+          className="relative pt-24 sm:pt-28 md:pt-32 text-white min-h-screen"
+        >
           <div className="absolute inset-0 z-0">
-            <img
-              src="images/temple_gopuram.jpg"
-              alt="Temple backdrop"
-              className="h-full w-full object-cover"
+            <iframe
+              title="Kakkalani Village 3D view"
+              src="https://www.google.com/maps?q=Kakkalani,%20Tamil%20Nadu%20611101&z=18&t=k&output=embed"
+              className="h-full w-full border-0 object-cover"
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
           </div>
@@ -422,7 +428,10 @@ const LandingPage = () => {
         </section>
 
         {/* TIMINGS */}
-        <section id="timings" className="relative -mt-12 sm:-mt-16 z-20 pb-12 sm:pb-16 pt-6 sm:pt-8 md:-mt-20">
+        <section
+          id="timings"
+          className="relative z-20 pb-12 sm:pb-16 pt-6 sm:pt-8 mt-12 sm:mt-16"
+        >
           <div className="responsive-layout md:px-10">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
               {heroHighlights.map((item) => (

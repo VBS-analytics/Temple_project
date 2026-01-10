@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 
 import api from '../../lib/api';
@@ -7,6 +7,7 @@ import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { useCartStore, type CartItem } from '../../store/cart';
 import { useAuthStore } from '../../store/auth';
 import { usePaymentStore } from '../../store/payments';
+import { useCombineAccessStore } from '../../store/combineAccess';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
 import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
@@ -33,6 +34,26 @@ const parseAmount = (value?: number | string | null) => {
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isNaN(numeric) ? 0 : numeric;
 };
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const sumCartItems = (items: CartItem[]) =>
+  items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
 
 const formatDate = (value?: string | null) => {
   if (!value) {
@@ -71,6 +92,11 @@ const CombinePaymentPage = () => {
   const addCombinePaymentHistory = usePaymentStore((state) => state.addCombinePaymentHistory);
   const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
     useCurrentBalance();
+  const canCombine = useCombineAccessStore((state) => state.canCombine);
+  const combineLoading = useCombineAccessStore((state) => state.loading);
+  const combineError = useCombineAccessStore((state) => state.error);
+  const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
+  const parentDonors = useCombineAccessStore((state) => state.parentDonors);
 
   const [transactionReference, setTransactionReference] = useState('');
   const [transactionReferenceError, setTransactionReferenceError] = useState<string | null>(null);
@@ -79,16 +105,29 @@ const CombinePaymentPage = () => {
   const [petalSeed, setPetalSeed] = useState(0);
   const [shareError, setShareError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [amountPaid, setAmountPaid] = useState('');
+  const [paymentDate, setPaymentDate] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const combineHistory = usePaymentStore((state) => state.combinePaymentHistory);
+  const lastCombineEntry = useMemo(() => (combineHistory.length > 0 ? combineHistory[0] : null), [combineHistory]);
+  const lastCombineAmountLabel = lastCombineEntry ? `₹ ${formatCurrency(lastCombineEntry.combinedTotal)}` : '—';
+  const lastCombineDateLabel = lastCombineEntry?.completedAt ? formatDate(lastCombineEntry.completedAt) : '—';
 
-  const yourTotalAmount = useMemo(
-    () => cartItems.reduce((sum, item) => sum + parseAmount(item.amount), 0),
-    [cartItems],
+  const yourTotalAmount = useMemo(() => sumCartItems(cartItems), [cartItems]);
+  const parentItemsTotal = useMemo(
+    () => parentDonors.reduce((sum, donor) => sum + sumCartItems(donor.items), 0),
+    [parentDonors],
   );
-  const combinedTotal = yourTotalAmount;
+  const parentItemsCount = useMemo(
+    () => parentDonors.reduce((sum, donor) => sum + donor.items.length, 0),
+    [parentDonors],
+  );
+  const combinedTotal = yourTotalAmount + parentItemsTotal;
   const combinedAmountDue = Math.max(0, combinedTotal - (currentBalance ?? 0));
-  const combinedPoojaCount = cartItems.length;
+  const combinedPoojaCount = cartItems.length + parentItemsCount;
+  const hasOwnItems = cartItems.length > 0;
+  const hasParentItems = parentItemsCount > 0;
 
   const isAndroid = useMemo(
     () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent),
@@ -121,6 +160,12 @@ const CombinePaymentPage = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (canCombine === null && !combineLoading && !combineError) {
+      fetchCombineAccess();
+    }
+  }, [canCombine, combineLoading, combineError, fetchCombineAccess]);
 
   const handleOpenUpiApp = useCallback(
     (amount?: number) => {
@@ -177,6 +222,8 @@ const CombinePaymentPage = () => {
     setShowPaymentDetails(false);
     setTransactionReference('');
     setTransactionReferenceError(null);
+    setAmountPaid('');
+    setPaymentDate('');
     setSubmissionError(null);
     setShareError(null);
   };
@@ -194,10 +241,19 @@ const CombinePaymentPage = () => {
     setSubmissionError(null);
     setProcessingPayment(true);
     try {
+      const donorEntries = parentDonors
+        .filter((donor) => donor.items.length > 0)
+        .map((donor) => ({
+          id: donor.id ?? null,
+          name: donor.name ?? null,
+          phone: donor.phone ?? null,
+          totalAmount: sumCartItems(donor.items),
+          items: donor.items,
+        }));
       addCombinePaymentHistory({
         yourItems: cartItems,
-        yourTotal: combinedTotal,
-        donors: [],
+        yourTotal: yourTotalAmount,
+        donors: donorEntries,
         combinedTotal,
       });
       if (typeof currentBalance === 'number' && combinedTotal > 0) {
@@ -215,6 +271,8 @@ const CombinePaymentPage = () => {
       clearCart(cartKey);
       setShowPaymentDetails(false);
       setTransactionReference('');
+      setAmountPaid('');
+      setPaymentDate('');
       setPetalSeed((seed) => seed + 1);
       setShowCelebration(true);
       if (celebrationTimeoutRef.current) {
@@ -238,8 +296,10 @@ const CombinePaymentPage = () => {
     combinedTotal,
     currentBalance,
     navigate,
+    parentDonors,
     refreshBalance,
     transactionReference,
+    yourTotalAmount,
   ]);
 
   const renderCurrentView = () => (
@@ -257,14 +317,111 @@ const CombinePaymentPage = () => {
         </div>
       </div>
 
+      {parentDonors.length > 0 && (
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-600">Parent donor selections</p>
+              <p className="text-xs text-slate-500">
+                Items saved by linked donors are aggregated so you can complete a single transfer.
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parent total</p>
+              <p className="text-lg font-semibold text-orange-700">₹ {formatCurrency(parentItemsTotal)}</p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {parentDonors.map((donor, donorIndex) => {
+              const donorKey = `parent-${donor.id ?? donor.phone ?? donorIndex}`;
+              const donorTotal = sumCartItems(donor.items);
+              return (
+                <article
+                  key={donorKey}
+                  className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Parent donor</p>
+                      <p className="text-lg font-semibold text-slate-900">
+                        {donor.name || donor.phone || 'Unnamed donor'}
+                      </p>
+                      <p className="text-xs text-slate-500">{donor.phone || '—'}</p>
+                      {donor.updatedAt && (
+                        <p className="text-xs text-slate-400">Saved {formatDateTime(donor.updatedAt)}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</p>
+                      <p className="text-lg font-semibold text-orange-700">₹ {formatCurrency(donorTotal)}</p>
+                      <p className="text-xs text-slate-500">{donor.items.length} pooja(s)</p>
+                    </div>
+                  </div>
+                  {donor.items.length === 0 ? (
+                    <p className="text-sm text-slate-500">No poojas in the cart yet.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {donor.items.map((item, index) => (
+                        <li
+                          key={`${donorKey}-${item.cartId ?? `idx-${index}`}`}
+                          className="grid gap-2 px-4 py-3 sm:grid-cols-5 sm:items-center"
+                        >
+                          <div className="sm:col-span-2">
+                            <p className="font-medium text-slate-800">{item.poojaName}</p>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              {item.poojaCode ?? 'POOJA'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Date</p>
+                            <p className="font-medium text-slate-800">
+                              {formatDate(item.customDayDate || item.bookingDate)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Notes</p>
+                            <p className="font-medium text-slate-800">{item.customDayNote?.trim() || '—'}</p>
+                            {(() => {
+                              const memberLabel = buildMembersLabel(item.members);
+                              return memberLabel ? (
+                                <p className="mt-1 text-[0.65rem] uppercase tracking-wide text-slate-400">
+                                  {memberLabel}
+                                </p>
+                              ) : null;
+                            })()}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-slate-500">Amount</p>
+                            <p className="font-semibold text-slate-900">
+                              ₹ {formatCurrency(item.amount)}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div>
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-800">Your Cart Items</h3>
         </div>
         {cartItems.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
-            You have not added any poojas yet. Visit the Pooja cart to select offerings before combining payments.
-          </div>
+          hasParentItems ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+              You haven’t added any poojas yet. The linked parent donors have {parentItemsCount}{' '}
+              pooja{parentItemsCount === 1 ? '' : 's'} waiting to be paid for on this screen.
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+              You have not added any poojas yet. Visit the Pooja cart to select offerings before combining payments.
+            </div>
+          )
         ) : (
           <ul className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-100">
             {cartItems.map((item) => {
@@ -304,35 +461,35 @@ const CombinePaymentPage = () => {
         )}
       </div>
 
-      <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-slate-600">
-          <p>
-            Click Payment to reveal the bank transfer details. Once the transfer is complete, click Payment Completed to clear the record.
-          </p>
-        </div>
-        {!showPaymentDetails ? (
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={triggerPaymentDetails}
-              className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-              disabled={cartItems.length === 0}
-            >
-              Payment
-            </button>
-            <button
-              type="button"
-              onClick={handleClearSummary}
-              className="inline-flex items-center justify-center rounded-full border border-transparent bg-slate-800 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900"
-              disabled={cartItems.length === 0}
-            >
-              Clear Summary
-            </button>
-          </div>
-        ) : (
-          <div>
-            <button
-              type="button"
+            <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-600">
+                <p>
+                  Click Payment to reveal the bank transfer details. Once the transfer is complete, click Payment Completed to clear the record.
+                </p>
+              </div>
+              {!showPaymentDetails ? (
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={triggerPaymentDetails}
+                    className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                    disabled={combinedPoojaCount === 0}
+                  >
+                    Payment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearSummary}
+                    className="inline-flex items-center justify-center rounded-full border border-transparent bg-slate-800 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900"
+                    disabled={combinedPoojaCount === 0}
+                  >
+                    Clear Summary
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <button
+                    type="button"
               onClick={handlePaymentCompleted}
               disabled={processingPayment}
               className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60"
@@ -433,29 +590,71 @@ const CombinePaymentPage = () => {
               </div>
             </RevealableAccountSection>
           </div>
-          <div className="mt-6">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="club-transaction-reference">
+          <div className="mt-6 grid gap-4 md:grid-cols-[1.6fr,1fr,1fr]">
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Transaction ID or UPI ID
+              <input
+                id="club-transaction-reference"
+                type="text"
+                value={transactionReference}
+                onChange={(event) => {
+                  setTransactionReference(event.target.value);
+                  if (transactionReferenceError) {
+                    setTransactionReferenceError(null);
+                  }
+                  if (submissionError) {
+                    setSubmissionError(null);
+                  }
+                }}
+                placeholder="Enter the transaction reference or UPI ID used"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+              {transactionReferenceError && (
+                <p className="mt-2 text-sm text-rose-600">{transactionReferenceError}</p>
+              )}
             </label>
-            <input
-              id="club-transaction-reference"
-              type="text"
-              value={transactionReference}
-              onChange={(event) => {
-                setTransactionReference(event.target.value);
-                if (transactionReferenceError) {
-                  setTransactionReferenceError(null);
-                }
-                if (submissionError) {
-                  setSubmissionError(null);
-                }
-              }}
-              placeholder="Enter the transaction reference or UPI ID used"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
-            />
-            {transactionReferenceError && (
-              <p className="mt-2 text-sm text-rose-600">{transactionReferenceError}</p>
-            )}
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Amount Paid
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={amountPaid}
+                onChange={(event) => {
+                  setAmountPaid(event.target.value);
+                  if (submissionError) {
+                    setSubmissionError(null);
+                  }
+                }}
+                placeholder="0.00"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Payment Date
+              <input
+                type="date"
+                value={paymentDate}
+                onChange={(event) => {
+                  setPaymentDate(event.target.value);
+                  if (submissionError) {
+                    setSubmissionError(null);
+                  }
+                }}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+            </label>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment amount</p>
+              <p className="text-lg font-semibold text-slate-900">{lastCombineAmountLabel}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment date</p>
+              <p className="text-lg font-semibold text-slate-900">{lastCombineDateLabel}</p>
+            </div>
           </div>
           <p className="text-sm text-slate-600">
             After the transfer, inform the temple office with your cart details for faster reconciliation.
@@ -464,6 +663,31 @@ const CombinePaymentPage = () => {
       )}
     </div>
   );
+
+  if (canCombine === false) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (canCombine === null) {
+    return (
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold text-slate-600">Verifying combine payment access…</p>
+        {combineError && (
+          <>
+            <p className="text-sm text-rose-600">{combineError}</p>
+            <button
+              type="button"
+              onClick={fetchCombineAccess}
+              disabled={combineLoading}
+              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {combineLoading ? 'Retrying…' : 'Retry'}
+            </button>
+          </>
+        )}
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-6">

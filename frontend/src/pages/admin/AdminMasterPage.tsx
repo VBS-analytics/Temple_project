@@ -66,6 +66,7 @@ interface PoojaOption {
   is_active: boolean;
   is_group_header: boolean;
   parent_id: number | null;
+  display_order?: number | null;
 }
 
 interface DailyMessageItem {
@@ -88,7 +89,6 @@ type DayOptionFormValues = {
 };
 
 type PoojaOptionFormValues = {
-  code: string;
   poojaDescription: string;
   rate: string;
   minRate: string;
@@ -134,6 +134,9 @@ const AdminMasterPage = () => {
   const [editingHeader, setEditingHeader] = useState<PoojaOption | null>(null);
   const [editingPooja, setEditingPooja] = useState<PoojaOption | null>(null);
   const [draggingDayId, setDraggingDayId] = useState<number | null>(null);
+  const [draggingHeaderId, setDraggingHeaderId] = useState<number | null>(null);
+  const [draggingPoojaId, setDraggingPoojaId] = useState<number | null>(null);
+  const [draggingPoojaParentId, setDraggingPoojaParentId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -144,6 +147,8 @@ const AdminMasterPage = () => {
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const originalDayOrderRef = useRef<DayOption[]>([]);
+  const headerOrderSnapshotRef = useRef<number[]>([]);
+  const poojaOrderSnapshotRef = useRef<number[]>([]);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const gothraOptionEntries = useMasterDataStore((state) => state.gothraOptionEntries);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
@@ -169,7 +174,7 @@ const AdminMasterPage = () => {
   const dayForm = useForm<DayOptionFormValues>({ defaultValues: { code: '', description: '', category: 'weekday' } });
   const headerForm = useForm<HeaderFormValues>({ defaultValues: { headerName: '' } });
   const poojaForm = useForm<PoojaOptionFormValues>({
-    defaultValues: { code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' },
+    defaultValues: { poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' },
   });
 
   const parentCandidates = useMemo(() => poojaOptions.filter((option) => option.is_group_header), [poojaOptions]);
@@ -188,7 +193,16 @@ const AdminMasterPage = () => {
       }
     });
 
-    const sortEntries = (items: PoojaOption[]) => items.slice().sort((a, b) => a.code.localeCompare(b.code));
+    const sortEntries = (items: PoojaOption[]) =>
+      items
+        .slice()
+        .sort((a, b) => {
+          const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.code.localeCompare(b.code);
+        });
 
     const topLevel = sortEntries(poojaOptions.filter((option) => option.parent_id === null));
 
@@ -784,6 +798,175 @@ const AdminMasterPage = () => {
     }
   };
 
+  const arraysEqual = (a: number[], b: number[]) =>
+    a.length === b.length && a.every((value, index) => value === b[index]);
+
+  const applySiblingOrder = (parentId: number | null, order: number[]) => {
+    setPoojaOptions((prev) => {
+      const updated = prev.map((item) => ({ ...item }));
+      const orderMap = new Map(order.map((id, index) => [id, index + 1]));
+      return updated.map((item) => {
+        if (item.parent_id !== parentId) {
+          return item;
+        }
+        const position = orderMap.get(item.id);
+        if (position === undefined) {
+          return item;
+        }
+        return { ...item, display_order: position };
+      });
+    });
+  };
+
+  const reorderWithinParent = (parentId: number | null, dragId: number, targetId: number) => {
+    setPoojaOptions((prev) => {
+      const updated = prev.map((item) => ({ ...item }));
+      const siblings = updated
+        .filter((item) => item.parent_id === parentId)
+        .slice()
+        .sort((a, b) => {
+          const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.code.localeCompare(b.code);
+        });
+
+      const dragIndex = siblings.findIndex((item) => item.id === dragId);
+      const targetIndex = siblings.findIndex((item) => item.id === targetId);
+      if (dragIndex === -1 || targetIndex === -1 || dragIndex === targetIndex) {
+        return prev;
+      }
+
+      const reordered = siblings.slice();
+      const [dragged] = reordered.splice(dragIndex, 1);
+      reordered.splice(targetIndex, 0, dragged);
+      const orderedIds = reordered.map((item) => item.id);
+
+      return updated.map((item) => {
+        if (item.parent_id !== parentId) {
+          return item;
+        }
+        const position = orderedIds.indexOf(item.id);
+        if (position === -1) {
+          return item;
+        }
+        return { ...item, display_order: position + 1 };
+      });
+    });
+  };
+
+  const persistSiblingOrder = async (
+    parentId: number | null,
+    snapshot: number[],
+    newOrder: number[],
+    successMessage: string,
+    errorLabel: string,
+  ) => {
+    if (arraysEqual(snapshot, newOrder)) {
+      return;
+    }
+
+    try {
+      await api.post('/pooja/options/reorder/', { parent_id: parentId, order: newOrder });
+      setNotice(successMessage);
+    } catch (err: any) {
+      applySiblingOrder(parentId, snapshot);
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`${errorLabel}: ${errorMessage}`);
+    }
+  };
+
+  const handleHeaderDragStart = (event: DragEvent<HTMLElement>, id: number) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(id));
+    headerOrderSnapshotRef.current = headerSections.map(({ option }) => option.id);
+    setDraggingHeaderId(id);
+  };
+
+  const handleHeaderDragOver = (event: DragEvent<HTMLElement>, overId: number) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (draggingHeaderId === null || draggingHeaderId === overId) {
+      return;
+    }
+    reorderWithinParent(null, draggingHeaderId, overId);
+  };
+
+  const handleHeaderDragEnd = async () => {
+    if (draggingHeaderId === null) {
+      return;
+    }
+
+    setDraggingHeaderId(null);
+    const snapshot = headerOrderSnapshotRef.current;
+    const newOrder = headerSections.map(({ option }) => option.id);
+    headerOrderSnapshotRef.current = [];
+
+    if (snapshot.length === 0 || arraysEqual(snapshot, newOrder)) {
+      return;
+    }
+
+    await persistSiblingOrder(
+      null,
+      snapshot,
+      newOrder,
+      'Pooja headers reordered successfully.',
+      'Error reordering headers',
+    );
+  };
+
+  const handlePoojaDragStart = (event: DragEvent<HTMLDivElement>, parentId: number, childId: number) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(childId));
+    setDraggingPoojaId(childId);
+    setDraggingPoojaParentId(parentId);
+    const section = groupedPoojas.find((section) => section.option.id === parentId);
+    poojaOrderSnapshotRef.current = section ? section.children.map((child) => child.id) : [];
+  };
+
+  const handlePoojaDragOver = (event: DragEvent<HTMLDivElement>, parentId: number, overId: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    if (draggingPoojaId === null || draggingPoojaParentId !== parentId || draggingPoojaId === overId) {
+      return;
+    }
+    reorderWithinParent(parentId, draggingPoojaId, overId);
+  };
+
+  const handlePoojaDragEnd = async () => {
+    if (draggingPoojaId === null || draggingPoojaParentId === null) {
+      setDraggingPoojaId(null);
+      setDraggingPoojaParentId(null);
+      return;
+    }
+
+    const parentId = draggingPoojaParentId;
+    const snapshot = poojaOrderSnapshotRef.current;
+    setDraggingPoojaId(null);
+    setDraggingPoojaParentId(null);
+    poojaOrderSnapshotRef.current = [];
+
+    const section = groupedPoojas.find((section) => section.option.id === parentId);
+    if (!section || snapshot.length === 0) {
+      return;
+    }
+
+    const newOrder = section.children.map((child) => child.id);
+    if (arraysEqual(snapshot, newOrder)) {
+      return;
+    }
+
+    await persistSiblingOrder(
+      parentId,
+      snapshot,
+      newOrder,
+      'Pooja entries reordered successfully.',
+      'Error reordering poojas',
+    );
+  };
+
   const resetHeaderForm = () => {
     setEditingHeader(null);
     headerForm.reset({ headerName: '' });
@@ -791,7 +974,7 @@ const AdminMasterPage = () => {
 
   const resetPoojaForm = () => {
     setEditingPooja(null);
-    poojaForm.reset({ code: '', poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' });
+    poojaForm.reset({ poojaDescription: '', rate: '', minRate: '', maxRate: '', headerId: '' });
   };
 
   const onSubmitHeader = async (values: HeaderFormValues) => {
@@ -833,7 +1016,6 @@ const AdminMasterPage = () => {
 
   const onSubmitPooja = async (values: PoojaOptionFormValues) => {
     setIsSubmitting(true);
-    const rawCode = values.code.trim();
     const name = values.poojaDescription.trim();
     const rate = values.rate.trim();
     const minRate = values.minRate.trim();
@@ -841,8 +1023,8 @@ const AdminMasterPage = () => {
     const headerIdValue = values.headerId.trim();
     const headerId = headerIdValue ? Number(headerIdValue) : null;
 
-    if (!rawCode || !name || !headerId) {
-      setNotice('Code, header and pooja description are required.');
+    if (!name || !headerId) {
+      setNotice('Header and pooja description are required.');
       setIsSubmitting(false);
       return;
     }
@@ -862,7 +1044,7 @@ const AdminMasterPage = () => {
     }
 
     const payload: Record<string, any> = {
-      code: rawCode,
+      code: editingPooja?.code ?? generateHeaderCode(name),
       name,
       description: editingPooja?.description ?? '',
       default_amount: rate || null,
@@ -1306,159 +1488,127 @@ const AdminMasterPage = () => {
                 {/* Sidebar Forms - Hidden on mobile, shown when menu is open */}
                 <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} lg:block w-full lg:w-80 space-y-6 lg:sticky lg:top-28 lg:h-fit`}>
                   {/* Header Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3">
                       <h3 className="text-lg font-semibold text-slate-900">{editingHeader ? 'Edit Header' : 'Add Header'}</h3>
+                      <p className="text-sm text-slate-500">Group related poojas with a simple title.</p>
                     </div>
-                    <p className="mb-4 text-sm text-slate-600">Group pooja entries by rituals or themes.</p>
                     <form onSubmit={headerForm.handleSubmit(onSubmitHeader)} className="space-y-4">
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Header Title</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                           placeholder="Enter header name"
                           {...headerForm.register('headerName', { required: true })}
                         />
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-50"
+                          className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:opacity-50"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
                           {editingHeader ? 'Update Header' : 'Save Header'}
                         </button>
                         {editingHeader && (
                           <button
                             type="button"
                             onClick={resetHeaderForm}
-                            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
                             Cancel
                           </button>
                         )}
                       </div>
-                      {!editingHeader && <p className="text-xs text-slate-500">A header code will be generated automatically.</p>}
+                      {!editingHeader && <p className="text-xs text-slate-500">Header codes are generated automatically.</p>}
                     </form>
-                  </div>
+                  </section>
 
                   {/* Pooja Form */}
-                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-lg bg-orange-100 p-1.5 text-orange-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3">
                       <h3 className="text-lg font-semibold text-slate-900">{editingPooja ? 'Edit Pooja Item' : 'Add Pooja Item'}</h3>
+                      <p className="text-sm text-slate-500">Create a pooja entry and assign it to a header.</p>
                     </div>
-                    <p className="mb-4 text-sm text-slate-600">Create individual pooja offerings and link them to headers.</p>
                     <form onSubmit={poojaForm.handleSubmit(onSubmitPooja)} className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">Code</label>
-                          <input
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                            placeholder="Enter code"
-                            {...poojaForm.register('code', { required: true })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">Header</label>
-                          <select
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                            {...poojaForm.register('headerId', { required: true })}
-                          >
-                            <option value="">Select header</option>
-                            {availableParentOptions.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-700">Header</label>
+                        <select
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
+                          {...poojaForm.register('headerId', { required: true })}
+                        >
+                          <option value="">Select header</option>
+                          {availableParentOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Pooja Description</label>
                         <input
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                           placeholder="Enter description"
                           {...poojaForm.register('poojaDescription', { required: true })}
                         />
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Rate</label>
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                           placeholder="Enter rate"
                           {...poojaForm.register('rate')}
                         />
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
                           <label className="text-sm font-medium text-slate-700">Minimum Rate</label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                             placeholder="Enter minimum rate"
                             {...poojaForm.register('minRate')}
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                           <label className="text-sm font-medium text-slate-700">Maximum Rate</label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-orange-500 focus:outline-none focus:ring focus:ring-orange-100"
                             placeholder="Enter maximum rate"
                             {...poojaForm.register('maxRate')}
                           />
                         </div>
                       </div>
                       <p className="text-xs text-slate-500">Code, header, description and at least one rate field are mandatory.</p>
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-50"
+                          className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:opacity-50"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
                           {editingPooja ? 'Update Pooja' : 'Save Pooja'}
                         </button>
                         {editingPooja && (
                           <button
                             type="button"
                             onClick={resetPoojaForm}
-                            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
                             Cancel
                           </button>
                         )}
                       </div>
                     </form>
-                  </div>
+                  </section>
                 </aside>
 
                 {/* Main Content */}
@@ -1486,27 +1636,45 @@ const AdminMasterPage = () => {
                       {filteredHeaderSections.map(({ option, children }) => (
                         <article
                           key={option.id}
-                          className="rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all duration-300 hover:border-orange-300 hover:shadow-md"
+                          draggable
+                          onDragStart={(event) => handleHeaderDragStart(event, option.id)}
+                          onDragOver={(event) => handleHeaderDragOver(event, option.id)}
+                          onDragEnd={handleHeaderDragEnd}
+                          onDrop={(event) => event.preventDefault()}
+                          aria-grabbed={draggingHeaderId === option.id}
+                          className={`rounded-2xl border bg-white overflow-hidden transition-all duration-300 hover:border-orange-300 hover:shadow-md ${
+                            draggingHeaderId === option.id
+                              ? 'border-orange-400 shadow-lg cursor-grabbing'
+                              : 'border-slate-200 cursor-grab'
+                          }`}
                         >
                           <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 sm:px-6 py-4">
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => toggleHeaderCollapse(option.id)}
-                                  className="rounded-lg bg-orange-100 p-2 text-orange-700 hover:bg-orange-200 transition-colors"
-                                >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className={`h-5 w-5 transition-transform ${collapsedHeaders.has(option.id) ? '' : 'rotate-90'}`}
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => toggleHeaderCollapse(option.id)}
+                                    className="rounded-lg bg-orange-100 p-2 text-orange-700 hover:bg-orange-200 transition-colors"
                                   >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </button>
-                                <div>
-                                  <h3 className="text-lg font-bold text-orange-800">{option.name}</h3>
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className={`h-5 w-5 transition-transform ${collapsedHeaders.has(option.id) ? '' : 'rotate-90'}`}
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                  <span
+                                    className="text-slate-400 transition-colors hover:text-slate-600 cursor-grab"
+                                    aria-hidden="true"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 12h10M7 17h10" />
+                                    </svg>
+                                  </span>
+                                  <div>
+                                    <h3 className="text-lg font-bold text-orange-800">{option.name}</h3>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                                     <span className="rounded-full bg-orange-100 px-2.5 py-0.5 font-medium text-orange-800">
                                       Header
@@ -1563,7 +1731,17 @@ const AdminMasterPage = () => {
                                     return (
                                     <div
                                       key={child.id}
-                                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-orange-300 hover:shadow-md"
+                                      draggable
+                                      onDragStart={(event) => handlePoojaDragStart(event, option.id, child.id)}
+                                      onDragOver={(event) => handlePoojaDragOver(event, option.id, child.id)}
+                                      onDragEnd={handlePoojaDragEnd}
+                                      onDrop={(event) => event.preventDefault()}
+                                      aria-grabbed={draggingPoojaId === child.id}
+                                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border bg-white p-4 shadow-sm transition-all duration-300 ${
+                                        draggingPoojaId === child.id
+                                          ? 'border-orange-300 bg-orange-50 shadow-lg cursor-grabbing'
+                                          : 'border-slate-200 cursor-grab hover:border-orange-300 hover:shadow-md'
+                                      }`}
                                     >
                                       <div className="flex items-start gap-3">
                                         <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-800">
@@ -1571,13 +1749,25 @@ const AdminMasterPage = () => {
                                             {child.code ? child.code.substring(0, 2) : 'PK'}
                                           </span>
                                         </div>
-                                        <div>
-                                          <p className="font-medium text-slate-900">
-                                            {child.name}
-                                            {child.code ? (
-                                              <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">{child.code}</span>
-                                            ) : null}
-                                          </p>
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2">
+                                            <span
+                                              className="text-slate-400 transition-colors hover:text-slate-600 cursor-grab"
+                                              aria-hidden="true"
+                                            >
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 12h10M7 17h10" />
+                                              </svg>
+                                            </span>
+                                            <p className="font-medium text-slate-900">
+                                              {child.name}
+                                              {child.code ? (
+                                                <span className="ml-2 font-mono text-xs uppercase tracking-widest text-slate-500">
+                                                  {child.code}
+                                                </span>
+                                              ) : null}
+                                            </p>
+                                          </div>
                                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                                             {childRateLabel && (
                                               <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700">
