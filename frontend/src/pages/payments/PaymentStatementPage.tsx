@@ -59,11 +59,12 @@ const TIMEFRAME_FILTERS: { label: string; value: TimeframeOption }[] = [
   { label: 'Year Wise', value: 'year' },
 ];
 
+const STATUS_LABEL_PAYMENT_RECEIVED = 'Payment Received';
+const STATUS_LABEL_PAYMENT_NOT_RECEIVED = 'Payment Not Received';
+
 const STATUS_STYLES: Record<string, string> = {
-  'Admin action is pending': 'bg-amber-100 text-amber-800',
-  'Payment not received': 'bg-rose-100 text-rose-800',
-  'Payment Received': 'bg-emerald-100 text-emerald-800',
-  'Pooja Completed': 'bg-emerald-100 text-emerald-800',
+  [STATUS_LABEL_PAYMENT_NOT_RECEIVED]: 'bg-rose-100 text-rose-800',
+  [STATUS_LABEL_PAYMENT_RECEIVED]: 'bg-emerald-100 text-emerald-800',
 };
 const CLUB_STYLES: Record<string, string> = {
   Yes: 'bg-emerald-100 text-emerald-800',
@@ -130,6 +131,28 @@ const parseNumeric = (value?: string | number | null) => {
   }
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isNaN(numeric) ? 0 : numeric;
+};
+
+const normalizeStatusLabel = (value?: string | null) => {
+  if (!value) {
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized === STATUS_LABEL_PAYMENT_RECEIVED.toLowerCase() ||
+    normalized === 'pooja completed' ||
+    normalized === 'admin action is pending'
+  ) {
+    return STATUS_LABEL_PAYMENT_RECEIVED;
+  }
+  if (normalized === 'payment not received') {
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+  }
+  return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
 };
 
 const getRecordTimestamp = (record: PaymentRecordEntry) => {
@@ -243,10 +266,8 @@ const buildRangeLabel = (reference: Date, timeframe: TimeframeOption) => {
 };
 
 const STATUS_OPTIONS = [
-  'Payment Received',
-  'Payment not received',
-  'Pooja Completed',
-  'Admin action is pending',
+  STATUS_LABEL_PAYMENT_NOT_RECEIVED,
+  STATUS_LABEL_PAYMENT_RECEIVED,
 ];
 
 const CLUB_OPTIONS = ['Yes', 'No'] as const;
@@ -313,7 +334,24 @@ const PaymentStatementPage = () => {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (typeof parsed === 'object' && parsed !== null) {
-          setStatusOverrideMap(parsed as Record<string, string>);
+          const entries = Object.entries(parsed);
+          if (entries.length > 0) {
+            const normalized: Record<string, string> = {};
+            entries.forEach(([key, value]) => {
+              if (typeof value === 'string') {
+                normalized[key] = normalizeStatusLabel(value);
+              }
+            });
+            setStatusOverrideMap(normalized);
+            try {
+              window.localStorage.setItem(
+                STATUS_OVERRIDES_STORAGE_KEY,
+                JSON.stringify(normalized),
+              );
+            } catch {
+              // ignore storage errors
+            }
+          }
         }
       }
       const clubStored = window.localStorage.getItem(CLUB_OVERRIDES_STORAGE_KEY);
@@ -345,10 +383,8 @@ const PaymentStatementPage = () => {
     const paymentId = typeof record.id === 'number' ? record.id : null;
     const registrationId = record.registration ?? null;
     const transitionMap: Record<string, { payment?: string; registration?: string }> = {
-      'Payment Received': { payment: 'success', registration: 'pending' },
-      'Payment not received': { payment: 'pending', registration: 'pending' },
-      'Pooja Completed': { payment: 'success', registration: 'completed' },
-      'Admin action is pending': { payment: 'pending', registration: 'pending' },
+      [STATUS_LABEL_PAYMENT_RECEIVED]: { payment: 'success', registration: 'pending' },
+      [STATUS_LABEL_PAYMENT_NOT_RECEIVED]: { payment: 'pending', registration: 'pending' },
     };
     const transition = transitionMap[label];
     if (!transition) {
@@ -511,18 +547,17 @@ const PaymentStatementPage = () => {
   };
 
   const resolveStatusLabel = (record: PaymentRecordEntry) => {
-    const status = record.status?.toLowerCase() ?? '';
-    const dueAmount = parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
+    const status = (record.status ?? '').toLowerCase();
     const paidAmount = parseNumeric(record.amount);
-    const isFullyPaid = paidAmount > 0 && dueAmount <= 0;
+    const hasTransactionReference = Boolean(
+      typeof record.transaction_reference === 'string' &&
+        record.transaction_reference.trim().length > 0,
+    );
 
-    if ((record.registration_status ?? '').toLowerCase() === 'completed') {
-      return 'Pooja Completed';
+    if (status === 'success' || paidAmount > 0 || hasTransactionReference) {
+      return STATUS_LABEL_PAYMENT_RECEIVED;
     }
-    if (status === 'pending' && !record.transaction_reference && !isFullyPaid) {
-      return 'Payment not received';
-    }
-    return 'Admin action is pending';
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
   };
 
   const mergedRecords = useMemo(() => {
@@ -601,7 +636,7 @@ const PaymentStatementPage = () => {
 
   const getDisplayedDueAmountValue = (record: PaymentRecordEntry) => {
     const statusLabel = getStatusLabel(record);
-    if (statusLabel === 'Payment not received') {
+    if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
       const pendingAmount = parseNumeric(record.amount);
       if (pendingAmount > 0) {
         return pendingAmount;
@@ -612,7 +647,7 @@ const PaymentStatementPage = () => {
 
   const getDisplayedPaidAmountValue = (record: PaymentRecordEntry) => {
     const statusLabel = getStatusLabel(record);
-    if (statusLabel === 'Payment not received') {
+    if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
       return 0;
     }
     return parseNumeric(record.amount);
@@ -814,18 +849,8 @@ const PaymentStatementPage = () => {
     const compareByTimestampDesc = (a: PaymentRecordEntry, b: PaymentRecordEntry) =>
       getRecordTimestamp(b) - getRecordTimestamp(a);
 
-    if (isAdminUser) {
-      return [...filteredRecords].sort(compareByTimestampDesc);
-    }
-
-    const adminActionPendingRecords = filteredRecords.filter(
-      (record) => getStatusLabel(record) === 'Admin action is pending',
-    );
-    const otherRecords = filteredRecords.filter(
-      (record) => getStatusLabel(record) !== 'Admin action is pending',
-    );
-    return [...otherRecords, ...adminActionPendingRecords];
-  }, [filteredRecords, isAdminUser, statusOverrideMap]);
+    return [...filteredRecords].sort(compareByTimestampDesc);
+  }, [filteredRecords]);
 
   const totalPaid = useMemo(
     () => filteredRecords.reduce((sum, record) => sum + getDisplayedPaidAmountValue(record), 0),

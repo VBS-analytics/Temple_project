@@ -130,6 +130,11 @@ const galleryImages = [
   "https://images.unsplash.com/photo-1518548865246-1e2922e03e94?auto=format&fit=crop&w=1100&q=80",
 ] as const;
 
+const kakkalaniMapEmbedUrl =
+  "https://www.google.com/maps?q=Kakkalani,%20Tamil%20Nadu%20611101&ll=10.7329213,79.7090455&z=17&t=k&layer=c&cbll=10.7329213,79.7090455&cbp=11,0,0,0,0&output=embed";
+const kakkalaniMapFullViewUrl =
+  "https://www.google.com/maps/place/Kakkalani,+Tamil+Nadu+611101/@10.7330371,79.7096892,2103m/data=!3m1!1e3!4m15!1m8!3m7!1s0x3a5541848b6c5ca3:0x19261ee607ced357!2sKakkalani,+Tamil+Nadu+611101!3b1!8m2!3d10.7329213!4d79.7090455!16s%2Fg%2F12hx21bjn";
+
 const joinDevoteeNames = (members?: TodayPoojaMemberRecord[]) => {
   if (!Array.isArray(members)) {
     return "N/A";
@@ -389,7 +394,7 @@ const LandingPage = () => {
           <div className="absolute inset-0 z-0">
             <iframe
               title="Kakkalani Village 3D view"
-              src="https://www.google.com/maps?q=Kakkalani,%20Tamil%20Nadu%20611101&z=18&t=k&output=embed"
+              src={kakkalaniMapEmbedUrl}
               className="h-full w-full border-0 object-cover"
               allowFullScreen
               loading="lazy"
@@ -397,32 +402,43 @@ const LandingPage = () => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
           </div>
-          <div className="responsive-layout relative z-10 flex flex-col py-16 sm:py-20 md:py-28 md:px-10">
-            <div className="max-w-2xl space-y-4 sm:space-y-6">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white">
-                A living temple dedicated to{" "}
-                <span className="text-[#f3c428]">Lord Shivan</span> & Ambal
-              </h1>
-              <p className="text-base sm:text-lg text-slate-100">
-                A 2,500-year-old Dravidian masterpiece, renowned for its
-                towering gopurams, intricate carvings, and cultural legacy.
-                Plan your visit, participate in darshan & poojas, and immerse
-                yourself in timeless traditions.
-              </p>
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm font-semibold uppercase tracking-wide">
-                <a
-                  href="#visit"
-                  className="rounded-full bg-[#f3c428] px-4 sm:px-6 py-2 sm:py-3 text-slate-900 transition hover:bg-[#ffd559]"
-                >
-                  Plan Your Visit
-                </a>
-                <a
-                  href="#darshan"
-                  className="rounded-full border border-white/40 px-4 sm:px-6 py-2 sm:py-3 transition hover:border-[#f3c428] hover:text-[#f3c428]"
-                >
-                  View Pooja Schedule
-                </a>
-              </div>
+          <div className="responsive-layout relative z-10 flex flex-col gap-6 py-16 sm:py-20 md:py-28 md:px-10">
+            <p className="text-xs sm:text-sm uppercase tracking-[0.6em] text-slate-200">
+              கக்கழனி • Kakkalani Gramam
+            </p>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white max-w-2xl">
+              A living temple dedicated to{" "}
+              <span className="text-[#f3c428]">Lord Shivan</span> & Ambal
+            </h1>
+            <p className="text-base sm:text-lg text-slate-100 max-w-3xl">
+              A 2,500-year-old Dravidian masterpiece, renowned for its towering
+              gopurams, intricate carvings, and cultural legacy. Plan your
+              visit, participate in darshan & poojas, and immerse yourself in
+              timeless traditions.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm font-semibold uppercase tracking-wide">
+              <a
+                href="#visit"
+                className="rounded-full bg-[#f3c428] px-4 sm:px-6 py-2 sm:py-3 text-slate-900 transition hover:bg-[#ffd559]"
+              >
+                Plan Your Visit
+              </a>
+              <a
+                href="#darshan"
+                className="rounded-full border border-white/40 px-4 sm:px-6 py-2 sm:py-3 transition hover:border-[#f3c428] hover:text-[#f3c428]"
+              >
+                View Pooja Schedule
+              </a>
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs sm:text-sm font-semibold uppercase tracking-[0.3em]">
+              <a
+                href={kakkalaniMapFullViewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-white/40 bg-white/10 px-4 sm:px-6 py-2 sm:py-3 text-white transition hover:border-[#f3c428] hover:text-[#f3c428]"
+              >
+                Open full 3D map in Google Maps
+              </a>
             </div>
           </div>
         </section>
