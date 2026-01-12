@@ -205,6 +205,7 @@ docker-compose.yml
 - **Environment Variables**: Store secrets in a managed vault and inject at runtime; do not commit `.env`.
 - **Static Assets**: Serve `frontend/dist` via a CDN or static host; configure Django to serve only API endpoints.
 - **Monitoring**: Enable logging for OTP, payments, and calendar services; alert on API error spikes and failed ephemeris downloads.
+- **Uptime keep-alive**: Prevent platform spin-down by configuring a free HTTP(s) monitor with UptimeRobot (create a free account, add a monitor pointing to `https://temple-project-1.onrender.com/`, set the check interval to 5 or 10 minutes, and save); the service will ping the URL regularly and provide uptime insights without code changes.
 
 ## Environment & Configuration
 
