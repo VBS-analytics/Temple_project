@@ -920,12 +920,6 @@ const PaymentPage = () => {
           </div>
         )}
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-slate-600">
-            <p>
-              Click Payment to reveal the bank transfer details. Once the transfer is complete, click Payment Completed
-              to clear the record.
-            </p>
-          </div>
           {!showPaymentDetails ? (
             <div className="flex flex-wrap gap-3">
               <button
@@ -934,13 +928,6 @@ const PaymentPage = () => {
                 className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
               >
                 Payment
-              </button>
-              <button
-                type="button"
-                onClick={handleClearSummary}
-                className="inline-flex items-center justify-center rounded-full border border-transparent bg-slate-800 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900"
-              >
-                Clear Summary
               </button>
             </div>
           ) : (
@@ -972,6 +959,9 @@ const PaymentPage = () => {
             Review the pooja registrations you saved from the cart to log a single consolidated payment.
           </p>
         </div>
+      </div>
+      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-700 shadow-sm">
+        Click Payment to view the bank details, then tap Payment Completed after transferring funds.
       </div>
       <div>{renderSummaryContent()}</div>
     </div>
