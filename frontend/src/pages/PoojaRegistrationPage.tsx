@@ -2198,38 +2198,25 @@ const PoojaRegistrationPage = () => {
     if (cartItems.length === 0) {
       return;
     }
-    const groupedItems = new Map<number, ChartPreferredDateGroup[]>();
+    const itemsByPooja = new Map<number, CartItem[]>();
     cartItems.forEach((item) => {
       const code = item.dayOptionCode?.trim().toUpperCase() ?? '';
       if (code !== CHART_DAY_OPTION_CODE) {
         return;
       }
-      const groups = groupedItems.get(item.poojaId) ?? [];
-      groups.push(buildPreferredDateGroupFromCartItem(item));
-      groupedItems.set(item.poojaId, groups);
+      const existing = itemsByPooja.get(item.poojaId) ?? [];
+      existing.push(item);
+      itemsByPooja.set(item.poojaId, existing);
     });
 
-    if (groupedItems.size === 0) {
+    if (itemsByPooja.size === 0) {
       return;
     }
 
-    setChartPreferredDateGroupsMap((prev) => {
-      let changed = false;
-      const next: Record<number, ChartPreferredDateGroup[]> = { ...prev };
-
-      groupedItems.forEach((groups, poojaId) => {
-        const sortedGroups = [...groups].sort((a, b) =>
-          (a.date ?? '').localeCompare(b.date ?? ''),
-        );
-        if (!arePreferredDateGroupsEqual(prev[poojaId], sortedGroups)) {
-          next[poojaId] = sortedGroups;
-          changed = true;
-        }
-      });
-
-      return changed ? next : prev;
+    itemsByPooja.forEach((items, poojaId) => {
+      hydrateChartPreferredDateGroupsFromCart(poojaId, items);
     });
-  }, [cartItems]);
+  }, [cartItems, hydrateChartPreferredDateGroupsFromCart]);
 
   useEffect(() => {
     masterRows.forEach((row) => {

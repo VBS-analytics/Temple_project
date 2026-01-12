@@ -71,6 +71,21 @@ const formatDate = (value?: string | null) => {
   });
 };
 
+const formatDayOptionLabel = (description?: string | null, code?: string | null) => {
+  const trimmedDescription = description?.trim();
+  const trimmedCode = code?.trim();
+  if (trimmedDescription && trimmedCode) {
+    return `${trimmedDescription} — ${trimmedCode}`;
+  }
+  if (trimmedDescription) {
+    return trimmedDescription;
+  }
+  if (trimmedCode) {
+    return trimmedCode;
+  }
+  return null;
+};
+
 const formatDateTime = (value?: string | null) => {
   if (!value) {
     return '—';
@@ -696,6 +711,7 @@ const PaymentPage = () => {
             const memberSummary = membersLabel ?? `${quantity} devotee${quantity === 1 ? '' : 's'}`;
             const selectedDate = formatDate(item.customDayDate || item.bookingDate);
             const notes = item.customDayNote?.trim();
+            const dayOptionLabel = formatDayOptionLabel(item.dayOptionDescription, item.dayOptionCode);
 
             return (
               <div
@@ -707,6 +723,9 @@ const PaymentPage = () => {
                     {item.poojaCode ?? 'Pooja'}
                   </p>
                   <p className="text-base font-semibold text-slate-900">{item.poojaName}</p>
+                  {dayOptionLabel && (
+                    <p className="text-xs text-slate-500">Day option: {dayOptionLabel}</p>
+                  )}
                   <p className="text-xs text-slate-500">Date: {selectedDate}</p>
                   <p className="text-xs text-slate-500">Members: {memberSummary}</p>
                   {notes && <p className="text-xs text-slate-500">Notes: {notes}</p>}
