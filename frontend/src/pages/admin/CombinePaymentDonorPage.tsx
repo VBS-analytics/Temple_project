@@ -13,13 +13,21 @@ interface MappingForm {
   id: number;
   mainPhone: string;
   parentPhones: string[];
+  effectiveMonth: string;
+  uncombineMonth: string;
   statusMessage: { type: 'error' | 'success'; text: string } | null;
+}
+
+interface StoredParentEntry extends DonorOption {
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  active?: boolean | null;
 }
 
 interface StoredMappingEntry {
   id: number;
   mainDonor: DonorOption;
-  parentDonors: DonorOption[];
+  parentDonors: StoredParentEntry[];
   savedAtLabel: string;
 }
 
@@ -29,6 +37,8 @@ const createMappingForm = (): MappingForm => ({
   id: Date.now() + Math.random(),
   mainPhone: '',
   parentPhones: [''],
+  effectiveMonth: '',
+  uncombineMonth: '',
   statusMessage: null,
 });
 
@@ -44,6 +54,35 @@ const formatSavedAtLabel = (value?: string | null) => {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+};
+
+const formatMonthLabel = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  const normalized = value.trim();
+  const match = normalized.match(/^(\d{4}-\d{2})/);
+  if (!match) {
+    return value;
+  }
+  const [year, month] = match[1].split('-');
+  const parsed = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const toMonthInputValue = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+  const normalized = value.trim();
+  const match = normalized.match(/^(\d{4}-\d{2})/);
+  return match ? match[1] : '';
 };
 
 const CombinePaymentDonorPage = () => {
@@ -106,6 +145,9 @@ const CombinePaymentDonorPage = () => {
                   id: parent.id,
                   name: parent.name ?? 'Unnamed',
                   phone: parent.phone,
+                  effectiveFrom: parent.effective_from ?? null,
+                  effectiveTo: parent.effective_to ?? null,
+                  active: typeof parent.active === 'boolean' ? parent.active : null,
                 }))
             : [];
           return {
@@ -141,11 +183,14 @@ const CombinePaymentDonorPage = () => {
 
   const handleEditMapping = (entry: StoredMappingEntry) => {
     setEditingEntryId(entry.mainDonor.id);
+    const firstParent = entry.parentDonors[0];
     setMappingForms([
       {
         id: Date.now(),
         mainPhone: entry.mainDonor.phone,
         parentPhones: entry.parentDonors.map((parent) => parent.phone || ''),
+        effectiveMonth: toMonthInputValue(firstParent?.effectiveFrom),
+        uncombineMonth: toMonthInputValue(firstParent?.effectiveTo),
         statusMessage: null,
       },
     ]);
@@ -234,6 +279,22 @@ const CombinePaymentDonorPage = () => {
     });
   };
 
+  const handleEffectiveMonthChange = (formId: number, value: string) => {
+    mutateForm(formId, (form) => ({
+      ...form,
+      effectiveMonth: value,
+      statusMessage: null,
+    }));
+  };
+
+  const handleUncombineMonthChange = (formId: number, value: string) => {
+    mutateForm(formId, (form) => ({
+      ...form,
+      uncombineMonth: value,
+      statusMessage: null,
+    }));
+  };
+
   const handleSaveMapping = async (formId: number) => {
     const form = mappingForms.find((item) => item.id === formId);
     if (!form) {
@@ -260,10 +321,19 @@ const CombinePaymentDonorPage = () => {
     }
 
     try {
-      await api.post('payments/combine-mappings/', {
+      const payload: Record<string, unknown> = {
         main_phone: trimmedMain,
         parent_phones: trimmedParents,
-      });
+      };
+      const effectiveMonthValue = form.effectiveMonth.trim();
+      if (effectiveMonthValue) {
+        payload.effective_month = effectiveMonthValue;
+      }
+      const uncombineMonthValue = form.uncombineMonth.trim();
+      if (uncombineMonthValue) {
+        payload.uncombine_month = uncombineMonthValue;
+      }
+      await api.post('payments/combine-mappings/', payload);
       mutateForm(formId, () => ({
         ...createMappingForm(),
         id: formId,
@@ -508,23 +578,51 @@ const CombinePaymentDonorPage = () => {
                   </p>
                 )}
                 {trimmedParents.length > 0 && (
-                  <div className="space-y-1 text-sm text-slate-600">
-                    <p className="font-medium text-slate-800">
-                      Main donor:{' '}
-                      <span className="text-indigo-600">{form.mainPhone.trim() || '—'}</span>
-                    </p>
-                    <p className="text-xs">Parent donors ready to map:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {trimmedParents.map((phone, previewIndex) => (
-                        <span
-                          key={`preview-${form.id}-${previewIndex}-${phone}`}
-                          className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
-                        >
-                          {phone}
-                        </span>
-                      ))}
+                  <>
+                    <div className="space-y-1 text-sm text-slate-600">
+                      <p className="font-medium text-slate-800">
+                        Main donor:{' '}
+                        <span className="text-indigo-600">{form.mainPhone.trim() || '—'}</span>
+                      </p>
+                      <p className="text-xs">Parent donors ready to map:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {trimmedParents.map((phone, previewIndex) => (
+                          <span
+                            key={`preview-${form.id}-${previewIndex}-${phone}`}
+                            className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+                          >
+                            {phone}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Effective from
+                        <input
+                          type="month"
+                          value={form.effectiveMonth}
+                          onChange={(event) =>
+                            handleEffectiveMonthChange(form.id, event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                          placeholder="Select month"
+                        />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        Uncombine from
+                        <input
+                          type="month"
+                          value={form.uncombineMonth}
+                          onChange={(event) =>
+                            handleUncombineMonthChange(form.id, event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                          placeholder="Select month"
+                        />
+                      </label>
+                    </div>
+                  </>
                 )}
               </div>
             </section>
@@ -585,6 +683,14 @@ const CombinePaymentDonorPage = () => {
                     </span>
                   ))}
                 </div>
+                {entry.parentDonors.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Effective from {formatMonthLabel(entry.parentDonors[0]?.effectiveFrom)}
+                    {entry.parentDonors[0]?.effectiveTo
+                      ? ` • Uncombine from ${formatMonthLabel(entry.parentDonors[0]?.effectiveTo)}`
+                      : ''}
+                  </p>
+                )}
               </article>
             ))}
           </div>

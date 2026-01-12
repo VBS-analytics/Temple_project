@@ -7,6 +7,7 @@ import { useCartStore } from '../../store/cart';
 import { usePaymentStore } from '../../store/payments';
 import { useAuthStore } from '../../store/auth';
 import { useCurrentBalance } from '../../hooks/useCurrentBalance';
+import { useCombineAccessStore } from '../../store/combineAccess';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
 import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
@@ -84,6 +85,26 @@ const formatDateTime = (value?: string | null) => {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+  });
+};
+
+const formatCombineMonthLabel = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  const match = normalized.match(/^(\d{4}-\d{2})/);
+  if (!match) {
+    return null;
+  }
+  const [year, month] = match[1].split('-');
+  const parsed = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
   });
 };
 
@@ -353,8 +374,13 @@ const PaymentPage = () => {
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
-  const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
+  const { balance: currentBalance, monthlyDonation, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
     useCurrentBalance();
+  const combineRole = useCombineAccessStore((state) => state.role);
+  const combinedTo = useCombineAccessStore((state) => state.combinedTo);
+  const combineLoading = useCombineAccessStore((state) => state.loading);
+  const combineError = useCombineAccessStore((state) => state.error);
+  const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
   const lastPaymentEntry = useMemo(
     () => (userHistory.length > 0 ? userHistory[0] : null),
     [userHistory],
@@ -367,6 +393,12 @@ const PaymentPage = () => {
   const lastPaymentDateLabel = lastPaymentEntry?.completedAt
     ? formatDate(lastPaymentEntry.completedAt)
     : '—';
+  const monthlyDueAmount = monthlyDonation ?? currentBalance ?? null;
+  const monthlyDueLabel = monthlyDueAmount !== null ? formatCurrency(monthlyDueAmount) : 'Not set';
+  const parentName = combinedTo?.name ?? 'Parent donor';
+  const parentPhone = combinedTo?.phone ? combinedTo.phone : 'Phone not available';
+  const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
+  const uncombineFromLabel = formatCombineMonthLabel(combinedTo?.effectiveTo);
   const isAndroid = useMemo(
     () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent),
     [],
@@ -392,11 +424,60 @@ const PaymentPage = () => {
     [petalSeed],
   );
 
+  if (combineRole === 'subordinate') {
+    const effectiveRange = [
+      effectiveFromLabel ? `Effective from ${effectiveFromLabel}` : null,
+      uncombineFromLabel ? `Uncombine from ${uncombineFromLabel}` : null,
+    ]
+      .filter(Boolean)
+      .join(' • ');
+
+    return (
+      <div className="space-y-6">
+        <section className="space-y-4 rounded-2xl border border-rose-200 bg-white/80 p-6 shadow-sm">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold text-slate-800">Combined payment handled elsewhere</h1>
+            <p className="text-sm text-slate-600">
+              All payments and history requests are managed by {parentName} ({parentPhone}). This account
+              cannot be used to log payments.
+            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
+              Payments &amp; history are disabled for this profile.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">Monthly dues</p>
+              <p className="text-xl font-semibold text-slate-900">{monthlyDueLabel}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">Parent donor</p>
+              <p className="text-lg font-semibold text-slate-900">{parentName}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">Phone</p>
+              <p className="text-lg font-semibold text-slate-900">{parentPhone}</p>
+            </div>
+          </div>
+          {effectiveRange && (
+            <p className="text-xs text-slate-500">{effectiveRange}</p>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   useEffect(() => {
     if (!paymentSnapshot) {
       setShowPaymentDetails(false);
     }
   }, [paymentSnapshot]);
+
+  useEffect(() => {
+    if (combineRole === null && !combineLoading && !combineError) {
+      fetchCombineAccess();
+    }
+  }, [combineRole, combineLoading, combineError, fetchCombineAccess]);
 
   useEffect(() => {
     if (!paymentSnapshot) {

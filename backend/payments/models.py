@@ -1,9 +1,21 @@
 """Payment tracking models."""
 
+from datetime import date
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from pooja.models import PoojaRegistration
+
+
+def _first_day_of_month(value: date) -> date:
+    return value.replace(day=1)
+
+
+def _default_effective_from() -> date:
+    today = timezone.localdate()
+    return today.replace(day=1)
 
 
 class PaymentMode(models.TextChoices):
@@ -63,6 +75,15 @@ class CombinePaymentMapping(models.Model):
     main_donor_name = models.CharField(max_length=255, blank=True)
     parent_donor_phone = models.CharField(max_length=15, blank=True)
     parent_donor_name = models.CharField(max_length=255, blank=True)
+    effective_from = models.DateField(
+        default=_default_effective_from,
+        help_text="First month (inclusive) when this combine mapping is active.",
+    )
+    effective_to = models.DateField(
+        null=True,
+        blank=True,
+        help_text="First month when this combine mapping is no longer active (exclusive).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,7 +103,22 @@ class CombinePaymentMapping(models.Model):
         if self.parent_donor:
             self.parent_donor_phone = self.parent_donor.phone_number
             self.parent_donor_name = self.parent_donor.name
+        if self.effective_from:
+            self.effective_from = _first_day_of_month(self.effective_from)
+        else:
+            self.effective_from = _default_effective_from()
+        if self.effective_to:
+            self.effective_to = _first_day_of_month(self.effective_to)
         super().save(*args, **kwargs)
+
+    def is_active_on(self, reference_date: date | None = None) -> bool:
+        reference = reference_date or timezone.localdate()
+        month_start = reference.replace(day=1)
+        if self.effective_from and self.effective_from > month_start:
+            return False
+        if self.effective_to and self.effective_to <= month_start:
+            return False
+        return True
 
 
 class ExpenseRecord(models.Model):

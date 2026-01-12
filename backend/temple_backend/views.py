@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -51,13 +52,21 @@ def download_database_backup(request):
                     live_dump_path = _generate_live_database_dump(temp_dir, pg_dump_path)
                 except subprocess.CalledProcessError as exc:
                     logger.exception(
-                        'pg_dump failed while generating the live database dump; falling back to stored backups',
+                        'pg_dump failed while generating the live database dump; trying Django dumpdata',
                         exc_info=exc,
                     )
                     live_dump_error = exc
-            else:
-                logger.warning('pg_dump is not available when preparing the live database dump; falling back to stored backups')
-                live_dump_error = FileNotFoundError('pg_dump binary is not available')
+            
+            # If pg_dump is not available or failed, try Django's dumpdata
+            if not live_dump_path:
+                try:
+                    live_dump_path = _generate_live_database_dump_django(temp_dir)
+                except Exception as exc:
+                    logger.exception(
+                        'Django dumpdata failed while generating the live database dump; falling back to stored backups',
+                        exc_info=exc,
+                    )
+                    live_dump_error = exc
 
         if not live_dump_path and not backup_files:
             detail = (
@@ -69,11 +78,22 @@ def download_database_backup(request):
             return JsonResponse({"detail": detail}, status=500)
 
         archive_path = _create_database_archive(temp_dir, live_dump_path, backup_files)
-        file_handle = open(archive_path, 'rb')
-        response = FileResponse(file_handle, filename=archive_path.name, as_attachment=True)
+        
+        # Read the file into memory and clean up immediately
+        with open(archive_path, 'rb') as f:
+            file_content = f.read()
+        
+        # Clean up temporary directory
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        # Return the file as attachment
+        response = FileResponse(
+            BytesIO(file_content),
+            as_attachment=True,
+            filename=archive_path.name
+        )
         response['Content-Type'] = 'application/gzip'
-        response['Content-Length'] = str(archive_path.stat().st_size)
-        response.add_post_render_callback(lambda resp: _cleanup_temp_resources(temp_dir, file_handle))
+        response['Content-Length'] = str(len(file_content))
         return response
     except (OSError, tarfile.TarError) as exc:
         logger.exception('Filesystem error while preparing the database download')
@@ -91,12 +111,35 @@ def download_database_backup(request):
         )
 
 
-def _cleanup_temp_resources(temp_dir: Path, file_handle):
+def _generate_live_database_dump_django(temp_dir: Path) -> Path:
+    """
+    Generate a live database dump using Django's dumpdata command.
+    This is a fallback when pg_dump is not available.
+    """
+    from django.core.management import call_command
+    from io import StringIO
+    
+    sql_path = temp_dir / LIVE_DUMP_FILENAME.replace('.gz', '')
+    gzip_path = temp_dir / LIVE_DUMP_FILENAME
+    
+    output = StringIO()
     try:
-        file_handle.close()
-    except Exception:
+        call_command('dumpdata', stdout=output, exclude=['sessions', 'admin.logentry'])
+        with open(sql_path, 'w') as sql_file:
+            sql_file.write(output.getvalue())
+    except Exception as e:
+        logger.exception('Django dumpdata failed')
+        raise
+
+    with open(sql_path, 'rb') as sql_file, gzip.open(gzip_path, 'wb') as gzip_file:
+        shutil.copyfileobj(sql_file, gzip_file)
+
+    try:
+        sql_path.unlink()
+    except OSError:
         pass
-    shutil.rmtree(temp_dir, ignore_errors=True)
+
+    return gzip_path
 
 
 def _generate_live_database_dump(temp_dir: Path, pg_dump_path: str) -> Path:
