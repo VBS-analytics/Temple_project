@@ -887,6 +887,17 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
     XLSX.writeFile(workbook, `${downloadFilenameBase}.xlsx`);
   };
 
+  const orderedRecords = useMemo(() => {
+    if (!filteredRecords.length) {
+      return filteredRecords;
+    }
+
+    const compareByTimestampDesc = (a: PaymentRecordEntry, b: PaymentRecordEntry) =>
+      getRecordTimestamp(b) - getRecordTimestamp(a);
+
+    return [...filteredRecords].sort(compareByTimestampDesc);
+  }, [filteredRecords]);
+
   const passbookEntries = useMemo(() => {
     if (!filteredRecords.length) {
       return [];
@@ -1066,79 +1077,295 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
         </div>
       </div>
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-          <div className="hidden rounded-t-2xl md:block">
-            <div className="max-h-[720px] overflow-auto">
-              <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold">S.no</th>
-                    <th className="px-4 py-3 text-left font-semibold">Date</th>
-                    <th className="px-4 py-3 text-left font-semibold">Transaction Details</th>
-                    <th className="px-4 py-3 text-right font-semibold">Due for current month</th>
-                    <th className="px-4 py-3 text-right font-semibold">Amount received</th>
-                    <th className="px-4 py-3 text-right font-semibold">Closing balance due</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                {passbookEntries.map((entry, idx) => (
-                  <tr key={entry.record.id}>
-                    <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {buildTransactionDetails(entry.record)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                      {formatCurrency(entry.dueAmount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                      {formatCurrency(entry.paidAmount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                      {formatCurrency(entry.closingDue)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="flex flex-col md:hidden">
-          {passbookEntries.map((entry, idx) => (
-            <div
-              key={`${entry.record.id}-mobile`}
-              className="border-b border-slate-100 px-4 py-4 last:border-b-0"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-700">
-                  #{idx + 1} •{' '}
-                  <span className="font-normal text-slate-500">
-                    {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
-                  </span>
-                </p>
-              </div>
-              <div className="mt-2 space-y-2 text-xs text-slate-500">
-                <div>
-                  <p className="font-semibold text-slate-600">Transaction Details</p>
-                  <p className="text-slate-700">{buildTransactionDetails(entry.record)}</p>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold text-slate-600">Due for current month</span>
-                  <span>{formatCurrency(entry.dueAmount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold text-slate-600">Amount received</span>
-                  <span>{formatCurrency(entry.paidAmount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold text-slate-600">Closing balance due</span>
-                  <span>{formatCurrency(entry.closingDue)}</span>
-                </div>
+        {isAdminUser ? (
+          <>
+            <div className="hidden rounded-t-2xl md:block">
+              <div className="max-h-[720px] overflow-auto">
+                <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">S.no</th>
+                      <th className="px-4 py-3 text-left font-semibold">Donor Id</th>
+                      <th className="px-4 py-3 text-left font-semibold">Donor Name</th>
+                      <th className="px-4 py-3 text-left font-semibold">Pooja</th>
+                      <th className="px-4 py-3 text-left font-semibold">Pooja Date</th>
+                      <th className="px-4 py-3 text-right font-semibold">Pooja Due Amount</th>
+                      <th className="px-4 py-3 text-right font-semibold">Paid Amount</th>
+                      <th className="px-4 py-3 text-left font-semibold">Transaction Id</th>
+                      <th className="px-4 py-3 text-left font-semibold">Pooja Registered by</th>
+                      <th className="px-4 py-3 text-left font-semibold">Pooja Booked by</th>
+                      <th className="px-4 py-3 text-center font-semibold">Club Payment</th>
+                      <th className="px-4 py-3 text-left font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {orderedRecords.map((record, idx) => {
+                      const statusKey = getStatusLabel(record);
+                      const statusClasses =
+                        STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
+                      const clubLabel = getClubSelectionLabel(record);
+                      const clubClasses = getClubBadgeClasses(clubLabel);
+                      const displayedDueAmount = getDisplayedDueAmountValue(record);
+                      return (
+                        <tr key={record.id}>
+                          <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
+                          <td className="px-4 py-3 text-slate-600">{record.donor ?? '—'}</td>
+                          <td className="px-4 py-3 text-slate-600">{record.donor_name || '—'}</td>
+                          <td className="px-4 py-3 text-slate-600">
+                            <div>{record.pooja_option || '—'}</div>
+                            {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {formatDisplayDate(record.registration_start_date)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                            {formatCurrency(displayedDueAmount)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                            {formatCurrency(getDisplayedPaidAmountValue(record))}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {record.transaction_reference || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {resolveRegisteredByLabel(record)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {resolveBookedByLabel(record)}
+                          </td>
+                          <td className="px-4 py-3 text-center font-semibold text-slate-800">
+                            {isAdminUser && typeof record.registration === 'number' ? (
+                              <select
+                                value={clubLabel}
+                                onChange={(event) => handleClubChange(record, event.target.value)}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide focus:outline-none ${clubClasses}`}
+                              >
+                                {CLUB_OPTIONS.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${clubClasses}`}
+                              >
+                                {clubLabel}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {isAdminUser ? (
+                              <select
+                                value={statusKey}
+                                onChange={(event) =>
+                                  handleStatusChange(record, event.target.value)
+                                }
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
+                              >
+                                {STATUS_OPTIONS.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
+                              >
+                                {statusKey}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
-        </div>
+            <div className="flex flex-col md:hidden">
+              {orderedRecords.map((record, idx) => {
+                const statusKey = getStatusLabel(record);
+                const statusClasses =
+                  STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
+                const clubLabel = getClubSelectionLabel(record);
+                const clubClasses = getClubBadgeClasses(clubLabel);
+                return (
+                  <div
+                    key={record.id}
+                    className="border-b border-slate-100 px-4 py-4 last:border-b-0"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-700">
+                        #{idx + 1} •{' '}
+                        <span className="font-normal text-slate-500">
+                          {record.donor_name || '—'}
+                        </span>
+                      </p>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
+                      >
+                        {statusKey}
+                      </span>
+                    </div>
+                    <div className="mt-2 grid gap-2 text-xs text-slate-500">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Donor ID</span>
+                        <span>{record.donor ?? '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Pooja</span>
+                        <span>{record.pooja_option || '—'}</span>
+                      </div>
+                      {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Pooja Date</span>
+                        <span>{formatDisplayDate(record.registration_start_date)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Due Amount</span>
+                        <span>{formatCurrency(getDisplayedDueAmountValue(record))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Paid Amount</span>
+                        <span>{formatCurrency(getDisplayedPaidAmountValue(record))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Transaction ID</span>
+                        <span className="text-slate-400">
+                          {record.transaction_reference || '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Pooja Registered by</span>
+                        <span className="text-slate-600">{resolveRegisteredByLabel(record)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Pooja Booked by</span>
+                        <span className="text-slate-600">{resolveBookedByLabel(record)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-600">Club Payment</span>
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-wide ${clubClasses}`}
+                        >
+                          {clubLabel}
+                        </span>
+                      </div>
+                      {isAdminUser && (
+                        <div className="mt-2">
+                          <select
+                            value={statusKey}
+                            onChange={(event) => handleStatusChange(record, event.target.value)}
+                            className={`w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
+                          >
+                            {STATUS_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {isAdminUser && typeof record.registration === 'number' && (
+                        <div className="mt-2">
+                          <select
+                            value={getClubSelectionLabel(record)}
+                            onChange={(event) => handleClubChange(record, event.target.value)}
+                            className="w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 focus:outline-none"
+                          >
+                            {CLUB_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="hidden rounded-t-2xl md:block">
+              <div className="max-h-[720px] overflow-auto">
+                <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">S.no</th>
+                      <th className="px-4 py-3 text-left font-semibold">Date</th>
+                      <th className="px-4 py-3 text-left font-semibold">Transaction Details</th>
+                      <th className="px-4 py-3 text-right font-semibold">Due for current month</th>
+                      <th className="px-4 py-3 text-right font-semibold">Amount received</th>
+                      <th className="px-4 py-3 text-right font-semibold">Closing balance due</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {passbookEntries.map((entry, idx) => (
+                      <tr key={entry.record.id}>
+                        <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {buildTransactionDetails(entry.record)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                          {formatCurrency(entry.dueAmount)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                          {formatCurrency(entry.paidAmount)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                          {formatCurrency(entry.closingDue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="flex flex-col md:hidden">
+              {passbookEntries.map((entry, idx) => (
+                <div
+                  key={`${entry.record.id}-mobile`}
+                  className="border-b border-slate-100 px-4 py-4 last:border-b-0"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-700">
+                      #{idx + 1} •{' '}
+                      <span className="font-normal text-slate-500">
+                        {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="mt-2 space-y-2 text-xs text-slate-500">
+                    <div>
+                      <p className="font-semibold text-slate-600">Transaction Details</p>
+                      <p className="text-slate-700">{buildTransactionDetails(entry.record)}</p>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-slate-600">Due for current month</span>
+                      <span>{formatCurrency(entry.dueAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-slate-600">Amount received</span>
+                      <span>{formatCurrency(entry.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-slate-600">Closing balance due</span>
+                      <span>{formatCurrency(entry.closingDue)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         {loading && (
           <div className="px-4 py-5 text-sm text-slate-500">
             Loading based on selected timeframe…
