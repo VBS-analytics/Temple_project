@@ -8,6 +8,7 @@ import api, { extractResults } from '../../lib/api';
 import { loadPdfMake } from '../../lib/pdfMakeLoader';
 import type { CartItem } from '../../store/cart';
 import { isAdmin, useAuthStore } from '../../store/auth';
+import { useCombineAccessStore } from '../../store/combineAccess';
 import * as XLSX from 'xlsx';
 import { POOJA_CART_SNAPSHOT_UPDATED_EVENT } from '../../constants/events';
 
@@ -59,11 +60,12 @@ const TIMEFRAME_FILTERS: { label: string; value: TimeframeOption }[] = [
   { label: 'Year Wise', value: 'year' },
 ];
 
+const STATUS_LABEL_PAYMENT_RECEIVED = 'Payment Received';
+const STATUS_LABEL_PAYMENT_NOT_RECEIVED = 'Payment Not Received';
+
 const STATUS_STYLES: Record<string, string> = {
-  'Admin action is pending': 'bg-amber-100 text-amber-800',
-  'Payment not received': 'bg-rose-100 text-rose-800',
-  'Payment Received': 'bg-emerald-100 text-emerald-800',
-  'Pooja Completed': 'bg-emerald-100 text-emerald-800',
+  [STATUS_LABEL_PAYMENT_NOT_RECEIVED]: 'bg-rose-100 text-rose-800',
+  [STATUS_LABEL_PAYMENT_RECEIVED]: 'bg-emerald-100 text-emerald-800',
 };
 const CLUB_STYLES: Record<string, string> = {
   Yes: 'bg-emerald-100 text-emerald-800',
@@ -101,6 +103,26 @@ const formatDisplayDate = (value?: string | null) => {
   });
 };
 
+const formatCombineMonthLabel = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  const match = normalized.match(/^(\d{4}-\d{2})/);
+  if (!match) {
+    return null;
+  }
+  const [year, month] = match[1].split('-');
+  const parsed = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
 const formatUpcomingOccurrenceLabel = (occurrence: PaymentRecordEntry['upcoming_occurrences'][number]) => {
   const labelParts = [formatDisplayDate(occurrence.date)];
   if (occurrence.label) {
@@ -130,6 +152,28 @@ const parseNumeric = (value?: string | number | null) => {
   }
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isNaN(numeric) ? 0 : numeric;
+};
+
+const normalizeStatusLabel = (value?: string | null) => {
+  if (!value) {
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized === STATUS_LABEL_PAYMENT_RECEIVED.toLowerCase() ||
+    normalized === 'pooja completed' ||
+    normalized === 'admin action is pending'
+  ) {
+    return STATUS_LABEL_PAYMENT_RECEIVED;
+  }
+  if (normalized === 'payment not received') {
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+  }
+  return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
 };
 
 const getRecordTimestamp = (record: PaymentRecordEntry) => {
@@ -243,10 +287,8 @@ const buildRangeLabel = (reference: Date, timeframe: TimeframeOption) => {
 };
 
 const STATUS_OPTIONS = [
-  'Payment Received',
-  'Payment not received',
-  'Pooja Completed',
-  'Admin action is pending',
+  STATUS_LABEL_PAYMENT_NOT_RECEIVED,
+  STATUS_LABEL_PAYMENT_RECEIVED,
 ];
 
 const CLUB_OPTIONS = ['Yes', 'No'] as const;
@@ -275,6 +317,11 @@ const PaymentStatementPage = () => {
   const [clubOverrideMap, setClubOverrideMap] = useState<Record<string, string>>({});
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
+  const combineRole = useCombineAccessStore((state) => state.role);
+  const combinedTo = useCombineAccessStore((state) => state.combinedTo);
+  const combineLoading = useCombineAccessStore((state) => state.loading);
+  const combineError = useCombineAccessStore((state) => state.error);
+  const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
 
   const applyOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
     setStatusOverrideMap((prev) => {
@@ -313,7 +360,24 @@ const PaymentStatementPage = () => {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (typeof parsed === 'object' && parsed !== null) {
-          setStatusOverrideMap(parsed as Record<string, string>);
+          const entries = Object.entries(parsed);
+          if (entries.length > 0) {
+            const normalized: Record<string, string> = {};
+            entries.forEach(([key, value]) => {
+              if (typeof value === 'string') {
+                normalized[key] = normalizeStatusLabel(value);
+              }
+            });
+            setStatusOverrideMap(normalized);
+            try {
+              window.localStorage.setItem(
+                STATUS_OVERRIDES_STORAGE_KEY,
+                JSON.stringify(normalized),
+              );
+            } catch {
+              // ignore storage errors
+            }
+          }
         }
       }
       const clubStored = window.localStorage.getItem(CLUB_OVERRIDES_STORAGE_KEY);
@@ -327,6 +391,12 @@ const PaymentStatementPage = () => {
       // no-op
     }
   }, []);
+
+  useEffect(() => {
+    if (combineRole === null && !combineLoading && !combineError) {
+      fetchCombineAccess();
+    }
+  }, [combineRole, combineLoading, combineError, fetchCombineAccess]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -345,10 +415,8 @@ const PaymentStatementPage = () => {
     const paymentId = typeof record.id === 'number' ? record.id : null;
     const registrationId = record.registration ?? null;
     const transitionMap: Record<string, { payment?: string; registration?: string }> = {
-      'Payment Received': { payment: 'success', registration: 'pending' },
-      'Payment not received': { payment: 'pending', registration: 'pending' },
-      'Pooja Completed': { payment: 'success', registration: 'completed' },
-      'Admin action is pending': { payment: 'pending', registration: 'pending' },
+      [STATUS_LABEL_PAYMENT_RECEIVED]: { payment: 'success', registration: 'pending' },
+      [STATUS_LABEL_PAYMENT_NOT_RECEIVED]: { payment: 'pending', registration: 'pending' },
     };
     const transition = transitionMap[label];
     if (!transition) {
@@ -511,18 +579,17 @@ const PaymentStatementPage = () => {
   };
 
   const resolveStatusLabel = (record: PaymentRecordEntry) => {
-    const status = record.status?.toLowerCase() ?? '';
-    const dueAmount = parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
+    const status = (record.status ?? '').toLowerCase();
     const paidAmount = parseNumeric(record.amount);
-    const isFullyPaid = paidAmount > 0 && dueAmount <= 0;
+    const hasTransactionReference = Boolean(
+      typeof record.transaction_reference === 'string' &&
+        record.transaction_reference.trim().length > 0,
+    );
 
-    if ((record.registration_status ?? '').toLowerCase() === 'completed') {
-      return 'Pooja Completed';
+    if (status === 'success' || paidAmount > 0 || hasTransactionReference) {
+      return STATUS_LABEL_PAYMENT_RECEIVED;
     }
-    if (status === 'pending' && !record.transaction_reference && !isFullyPaid) {
-      return 'Payment not received';
-    }
-    return 'Admin action is pending';
+    return STATUS_LABEL_PAYMENT_NOT_RECEIVED;
   };
 
   const mergedRecords = useMemo(() => {
@@ -599,24 +666,38 @@ const PaymentStatementPage = () => {
     return record.registration_is_group_registration ? 'Yes' : 'No';
   };
 
-  const getDisplayedDueAmountValue = (record: PaymentRecordEntry) => {
-    const statusLabel = getStatusLabel(record);
-    if (statusLabel === 'Payment not received') {
-      const pendingAmount = parseNumeric(record.amount);
-      if (pendingAmount > 0) {
-        return pendingAmount;
-      }
+const getDisplayedDueAmountValue = (record: PaymentRecordEntry) => {
+  const statusLabel = getStatusLabel(record);
+  if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+    const pendingAmount = parseNumeric(record.amount);
+    if (pendingAmount > 0) {
+      return pendingAmount;
     }
-    return parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
-  };
+  }
+  return parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
+};
 
-  const getDisplayedPaidAmountValue = (record: PaymentRecordEntry) => {
-    const statusLabel = getStatusLabel(record);
-    if (statusLabel === 'Payment not received') {
-      return 0;
-    }
-    return parseNumeric(record.amount);
-  };
+const getDisplayedPaidAmountValue = (record: PaymentRecordEntry) => {
+  const statusLabel = getStatusLabel(record);
+  if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+    return 0;
+  }
+  return parseNumeric(record.amount);
+};
+
+const buildTransactionDetails = (record: PaymentRecordEntry) => {
+  const pieces = [];
+  if (record.pooja_option) {
+    pieces.push(record.pooja_option);
+  }
+  if (record.transaction_reference) {
+    pieces.push(`Tx: ${record.transaction_reference}`);
+  }
+  if (record.registration_donor_name) {
+    pieces.push(`Booked by ${record.registration_donor_name}`);
+  }
+  return pieces.join(' • ') || '—';
+};
 
   const formatFilenameDate = (value: Date) =>
     value.toISOString().replace(/[:.]/g, '').replace(/-/g, '').slice(0, 15);
@@ -806,26 +887,26 @@ const PaymentStatementPage = () => {
     XLSX.writeFile(workbook, `${downloadFilenameBase}.xlsx`);
   };
 
-  const orderedRecords = useMemo(() => {
+  const passbookEntries = useMemo(() => {
     if (!filteredRecords.length) {
-      return filteredRecords;
+      return [];
     }
-
-    const compareByTimestampDesc = (a: PaymentRecordEntry, b: PaymentRecordEntry) =>
-      getRecordTimestamp(b) - getRecordTimestamp(a);
-
-    if (isAdminUser) {
-      return [...filteredRecords].sort(compareByTimestampDesc);
-    }
-
-    const adminActionPendingRecords = filteredRecords.filter(
-      (record) => getStatusLabel(record) === 'Admin action is pending',
+    const sorted = [...filteredRecords].sort(
+      (a, b) => getRecordTimestamp(a) - getRecordTimestamp(b),
     );
-    const otherRecords = filteredRecords.filter(
-      (record) => getStatusLabel(record) !== 'Admin action is pending',
-    );
-    return [...otherRecords, ...adminActionPendingRecords];
-  }, [filteredRecords, isAdminUser, statusOverrideMap]);
+    let runningBalance = 0;
+    return sorted.map((record) => {
+      const dueAmount = getDisplayedDueAmountValue(record);
+      const paidAmount = getDisplayedPaidAmountValue(record);
+      runningBalance += dueAmount - paidAmount;
+      return {
+        record,
+        dueAmount,
+        paidAmount,
+        closingDue: Math.max(0, runningBalance),
+      };
+    });
+  }, [filteredRecords, statusOverrideMap]);
 
   const totalPaid = useMemo(
     () => filteredRecords.reduce((sum, record) => sum + getDisplayedPaidAmountValue(record), 0),
@@ -847,6 +928,37 @@ const PaymentStatementPage = () => {
     const label = rangeLabel.replace(/\W+/g, '-').replace(/-+/g, '-').toLowerCase();
     return `payment-statement-${label}-${formatFilenameDate(new Date())}`;
   }, [rangeLabel]);
+  const parentName = combinedTo?.name ?? 'Parent donor';
+  const parentPhone = combinedTo?.phone ?? 'Phone not available';
+  const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
+  const uncombineFromLabel = formatCombineMonthLabel(combinedTo?.effectiveTo);
+  const effectiveRange = [
+    effectiveFromLabel ? `Effective from ${effectiveFromLabel}` : null,
+    uncombineFromLabel ? `Uncombine from ${uncombineFromLabel}` : null,
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
+  if (combineRole === 'subordinate') {
+    return (
+      <div className="space-y-6">
+        <section className="space-y-4 rounded-2xl border border-rose-200 bg-white/80 p-6 shadow-sm">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold text-slate-800">Payment history managed by another donor</h1>
+            <p className="text-sm text-slate-600">
+              Your payment records are overseen by {parentName} ({parentPhone}). Connect with them to access history.
+            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
+              Payment history is unavailable for this profile.
+            </p>
+          </div>
+          {effectiveRange && (
+            <p className="text-xs text-slate-500">{effectiveRange}</p>
+          )}
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -954,214 +1066,78 @@ const PaymentStatementPage = () => {
         </div>
       </div>
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="hidden rounded-t-2xl md:block">
-          <div className="max-h-[720px] overflow-auto">
-            <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold">S.no</th>
-                  <th className="px-4 py-3 text-left font-semibold">Donor Id</th>
-                  <th className="px-4 py-3 text-left font-semibold">Donor Name</th>
-                  <th className="px-4 py-3 text-left font-semibold">Pooja</th>
-                  <th className="px-4 py-3 text-left font-semibold">Pooja Date</th>
-                  <th className="px-4 py-3 text-right font-semibold">Pooja Due Amount</th>
-                  <th className="px-4 py-3 text-right font-semibold">Paid Amount</th>
-                  <th className="px-4 py-3 text-left font-semibold">Transaction Id</th>
-                  <th className="px-4 py-3 text-left font-semibold">Pooja Registered by</th>
-                  <th className="px-4 py-3 text-left font-semibold">Pooja Booked by</th>
-                  <th className="px-4 py-3 text-center font-semibold">Club Payment</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orderedRecords.map((record, idx) => {
-                  const statusKey = getStatusLabel(record);
-                  const statusClasses =
-                    STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
-                  const clubLabel = getClubSelectionLabel(record);
-                  const clubClasses = getClubBadgeClasses(clubLabel);
-                  const displayedDueAmount = getDisplayedDueAmountValue(record);
-                  return (
-                    <tr key={record.id}>
-                      <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
-                      <td className="px-4 py-3 text-slate-600">{record.donor ?? '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{record.donor_name || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <div>{record.pooja_option || '—'}</div>
-                        {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {formatDisplayDate(record.registration_start_date)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                        {formatCurrency(displayedDueAmount)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                        {formatCurrency(getDisplayedPaidAmountValue(record))}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {record.transaction_reference || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {resolveRegisteredByLabel(record)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {resolveBookedByLabel(record)}
-                      </td>
-                      <td className="px-4 py-3 text-center font-semibold text-slate-800">
-                        {isAdminUser && typeof record.registration === 'number' ? (
-                          <select
-                            value={clubLabel}
-                            onChange={(event) => handleClubChange(record, event.target.value)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide focus:outline-none ${clubClasses}`}
-                          >
-                            {CLUB_OPTIONS.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${clubClasses}`}
-                          >
-                            {clubLabel}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {isAdminUser ? (
-                          <select
-                            value={statusKey}
-                            onChange={(event) =>
-                              handleStatusChange(record, event.target.value)
-                            }
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
-                          >
-                            {STATUS_OPTIONS.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
-                          >
-                            {statusKey}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+          <div className="hidden rounded-t-2xl md:block">
+            <div className="max-h-[720px] overflow-auto">
+              <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">S.no</th>
+                    <th className="px-4 py-3 text-left font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left font-semibold">Transaction Details</th>
+                    <th className="px-4 py-3 text-right font-semibold">Due for current month</th>
+                    <th className="px-4 py-3 text-right font-semibold">Amount received</th>
+                    <th className="px-4 py-3 text-right font-semibold">Closing balance due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                {passbookEntries.map((entry, idx) => (
+                  <tr key={entry.record.id}>
+                    <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {buildTransactionDetails(entry.record)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                      {formatCurrency(entry.dueAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                      {formatCurrency(entry.paidAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                      {formatCurrency(entry.closingDue)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
         <div className="flex flex-col md:hidden">
-          {orderedRecords.map((record, idx) => {
-            const statusKey = getStatusLabel(record);
-            const statusClasses =
-              STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
-            const clubLabel = getClubSelectionLabel(record);
-            const clubClasses = getClubBadgeClasses(clubLabel);
-            return (
-              <div
-                key={record.id}
-                className="border-b border-slate-100 px-4 py-4 last:border-b-0"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-700">
-                    #{idx + 1} •{' '}
-                    <span className="font-normal text-slate-500">
-                      {record.donor_name || '—'}
-                    </span>
-                  </p>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
-                  >
-                    {statusKey}
+          {passbookEntries.map((entry, idx) => (
+            <div
+              key={`${entry.record.id}-mobile`}
+              className="border-b border-slate-100 px-4 py-4 last:border-b-0"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-700">
+                  #{idx + 1} •{' '}
+                  <span className="font-normal text-slate-500">
+                    {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
                   </span>
+                </p>
+              </div>
+              <div className="mt-2 space-y-2 text-xs text-slate-500">
+                <div>
+                  <p className="font-semibold text-slate-600">Transaction Details</p>
+                  <p className="text-slate-700">{buildTransactionDetails(entry.record)}</p>
                 </div>
-                <div className="mt-2 grid gap-2 text-xs text-slate-500">
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Donor ID</span>
-                    <span>{record.donor ?? '—'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Pooja</span>
-                    <span>{record.pooja_option || '—'}</span>
-                  </div>
-                  {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Pooja Date</span>
-                    <span>{formatDisplayDate(record.registration_start_date)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Due Amount</span>
-                    <span>{formatCurrency(getDisplayedDueAmountValue(record))}</span>
-                  </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold text-slate-600">Paid Amount</span>
-                      <span>{formatCurrency(getDisplayedPaidAmountValue(record))}</span>
-                    </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Transaction ID</span>
-                    <span className="text-slate-400">
-                      {record.transaction_reference || '—'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Pooja Registered by</span>
-                    <span className="text-slate-600">{resolveRegisteredByLabel(record)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Pooja Booked by</span>
-                    <span className="text-slate-600">{resolveBookedByLabel(record)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-600">Club Payment</span>
-                    <span
-                      className={`inline-flex rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-wide ${clubClasses}`}
-                    >
-                      {clubLabel}
-                    </span>
-                  </div>
-                  {isAdminUser && (
-                    <div className="mt-2">
-                      <select
-                        value={statusKey}
-                        onChange={(event) => handleStatusChange(record, event.target.value)}
-                        className={`w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {isAdminUser && typeof record.registration === 'number' && (
-                    <div className="mt-2">
-                      <select
-                        value={getClubSelectionLabel(record)}
-                        onChange={(event) => handleClubChange(record, event.target.value)}
-                        className="w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 focus:outline-none"
-                      >
-                        {CLUB_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-600">Due for current month</span>
+                  <span>{formatCurrency(entry.dueAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-600">Amount received</span>
+                  <span>{formatCurrency(entry.paidAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-600">Closing balance due</span>
+                  <span>{formatCurrency(entry.closingDue)}</span>
                 </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
         {loading && (
           <div className="px-4 py-5 text-sm text-slate-500">

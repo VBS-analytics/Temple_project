@@ -10,12 +10,27 @@ interface CombineAccessParent {
   phone?: string | null;
   items: CartItem[];
   updatedAt?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  active?: boolean | null;
+}
+
+type CombineRole = 'main' | 'subordinate' | null;
+
+interface CombinedToInfo {
+  id: number | null;
+  name?: string | null;
+  phone?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
 }
 
 interface CombineAccessState {
   loading: boolean;
   canCombine: boolean | null;
   parentDonors: CombineAccessParent[];
+  role: CombineRole;
+  combinedTo: CombinedToInfo | null;
   error: string | null;
   fetchAccess: () => Promise<void>;
   resetAccess: () => void;
@@ -25,6 +40,8 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
   loading: false,
   canCombine: null,
   parentDonors: [],
+  role: null,
+  combinedTo: null,
   error: null,
   fetchAccess: async () => {
     const state = get();
@@ -35,6 +52,17 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
     try {
       const response = await api.get('payments/combine-access/');
       const canCombine = Boolean(response.data?.can_combine);
+      const role = (response.data?.role as CombineRole) ?? null;
+      const combinedToPayload = response.data?.combined_to;
+      const combinedTo: CombinedToInfo | null = combinedToPayload
+        ? {
+            id: combinedToPayload?.id ?? null,
+            name: combinedToPayload?.name ?? null,
+            phone: combinedToPayload?.phone ?? null,
+            effectiveFrom: combinedToPayload?.effective_from ?? null,
+            effectiveTo: combinedToPayload?.effective_to ?? null,
+          }
+        : null;
       const parentDonors = Array.isArray(response.data?.parent_donors)
         ? response.data.parent_donors.map((donor: any) => ({
             id: donor?.id ?? null,
@@ -42,12 +70,17 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
             phone: donor?.phone ?? null,
             items: Array.isArray(donor?.items) ? donor.items : [],
             updatedAt: donor?.updated_at ?? null,
+            effectiveFrom: donor?.effective_from ?? null,
+            effectiveTo: donor?.effective_to ?? null,
+            active: typeof donor?.active === 'boolean' ? donor.active : null,
           }))
         : [];
       set({
         loading: false,
         canCombine,
         parentDonors,
+        role,
+        combinedTo,
         error: null,
       });
     } catch (error) {
@@ -60,6 +93,8 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
         loading: false,
         canCombine: null,
         parentDonors: [],
+        role: null,
+        combinedTo: null,
         error: message,
       });
     }
@@ -69,6 +104,8 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
       loading: false,
       canCombine: null,
       parentDonors: [],
+      role: null,
+      combinedTo: null,
       error: null,
     }),
 }));
