@@ -3181,8 +3181,30 @@ const PoojaRegistrationPage = () => {
     if (!modalRequiresChartDetails || !selectedPooja) {
       return;
     }
-    ensurePreferredDateGroups(selectedPooja.id, 1);
-  }, [modalRequiresChartDetails, selectedPooja, ensurePreferredDateGroups]);
+    const existingGroups = chartPreferredDateGroupsMap[selectedPooja.id];
+    if (existingGroups && existingGroups.length > 0) {
+      return;
+    }
+    const chartItems = cartItems.filter(
+      (item) =>
+        item.poojaId === selectedPooja.id &&
+        (item.dayOptionCode?.trim().toUpperCase() ?? '') === CHART_DAY_OPTION_CODE,
+    );
+    if (chartItems.length > 0) {
+      hydrateChartPreferredDateGroupsFromCart(selectedPooja.id, chartItems);
+      return;
+    }
+    setChartPreferredDateGroupsMap((prev) => ({
+      ...prev,
+      [selectedPooja.id]: [createChartPreferredDateGroup()],
+    }));
+  }, [
+    modalRequiresChartDetails,
+    selectedPooja,
+    cartItems,
+    chartPreferredDateGroupsMap,
+    hydrateChartPreferredDateGroupsFromCart,
+  ]);
 
   const renderPreferredDateGroupsEditor = (poojaId: number, availableOptions: SSOption[]) => {
     const groups = chartPreferredDateGroupsMap[poojaId] ?? [];
