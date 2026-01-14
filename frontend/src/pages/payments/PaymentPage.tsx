@@ -50,6 +50,16 @@ const formatDisplayDate = (value?: string | null) => {
   });
 };
 
+const displayToIsoDate = (displayDate: string): string => {
+  const parts = displayDate.split('/');
+  if (parts.length !== 3) return '';
+  const [day, month, year] = parts;
+  if (!day || !month || !year || day.length !== 2 || month.length !== 2 || year.length !== 4) {
+    return '';
+  }
+  return `${year}-${month}-${day}`;
+};
+
 const DAY_CATEGORY_LABELS: Record<string, string> = {
   weekday: '',
   tamil_star: '',
@@ -64,9 +74,9 @@ const formatDate = (value?: string | null) => {
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return parsed.toLocaleDateString('en-IN', {
+  return parsed.toLocaleDateString('en-GB', {
     day: '2-digit',
-    month: 'short',
+    month: '2-digit',
     year: 'numeric',
   });
 };
@@ -386,7 +396,7 @@ const PaymentPage = () => {
   const [amountPaidError, setAmountPaidError] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentDateError, setPaymentDateError] = useState<string | null>(null);
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState(() => formatDisplayDate(new Date().toISOString()));
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const {
@@ -418,8 +428,8 @@ const PaymentPage = () => {
   const lastPaymentAmountLabel = lastPaymentEntry
     ? `₹ ${formatCurrency(lastPaymentEntry.totalAmount)}`
     : '—';
-  const lastPaymentDateLabel = lastPaymentEntry?.completedAt
-    ? formatDate(lastPaymentEntry.completedAt)
+  const lastPaymentDateLabel = lastPaymentEntry
+    ? formatDate(lastPaymentEntry.paymentDate ?? lastPaymentEntry.completedAt)
     : '—';
   const openingBalanceDisplay = balanceLoading
     ? 'Loading…'
@@ -526,7 +536,7 @@ const PaymentPage = () => {
       setTransactionReference('');
       setAmountPaid('');
       setAmountPaidError(null);
-      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentDate(formatDisplayDate(new Date().toISOString()));
       setPaymentDateError(null);
     }
   }, [paymentSnapshot]);
@@ -596,7 +606,7 @@ const PaymentPage = () => {
     const defaultAmount = netPaymentAmount > 0 ? netPaymentAmount.toFixed(2) : '0.00';
     setAmountPaid(defaultAmount);
     setAmountPaidError(null);
-    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setPaymentDate(formatDisplayDate(new Date().toISOString()));
     setPaymentDateError(null);
     setShowPaymentDetails(true);
   };
@@ -632,14 +642,19 @@ const PaymentPage = () => {
       setAmountPaidError('Enter a valid amount paid.');
       return;
     }
-    const trimmedDate = paymentDate.trim();
-    if (!trimmedDate) {
+    const displayDate = paymentDate.trim();
+    if (!displayDate) {
       setPaymentDateError('Payment date is required.');
       return;
     }
-    const parsedDate = new Date(trimmedDate);
+    const isoDate = displayToIsoDate(displayDate);
+    if (!isoDate) {
+      setPaymentDateError('Enter a valid payment date (dd/mm/yyyy).');
+      return;
+    }
+    const parsedDate = new Date(isoDate);
     if (Number.isNaN(parsedDate.getTime())) {
-      setPaymentDateError('Enter a valid payment date.');
+      setPaymentDateError('Enter a valid payment date (dd/mm/yyyy).');
       return;
     }
 
@@ -648,7 +663,7 @@ const PaymentPage = () => {
     setRegistrationError(null);
     setRegistrationInProgress(true);
     try {
-      await recordRegistrations(paymentSnapshot.items, trimmedReference, parsedAmount, trimmedDate);
+      await recordRegistrations(paymentSnapshot.items, trimmedReference, parsedAmount, isoDate);
       emitPoojaDataUpdatedEvent();
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
@@ -657,7 +672,7 @@ const PaymentPage = () => {
       setRegistrationInProgress(false);
     }
 
-    addGeneralPaymentHistory(paymentSnapshot);
+    addGeneralPaymentHistory(paymentSnapshot, isoDate);
     const snapshotAmount = paymentSnapshot.totalAmount ?? 0;
     const baseBalance =
       typeof openingBalance === 'number'
@@ -907,15 +922,28 @@ const PaymentPage = () => {
                 </label>
                 <input
                   id="payment-date"
-                  type="date"
+                  type="text"
                   value={paymentDate}
+                  placeholder="dd/mm/yyyy"
                   onChange={(event) => {
-                    setPaymentDate(event.target.value);
-                    if (paymentDateError) {
+                    const displayValue = event.target.value;
+                    setPaymentDate(displayValue);
+                    if (paymentDateError && displayValue.length > 0) {
                       setPaymentDateError(null);
                     }
                   }}
+                  onBlur={(event) => {
+                    const displayValue = event.target.value;
+                    if (displayValue && displayValue.length === 10) {
+                      const isoDate = displayToIsoDate(displayValue);
+                      if (!isoDate) {
+                        setPaymentDateError('Invalid date format. Use dd/mm/yyyy');
+                      }
+                    }
+                  }}
+                  maxLength={10}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                  style={{ textAlign: 'center' }}
                 />
                 {paymentDateError && (
                   <p className="mt-2 text-sm text-rose-600">{paymentDateError}</p>
