@@ -1,0 +1,464 @@
+================================================================================
+TEMPLE DONOR PORTAL - DATABASE RESTORE GUIDE
+================================================================================
+Date Created: January 12, 2026
+Purpose: Step-by-step instructions to restore database from backup
+Status: TESTED AND WORKING
+
+================================================================================
+OVERVIEW
+================================================================================
+
+The backup file (temple_db-live.sql.gz) is in Django JSON format (dumpdata), 
+NOT PostgreSQL SQL format. This guide explains how to load it correctly while 
+handling integrity constraint issues.
+
+Key Issues Encountered:
+1. DonorProfile auto-creation when loading users (causes duplicate donor_numbers)
+2. PoojaDayOption/PoojaOption auto-seeding from migrations (causes duplicate codes)
+3. Foreign key dependencies between tables (order matters)
+
+Solution: Load data incrementally in phases, deleting conflicts before each phase.
+
+================================================================================
+PREREQUISITES
+================================================================================
+
+- Docker and Docker Compose installed
+- Backup file: temple_db-live.sql.gz (in project root)
+- Project directory: /home/vbs-blr-lt-0064/Documents/Temple_project
+- All containers running: docker compose -p temple_dev up -d
+
+================================================================================
+STEP-BY-STEP INSTRUCTIONS
+================================================================================
+
+BEFORE YOU START: COMPLETE RESET (OPTIONAL)
+================================================================================
+
+If you want to start completely fresh and remove all existing data:
+
+$ docker compose -p temple_dev down -v
+$ docker compose -p temple_dev up -d
+$ sleep 10
+
+This will:
+  - Stop all containers
+  - Delete the database volume (fresh PostgreSQL database)
+  - Restart all services with migrations applied
+
+Use this if you encounter persistent errors or want a clean slate.
+
+================================================================================
+
+PHASE 0: PREPARE THE BACKUP FILE
+================================================================================
+
+1. Extract the gzipped JSON file:
+   $ gunzip -c temple_db-live.sql.gz > temple_db-live.json
+
+2. Remove problematic auto-seeded records:
+   Run this Python script:
+   
+   python3 << 'EOF'
+   import json
+   
+   with open('temple_db-live.json', 'r') as f:
+       data = json.load(f)
+   
+   # Exclude auto-seeded and problematic models
+   exclude_models = {
+       'pooja.dailymessage',  # Causes seeding conflicts
+   }
+   
+   filtered = [item for item in data if item.get('model') not in exclude_models]
+   
+   with open('temple_db-live-nodailymsgs.json', 'w') as f:
+       json.dump(filtered, f, indent=2)
+   
+   print(f"Created cleaned fixture: {len(filtered)} items")
+   EOF
+
+   OUTPUT: "Created cleaned fixture: 4139 items"
+
+================================================================================
+
+PHASE 1: LOAD USERS ONLY
+================================================================================
+
+1. Create users-only fixture:
+   
+   python3 << 'EOF'
+   import json
+   
+   with open('temple_db-live-nodailymsgs.json', 'r') as f:
+       data = json.load(f)
+   
+   # Extract ONLY users (NOT donors or OTP tokens)
+   users_only = [item for item in data if item.get('model') == 'accounts.user']
+   
+   with open('temple_db-live-users-nodonors.json', 'w') as f:
+       json.dump(users_only, f, indent=2)
+   
+   print(f"Created fixture: {len(users_only)} users")
+   EOF
+
+   OUTPUT: "Created fixture: 95 users"
+
+2. Copy fixture to backend container:
+   $ docker compose -p temple_dev cp temple_db-live-users-nodonors.json backend:/app/
+
+3. Load users into database:
+   $ docker compose -p temple_dev exec -T backend python manage.py loaddata /app/temple_db-live-users-nodonors.json
+
+   EXPECTED OUTPUT: "Installed 95 object(s) from 1 fixture(s)"
+   
+   ERROR CHECK: If you see IntegrityError, it means:
+   - Delete existing users: docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db -c "DELETE FROM accounts_user;"
+   - Try loading again
+
+================================================================================
+
+PHASE 2: LOAD DONORS (AFTER DELETING AUTO-CREATED ONES)
+================================================================================
+
+⚠️  IMPORTANT: When users are loaded, Django auto-creates DonorProfile records
+    for each user. We must delete these before loading backup donors.
+
+1. Create donors-only fixture:
+   
+   python3 << 'EOF'
+   import json
+   
+   with open('temple_db-live-nodailymsgs.json', 'r') as f:
+       data = json.load(f)
+   
+   # Extract ONLY donors
+   donors_only = [item for item in data if item.get('model') == 'accounts.donorprofile']
+   
+   with open('temple_db-live-donors-only.json', 'w') as f:
+       json.dump(donors_only, f, indent=2)
+   
+   print(f"Created fixture: {len(donors_only)} donors")
+   EOF
+
+   OUTPUT: "Created fixture: 95 donors"
+
+2. Delete auto-created donors:
+   $ docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db -c "DELETE FROM accounts_donorprofile;"
+
+   EXPECTED OUTPUT: "DELETE 95"
+
+3. Copy donors fixture to backend:
+   $ docker compose -p temple_dev cp temple_db-live-donors-only.json backend:/app/
+
+4. Load donors:
+   $ docker compose -p temple_dev exec -T backend python manage.py loaddata /app/temple_db-live-donors-only.json
+
+   EXPECTED OUTPUT: "Installed 95 object(s) from 1 fixture(s)"
+
+================================================================================
+
+PHASE 3: LOAD ALL REMAINING DATA
+================================================================================
+
+⚠️  IMPORTANT: Pooja day options and pooja options are auto-seeded by migrations.
+    We must delete these before loading backup versions.
+
+1. Create remaining-data fixture (everything except users/donors/auto-seeded):
+   
+   python3 << 'EOF'
+   import json
+   
+   with open('temple_db-live-nodailymsgs.json', 'r') as f:
+       data = json.load(f)
+   
+   # Exclude users, donors, OTP, and special announcements (auto-seeded)
+   excluded = {'accounts.user', 'accounts.donorprofile', 'accounts.otptoken', 
+               'pooja.specialannouncement'}
+   remaining = [item for item in data if item.get('model') not in excluded]
+   
+   with open('temple_db-live-remaining.json', 'w') as f:
+       json.dump(remaining, f, indent=2)
+   
+   # Show what's included
+   models = {}
+   for item in remaining:
+       model = item.get('model')
+       models[model] = models.get(model, 0) + 1
+   
+   print(f"Created fixture: {len(remaining)} items")
+   for model in sorted(models.keys()):
+       print(f"  {model}: {models[model]}")
+   EOF
+
+   OUTPUT: "Created fixture: 3898 items" with list of models
+
+2. Delete auto-seeded pooja options:
+   $ docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db -c "DELETE FROM pooja_poojadayoption;"
+
+   EXPECTED OUTPUT: "DELETE 42"
+
+3. Copy remaining fixture:
+   $ docker compose -p temple_dev cp temple_db-live-remaining.json backend:/app/
+
+4. Load all remaining data:
+   $ docker compose -p temple_dev exec -T backend python manage.py loaddata /app/temple_db-live-remaining.json
+
+   EXPECTED OUTPUT: "Installed XXXX object(s) from 1 fixture(s)"
+
+================================================================================
+
+PHASE 4: VERIFICATION
+================================================================================
+
+Verify the data was loaded correctly:
+
+$ docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db << 'SQL'
+SELECT 'Donors' as table_name, COUNT(*) as count FROM accounts_donorprofile
+UNION ALL
+SELECT 'Family Members', COUNT(*) FROM accounts_familymember
+UNION ALL
+SELECT 'Pooja Registrations', COUNT(*) FROM pooja_poojaregistration
+UNION ALL
+SELECT 'Users', COUNT(*) FROM accounts_user
+UNION ALL
+SELECT 'Payment Records', COUNT(*) FROM payments_paymentrecord;
+SQL
+
+EXPECTED OUTPUT:
+   Donors:                  95
+   Family Members:          286
+   Pooja Registrations:     8
+   Users:                   95
+   Payment Records:         8
+
+Check the dashboard at: http://localhost:5173
+You should see:
+   - 95 Registered Donors
+   - 286 Family Members
+   - Payment data and pooja registration history
+
+================================================================================
+
+PHASE 5: AFTER SUCCESSFUL RESTORE
+================================================================================
+
+1. Verify you can login:
+   - Find a valid user: docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db -c "SELECT phone_number FROM accounts_user LIMIT 3;"
+   - Login with that phone number
+   - If login fails, contact the team for correct credentials
+
+2. Check dashboard displays correct data:
+   - URL: http://localhost:5173
+   - Dashboard should show: 95 donors, 286 family members
+   - All metrics should be populated with actual numbers
+   - If still showing 0, do a hard refresh: Ctrl+Shift+R
+
+3. Test key features:
+   - View Donor Details: Can you see all 95 donors?
+   - View Pooja Registrations: Can you see the 8 pooja registrations?
+   - View Payment Reports: Can you see the payment history?
+   - Download reports: Try downloading data to verify it exports correctly
+
+4. Optional: Create a backup of your fixtures for reuse
+   $ mkdir -p backups/restore-fixtures
+   $ cp temple_db-live-*.json backups/restore-fixtures/
+   $ cp DATABASE_RESTORE_GUIDE.txt backups/restore-fixtures/
+
+5. Commit your work:
+   $ git add DATABASE_RESTORE_GUIDE.txt
+   $ git commit -m "docs: Add tested database restore guide and process"
+
+================================================================================
+
+IMPORTANT: BACKUP SYSTEM STATUS
+================================================================================
+
+Current Issues:
+- The backup system in backups/ directory has broken symlinks
+- Original backup files don't exist in expected location
+- Restoration relies on manually downloaded temple_db-live.sql.gz
+
+This Should Be Fixed:
+1. Check if backup cron job is running
+   $ systemctl status backup-cron
+   
+2. Review and fix backup script
+   $ cat scripts/setup-backup-cron.sh
+   
+3. Verify recent backups exist
+   $ ls -lh backups/ | grep temple_db
+   
+4. Test the backup system
+   - Create a test backup manually
+   - Try to restore it
+   - Verify integrity
+
+For Production:
+- Schedule daily backups with proper rotation
+- Store backups in multiple locations
+- Implement automated backup verification
+- Test restore process monthly
+- Monitor backup job completion
+
+================================================================================
+
+TROUBLESHOOTING
+================================================================================
+
+ERROR: "duplicate key value violates unique constraint"
+-------
+CAUSE: A record with the same unique field already exists
+SOLUTION: 
+  1. Identify which table: Look at the error message (e.g., "accounts_donorprofile_donor_number_key")
+  2. Delete existing records: DELETE FROM [table_name];
+  3. Run the load command again
+
+ERROR: "foreign key constraint violation"
+-------
+CAUSE: Related data is missing (e.g., pooja registration refers to non-existent user)
+SOLUTION:
+  1. Make sure you've loaded users and donors BEFORE trying to load other data
+  2. Check if you've excluded necessary models
+  3. Make sure data is loaded in the correct order (users → donors → everything else)
+
+ERROR: "No such file or directory"
+-------
+CAUSE: File path is incorrect or file doesn't exist
+SOLUTION:
+  1. Check file exists: ls -lh temple_db-live-*.json
+  2. Use absolute paths or ensure you're in the correct directory
+  3. Make sure you've extracted the .sql.gz file first
+
+ERROR: "CommandError: No fixture named '...' found"
+-------
+CAUSE: Docker can't find the file in the container
+SOLUTION:
+  1. Copy file to container: docker compose -p temple_dev cp [file] backend:/app/
+  2. Use the correct path: /app/[filename]
+
+================================================================================
+
+QUICK REFERENCE - COMPLETE COMMAND SEQUENCE
+================================================================================
+
+If everything works perfectly, here's the complete sequence:
+
+# Prepare
+gunzip -c temple_db-live.sql.gz > temple_db-live.json
+
+# Create fixtures (run these Python scripts in order)
+python3 << 'EOF'
+import json
+with open('temple_db-live.json', 'r') as f:
+    data = json.load(f)
+filtered = [i for i in data if i.get('model') != 'pooja.dailymessage']
+with open('temple_db-live-nodailymsgs.json', 'w') as f:
+    json.dump(filtered, f)
+EOF
+
+python3 << 'EOF'
+import json
+with open('temple_db-live-nodailymsgs.json', 'r') as f:
+    data = json.load(f)
+users = [i for i in data if i.get('model') == 'accounts.user']
+with open('temple_db-live-users-nodonors.json', 'w') as f:
+    json.dump(users, f)
+EOF
+
+python3 << 'EOF'
+import json
+with open('temple_db-live-nodailymsgs.json', 'r') as f:
+    data = json.load(f)
+donors = [i for i in data if i.get('model') == 'accounts.donorprofile']
+with open('temple_db-live-donors-only.json', 'w') as f:
+    json.dump(donors, f)
+EOF
+
+python3 << 'EOF'
+import json
+with open('temple_db-live-nodailymsgs.json', 'r') as f:
+    data = json.load(f)
+excluded = {'accounts.user', 'accounts.donorprofile', 'accounts.otptoken', 'pooja.specialannouncement'}
+remaining = [i for i in data if i.get('model') not in excluded]
+with open('temple_db-live-remaining.json', 'w') as f:
+    json.dump(remaining, f)
+EOF
+
+# Load data
+docker compose -p temple_dev cp temple_db-live-users-nodonors.json backend:/app/
+docker compose -p temple_dev exec -T backend python manage.py loaddata /app/temple_db-live-users-nodonors.json
+
+docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db -c "DELETE FROM accounts_donorprofile;"
+docker compose -p temple_dev cp temple_db-live-donors-only.json backend:/app/
+docker compose -p temple_dev exec -T backend python manage.py loaddata /app/temple_db-live-donors-only.json
+
+docker compose -p temple_dev exec -T db psql -U temple_user -d temple_db -c "DELETE FROM pooja_poojadayoption;"
+docker compose -p temple_dev cp temple_db-live-remaining.json backend:/app/
+docker compose -p temple_dev exec -T backend python manage.py loaddata /app/temple_db-live-remaining.json
+
+================================================================================
+
+KEY TAKEAWAYS FOR FUTURE IMPLEMENTATION
+================================================================================
+
+1. Always extract the .sql.gz file first - it's JSON, not SQL
+
+2. Load data in this ORDER:
+   - Users
+   - Donors (after deleting auto-created ones)
+   - Everything else (after deleting auto-seeded pooja options)
+
+3. Use separate Python scripts to create fixtures - easier to debug
+
+4. Test one phase at a time - don't try to load everything at once
+
+5. Always run verification queries to confirm data was loaded
+
+6. If you see "duplicate key" errors, identify the unique constraint and 
+   delete conflicting records before retrying
+
+7. Keep all generated JSON fixture files - useful for future loads
+
+================================================================================
+ADDITIONAL RECOMMENDATIONS
+================================================================================
+
+1. POST-RESTORE VERIFICATION CHECKLIST
+   □ Dashboard shows correct donor count (95)
+   □ Dashboard shows correct family member count (286)
+   □ Can login with admin credentials
+   □ All metrics and reports populate correctly
+   □ Historical pooja data is visible
+   □ Payment records are intact
+   □ Do a hard browser refresh if needed (Ctrl+Shift+R)
+
+2. FIX THE BACKUP SYSTEM
+   - The current backup symlinks in backups/ are broken
+   - Implement actual backup rotation system
+   - Test backup and restore monthly
+   - Keep backups in at least 2 locations (local + cloud)
+
+3. CREATE AN AUTOMATION SCRIPT
+   - Save the restore steps as scripts/restore-database.sh
+   - Makes future restores faster and less error-prone
+   - Can be scheduled as a cron job
+   - Include in your CI/CD pipeline for testing
+
+4. DOCUMENT YOUR DATA
+   - Keep a changelog of schema modifications
+   - Document any custom fields added to models
+   - Version your backup fixtures
+   - Include restore guide with project documentation
+
+5. MONITORING & ALERTS
+   - Set up daily backup completion checks
+   - Alert if backup fails or is missing
+   - Track backup file size (should be consistent ~1.4MB)
+   - Test restore process in staging monthly
+   - Document any changes to the restore process
+
+================================================================================
+END OF GUIDE
+================================================================================"}

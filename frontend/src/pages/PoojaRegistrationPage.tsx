@@ -3181,8 +3181,30 @@ const PoojaRegistrationPage = () => {
     if (!modalRequiresChartDetails || !selectedPooja) {
       return;
     }
-    ensurePreferredDateGroups(selectedPooja.id, 1);
-  }, [modalRequiresChartDetails, selectedPooja, ensurePreferredDateGroups]);
+    const existingGroups = chartPreferredDateGroupsMap[selectedPooja.id];
+    if (existingGroups && existingGroups.length > 0) {
+      return;
+    }
+    const chartItems = cartItems.filter(
+      (item) =>
+        item.poojaId === selectedPooja.id &&
+        (item.dayOptionCode?.trim().toUpperCase() ?? '') === CHART_DAY_OPTION_CODE,
+    );
+    if (chartItems.length > 0) {
+      hydrateChartPreferredDateGroupsFromCart(selectedPooja.id, chartItems);
+      return;
+    }
+    setChartPreferredDateGroupsMap((prev) => ({
+      ...prev,
+      [selectedPooja.id]: [createChartPreferredDateGroup()],
+    }));
+  }, [
+    modalRequiresChartDetails,
+    selectedPooja,
+    cartItems,
+    chartPreferredDateGroupsMap,
+    hydrateChartPreferredDateGroupsFromCart,
+  ]);
 
   const renderPreferredDateGroupsEditor = (poojaId: number, availableOptions: SSOption[]) => {
     const groups = chartPreferredDateGroupsMap[poojaId] ?? [];
@@ -3367,9 +3389,9 @@ const PoojaRegistrationPage = () => {
                   })}
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                  <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400">
+                  <label className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-700">
                     View
-                  </span>
+                  </label>
                   {VIEW_MODES.map((mode) => (
                     <button
                       key={mode}
@@ -3554,7 +3576,7 @@ const PoojaRegistrationPage = () => {
                         key={row.pooja.id}
                         className={clsx(
                           'flex flex-col rounded-3xl border bg-white shadow-[0_10px_25px_rgba(15,23,42,0.07)] transition hover:shadow-[0_10px_25px_rgba(0,0,0,0.12)]',
-                          inCart ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-gray-100',
+                          inCart ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-yellow-300',
                           isListView && 'md:flex-row md:items-center md:gap-5 transition',
                         )}
                       >

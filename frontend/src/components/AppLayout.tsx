@@ -4,6 +4,8 @@ import clsx from 'clsx';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import useCartSync from '../hooks/useCartSync';
+import useSessionTimeout from '../hooks/useSessionTimeout';
+import SessionExpiryPrompt from './SessionExpiryPrompt';
 import { isAdmin, useAuthStore } from '../store/auth';
 import { useCombineAccessStore } from '../store/combineAccess';
 
@@ -15,10 +17,18 @@ type NavItem = {
   badge?: string;
 };
 
+const formatCountdown = (ms: number) => {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
 const AppLayout = () => {
   const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
   useCartSync();
+  const sessionTimeout = useSessionTimeout();
 
   const { canCombine, fetchAccess, resetAccess } = useCombineAccessStore((state) => ({
     canCombine: state.canCombine,
@@ -103,6 +113,7 @@ const AppLayout = () => {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <SessionExpiryPrompt {...sessionTimeout} />
       {/* HEADER */}
       <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 shadow-sm">
         <div className="responsive-layout flex flex-col gap-4 py-3">
@@ -141,6 +152,11 @@ const AppLayout = () => {
                       <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
                         {userRoleLabel}
                       </span>
+                      {sessionTimeout.timeLeftMs !== null && (
+                        <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                          Expires in {formatCountdown(sessionTimeout.timeLeftMs)}
+                        </span>
+                      )}
                     </div>
                   </div>
 

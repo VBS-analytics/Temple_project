@@ -1,18 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 
 import api, { extractResults } from '../../lib/api';
 import { loadPdfMake } from '../../lib/pdfMakeLoader';
+import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import type { CartItem } from '../../store/cart';
 import { isAdmin, useAuthStore } from '../../store/auth';
 import { useCombineAccessStore } from '../../store/combineAccess';
 import * as XLSX from 'xlsx';
 import { POOJA_CART_SNAPSHOT_UPDATED_EVENT } from '../../constants/events';
-
-type TimeframeOption = 'day' | 'week' | 'month' | 'year';
 
 interface PaymentRecordEntry {
   id: number | string;
@@ -53,23 +52,177 @@ interface CartSnapshotRecord {
   updated_at?: string | null;
 }
 
-const TIMEFRAME_FILTERS: { label: string; value: TimeframeOption }[] = [
-  { label: 'Day Wise', value: 'day' },
-  { label: 'Weekly Wise', value: 'week' },
-  { label: 'Month Wise', value: 'month' },
-  { label: 'Year Wise', value: 'year' },
-];
+interface DonorListEntry {
+  user: {
+    id: number;
+    name?: string | null;
+    phone_number?: string | null;
+  };
+}
+
+interface DonorNameOption {
+  id: number;
+  label: string;
+}
+
+interface DonorNameMultiSelectProps {
+  options: DonorNameOption[];
+  selectedIds: number[];
+  onToggleId: (value: number) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}
+
+function DonorNameMultiSelect({
+  options,
+  selectedIds,
+  onToggleId,
+  disabled = false,
+  placeholder = 'Select donor names',
+}: DonorNameMultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const hasOptions = options.length > 0;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!hasOptions) {
+      setOpen(false);
+      setSearchTerm('');
+    }
+  }, [hasOptions]);
+
+  const toggleDropdown = () => {
+    if (disabled || !hasOptions) {
+      return;
+    }
+    setOpen((prev) => !prev);
+  };
+
+  const selectedCount = selectedIds.length;
+  const label =
+    selectedCount > 0
+      ? `${selectedCount} donor${selectedCount === 1 ? '' : 's'} selected`
+      : placeholder;
+
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const filteredOptions = useMemo(() => {
+    if (!normalizedSearchTerm) {
+      return options;
+    }
+    return options.filter((option) =>
+      option.label.toLowerCase().includes(normalizedSearchTerm),
+    );
+  }, [options, normalizedSearchTerm]);
+
+  useEffect(() => {
+    if (!open) {
+      setSearchTerm('');
+    }
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative w-full min-w-0">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:border-orange-400 hover:text-slate-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+        onClick={toggleDropdown}
+        disabled={disabled || !hasOptions}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="truncate">{label}</span>
+        <span className="ml-2 text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          <div className="px-3 py-2">
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search donor"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+            />
+          </div>
+          <div className="max-h-48 overflow-auto">
+            {filteredOptions.length > 0 ? (
+              <ul className="divide-y divide-slate-100">
+                {filteredOptions.map((option) => {
+                  const checked = selectedIds.includes(option.id);
+                  return (
+                    <li key={`donor-option-${option.id}`}>
+                      <label className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                        <span className="truncate">{option.label}</span>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                          checked={checked}
+                          onChange={() => onToggleId(option.id)}
+                        />
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="px-3 py-2 text-xs text-slate-500">No donors match your search.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUS_LABEL_PAYMENT_RECEIVED = 'Payment Received';
 const STATUS_LABEL_PAYMENT_NOT_RECEIVED = 'Payment Not Received';
 
-const STATUS_STYLES: Record<string, string> = {
-  [STATUS_LABEL_PAYMENT_NOT_RECEIVED]: 'bg-rose-100 text-rose-800',
-  [STATUS_LABEL_PAYMENT_RECEIVED]: 'bg-emerald-100 text-emerald-800',
-};
-const CLUB_STYLES: Record<string, string> = {
-  Yes: 'bg-emerald-100 text-emerald-800',
-  No: 'bg-rose-100 text-rose-800',
+type PaymentStatusFilter = 'all' | 'due' | 'paid';
+
+const PAYMENT_STATUS_FILTERS: { id: PaymentStatusFilter; label: string }[] = [
+  { id: 'all', label: 'All payments' },
+  { id: 'due', label: 'Due for current month (Not paid)' },
+  { id: 'paid', label: 'Amount received (Paid)' },
+];
+
+
+const CURRENT_BALANCE_ENTRY_ID = 'current-balance-entry';
+const CURRENT_BALANCE_ENTRY_DATE = '2025-12-31';
+const CURRENT_BALANCE_ENTRY_DISPLAY_DATE = '31-Dec-2025';
+
+type PassbookEntry = {
+  record: PaymentRecordEntry;
+  dueAmount: number;
+  paidAmount: number;
+  closingDue: number;
+  displayDate?: string;
+  isCurrentBalanceEntry?: boolean;
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -103,6 +256,20 @@ const formatDisplayDate = (value?: string | null) => {
   });
 };
 
+const formatMonthYearFromDate = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '—';
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
 const formatCombineMonthLabel = (value?: string | null) => {
   if (!value) {
     return null;
@@ -122,6 +289,52 @@ const formatCombineMonthLabel = (value?: string | null) => {
     year: 'numeric',
   });
 };
+
+const formatYearMonthLabel = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  const [yearPart, monthPart] = normalized.split('-');
+  if (!yearPart || !monthPart) {
+    return null;
+  }
+  const parsedYear = Number(yearPart);
+  const parsedMonth = Number(monthPart);
+  if (
+    Number.isNaN(parsedYear) ||
+    Number.isNaN(parsedMonth) ||
+    parsedMonth < 1 ||
+    parsedMonth > 12
+  ) {
+    return null;
+  }
+  const parsed = new Date(parsedYear, parsedMonth - 1, 1);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getRecordMonthKey = (record: PaymentRecordEntry) => {
+  const dateValue = record.registration_start_date ?? record.created_at;
+  if (!dateValue) {
+    return null;
+  }
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+const formatFilenameDate = (value: Date) =>
+  value.toISOString().replace(/[:.]/g, '').replace(/-/g, '').slice(0, 15);
 
 const formatUpcomingOccurrenceLabel = (occurrence: PaymentRecordEntry['upcoming_occurrences'][number]) => {
   const labelParts = [formatDisplayDate(occurrence.date)];
@@ -230,91 +443,18 @@ const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
 
 const resolveBookedByLabel = (record: PaymentRecordEntry) => record.donor_name || '—';
 
-const getClubBadgeClasses = (label: string) =>
-  CLUB_STYLES[label] ?? 'bg-slate-100 text-slate-700';
-
-const getTimeframeRange = (reference: Date, timeframe: TimeframeOption) => {
-  const start = new Date(reference);
-  start.setHours(0, 0, 0, 0);
-  switch (timeframe) {
-    case 'day': {
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      return { start, end };
-    }
-    case 'week': {
-      const dayIndex = start.getDay();
-      const weekStart = new Date(start);
-      weekStart.setDate(start.getDate() - dayIndex);
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 7);
-      return { start: weekStart, end: weekEnd };
-    }
-    case 'month': {
-      const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-      const monthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-      return { start: monthStart, end: monthEnd };
-    }
-    case 'year': {
-      const yearStart = new Date(start.getFullYear(), 0, 1);
-      const yearEnd = new Date(start.getFullYear() + 1, 0, 1);
-      return { start: yearStart, end: yearEnd };
-    }
-  }
-};
-
-const buildRangeLabel = (reference: Date, timeframe: TimeframeOption) => {
-  const start = getTimeframeRange(reference, timeframe).start;
-  switch (timeframe) {
-    case 'day':
-      return `Day of ${formatDisplayDate(start.toISOString())}`;
-    case 'week': {
-      const weekEnd = new Date(start);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      return `Week of ${formatDisplayDate(start.toISOString())} – ${formatDisplayDate(
-        weekEnd.toISOString(),
-      )}`;
-    }
-    case 'month':
-      return `Month of ${start.toLocaleDateString('en-IN', {
-        month: 'long',
-        year: 'numeric',
-      })}`;
-    case 'year':
-      return `Year ${start.getFullYear()}`;
-  }
-};
-
-const STATUS_OPTIONS = [
-  STATUS_LABEL_PAYMENT_NOT_RECEIVED,
-  STATUS_LABEL_PAYMENT_RECEIVED,
-];
-
-const CLUB_OPTIONS = ['Yes', 'No'] as const;
-
-const STATUS_OVERRIDES_STORAGE_KEY = 'payment-statement-status-overrides';
-const CLUB_OVERRIDES_STORAGE_KEY = 'payment-statement-club-overrides';
-
 const PaymentStatementPage = () => {
   const [records, setRecords] = useState<PaymentRecordEntry[]>([]);
   const [registrations, setRegistrations] = useState<PoojaRegistrationEntry[]>([]);
-  const [recordsVersion, setRecordsVersion] = useState(0);
-  const [registrationsVersion, setRegistrationsVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [timeframe, setTimeframe] = useState<TimeframeOption>('month');
-  const referenceDateValue = useMemo(() => new Date(), []);
-  const [donorSearchTerm, setDonorSearchTerm] = useState('');
-  const [appliedDonorFilter, setAppliedDonorFilter] = useState('');
-  const normalizedDonorSearchTerm = donorSearchTerm.trim();
-  const canApplyDonorFilter =
-    normalizedDonorSearchTerm.length > 0 && normalizedDonorSearchTerm !== appliedDonorFilter;
   const user = useAuthStore((state) => state.user);
   const isAdminUser = Boolean(user && isAdmin(user.role));
   const showDonorFilter = isAdminUser;
-  const [statusOverrideMap, setStatusOverrideMap] = useState<Record<string, string>>({});
-  const [clubOverrideMap, setClubOverrideMap] = useState<Record<string, string>>({});
+  const [donorOptions, setDonorOptions] = useState<DonorNameOption[]>([]);
+  const [selectedDonorIds, setSelectedDonorIds] = useState<number[]>([]);
+  const [selectedMonthKey, setSelectedMonthKey] = useState('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
   const combineRole = useCombineAccessStore((state) => state.role);
@@ -322,75 +462,7 @@ const PaymentStatementPage = () => {
   const combineLoading = useCombineAccessStore((state) => state.loading);
   const combineError = useCombineAccessStore((state) => state.error);
   const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
-
-  const applyOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
-    setStatusOverrideMap((prev) => {
-      const next = updater(prev);
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(STATUS_OVERRIDES_STORAGE_KEY, JSON.stringify(next));
-        } catch {
-          // ignore storage errors
-        }
-      }
-      return next;
-    });
-  };
-
-  const applyClubOverrides = (updater: (prev: Record<string, string>) => Record<string, string>) => {
-    setClubOverrideMap((prev) => {
-      const next = updater(prev);
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(CLUB_OVERRIDES_STORAGE_KEY, JSON.stringify(next));
-        } catch {
-          // ignore storage errors
-        }
-      }
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      const stored = window.localStorage.getItem(STATUS_OVERRIDES_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (typeof parsed === 'object' && parsed !== null) {
-          const entries = Object.entries(parsed);
-          if (entries.length > 0) {
-            const normalized: Record<string, string> = {};
-            entries.forEach(([key, value]) => {
-              if (typeof value === 'string') {
-                normalized[key] = normalizeStatusLabel(value);
-              }
-            });
-            setStatusOverrideMap(normalized);
-            try {
-              window.localStorage.setItem(
-                STATUS_OVERRIDES_STORAGE_KEY,
-                JSON.stringify(normalized),
-              );
-            } catch {
-              // ignore storage errors
-            }
-          }
-        }
-      }
-      const clubStored = window.localStorage.getItem(CLUB_OVERRIDES_STORAGE_KEY);
-      if (clubStored) {
-        const parsedClub = JSON.parse(clubStored);
-        if (typeof parsedClub === 'object' && parsedClub !== null) {
-          setClubOverrideMap(parsedClub as Record<string, string>);
-        }
-      }
-    } catch {
-      // no-op
-    }
-  }, []);
+  const { balance: currentBalance } = useCurrentBalance();
 
   useEffect(() => {
     if (combineRole === null && !combineLoading && !combineError) {
@@ -411,49 +483,6 @@ const PaymentStatementPage = () => {
     };
   }, []);
 
-  const updateStatus = async (record: PaymentRecordEntry, label: string) => {
-    const paymentId = typeof record.id === 'number' ? record.id : null;
-    const registrationId = record.registration ?? null;
-    const transitionMap: Record<string, { payment?: string; registration?: string }> = {
-      [STATUS_LABEL_PAYMENT_RECEIVED]: { payment: 'success', registration: 'pending' },
-      [STATUS_LABEL_PAYMENT_NOT_RECEIVED]: { payment: 'pending', registration: 'pending' },
-    };
-    const transition = transitionMap[label];
-    if (!transition) {
-      return;
-    }
-    const operations: Promise<any>[] = [];
-    if (paymentId !== null && transition.payment) {
-      operations.push(api.patch(`payments/records/${paymentId}/`, { status: transition.payment }));
-    }
-    if (registrationId !== null && transition.registration) {
-      operations.push(
-        api.patch(`pooja/registrations/${registrationId}/`, { status: transition.registration }),
-      );
-    }
-    if (operations.length === 0) {
-      return;
-    }
-    await Promise.all(operations);
-  };
-
-  const handleStatusChange = async (record: PaymentRecordEntry, label: string) => {
-    const key = recordKey(record);
-    applyOverrides((prev) => ({ ...prev, [key]: label }));
-    try {
-      await updateStatus(record, label);
-      setRecordsVersion((prev) => prev + 1);
-      setRegistrationsVersion((prev) => prev + 1);
-    } catch (err) {
-      console.error('Failed to update status', err);
-      applyOverrides((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    }
-  };
-
   useEffect(() => {
     let isMounted = true;
     const loadRecords = async () => {
@@ -464,9 +493,6 @@ const PaymentStatementPage = () => {
           page_size: 250,
           ordering: '-created_at',
         };
-        if (appliedDonorFilter) {
-          params.donor = appliedDonorFilter;
-        }
         const response = await api.get('payments/records/', {
           params,
         });
@@ -491,7 +517,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [appliedDonorFilter, recordsVersion]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -501,9 +527,6 @@ const PaymentStatementPage = () => {
           page_size: 250,
           ordering: '-created_at',
         };
-        if (appliedDonorFilter) {
-          params.donor = appliedDonorFilter;
-        }
         const response = await api.get('pooja/registrations/', {
           params,
         });
@@ -523,7 +546,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [appliedDonorFilter, registrationsVersion]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -537,13 +560,7 @@ const PaymentStatementPage = () => {
 
     const loadCartSnapshots = async () => {
       try {
-        const params: Record<string, string> = {};
-        if (appliedDonorFilter) {
-          params.phone = appliedDonorFilter;
-        }
-        const response = await api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/', {
-          params: Object.keys(params).length ? params : undefined,
-        });
+        const response = await api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/');
         if (!isMounted) {
           return;
         }
@@ -561,22 +578,67 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [appliedDonorFilter, cartSnapshotsVersion, isAdminUser]);
+  }, [cartSnapshotsVersion, isAdminUser]);
 
-  const handleApplyDonorFilter = () => {
-    if (!isAdminUser || !canApplyDonorFilter) {
-      return;
-    }
-    setAppliedDonorFilter(normalizedDonorSearchTerm);
-  };
-
-  const handleClearDonorFilter = () => {
+  useEffect(() => {
     if (!isAdminUser) {
+      setDonorOptions([]);
+      setSelectedDonorIds([]);
       return;
     }
-    setDonorSearchTerm('');
-    setAppliedDonorFilter('');
-  };
+
+    let isMounted = true;
+    const loadDonors = async () => {
+      try {
+        const response = await api.get('auth/donors/', {
+          params: { page_size: 500 },
+        });
+        if (!isMounted) {
+          return;
+        }
+        const donors = Array.isArray(response.data)
+          ? response.data
+          : extractResults<DonorListEntry>(response.data);
+        const nextOptions: DonorNameOption[] = donors
+          .map((donor) => {
+            const rawName = (donor.user.name ?? '').trim();
+            const fallbackName = rawName || `Donor #${donor.user.id}`;
+            const phone = (donor.user.phone_number ?? '').trim();
+            const label = phone ? `${fallbackName} — ${phone}` : fallbackName;
+            return { id: donor.user.id, label };
+          })
+          .sort((a, b) => a.label.localeCompare(b.label));
+        if (!isMounted) {
+          return;
+        }
+        setDonorOptions(nextOptions);
+        setSelectedDonorIds((prev) =>
+          prev.filter((id) => nextOptions.some((option) => option.id === id)),
+        );
+      } catch (err) {
+        if (isMounted) {
+          console.error('Unable to load donors for payment statement', err);
+          setDonorOptions([]);
+          setSelectedDonorIds([]);
+        }
+      }
+    };
+
+    loadDonors();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdminUser]);
+
+  const selectedDonorLabels = useMemo(() => {
+    if (selectedDonorIds.length === 0 || donorOptions.length === 0) {
+      return [];
+    }
+    const lookup = new Map(donorOptions.map((option) => [option.id, option.label]));
+    return selectedDonorIds
+      .map((id) => lookup.get(id))
+      .filter((label): label is string => typeof label === 'string');
+  }, [selectedDonorIds, donorOptions]);
 
   const resolveStatusLabel = (record: PaymentRecordEntry) => {
     const status = (record.status ?? '').toLowerCase();
@@ -628,102 +690,104 @@ const PaymentStatementPage = () => {
     return [...records, ...registrationRecords, ...cartRecords];
   }, [records, registrations, cartSnapshots]);
 
-  const range = useMemo(
-    () => getTimeframeRange(referenceDateValue, timeframe),
-    [referenceDateValue, timeframe],
+  const filteredRecords = useMemo(() => {
+    let nextRecords = mergedRecords;
+
+    if (selectedDonorIds.length > 0) {
+      const selectedSet = new Set(selectedDonorIds);
+      nextRecords = nextRecords.filter((record) => {
+        const donorId = record.donor;
+        return typeof donorId === 'number' && selectedSet.has(donorId);
+      });
+    }
+
+    if (selectedMonthKey) {
+      nextRecords = nextRecords.filter(
+        (record) => getRecordMonthKey(record) === selectedMonthKey,
+      );
+    }
+
+    if (paymentStatusFilter === 'due') {
+      nextRecords = nextRecords.filter(
+        (record) => resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED,
+      );
+    } else if (paymentStatusFilter === 'paid') {
+      nextRecords = nextRecords.filter(
+        (record) => resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_RECEIVED,
+      );
+    }
+
+    return nextRecords;
+  }, [mergedRecords, selectedDonorIds, selectedMonthKey, paymentStatusFilter]);
+
+  const selectedMonthLabel = useMemo(
+    () =>
+      selectedMonthKey ? formatYearMonthLabel(selectedMonthKey) ?? selectedMonthKey : null,
+    [selectedMonthKey],
   );
 
-  const filteredRecords = useMemo(() => {
-    if (!mergedRecords.length) {
-      return [];
-    }
-    if (!range) {
-      return mergedRecords;
-    }
-    const isInRange = (value?: string | null) => {
-      if (!value) {
-        return false;
-      }
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) {
-        return false;
-      }
-      return parsed >= range.start && parsed < range.end;
-    };
-    return mergedRecords.filter(
-      (record) => isInRange(record.registration_start_date) || isInRange(record.created_at),
-    );
-  }, [mergedRecords, range]);
+  const summaryLabel = useMemo(() => {
+    const statusLabel =
+      paymentStatusFilter === 'due'
+        ? 'Due payments'
+        : paymentStatusFilter === 'paid'
+        ? 'Amount received'
+        : 'All payments';
+    return selectedMonthLabel ? `${statusLabel} • ${selectedMonthLabel}` : statusLabel;
+  }, [paymentStatusFilter, selectedMonthLabel]);
 
-  const recordKey = (record: PaymentRecordEntry) => record.id.toString();
-  const getStatusLabel = (record: PaymentRecordEntry) =>
-    statusOverrideMap[recordKey(record)] ?? resolveStatusLabel(record);
-  const getClubSelectionLabel = (record: PaymentRecordEntry) => {
-    const override = clubOverrideMap[recordKey(record)];
-    if (override) {
-      return override;
+  const downloadFilenameBase = useMemo(() => {
+    const parts = ['payment-statement'];
+    if (paymentStatusFilter !== 'all') {
+      parts.push(paymentStatusFilter);
     }
-    return record.registration_is_group_registration ? 'Yes' : 'No';
+    if (selectedMonthKey) {
+      parts.push(selectedMonthKey);
+    }
+    parts.push(formatFilenameDate(new Date()));
+    return parts.join('-');
+  }, [paymentStatusFilter, selectedMonthKey]);
+
+  const getDisplayedDueAmountValue = (record: PaymentRecordEntry) => {
+    const statusLabel = resolveStatusLabel(record);
+    if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+      const pendingAmount = parseNumeric(record.amount);
+      if (pendingAmount > 0) {
+        return pendingAmount;
+      }
+    }
+    return parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
   };
 
-const getDisplayedDueAmountValue = (record: PaymentRecordEntry) => {
-  const statusLabel = getStatusLabel(record);
-  if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
-    const pendingAmount = parseNumeric(record.amount);
-    if (pendingAmount > 0) {
-      return pendingAmount;
+  const getDisplayedPaidAmountValue = (record: PaymentRecordEntry) => {
+    const statusLabel = resolveStatusLabel(record);
+    if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+      return 0;
     }
-  }
-  return parseNumeric(record.pooja_due_amount ?? record.registration_total_amount);
-};
+    return parseNumeric(record.amount);
+  };
 
-const getDisplayedPaidAmountValue = (record: PaymentRecordEntry) => {
-  const statusLabel = getStatusLabel(record);
-  if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
-    return 0;
-  }
-  return parseNumeric(record.amount);
-};
-
-const buildTransactionDetails = (record: PaymentRecordEntry) => {
-  const pieces = [];
-  if (record.pooja_option) {
-    pieces.push(record.pooja_option);
-  }
-  if (record.transaction_reference) {
-    pieces.push(`Tx: ${record.transaction_reference}`);
-  }
-  if (record.registration_donor_name) {
-    pieces.push(`Booked by ${record.registration_donor_name}`);
-  }
-  return pieces.join(' • ') || '—';
-};
-
-  const formatFilenameDate = (value: Date) =>
-    value.toISOString().replace(/[:.]/g, '').replace(/-/g, '').slice(0, 15);
-
-  const clubValueToBool = (label: string) => label === 'Yes';
-
-  const handleClubChange = async (record: PaymentRecordEntry, label: string) => {
-    if (typeof record.registration !== 'number') {
-      return;
+  const resolveDonorDisplayLabel = (
+    record?: Partial<PaymentRecordEntry> | null,
+    fallbackDonorId?: number | null,
+  ) => {
+    if (!record) {
+      if (fallbackDonorId != null) {
+        return `Donor #${fallbackDonorId}`;
+      }
+      return 'Donor';
     }
-    const key = recordKey(record);
-    applyClubOverrides((prev) => ({ ...prev, [key]: label }));
-    try {
-      await api.patch(`pooja/registrations/${record.registration}/`, {
-        is_group_registration: clubValueToBool(label),
-      });
-      setRecordsVersion((prev) => prev + 1);
-      setRegistrationsVersion((prev) => prev + 1);
-    } catch (err) {
-      console.error('Failed to update club payment flag', err);
-      applyClubOverrides((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+    const trimmedName = (record.donor_name ?? record.registration_donor_name ?? '').trim();
+    if (trimmedName) {
+      return trimmedName;
     }
+    if (fallbackDonorId != null) {
+      return `Donor #${fallbackDonorId}`;
+    }
+    if (record.donor != null) {
+      return `Donor #${record.donor}`;
+    }
+    return 'Donor';
   };
 
   const buildDownloadRows = (rows: PaymentRecordEntry[]) =>
@@ -743,8 +807,8 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
       'Transaction ID': record.transaction_reference || '—',
       'Pooja Registered by': record.registration_donor_name ?? '—',
       'Pooja Booked by': record.donor_name ?? '—',
-      'Club Payment': getClubSelectionLabel(record),
-      Status: getStatusLabel(record),
+      'Club Payment': record.registration_is_group_registration ? 'Yes' : 'No',
+      Status: resolveStatusLabel(record),
     }));
 
   const handleDownloadPdf = async () => {
@@ -762,7 +826,7 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
         pageSize: 'A4',
         content: [
           { text: 'Payment Statement', style: 'header' },
-          { text: rangeLabel, style: 'subheader', margin: [0, 0, 0, 8] },
+          { text: summaryLabel, style: 'subheader', margin: [0, 0, 0, 8] },
           { text: `Records: ${filteredRecords.length}`, style: 'subheader' },
           {
               table: {
@@ -887,58 +951,141 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
     XLSX.writeFile(workbook, `${downloadFilenameBase}.xlsx`);
   };
 
-  const orderedRecords = useMemo(() => {
-    if (!filteredRecords.length) {
-      return filteredRecords;
-    }
-
-    const compareByTimestampDesc = (a: PaymentRecordEntry, b: PaymentRecordEntry) =>
-      getRecordTimestamp(b) - getRecordTimestamp(a);
-
-    return [...filteredRecords].sort(compareByTimestampDesc);
-  }, [filteredRecords]);
-
   const passbookEntries = useMemo(() => {
-    if (!filteredRecords.length) {
-      return [];
+    const sorted =
+      filteredRecords.length > 0
+        ? [...filteredRecords].sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+        : [];
+    const hasBalanceEntry = currentBalance !== null && currentBalance !== undefined;
+    const baseBalance = hasBalanceEntry ? Math.max(0, currentBalance) : 0;
+    const entries: PassbookEntry[] = [];
+
+    if (hasBalanceEntry) {
+      entries.push({
+        record: {
+          id: CURRENT_BALANCE_ENTRY_ID,
+          donor: null,
+          donor_name: null,
+          created_at: CURRENT_BALANCE_ENTRY_DATE,
+          registration_start_date: CURRENT_BALANCE_ENTRY_DATE,
+        },
+        dueAmount: 0,
+        paidAmount: 0,
+        closingDue: Math.max(0, baseBalance),
+        displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+        isCurrentBalanceEntry: true,
+      });
     }
-    const sorted = [...filteredRecords].sort(
-      (a, b) => getRecordTimestamp(a) - getRecordTimestamp(b),
-    );
-    let runningBalance = 0;
-    return sorted.map((record) => {
+
+    type DonorHistoryGroup = {
+      key: string;
+      donorId: number | null;
+      donorLabel: string;
+      totalDue: number;
+      totalPaid: number;
+      latestTimestamp: number;
+      latestDate: string | null;
+      latestTransactionReference: string | null;
+    };
+
+    const donorGroups = new Map<string, DonorHistoryGroup>();
+
+    sorted.forEach((record) => {
+      const donorId = record.donor ?? null;
+      const groupKey =
+        donorId !== null && donorId !== undefined ? `donor-${donorId}` : `record-${record.id}`;
       const dueAmount = getDisplayedDueAmountValue(record);
       const paidAmount = getDisplayedPaidAmountValue(record);
-      runningBalance += dueAmount - paidAmount;
-      return {
-        record,
-        dueAmount,
-        paidAmount,
-        closingDue: Math.max(0, runningBalance),
-      };
+      const timestamp = getRecordTimestamp(record);
+      const dateValue = record.registration_start_date ?? record.created_at ?? null;
+      const displayLabel = resolveDonorDisplayLabel(record, donorId);
+
+      const existing = donorGroups.get(groupKey);
+      if (existing) {
+        existing.totalDue += dueAmount;
+        existing.totalPaid += paidAmount;
+        if (timestamp >= existing.latestTimestamp) {
+          existing.latestTimestamp = timestamp;
+          existing.latestDate = dateValue;
+          existing.donorLabel = displayLabel;
+          existing.latestTransactionReference = record.transaction_reference ?? null;
+        }
+      } else {
+        donorGroups.set(groupKey, {
+          key: groupKey,
+          donorId,
+          donorLabel: displayLabel,
+          totalDue: dueAmount,
+          totalPaid: paidAmount,
+          latestTimestamp: timestamp,
+          latestDate: dateValue,
+          latestTransactionReference: record.transaction_reference ?? null,
+        });
+      }
     });
-  }, [filteredRecords, statusOverrideMap]);
+
+    const groupedHistory = Array.from(donorGroups.values()).sort(
+      (a, b) => a.latestTimestamp - b.latestTimestamp,
+    );
+
+    groupedHistory.forEach((group) => {
+      const donorClosingDue = Math.max(0, group.totalDue - group.totalPaid);
+      entries.push({
+        record: {
+          id: group.key,
+          donor: group.donorId,
+          donor_name: group.donorLabel,
+          created_at: group.latestDate,
+          registration_start_date: group.latestDate,
+          transaction_reference: group.latestTransactionReference,
+        },
+        dueAmount: group.totalDue,
+        paidAmount: group.totalPaid,
+        closingDue: donorClosingDue,
+      });
+    });
+
+    return entries;
+  }, [filteredRecords, currentBalance]);
+
+  const getEntryDateLabel = (entry: PassbookEntry) => {
+    const sourceDate =
+      entry.displayDate ??
+      entry.record.registration_start_date ??
+      entry.record.created_at ??
+      null;
+    return formatMonthYearFromDate(sourceDate);
+  };
+
+  const getEntryDonorNameLabel = (entry: PassbookEntry) => {
+    if (entry.isCurrentBalanceEntry) {
+      return '-';
+    }
+    return resolveDonorDisplayLabel(entry.record, entry.record.donor ?? null);
+  };
+
+  const getEntryTransactionDetailsLabel = (entry: PassbookEntry) => {
+    if (entry.isCurrentBalanceEntry) {
+      return '-';
+    }
+    const reference = entry.record.transaction_reference?.trim();
+    return reference ? reference : '—';
+  };
+
+  const getEntryAmountLabel = (entry: PassbookEntry, amount: number) =>
+    entry.isCurrentBalanceEntry ? '-' : formatCurrency(amount);
 
   const totalPaid = useMemo(
     () => filteredRecords.reduce((sum, record) => sum + getDisplayedPaidAmountValue(record), 0),
-    [filteredRecords, statusOverrideMap],
+    [filteredRecords],
   );
 
   const totalDue = useMemo(
     () =>
       filteredRecords.reduce((sum, record) => sum + getDisplayedDueAmountValue(record), 0),
-    [filteredRecords, statusOverrideMap],
+    [filteredRecords],
   );
 
-  const rangeLabel = useMemo(
-    () => buildRangeLabel(referenceDateValue, timeframe),
-    [referenceDateValue, timeframe],
-  );
-
-  const downloadFilenameBase = useMemo(() => {
-    const label = rangeLabel.replace(/\W+/g, '-').replace(/-+/g, '-').toLowerCase();
-    return `payment-statement-${label}-${formatFilenameDate(new Date())}`;
-  }, [rangeLabel]);
   const parentName = combinedTo?.name ?? 'Parent donor';
   const parentPhone = combinedTo?.phone ?? 'Phone not available';
   const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
@@ -977,14 +1124,9 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
         <div className="space-y-1 min-w-0">
           <h1 className="text-2xl font-semibold text-slate-800">Payment Statement</h1>
           <p className="text-sm text-slate-500">
-            {rangeLabel} • {filteredRecords.length} record
+            {summaryLabel} • {filteredRecords.length} record
             {filteredRecords.length === 1 ? '' : 's'}
           </p>
-          {appliedDonorFilter && (
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Filtering for donor <span className="text-slate-700">{appliedDonorFilter}</span>
-            </p>
-          )}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
@@ -1006,291 +1148,124 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-orange-200 bg-white/80 p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          {TIMEFRAME_FILTERS.map((filter) => (
-            <button
-              key={filter.value}
-              type="button"
-              onClick={() => setTimeframe(filter.value)}
-              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                timeframe === filter.value
-                  ? 'border-orange-600 bg-orange-600 text-white shadow-[0_10px_20px_-12px_rgba(234,88,12,0.95)]'
-                  : 'border-slate-200 text-slate-600 hover:border-orange-200 hover:text-orange-600'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        {showDonorFilter ? (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <label htmlFor="donor-filter" className="text-sm font-semibold text-slate-600">
-              Search By Donor Phone Number
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
+      <div className="rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm">
+        <div className="flex flex-wrap gap-6">
+          {showDonorFilter && (
+            <div className="flex-1 min-w-[260px] space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Filter by donor name
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <DonorNameMultiSelect
+                  options={donorOptions}
+                  selectedIds={selectedDonorIds}
+                  onToggleId={(value) =>
+                    setSelectedDonorIds((prev) =>
+                      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value],
+                    )
+                  }
+                  disabled={donorOptions.length === 0}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedDonorIds([])}
+                  disabled={selectedDonorIds.length === 0}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:border-orange-200 hover:text-orange-600 disabled:cursor-not-allowed disabled:text-slate-300"
+                >
+                  Clear
+                </button>
+              </div>
+              {selectedDonorIds.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  Showing records for {selectedDonorIds.length} donor
+                  {selectedDonorIds.length === 1 ? '' : 's'}
+                  {selectedDonorLabels.length > 0 ? `: ${selectedDonorLabels.join(', ')}` : ''}.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex-1 min-w-[220px] space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Filter by month
+            </p>
+            <div className="flex items-center gap-2">
               <input
-                id="donor-filter"
-                type="search"
-                value={donorSearchTerm}
-                onChange={(event) => setDonorSearchTerm(event.target.value)}
-                placeholder="e.g. 7894561231"
-                className="min-w-[220px] rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                type="date"
+                value={selectedMonthKey ? `${selectedMonthKey}-01` : ''}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!value) {
+                    setSelectedMonthKey('');
+                    return;
+                  }
+                  const [year, month] = value.split('-');
+                  if (year && month) {
+                    setSelectedMonthKey(`${year}-${month}`);
+                    return;
+                  }
+                  setSelectedMonthKey('');
+                }}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                placeholder="dd/mm/yyyy"
               />
               <button
                 type="button"
-                onClick={handleApplyDonorFilter}
-                disabled={!canApplyDonorFilter}
-                className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-orange-200"
-              >
-                Apply
-              </button>
-              <button
-                type="button"
-                onClick={handleClearDonorFilter}
-                disabled={!appliedDonorFilter}
-                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-orange-200 hover:text-orange-600 disabled:cursor-not-allowed disabled:text-slate-300"
+                onClick={() => setSelectedMonthKey('')}
+                disabled={!selectedMonthKey}
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
               >
                 Clear
               </button>
             </div>
+            <p className="text-xs text-slate-400">
+              Pick any date within the month (dd/mm/yyyy format).
+            </p>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-slate-500">
-            Donor view is read-only; admins can filter by other donors.
-          </p>
-        )}
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">No of Pooja</p>
-          <p className="text-2xl font-semibold text-slate-800">{filteredRecords.length}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Paid Amount</p>
-          <p className="text-2xl font-semibold text-slate-800">{formatCurrency(totalPaid)}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Due Amount</p>
-          <p className="text-2xl font-semibold text-slate-800">{formatCurrency(totalDue)}</p>
-        </div>
-      </div>
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-        {isAdminUser ? (
-          <>
-            <div className="hidden rounded-t-2xl md:block">
-              <div className="max-h-[720px] overflow-auto">
-                <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold">S.no</th>
-                      <th className="px-4 py-3 text-left font-semibold">Donor Id</th>
-                      <th className="px-4 py-3 text-left font-semibold">Donor Name</th>
-                      <th className="px-4 py-3 text-left font-semibold">Pooja</th>
-                      <th className="px-4 py-3 text-left font-semibold">Pooja Date</th>
-                      <th className="px-4 py-3 text-right font-semibold">Pooja Due Amount</th>
-                      <th className="px-4 py-3 text-right font-semibold">Paid Amount</th>
-                      <th className="px-4 py-3 text-left font-semibold">Transaction Id</th>
-                      <th className="px-4 py-3 text-left font-semibold">Pooja Registered by</th>
-                      <th className="px-4 py-3 text-left font-semibold">Pooja Booked by</th>
-                      <th className="px-4 py-3 text-center font-semibold">Club Payment</th>
-                      <th className="px-4 py-3 text-left font-semibold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {orderedRecords.map((record, idx) => {
-                      const statusKey = getStatusLabel(record);
-                      const statusClasses =
-                        STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
-                      const clubLabel = getClubSelectionLabel(record);
-                      const clubClasses = getClubBadgeClasses(clubLabel);
-                      const displayedDueAmount = getDisplayedDueAmountValue(record);
-                      return (
-                        <tr key={record.id}>
-                          <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
-                          <td className="px-4 py-3 text-slate-600">{record.donor ?? '—'}</td>
-                          <td className="px-4 py-3 text-slate-600">{record.donor_name || '—'}</td>
-                          <td className="px-4 py-3 text-slate-600">
-                            <div>{record.pooja_option || '—'}</div>
-                            {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {formatDisplayDate(record.registration_start_date)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                            {formatCurrency(displayedDueAmount)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                            {formatCurrency(getDisplayedPaidAmountValue(record))}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {record.transaction_reference || '—'}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {resolveRegisteredByLabel(record)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {resolveBookedByLabel(record)}
-                          </td>
-                          <td className="px-4 py-3 text-center font-semibold text-slate-800">
-                            {isAdminUser && typeof record.registration === 'number' ? (
-                              <select
-                                value={clubLabel}
-                                onChange={(event) => handleClubChange(record, event.target.value)}
-                                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide focus:outline-none ${clubClasses}`}
-                              >
-                                {CLUB_OPTIONS.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span
-                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${clubClasses}`}
-                              >
-                                {clubLabel}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {isAdminUser ? (
-                              <select
-                                value={statusKey}
-                                onChange={(event) =>
-                                  handleStatusChange(record, event.target.value)
-                                }
-                                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
-                              >
-                                {STATUS_OPTIONS.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span
-                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
-                              >
-                                {statusKey}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="flex flex-col md:hidden">
-              {orderedRecords.map((record, idx) => {
-                const statusKey = getStatusLabel(record);
-                const statusClasses =
-                  STATUS_STYLES[statusKey] ?? 'bg-slate-100 text-slate-700';
-                const clubLabel = getClubSelectionLabel(record);
-                const clubClasses = getClubBadgeClasses(clubLabel);
+          <div className="flex-1 min-w-[220px] space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Filter by payment status
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_STATUS_FILTERS.map((option) => {
+                const isActive = paymentStatusFilter === option.id;
                 return (
-                  <div
-                    key={record.id}
-                    className="border-b border-slate-100 px-4 py-4 last:border-b-0"
+                  <button
+                    type="button"
+                    key={option.id}
+                    onClick={() => setPaymentStatusFilter(option.id)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      isActive
+                        ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
+                    }`}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-700">
-                        #{idx + 1} •{' '}
-                        <span className="font-normal text-slate-500">
-                          {record.donor_name || '—'}
-                        </span>
-                      </p>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
-                      >
-                        {statusKey}
-                      </span>
-                    </div>
-                    <div className="mt-2 grid gap-2 text-xs text-slate-500">
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Donor ID</span>
-                        <span>{record.donor ?? '—'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Pooja</span>
-                        <span>{record.pooja_option || '—'}</span>
-                      </div>
-                      {renderUpcomingOccurrenceList(record.upcoming_occurrences)}
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Pooja Date</span>
-                        <span>{formatDisplayDate(record.registration_start_date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Due Amount</span>
-                        <span>{formatCurrency(getDisplayedDueAmountValue(record))}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Paid Amount</span>
-                        <span>{formatCurrency(getDisplayedPaidAmountValue(record))}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Transaction ID</span>
-                        <span className="text-slate-400">
-                          {record.transaction_reference || '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Pooja Registered by</span>
-                        <span className="text-slate-600">{resolveRegisteredByLabel(record)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Pooja Booked by</span>
-                        <span className="text-slate-600">{resolveBookedByLabel(record)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-600">Club Payment</span>
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-wide ${clubClasses}`}
-                        >
-                          {clubLabel}
-                        </span>
-                      </div>
-                      {isAdminUser && (
-                        <div className="mt-2">
-                          <select
-                            value={statusKey}
-                            onChange={(event) => handleStatusChange(record, event.target.value)}
-                            className={`w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses} focus:outline-none`}
-                          >
-                            {STATUS_OPTIONS.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      {isAdminUser && typeof record.registration === 'number' && (
-                        <div className="mt-2">
-                          <select
-                            value={getClubSelectionLabel(record)}
-                            onChange={(event) => handleClubChange(record, event.target.value)}
-                            className="w-full rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 focus:outline-none"
-                          >
-                            {CLUB_OPTIONS.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    {option.label}
+                  </button>
                 );
               })}
             </div>
-          </>
-        ) : (
-          <>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Passbook</p>
+            <p className="text-lg font-semibold text-slate-800">Payment history</p>
+          </div>
+          <p className="text-xs text-slate-500">
+            {passbookEntries.length} record{passbookEntries.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        {loading ? (
+          <div className="px-4 py-5 text-sm text-slate-500">Loading payment records…</div>
+        ) : error ? (
+          <div className="px-4 py-5 text-sm text-rose-600">{error}</div>
+        ) : passbookEntries.length ? (
+          <div className="px-4 py-3">
             <div className="hidden rounded-t-2xl md:block">
               <div className="max-h-[720px] overflow-auto">
                 <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
@@ -1298,6 +1273,7 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
                     <tr>
                       <th className="px-4 py-3 text-left font-semibold">S.no</th>
                       <th className="px-4 py-3 text-left font-semibold">Date</th>
+                      <th className="px-4 py-3 text-left font-semibold">Donor Name</th>
                       <th className="px-4 py-3 text-left font-semibold">Transaction Details</th>
                       <th className="px-4 py-3 text-right font-semibold">Due for current month</th>
                       <th className="px-4 py-3 text-right font-semibold">Amount received</th>
@@ -1306,19 +1282,16 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {passbookEntries.map((entry, idx) => (
-                      <tr key={entry.record.id}>
+                      <tr key={`${entry.record.id}-${idx}`}>
                         <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {buildTransactionDetails(entry.record)}
+                        <td className="px-4 py-3 text-slate-600">{getEntryDateLabel(entry)}</td>
+                        <td className="px-4 py-3 text-slate-600">{getEntryDonorNameLabel(entry)}</td>
+                        <td className="px-4 py-3 text-slate-600">{getEntryTransactionDetailsLabel(entry)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                          {getEntryAmountLabel(entry, entry.dueAmount)}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                          {formatCurrency(entry.dueAmount)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                          {formatCurrency(entry.paidAmount)}
+                          {getEntryAmountLabel(entry, entry.paidAmount)}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-800">
                           {formatCurrency(entry.closingDue)}
@@ -1332,29 +1305,31 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
             <div className="flex flex-col md:hidden">
               {passbookEntries.map((entry, idx) => (
                 <div
-                  key={`${entry.record.id}-mobile`}
+                  key={`${entry.record.id}-mobile-${idx}`}
                   className="border-b border-slate-100 px-4 py-4 last:border-b-0"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-700">
                       #{idx + 1} •{' '}
-                      <span className="font-normal text-slate-500">
-                        {formatDisplayDate(entry.record.created_at ?? entry.record.registration_start_date)}
-                      </span>
+                      <span className="font-normal text-slate-500">{getEntryDateLabel(entry)}</span>
                     </p>
                   </div>
                   <div className="mt-2 space-y-2 text-xs text-slate-500">
                     <div>
+                      <p className="font-semibold text-slate-600">Donor Name</p>
+                      <p className="text-slate-700">{getEntryDonorNameLabel(entry)}</p>
+                    </div>
+                    <div>
                       <p className="font-semibold text-slate-600">Transaction Details</p>
-                      <p className="text-slate-700">{buildTransactionDetails(entry.record)}</p>
+                      <p className="text-slate-700">{getEntryTransactionDetailsLabel(entry)}</p>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold text-slate-600">Due for current month</span>
-                      <span>{formatCurrency(entry.dueAmount)}</span>
+                      <span>{getEntryAmountLabel(entry, entry.dueAmount)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold text-slate-600">Amount received</span>
-                      <span>{formatCurrency(entry.paidAmount)}</span>
+                      <span>{getEntryAmountLabel(entry, entry.paidAmount)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold text-slate-600">Closing balance due</span>
@@ -1364,22 +1339,9 @@ const buildTransactionDetails = (record: PaymentRecordEntry) => {
                 </div>
               ))}
             </div>
-          </>
-        )}
-        {loading && (
-          <div className="px-4 py-5 text-sm text-slate-500">
-            Loading based on selected timeframe…
           </div>
-        )}
-        {!loading && !filteredRecords.length && !error && (
-          <div className="px-4 py-5 text-sm text-slate-500">
-            No payments found for this range.
-          </div>
-        )}
-        {error && (
-          <div className="px-4 py-5 text-sm text-rose-600">
-            {error}
-          </div>
+        ) : (
+          <div className="px-4 py-5 text-sm text-slate-500">No payments found.</div>
         )}
       </div>
     </div>

@@ -1,9 +1,6 @@
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import type { SVGProps } from 'react';
-import type { TDocumentDefinitions } from 'pdfmake/interfaces';
-import { loadPdfMake } from '../lib/pdfMakeLoader';
-
 import api, { extractResults } from '../lib/api';
 import { isAdmin, useAuthStore } from '../store/auth';
 import { DONATION_AMOUNT } from '../config/globalConstants';
@@ -34,7 +31,7 @@ interface ProfilePayload {
 }
 
 interface TodayPoojaRecord {
-  id: number;
+  id: number | string;
   pooja_reg_id?: string | null;
   start_date?: string | null;
   pooja_option_name?: string | null;
@@ -45,6 +42,33 @@ interface TodayPoojaRecord {
   members?: RegistrationMember[];
 }
 
+type CartSnapshotItemMember = {
+  name?: string | null;
+};
+
+interface CartSnapshotItem {
+  cartId?: string | null;
+  poojaName?: string | null;
+  poojaCode?: string | null;
+  bookingDate?: string | null;
+  customDayDate?: string | null;
+  dayOptionDescription?: string | null;
+  dayOptionLabel?: string | null;
+  dayOptionCode?: string | null;
+  dayOptionCategory?: string | null;
+  postPrasadam?: boolean | null;
+  members?: CartSnapshotItemMember[] | null;
+  fullName?: string | null;
+}
+
+interface CartSnapshotRecord {
+  donor_id?: number | null;
+  donor_name?: string | null;
+  donor_phone?: string | null;
+  items?: CartSnapshotItem[] | null;
+  updated_at?: string | null;
+}
+
 const joinDevoteeNames = (members?: RegistrationMember[]) => {
   if (!Array.isArray(members)) {
     return 'N/A';
@@ -53,14 +77,6 @@ const joinDevoteeNames = (members?: RegistrationMember[]) => {
     .map((member) => (member?.name ?? '').trim())
     .filter((name) => name.length > 0);
   return names.length > 0 ? names.join(', ') : 'N/A';
-};
-
-const resolvePoojaId = (pooja: TodayPoojaRecord) => {
-  const trimmed = (pooja.pooja_reg_id ?? '').trim();
-  if (trimmed) {
-    return trimmed;
-  }
-  return `#${pooja.id}`;
 };
 
 const formatBooleanLabel = (value?: boolean | null) => (value ? 'Yes' : 'No');
@@ -115,6 +131,85 @@ const formatDateTimeDisplay = (value?: string | null) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const extractSnapshotItemStartDate = (item: CartSnapshotItem) => {
+  const rawValue = `${item.customDayDate ?? item.bookingDate ?? ''}`.trim();
+  if (!rawValue) {
+    return null;
+  }
+  const parsed = new Date(rawValue);
+  if (!Number.isNaN(parsed.getTime())) {
+    return toLocalDateIso(parsed);
+  }
+  const match = rawValue.match(/\d{4}-\d{2}-\d{2}/);
+  if (match) {
+    return match[0];
+  }
+  return null;
+};
+
+const convertSnapshotMembers = (item: CartSnapshotItem) => {
+  const normalized: RegistrationMember[] = [];
+  if (Array.isArray(item.members)) {
+    item.members.forEach((member) => {
+      if (!member) {
+        return;
+      }
+      const name = `${member.name ?? ''}`.trim();
+      if (name) {
+        normalized.push({ name });
+      }
+    });
+  }
+  if (normalized.length === 0) {
+    const fallbackName = `${item.fullName ?? ''}`.trim();
+    if (fallbackName) {
+      normalized.push({ name: fallbackName });
+    }
+  }
+  return normalized;
+};
+
+const convertSnapshotItemToRecord = (
+  snapshot: CartSnapshotRecord,
+  item: CartSnapshotItem,
+  fallbackIndex: number,
+): TodayPoojaRecord | null => {
+  const startDate = extractSnapshotItemStartDate(item);
+  if (!startDate) {
+    return null;
+  }
+  const poojaLabel = `${item.poojaName ?? item.poojaCode ?? ''}`.trim();
+  const dayOptionLabel = `${item.dayOptionDescription ?? item.dayOptionLabel ?? item.dayOptionCode ?? ''}`.trim();
+  const donorKey = snapshot.donor_id ?? 'unknown';
+  const identifier = item.cartId?.trim();
+  const uniqueId = `${donorKey}-${identifier || `snapshot-${fallbackIndex}`}-${startDate}`;
+  return {
+    id: uniqueId,
+    pooja_reg_id: identifier || undefined,
+    start_date: startDate,
+    pooja_option_name: poojaLabel || undefined,
+    day_option_description: dayOptionLabel || undefined,
+    donor_name: snapshot.donor_name ?? undefined,
+    post_prasadam: item.postPrasadam ?? null,
+    created_at: snapshot.updated_at ?? undefined,
+    members: convertSnapshotMembers(item),
+  };
+};
+
+const flattenCartSnapshotRecords = (snapshots: CartSnapshotRecord[]) => {
+  const records: TodayPoojaRecord[] = [];
+  snapshots.forEach((snapshot) => {
+    const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+    items.forEach((item, index) => {
+      const record = convertSnapshotItemToRecord(snapshot, item, index);
+      if (record) {
+        records.push(record);
+      }
+    });
+  });
+  return records;
 };
 
 const IconBase = ({ children, ...props }: SVGProps<SVGSVGElement>) => (
@@ -242,41 +337,23 @@ const DashboardPage = () => {
       if (bHasTime) {
         return 1;
       }
-      return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
+      return String(a.id).localeCompare(String(b.id));
     });
     return filtered;
+  };
+
+  const fetchTodaySnapshotRecords = async () => {
+    const response = await api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/');
+    const snapshots: CartSnapshotRecord[] = Array.isArray(response.data) ? response.data : [];
+    return flattenCartSnapshotRecords(snapshots);
   };
 
   const loadTodayPoojas = async () => {
     try {
       setTodayPoojaLoading(true);
       setTodayPoojaError(null);
-      const response = await api.get('pooja/registrations/', { params: { page_size: 200 } });
-      const allRegistrations = extractResults<TodayPoojaRecord>(response.data);
-      const todayIso = toLocalDateIso(new Date());
-      const filtered = allRegistrations.filter((item) => {
-        if (!item?.start_date) {
-          return false;
-        }
-        return item.start_date.slice(0, 10) === todayIso;
-      });
-      filtered.sort((a, b) => {
-        const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NaN;
-        const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NaN;
-        const aHasTime = !Number.isNaN(aTime);
-        const bHasTime = !Number.isNaN(bTime);
-        if (aHasTime && bHasTime) {
-          return bTime - aTime;
-        }
-        if (aHasTime) {
-          return -1;
-        }
-        if (bHasTime) {
-          return 1;
-        }
-        return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
-      });
-      setTodayPoojas(filtered);
+      const records = await fetchTodaySnapshotRecords();
+      setTodayPoojas(selectTodayRegistrations(records));
     } catch (err) {
       console.error("Failed to load today's pooja registrations", err);
       const axiosError = err as AxiosError<{ detail?: string }>;
@@ -441,88 +518,6 @@ const DashboardPage = () => {
       setError('Unable to refresh dashboard data right now.');
     } finally {
       setRefreshing(false);
-    }
-  };
-
-  const handleDownloadTodayPoojas = async () => {
-    if (todayPoojas.length === 0) {
-      window.alert('No pooja registrations available for today to download.');
-      return;
-    }
-
-    try {
-      const pdfMakeInstance = await loadPdfMake();
-      if (!pdfMakeInstance?.createPdf) {
-        throw new Error('pdfMake is unavailable');
-      }
-
-      const tableBody = [
-        ['Pooja ID', 'Pooja Date', 'Pooja Name', 'Day Option', 'Devotee', 'Post Prasadam', 'Registered By', 'Registration Date'].map((header) => ({ text: header, style: 'tableHeader' })),
-        ...todayPoojas.map((pooja) => [
-          resolvePoojaId(pooja),
-          formatDateDisplay(pooja.start_date),
-          pooja.pooja_option_name?.trim() || 'N/A',
-          pooja.day_option_description?.trim() || 'N/A',
-          joinDevoteeNames(pooja.members),
-          formatBooleanLabel(pooja.post_prasadam),
-          resolveDonorName(pooja.donor_name),
-          formatDateTimeDisplay(pooja.created_at),
-        ]),
-      ];
-
-      const generatedOn = formatDateTimeDisplay(new Date().toISOString());
-      const todayLabel = new Date().toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      });
-
-      const docDefinition: TDocumentDefinitions = {
-        info: {
-          title: `Today's Pooja Details - ${todayLabel}`,
-        },
-        pageOrientation: 'landscape',
-        pageSize: 'A4',
-        pageMargins: [24, 24, 24, 24],
-        defaultStyle: {
-          fontSize: 9,
-        },
-        styles: {
-          header: {
-            fontSize: 16,
-            bold: true,
-          },
-          subheader: {
-            fontSize: 10,
-            color: '#475569',
-            margin: [0, 2, 0, 8],
-          },
-          tableHeader: {
-            bold: true,
-            fillColor: '#f1f5f9',
-          },
-        },
-        content: [
-          { text: "Today's Pooja Details", style: 'header', margin: [0, 0, 0, 4] },
-          { text: `Pooja registrations scheduled for ${todayLabel}`, style: 'subheader' },
-          { text: `Generated on: ${generatedOn}`, style: 'subheader' },
-          {
-            table: {
-              headerRows: 1,
-              widths: ['auto', 'auto', 'auto', 'auto', '*', 'auto', 'auto', 'auto'],
-              body: tableBody,
-            },
-            layout: 'lightHorizontalLines',
-          },
-        ],
-      };
-
-      pdfMakeInstance
-        .createPdf(docDefinition)
-        .download(`today-pooja-details-${toLocalDateIso(new Date())}.pdf`);
-    } catch (err) {
-      console.error('Failed to generate PDF', err);
-      window.alert('Unable to generate PDF right now. Please try again later.');
     }
   };
 
@@ -789,33 +784,6 @@ const DashboardPage = () => {
                   {todayPoojas.length}{' '}
                   {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
                 </span>
-                {isAdminUser && (
-                  <button
-                    onClick={handleDownloadTodayPoojas}
-                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-orange-500 to-pink-600 px-3 sm:px-4 py-2 text-sm font-medium text-white shadow-md transition hover:shadow-lg hover:from-orange-600 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                      className="h-4 w-4"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M7 5a2 2 0 012-2h6a2 2 0 012 2v14a2 2 0 01-2 2H9l-4-4V7a2 2 0 012-2z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M11 11h6M11 15h4"
-                      />
-                    </svg>
-                    Download Data
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -881,18 +849,6 @@ const DashboardPage = () => {
                             scope="col"
                             className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
                           >
-                            Pooja ID
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
-                          >
-                            Pooja Date
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
-                          >
                             Pooja Name
                           </th>
                           <th
@@ -935,12 +891,6 @@ const DashboardPage = () => {
                               index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
                             } hover:bg-orange-50 transition-colors duration-150`}
                           >
-                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm font-medium text-orange-700">
-                              {resolvePoojaId(pooja)}
-                            </td>
-                            <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm text-slate-700">
-                              {formatDateDisplay(pooja.start_date)}
-                            </td>
                             <td
                               className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-slate-700 max-w-xs truncate"
                               title={pooja.pooja_option_name?.trim() || 'N/A'}

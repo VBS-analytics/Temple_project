@@ -7,6 +7,9 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from payments.models import PaymentMode, PaymentRecord, PaymentStatus
+from pooja.models import PoojaOption, PoojaRegistration
+
 from .models import (
     DonorProfile,
     FamilyMember,
@@ -14,7 +17,7 @@ from .models import (
     OtpToken,
     User,
 )
-from .serializers import RegisterSerializer
+from .serializers import DonorProfileSerializer, RegisterSerializer
 
 SQLITE_DB_CONFIG = {
     "default": {
@@ -120,3 +123,55 @@ class DashboardMetricsViewTests(TestCase):
         client.force_authenticate(donor_user)
         response = client.get(reverse("dashboard-metrics"))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class DonorProfileCurrentBalanceSerializerTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            phone_number="8000000004",
+            name="Balance Donor",
+            password="donorpass4",
+        )
+        self.profile = DonorProfile.objects.get(user=self.user)
+        self.profile.custom_number = Decimal("50.00")
+        self.profile.save(update_fields=["custom_number"])
+
+        self.option = PoojaOption.objects.create(
+            code="TEST",
+            name="Test Pooja",
+            min_amount=Decimal("0.00"),
+            max_amount=Decimal("1000.00"),
+            default_amount=Decimal("0.00"),
+        )
+
+        today = timezone.localdate()
+        PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.option,
+            start_date=today,
+            total_amount=Decimal("150.00"),
+        )
+        PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.option,
+            start_date=today,
+            total_amount=Decimal("200.00"),
+        )
+
+        PaymentRecord.objects.create(
+            donor=self.user,
+            amount=Decimal("100.00"),
+            currency="INR",
+            mode=PaymentMode.NEFT,
+            status=PaymentStatus.SUCCESS,
+            payment_month=today.replace(day=1),
+        )
+
+    def test_calculates_current_month_summary(self):
+        serializer = DonorProfileSerializer(self.profile)
+        data = serializer.data
+        self.assertEqual(data["current_month_due"], "350.00")
+        self.assertEqual(data["current_month_payments"], "100.00")
+        self.assertEqual(data["calculated_current_balance"], "300.00")

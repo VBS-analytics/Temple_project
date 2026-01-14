@@ -1100,7 +1100,6 @@ const AdminMasterPage = () => {
   const handleEditPooja = (pooja: PoojaOption) => {
     setEditingPooja(pooja);
     poojaForm.reset({
-      code: pooja.code,
       poojaDescription: pooja.name,
       rate: pooja.default_amount ?? pooja.description ?? '',
       minRate: pooja.min_amount ?? '',
