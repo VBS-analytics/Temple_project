@@ -389,8 +389,16 @@ const PaymentPage = () => {
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
-  const { balance: currentBalance, monthlyDonation, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
-    useCurrentBalance();
+  const {
+    balance: currentBalance,
+    openingBalance,
+    currentMonthDue,
+    currentMonthPayments,
+    monthlyDonation,
+    loading: balanceLoading,
+    error: balanceError,
+    refresh: refreshBalance,
+  } = useCurrentBalance();
   const combineRole = useCombineAccessStore((state) => state.role);
   const combinedTo = useCombineAccessStore((state) => state.combinedTo);
   const combineLoading = useCombineAccessStore((state) => state.loading);
@@ -401,13 +409,31 @@ const PaymentPage = () => {
     [userHistory],
   );
 
-  const netPaymentAmount = Math.max(0, (paymentSnapshot?.totalAmount ?? 0) - (currentBalance ?? 0));
+  const cartTotalAmount = paymentSnapshot?.totalAmount ?? 0;
+  const runningBalance = openingBalance ?? currentBalance ?? 0;
+  const needToPayForPooja = Math.max(0, runningBalance + cartTotalAmount);
+  const netPaymentAmount = needToPayForPooja;
+  const updatedOpeningBalanceValue = runningBalance + cartTotalAmount - netPaymentAmount;
+  const updatedOpeningBalanceLabel = `₹ ${formatCurrency(updatedOpeningBalanceValue)}`;
   const lastPaymentAmountLabel = lastPaymentEntry
     ? `₹ ${formatCurrency(lastPaymentEntry.totalAmount)}`
     : '—';
   const lastPaymentDateLabel = lastPaymentEntry?.completedAt
     ? formatDate(lastPaymentEntry.completedAt)
     : '—';
+  const openingBalanceDisplay = balanceLoading
+    ? 'Loading…'
+    : openingBalance != null
+      ? `₹ ${formatCurrency(openingBalance)}`
+      : 'Not set';
+  const cartDueAmount = paymentSnapshot?.totalAmount ?? null;
+  const currentMonthDueLabel =
+    cartDueAmount !== null
+      ? formatCurrency(cartDueAmount)
+      : currentMonthDue != null
+        ? formatCurrency(currentMonthDue)
+        : '—';
+  const currentMonthPaymentsLabel = currentMonthPayments != null ? formatCurrency(currentMonthPayments) : '—';
   const monthlyDueAmount = monthlyDonation ?? currentBalance ?? null;
   const monthlyDueLabel = monthlyDueAmount !== null ? formatCurrency(monthlyDueAmount) : 'Not set';
   const parentName = combinedTo?.name ?? 'Parent donor';
@@ -597,7 +623,12 @@ const PaymentPage = () => {
       return;
     }
     const parsedAmount = Number(trimmedAmount);
-    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+    const requiredPayment = netPaymentAmount;
+    if (
+      Number.isNaN(parsedAmount) ||
+      parsedAmount < requiredPayment ||
+      (requiredPayment > 0 && parsedAmount <= 0)
+    ) {
       setAmountPaidError('Enter a valid amount paid.');
       return;
     }
@@ -627,14 +658,21 @@ const PaymentPage = () => {
     }
 
     addGeneralPaymentHistory(paymentSnapshot);
-    if (typeof currentBalance === 'number' && paymentSnapshot.totalAmount > 0) {
-      const updatedBalance = Math.max(0, currentBalance - paymentSnapshot.totalAmount);
+    const snapshotAmount = paymentSnapshot.totalAmount ?? 0;
+    const baseBalance =
+      typeof openingBalance === 'number'
+        ? openingBalance
+        : typeof currentBalance === 'number'
+          ? currentBalance
+          : null;
+    if (baseBalance !== null) {
+      const updatedBalance = baseBalance + snapshotAmount - parsedAmount;
       try {
         await api.put('auth/profile/', { custom_number: updatedBalance });
         refreshBalance();
       } catch (balanceError) {
-        console.error('Unable to refresh current balance after payment', balanceError);
-        setRegistrationError('Payment recorded but unable to refresh current balance. Please reload.');
+        console.error('Unable to refresh opening balance after payment', balanceError);
+        setRegistrationError('Payment recorded but unable to refresh opening balance. Please reload.');
       }
     }
     setPetalSeed((seed) => seed + 1);
@@ -750,29 +788,6 @@ const PaymentPage = () => {
 
         {showPaymentDetails && (
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ring-1 ring-orange-100">
-            <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</p>
-                  <p className="text-2xl font-semibold text-slate-900">
-                    {balanceLoading
-                      ? 'Loading…'
-                      : currentBalance !== null
-                        ? `₹ ${formatCurrency(currentBalance)}`
-                        : 'Not set'}
-                  </p>
-                  {balanceError && <p className="mt-1 text-xs text-rose-600">{balanceError}</p>}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Amount</p>
-                  <p className="text-xl font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Date</p>
-                  <p className="text-xl font-semibold text-slate-900">{lastPaymentDateLabel}</p>
-                </div>
-              </div>
-            </div>
             <h3 className="text-lg font-semibold text-slate-900">Complete Your Payment</h3>
             <p className="text-sm text-slate-600">Scan the QR code or use the account details to transfer the total amount.</p>
             <div className="mt-5 grid gap-6 md:grid-cols-2">
@@ -955,13 +970,35 @@ const PaymentPage = () => {
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Payment Page</h2>
-          <p className="text-sm text-slate-600">
-            Review the pooja registrations you saved from the cart to log a single consolidated payment.
-          </p>
         </div>
       </div>
       <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-700 shadow-sm">
         Click Payment to view the bank details, then tap Payment Completed after transferring funds.
+      </div>
+      <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opening Balance</p>
+            <p className="text-2xl font-semibold text-slate-900">{openingBalanceDisplay}</p>
+            {balanceError && (
+              <p className="text-xs text-rose-600">{balanceError}</p>
+            )}
+            <p className="text-[0.65rem] text-slate-500">
+              Opening Balance = Opening Balance + Current Month Due
+            </p>
+            <p className="text-[0.65rem] text-slate-500">
+              Current Month Due: ₹ {currentMonthDueLabel}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Amount</p>
+            <p className="text-xl font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Date</p>
+            <p className="text-xl font-semibold text-slate-900">{lastPaymentDateLabel}</p>
+          </div>
+        </div>
       </div>
       <div>{renderSummaryContent()}</div>
     </div>

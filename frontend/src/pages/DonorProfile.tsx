@@ -11,7 +11,6 @@ import type { CartItem } from '../store/cart';
 import type { RecurrenceKind } from '../types/recurrence';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { useMasterDataStore } from '../store/masterData';
-import { useCurrentBalance } from '../hooks/useCurrentBalance';
 
 // All interfaces remain the same
 interface ApiUser {
@@ -441,34 +440,6 @@ const buildCartMemberNames = (members?: CartItem['members']) => {
   return names.length > 0 ? names.join(', ') : '—';
 };
 
-const formatPlanDateLabel = (plan: RecurringPlan, todayIso: string) => {
-  const collectFuture = (value?: string | null) => {
-    if (!value) {
-      return null;
-    }
-    return value;
-  };
-
-  const candidates = [
-    collectFuture(plan.start_date),
-    collectFuture(plan.next_occurrence),
-    collectFuture(plan.one_time_date),
-  ].filter(Boolean) as string[];
-
-  let nextDate: string | null = null;
-  for (const candidate of candidates) {
-    if (candidate >= todayIso) {
-      if (!nextDate || candidate < nextDate) {
-        nextDate = candidate;
-      }
-    }
-  }
-
-  const fallback = plan.next_occurrence ?? plan.one_time_date ?? plan.start_date ?? '';
-  const pickDate = nextDate ?? fallback;
-  return pickDate ? formatDate(pickDate) : '—';
-};
-
 const getPlanMemberNames = (metadata?: RecurringPlan['metadata']) => {
   if (!metadata) {
     return [];
@@ -598,9 +569,6 @@ const DonorProfile = () => {
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
-  const { balance: currentBalance, loading: balanceLoading, error: balanceError, refresh: refreshBalance } =
-    useCurrentBalance();
-
   useEffect(() => {
     loadGothraOptions();
   }, [loadGothraOptions]);
@@ -687,7 +655,6 @@ const DonorProfile = () => {
         });
         setActivePausePlanId(null);
         await reloadRecurrencePlans();
-        await refreshBalance();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
@@ -697,7 +664,7 @@ const DonorProfile = () => {
         }));
       }
     },
-    [reloadRecurrencePlans, refreshBalance, todayIso, pauseDurationSelection],
+    [reloadRecurrencePlans, todayIso, pauseDurationSelection],
   );
 
   const handleResumePlan = useCallback(
@@ -711,7 +678,6 @@ const DonorProfile = () => {
         await api.post(`pooja/recurrence/plans/${planId}/resume/`);
         setActivePausePlanId(null);
         await reloadRecurrencePlans();
-        await refreshBalance();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
@@ -721,7 +687,7 @@ const DonorProfile = () => {
         }));
       }
     },
-    [reloadRecurrencePlans, refreshBalance],
+    [reloadRecurrencePlans],
   );
 
   const handleCancelPlan = useCallback(
@@ -740,7 +706,6 @@ const DonorProfile = () => {
         await api.post(`pooja/recurrence/plans/${plan.id}/cancel/`);
         setActivePausePlanId(null);
         await reloadRecurrencePlans();
-        await refreshBalance();
       } catch (error) {
         setRecurrenceError(extractErrorMessage(error));
       } finally {
@@ -750,7 +715,7 @@ const DonorProfile = () => {
         }));
       }
     },
-    [reloadRecurrencePlans, refreshBalance],
+    [reloadRecurrencePlans],
   );
 
   const handlePrepareRecurringPayment = useCallback(
@@ -1349,17 +1314,6 @@ const DonorProfile = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 sm:text-3xl">Donor Profile</h1>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">Review your donor details and manage your family members.</p>
-        </div>
-        <div className="flex items-end gap-3 sm:text-right">
-          <div className="flex flex-col items-end">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</span>
-            <span className="text-lg font-semibold text-orange-600">
-              {balanceLoading ? 'Loading...' : balanceError ? 'Unavailable' : formatCurrencyValue(currentBalance)}
-            </span>
-            {balanceError && (
-              <span className="text-[0.7rem] text-rose-600 capitalize">{balanceError}</span>
-            )}
-          </div>
         </div>
       </div>
 
@@ -2433,12 +2387,6 @@ const DonorProfile = () => {
                 <div className="md:hidden space-y-4">
                 {visibleRegistrations.map((registration) => {
                   const isEditingRegistration = editingRegistrationId === registration.id;
-                  const statusLabel = getRegistrationStatusLabel(
-                    registration,
-                    paymentRecordsByRegistration,
-                    paymentRecordsLoaded,
-                  );
-                  const statusClasses = getRegistrationStatusBadgeClasses(statusLabel);
                   return (
                     <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex justify-between items-start mb-3">
@@ -2453,39 +2401,11 @@ const DonorProfile = () => {
                             Edit Date
                           </button>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
-                          >
-                            {statusLabel}
-                          </span>
-                        </div>
-                        
+
                         <dl className="space-y-2 text-sm">
                           <div>
                             <dt className="text-xs text-slate-500">Pooja Name</dt>
                             <dd className="text-slate-700">{registration.pooja_option_name?.trim() || '—'}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Pooja Date</dt>
-                            <dd className="text-slate-700">
-                              {isEditingRegistration ? (
-                                <div className="flex flex-col gap-2">
-                                  <input
-                                    type="date"
-                                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                                    value={registrationEditDate}
-                                    onChange={(event) => setRegistrationEditDate(event.target.value)}
-                                    max="9999-12-31"
-                                  />
-                                  {registrationEditError && (
-                                    <span className="text-xs text-red-600">{registrationEditError}</span>
-                                  )}
-                                </div>
-                              ) : (
-                                formatDate(registration.start_date)
-                              )}
-                            </dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Day Option</dt>
@@ -2516,25 +2436,43 @@ const DonorProfile = () => {
                             </dd>
                           </div>
                         </dl>
-                        
+
                         {isEditingRegistration && (
-                          <div className="flex justify-end space-x-3 mt-4">
-                            <button
-                              type="button"
-                              onClick={cancelRegistrationEditing}
-                              className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                              disabled={registrationEditSubmitting}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={submitRegistrationEdit}
-                              className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
-                              disabled={registrationEditSubmitting}
-                            >
-                              {registrationEditSubmitting ? 'Saving...' : 'Save'}
-                            </button>
+                          <div className="mt-4 space-y-3">
+                            <div className="space-y-2 text-sm">
+                              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor={`mobile-date-${registration.id}`}>
+                                Pooja Date
+                              </label>
+                              <input
+                                id={`mobile-date-${registration.id}`}
+                                type="date"
+                                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                value={registrationEditDate}
+                                onChange={(event) => setRegistrationEditDate(event.target.value)}
+                                max="9999-12-31"
+                              />
+                              {registrationEditError && (
+                                <span className="text-xs text-red-600">{registrationEditError}</span>
+                              )}
+                            </div>
+                            <div className="flex justify-end space-x-3">
+                              <button
+                                type="button"
+                                onClick={cancelRegistrationEditing}
+                                className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                                disabled={registrationEditSubmitting}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={submitRegistrationEdit}
+                                className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
+                                disabled={registrationEditSubmitting}
+                              >
+                                {registrationEditSubmitting ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2550,24 +2488,16 @@ const DonorProfile = () => {
                         <tr>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja ID</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Name</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Date</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Day Option</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
-                          <th scope="col" className="px-4 py-3 text-left font-semibold">Status</th>
                           <th scope="col" className="px-4 py-3 text-left font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {visibleRegistrations.map((registration, index) => {
                           const isEditingRegistration = editingRegistrationId === registration.id;
-                          const statusLabel = getRegistrationStatusLabel(
-                            registration,
-                            paymentRecordsByRegistration,
-                            paymentRecordsLoaded,
-                          );
-                          const statusClasses = getRegistrationStatusBadgeClasses(statusLabel);
                           return (
                             <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
                               <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
@@ -2575,24 +2505,6 @@ const DonorProfile = () => {
                               </td>
                               <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
                                 {registration.pooja_option_name?.trim() || '—'}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                                {isEditingRegistration ? (
-                                  <div className="flex flex-col gap-2">
-                                    <input
-                                      type="date"
-                                      className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                      value={registrationEditDate}
-                                      onChange={(event) => setRegistrationEditDate(event.target.value)}
-                                      max="9999-12-31"
-                                    />
-                                    {registrationEditError && (
-                                      <span className="text-xs text-red-600">{registrationEditError}</span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  formatDate(registration.start_date)
-                                )}
                               </td>
                               <td
                                 className="px-4 py-3 text-slate-700"
@@ -2618,32 +2530,46 @@ const DonorProfile = () => {
                               >
                                 {formatRegistrationTimeline(registration)}
                               </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClasses}`}
-                                >
-                                  {statusLabel}
-                                </span>
-                              </td>
                               <td className="px-4 py-3 text-right min-w-[160px]">
                                 {isEditingRegistration ? (
-                                  <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={cancelRegistrationEditing}
-                                      className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
-                                      disabled={registrationEditSubmitting}
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={submitRegistrationEdit}
-                                      className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
-                                      disabled={registrationEditSubmitting}
-                                    >
-                                      {registrationEditSubmitting ? 'Saving...' : 'Save'}
-                                    </button>
+                                  <div className="space-y-3">
+                                    <div className="space-y-2 text-sm text-left">
+                                      <label
+                                        htmlFor={`desktop-date-${registration.id}`}
+                                        className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                      >
+                                        Pooja Date
+                                      </label>
+                                      <input
+                                        id={`desktop-date-${registration.id}`}
+                                        type="date"
+                                        className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                        value={registrationEditDate}
+                                        onChange={(event) => setRegistrationEditDate(event.target.value)}
+                                        max="9999-12-31"
+                                      />
+                                      {registrationEditError && (
+                                        <span className="text-xs text-red-600">{registrationEditError}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={cancelRegistrationEditing}
+                                        className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                                        disabled={registrationEditSubmitting}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={submitRegistrationEdit}
+                                        className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
+                                        disabled={registrationEditSubmitting}
+                                      >
+                                        {registrationEditSubmitting ? 'Saving...' : 'Save'}
+                                      </button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <button
@@ -2688,7 +2614,6 @@ const DonorProfile = () => {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   {pendingRecurringPlans.map((item) => {
-                    const serviceDate = item.customDayDate || item.bookingDate;
                     const membersLabel = buildCartMemberNames(item.members);
                     const amountLabel = formatCartAmount(item.amount);
                     return (
@@ -2710,13 +2635,7 @@ const DonorProfile = () => {
                             Cart
                           </span>
                         </div>
-                        <dl className="mt-4 grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
-                          <div>
-                            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                              Next occurrence
-                            </dt>
-                            <dd className="text-slate-800">{formatDate(serviceDate)}</dd>
-                          </div>
+                        <dl className="mt-4 grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
                           <div>
                             <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Members</dt>
                             <dd className="text-slate-800">{membersLabel}</dd>
@@ -2788,7 +2707,7 @@ const DonorProfile = () => {
                           plan.origin_registration_updated_at,
                         )
                       : null;
-                  const planPaymentStatusLabel =
+                  const rawPlanPaymentStatusLabel =
                     dueRegistration && dueRegistration.id
                       ? getRegistrationStatusLabel(
                           { id: dueRegistration.id, status: dueRegistration.status ?? undefined } as PoojaRegistration,
@@ -2796,6 +2715,8 @@ const DonorProfile = () => {
                           paymentRecordsLoaded,
                         )
                       : null;
+                  const planPaymentStatusLabel =
+                    rawPlanPaymentStatusLabel === STATUS_ADMIN_PENDING_LABEL ? null : rawPlanPaymentStatusLabel;
                   const planPaymentStatusClasses = planPaymentStatusLabel
                     ? getRegistrationStatusBadgeClasses(planPaymentStatusLabel)
                     : null;
@@ -2830,30 +2751,23 @@ const DonorProfile = () => {
                       </span>
                     </div>
 
-                    <div className="mt-4 space-y-2 text-sm text-slate-700">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-wider text-slate-500">Schedule</p>
-                          <p className="text-base font-semibold text-slate-900">
-                            {formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency)}
-                          </p>
-                        </div>
-                        {isRecurringPlan && (
-                          <button
-                            type="button"
-                            onClick={() => startEditingPlan(plan)}
-                            className="rounded border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:bg-slate-100"
-                          >
-                            Edit plan
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-slate-500">Next occurrence</p>
-                          <p className="text-sm font-medium text-slate-900">
-                            {formatPlanDateLabel(plan, todayIso)}
-                          </p>
+                      <div className="mt-4 space-y-2 text-sm text-slate-700">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-wider text-slate-500">Schedule</p>
+                            <p className="text-base font-semibold text-slate-900">
+                              {formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency)}
+                            </p>
+                          </div>
+                          {isRecurringPlan && (
+                            <button
+                              type="button"
+                              onClick={() => startEditingPlan(plan)}
+                              className="rounded border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:bg-slate-100"
+                            >
+                              Edit plan
+                            </button>
+                          )}
                         </div>
                         <div>
                           <p className="text-xs text-slate-500">Amount</p>
@@ -2861,7 +2775,6 @@ const DonorProfile = () => {
                             ₹ {formatPlanAmount(plan.amount)}
                           </p>
                         </div>
-                      </div>
                     </div>
 
                     {(plan.pause_from || plan.pause_until) && (
@@ -2884,7 +2797,7 @@ const DonorProfile = () => {
                       </p>
                     )}
                     {dueRegistration && (
-                      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
+                      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                             Due amount
@@ -2899,14 +2812,6 @@ const DonorProfile = () => {
                           </p>
                           <p className="text-sm font-semibold text-slate-900">
                             {formatCartAmount(dueRegistration.paid_amount)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                            Scheduled for
-                          </p>
-                          <p className="text-sm font-semibold text-slate-900">
-                            {dueRegistration.start_date ? formatDate(dueRegistration.start_date) : '—'}
                           </p>
                         </div>
                       </div>

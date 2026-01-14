@@ -262,9 +262,9 @@ const CombinePaymentPage = () => {
           await api.put('auth/profile/', { custom_number: updatedBalance });
           refreshBalance();
         } catch (balanceError) {
-          console.error('Unable to refresh current balance after combined payment', balanceError);
+          console.error('Unable to refresh opening balance after combined payment', balanceError);
           setSubmissionError(
-            'Payment recorded but unable to refresh current balance. Please reload the page.',
+            'Payment recorded but unable to refresh opening balance. Please reload the page.',
           );
         }
       }
@@ -508,7 +508,7 @@ const CombinePaymentPage = () => {
           <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Balance</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opening Balance</p>
                 <p className="text-2xl font-semibold text-slate-900">
                   {balanceLoading
                     ? 'Loading...'

@@ -1,12 +1,63 @@
-"""Serializers for accounts authentication and donor profile handling."""
+"\"\"\"Serializers for accounts authentication and donor profile handling.\"\"\""
+
+from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from pooja.models import PoojaRegistration
+from payments.models import PaymentRecord, PaymentStatus
+
 from .models import DonorProfile, FamilyMember, GothraOption, OtpPurpose, OtpToken, User
+
+
+def _start_of_next_month(value: date) -> date:
+    if value.month == 12:
+        return date(value.year + 1, 1, 1)
+    return date(value.year, value.month + 1, 1)
+
+
+def _current_month_bounds(reference: date | None = None) -> tuple[date, date]:
+    reference_date = reference or timezone.localdate()
+    start = reference_date.replace(day=1)
+    return start, _start_of_next_month(start)
+
+
+def _decimal_to_string(value: Decimal) -> str:
+    return str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _compute_monthly_summary_for_user(user: User) -> dict[str, Decimal]:
+    start, end = _current_month_bounds()
+    due_total = Decimal("0.00")
+    totals = (
+        PoojaRegistration.objects.filter(
+            donor=user,
+            start_date__gte=start,
+            start_date__lt=end,
+        )
+        .values_list("total_amount", flat=True)
+    )
+    for total_amount in totals:
+        due_total += Decimal(total_amount or 0)
+    raw_payments = (
+        PaymentRecord.objects.filter(
+            donor=user,
+            payment_month__gte=start,
+            payment_month__lt=end,
+            status=PaymentStatus.SUCCESS,
+        )
+        .aggregate(total=Sum("amount"))
+        .get("total")
+    )
+    payments_total = Decimal(raw_payments or 0)
+    return {"due": due_total, "payments": payments_total}
 
 
 def build_phone_candidates(phone_number: str | None) -> list[str]:
@@ -32,6 +83,13 @@ def build_phone_candidates(phone_number: str | None) -> list[str]:
 
 class DonorProfileSerializer(serializers.ModelSerializer):
     donor_id = serializers.SerializerMethodField()
+    current_month_due = serializers.SerializerMethodField()
+    current_month_payments = serializers.SerializerMethodField()
+    calculated_current_balance = serializers.SerializerMethodField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._monthly_summary_cache: dict[str, Decimal] | None = None
 
     class Meta:
         model = DonorProfile
@@ -53,8 +111,17 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "notes",
             "custom_number",
             "monthly_donation_amount",
+            "current_month_due",
+            "current_month_payments",
+            "calculated_current_balance",
         )
-        read_only_fields = ("donor_id", "monthly_donation_amount")
+        read_only_fields = (
+            "donor_id",
+            "monthly_donation_amount",
+            "current_month_due",
+            "current_month_payments",
+            "calculated_current_balance",
+        )
         extra_kwargs = {
             "gender": {"required": False, "allow_blank": True},
             "rasi": {"required": False, "allow_blank": True},
@@ -62,6 +129,31 @@ class DonorProfileSerializer(serializers.ModelSerializer):
 
     def get_donor_id(self, obj):
         return obj.donor_id
+
+    def _get_monthly_summary(self, user: User) -> dict[str, Decimal]:
+        if self._monthly_summary_cache is None:
+            self._monthly_summary_cache = _compute_monthly_summary_for_user(user)
+        return self._monthly_summary_cache
+
+    def _summary_for(self, obj: DonorProfile) -> dict[str, Decimal]:
+        user = getattr(obj, "user", None)
+        if user is None:
+            return {"due": Decimal("0.00"), "payments": Decimal("0.00")}
+        return self._get_monthly_summary(user)
+
+    def get_current_month_due(self, obj):
+        summary = self._summary_for(obj)
+        return _decimal_to_string(summary["due"])
+
+    def get_current_month_payments(self, obj):
+        summary = self._summary_for(obj)
+        return _decimal_to_string(summary["payments"])
+
+    def get_calculated_current_balance(self, obj):
+        summary = self._summary_for(obj)
+        opening = Decimal(getattr(obj, "custom_number", 0) or 0)
+        result = opening + summary["due"] - summary["payments"]
+        return _decimal_to_string(result)
 
 
 PROFILE_FIELDS = [
@@ -414,7 +506,10 @@ class PasswordResetSerializer(serializers.Serializer):
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DonorProfile
-        fields = DonorProfileSerializer.Meta.fields
+        fields = [
+            f for f in DonorProfileSerializer.Meta.fields
+            if f not in ("current_month_due", "current_month_payments", "calculated_current_balance")
+        ]
 
     def update(self, instance, validated_data):
         for field, value in validated_data.items():

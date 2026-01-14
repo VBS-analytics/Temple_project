@@ -22,6 +22,9 @@ interface DonorProfile {
   gender?: string;
   notes?: string | null;
   custom_number?: number | null;
+  current_month_due?: string | number | null;
+  current_month_payments?: string | number | null;
+  calculated_current_balance?: string | number | null;
 }
 
 interface DonorUser {
@@ -116,6 +119,7 @@ interface RegistrationRecord {
   additional_notes?: string | null;
   total_amount?: string | null;
   members?: RegistrationMember[];
+  cart_item?: Record<string, unknown> | null;
 }
 
 interface GroupedRegistrations {
@@ -165,6 +169,13 @@ const formatCurrency = (value?: string | null) => {
     return value;
   }
   return amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+};
+
+const toCurrencyString = (value?: string | number | null) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return String(value);
 };
 
 const normalizePhone = (value?: string | null) => (value ? value.replace(/\D/g, '') : '');
@@ -308,42 +319,11 @@ const DonorDetailsPage = () => {
   const [registrationGroups, setRegistrationGroups] = useState<GroupedRegistrations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [poojaRegistrationsCount, setPoojaRegistrationsCount] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<
     Record<number, { members: boolean; registrations: boolean; details: boolean }>
   >({});
-  const [memberFormVisible, setMemberFormVisible] = useState(false);
-  const [memberForm, setMemberForm] = useState({
-    name: '',
-    gender: '',
-    date_of_birth: '',
-    tamil_star: '',
-    gothra: '',
-    rasi: '',
-    family_name: '',
-    isOtherSelected: false,
-    customFamilyName: ''
-  });
-  const [memberError, setMemberError] = useState('');
-  const [memberSubmitting, setMemberSubmitting] = useState(false);
-  const [adminMembers, setAdminMembers] = useState<DonorMember[]>([]);
-  const [adminMembersError, setAdminMembersError] = useState('');
-  const [adminMembersLoading, setAdminMembersLoading] = useState(false);
-  const [editingAdminMemberId, setEditingAdminMemberId] = useState<number | null>(null);
-  const [adminMemberEditForm, setAdminMemberEditForm] = useState(() => ({
-    name: '',
-    gender: '',
-    tamil_star: '',
-    gothra: '',
-    date_of_birth: '',
-    family_name: '',
-    relationship: '',
-  }));
-  const [adminMemberEditError, setAdminMemberEditError] = useState('');
-  const [adminMemberEditSubmitting, setAdminMemberEditSubmitting] = useState(false);
-  const [adminMemberDeleteError, setAdminMemberDeleteError] = useState('');
-  const [adminMemberDeleteSubmitting, setAdminMemberDeleteSubmitting] = useState(false);
-  const [adminMemberDeleteId, setAdminMemberDeleteId] = useState<number | null>(null);
   const [editingDonorId, setEditingDonorId] = useState<number | null>(null);
   const [donorEditForm, setDonorEditForm] = useState<DonorEditFormState>(createEmptyDonorEditForm);
   const [donorEditError, setDonorEditError] = useState('');
@@ -384,143 +364,6 @@ const DonorDetailsPage = () => {
       return next;
     });
   }, [donors]);
-
-  const loadAdminMembers = useCallback(async () => {
-    setAdminMembersLoading(true);
-    setAdminMembersError('');
-    try {
-      const response = await api.get('auth/family-members/');
-      const payload = response.data as any;
-      const members: DonorMember[] = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.results)
-          ? payload.results
-          : [];
-      setAdminMembers(members);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail ?? err?.message ?? 'Unable to load admin members';
-      setAdminMembersError(typeof detail === 'string' && detail ? detail : 'Unable to load admin members');
-      setAdminMembers([]);
-    } finally {
-      setAdminMembersLoading(false);
-    }
-  }, []);
-
-  const resetMemberForm = () => {
-    setMemberForm({
-      name: '',
-      gender: '',
-      date_of_birth: '',
-      tamil_star: '',
-      gothra: '',
-      rasi: '',
-      family_name: '',
-      isOtherSelected: false,
-      customFamilyName: ''
-    });
-  };
-
-  const handleMemberChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = event.target;
-    if (name === 'family_name') {
-      const isOtherSelected = value === 'Other';
-      setMemberForm((prev) => ({
-        ...prev,
-        [name]: value,
-        isOtherSelected,
-        customFamilyName: isOtherSelected ? prev.customFamilyName : ''
-      }));
-    } else {
-      setMemberForm((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleMemberSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setMemberError('');
-
-    if (!memberForm.name.trim()) {
-      setMemberError('Name is required.');
-      return;
-    }
-
-    const payload: Record<string, string> = {
-      name: memberForm.name.trim(),
-    };
-
-    if (memberForm.gender) {
-      payload.gender = memberForm.gender;
-    }
-    if (memberForm.tamil_star) {
-      payload.tamil_star = memberForm.tamil_star;
-    }
-    if (memberForm.gothra) {
-      payload.gothra = memberForm.gothra;
-    }
-    if (memberForm.rasi) {
-      payload.rasi = memberForm.rasi;
-    }
-    if (memberForm.date_of_birth) {
-      payload.date_of_birth = memberForm.date_of_birth;
-    }
-    const finalFamilyName = memberForm.isOtherSelected
-      ? memberForm.customFamilyName.trim()
-      : memberForm.family_name.trim();
-    if (finalFamilyName) {
-      payload.family_name = finalFamilyName;
-    }
-
-    try {
-      setMemberSubmitting(true);
-      await api.post('auth/family-members/', payload);
-      await loadAdminMembers();
-
-      resetMemberForm();
-      setMemberFormVisible(false);
-    } catch (err: any) {
-      const detail = err?.response?.data ?? err?.message ?? 'Unable to add member';
-      setMemberError(typeof detail === 'string' ? detail : 'Unable to add member');
-    } finally {
-      setMemberSubmitting(false);
-    }
-  };
-
-  const resetAdminMemberEditForm = () => {
-    setAdminMemberEditForm({
-      name: '',
-      gender: '',
-      tamil_star: '',
-      gothra: '',
-      date_of_birth: '',
-      family_name: '',
-      relationship: '',
-    });
-  };
-
-  const startAdminMemberEdit = (member: DonorMember) => {
-    setEditingAdminMemberId(member.id);
-    setAdminMemberEditError('');
-    setAdminMemberEditForm({
-      name: member.name ?? '',
-      gender: member.gender ?? '',
-      tamil_star: member.tamil_star ?? '',
-      gothra: member.gothra ?? '',
-      date_of_birth: member.date_of_birth ?? '',
-      family_name: member.family_name ?? '',
-      relationship: member.relationship ?? '',
-    });
-  };
-
-  const handleAdminMemberEditChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = event.target;
-    setAdminMemberEditForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const cancelAdminMemberEdit = () => {
-    setEditingAdminMemberId(null);
-    setAdminMemberEditError('');
-    resetAdminMemberEditForm();
-  };
 
   const startDonorEdit = (record: DonorRecord) => {
     setEditingDonorId(record.user.id);
@@ -746,80 +589,17 @@ const DonorDetailsPage = () => {
     }
   };
 
-  const handleAdminMemberEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (editingAdminMemberId === null) {
-      return;
-    }
-
-    setAdminMemberEditError('');
-
-    if (!adminMemberEditForm.name.trim()) {
-      setAdminMemberEditError('Name is required.');
-      return;
-    }
-
-    const payload: Record<string, string | null> = {
-      name: adminMemberEditForm.name.trim(),
-      gender: adminMemberEditForm.gender,
-      tamil_star: adminMemberEditForm.tamil_star,
-      gothra: adminMemberEditForm.gothra,
-      family_name: adminMemberEditForm.family_name.trim(),
-      relationship: adminMemberEditForm.relationship.trim(),
-      date_of_birth: adminMemberEditForm.date_of_birth ? adminMemberEditForm.date_of_birth : null,
-    };
-
-    try {
-      setAdminMemberEditSubmitting(true);
-      const { data } = await api.put<DonorMember>(`auth/family-members/${editingAdminMemberId}/`, payload);
-      setAdminMembers((prev) => prev.map((item) => (item.id === data.id ? data : item)));
-      setEditingAdminMemberId(null);
-      resetAdminMemberEditForm();
-      setAdminMemberEditError('');
-    } catch (err: any) {
-      const detail = err?.response?.data ?? err?.message ?? 'Unable to update member';
-      setAdminMemberEditError(typeof detail === 'string' ? detail : 'Unable to update member');
-    } finally {
-      setAdminMemberEditSubmitting(false);
-    }
-  };
-
-  const handleAdminMemberDelete = async (memberId: number) => {
-    if (adminMemberDeleteSubmitting) {
-      return;
-    }
-
-    const confirmed = window.confirm('Are you sure you want to delete this member? This action cannot be undone.');
-    if (!confirmed) {
-      return;
-    }
-
-    setAdminMemberDeleteError('');
-    setAdminMemberDeleteSubmitting(true);
-    setAdminMemberDeleteId(memberId);
-
-    try {
-      await api.delete(`auth/family-members/${memberId}/`);
-      setAdminMembers((prev) => prev.filter((item) => item.id !== memberId));
-      if (editingAdminMemberId === memberId) {
-        setEditingAdminMemberId(null);
-        resetAdminMemberEditForm();
-      }
-    } catch (err: any) {
-      const detail = err?.response?.data ?? err?.message ?? 'Unable to delete member';
-      setAdminMemberDeleteError(typeof detail === 'string' ? detail : 'Unable to delete member');
-    } finally {
-      setAdminMemberDeleteSubmitting(false);
-      setAdminMemberDeleteId(null);
-    }
-  };
-
   const fetchRegistrations = useCallback(async (): Promise<GroupedRegistrations[]> => {
     let adminEndpointError = '';
 
     try {
       const response = await api.get('pooja/registrations/admin-overview/');
       const overview = normalizeAdminOverview(response.data);
+      const overviewRegistrationCount = overview.reduce(
+        (count, group) => count + group.registrations.length,
+        0,
+      );
+      setPoojaRegistrationsCount(overviewRegistrationCount);
       return overview;
     } catch (err: any) {
       const status = err?.response?.status;
@@ -862,6 +642,16 @@ const DonorDetailsPage = () => {
         nextUrl = normalizeNextUrl(nextResponse.data?.next);
       }
 
+      const summaryCount = Number(summaryResponse.data?.count ?? NaN);
+      const firstPageCount = Number(firstPageData?.count ?? NaN);
+      const registrationsCount =
+        Number.isFinite(summaryCount)
+          ? summaryCount
+          : Number.isFinite(firstPageCount)
+            ? firstPageCount
+            : dedupe.size;
+      setPoojaRegistrationsCount(registrationsCount);
+
       return groupRegistrationsByDonor(Array.from(dedupe.values()));
     } catch (err: any) {
       const fallbackDetail = err?.response?.data?.detail ?? err?.message ?? adminEndpointError;
@@ -877,6 +667,7 @@ const DonorDetailsPage = () => {
     const load = async () => {
       setLoading(true);
       setError('');
+      setPoojaRegistrationsCount(null);
       try {
         const [donorResponse, registrations] = await Promise.all([api.get('auth/donors/'), fetchRegistrations()]);
         const donorData = donorResponse.data as DonorRecord[];
@@ -898,8 +689,7 @@ const DonorDetailsPage = () => {
     };
 
     load();
-    loadAdminMembers();
-  }, [fetchRegistrations, loadAdminMembers]);
+  }, [fetchRegistrations]);
 
   const filteredDonors = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -996,6 +786,33 @@ const DonorDetailsPage = () => {
 
   const { totalRegistrations, donorsWithRegistrations, totalFamilyMembers, topLocations } = totals;
 
+  const totalCartRegistrations = useMemo(
+    () =>
+      registrationGroups.reduce(
+        (sum, group) =>
+          sum + group.registrations.filter((registration) => Boolean(registration.cart_item)).length,
+        0,
+      ),
+    [registrationGroups],
+  );
+
+  const displayedRegistrationCount = poojaRegistrationsCount ?? totalRegistrations;
+
+  const registrationsHelper =
+    totalCartRegistrations > 0
+      ? `${formatNumber(Math.round(totalCartRegistrations / Math.max(donors.length, 1)))} per donor (avg based on cart)`
+      : displayedRegistrationCount > 0
+        ? `${formatNumber(Math.round(displayedRegistrationCount / Math.max(donors.length, 1)))} per donor (avg)`
+        : 'No registrations recorded';
+
+  const totalPaidRegistrations = Math.max(totalRegistrations - totalCartRegistrations, 0);
+  const paymentsHelper =
+    totalPaidRegistrations > 0
+      ? `${formatNumber(Math.round(totalPaidRegistrations / Math.max(donors.length, 1)))} per donor (avg)`
+      : 'No paid registrations yet';
+
+  const registrationCardValue = totalCartRegistrations > 0 ? totalCartRegistrations : displayedRegistrationCount;
+
   const summaryCards = useMemo(
     () => [
       {
@@ -1048,11 +865,8 @@ const DonorDetailsPage = () => {
       },
       {
         label: 'Pooja Registrations',
-        value: formatNumber(totalRegistrations),
-        helper:
-          totalRegistrations > 0
-            ? `${formatNumber(Math.round(totalRegistrations / Math.max(donors.length, 1)))} per donor (avg)`
-            : 'No registrations recorded',
+        value: formatNumber(registrationCardValue),
+        helper: registrationsHelper,
         icon: (
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -1071,9 +885,9 @@ const DonorDetailsPage = () => {
         ),
       },
       {
-        label: 'Admin Added Members',
-        value: formatNumber(adminMembers.length),
-        helper: 'Centralised records created from this dashboard',
+        label: 'Payment',
+        value: formatNumber(totalPaidRegistrations),
+        helper: paymentsHelper,
         icon: (
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -1086,18 +900,39 @@ const DonorDetailsPage = () => {
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M12 4.5v15m7.5-7.5h-15"
+              d="M12 8c-1.657 0-3 1.343-3 3v2h6v-2c0-1.657-1.343-3-3-3z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M7 13v3a2 2 0 002 2h6a2 2 0 002-2v-3"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 7h14a2 2 0 012 2v1H3V9a2 2 0 012-2z"
             />
           </svg>
         ),
       },
     ],
-    [adminMembers.length, donors.length, donorsWithRegistrations, totalFamilyMembers, totalRegistrations],
+    [
+      donors.length,
+      donorsWithRegistrations,
+      totalFamilyMembers,
+      totalCartRegistrations,
+      totalRegistrations,
+      registrationsHelper,
+      totalPaidRegistrations,
+      paymentsHelper,
+      displayedRegistrationCount,
+      registrationCardValue,
+    ],
   );
 
   if (loading) {
     return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full flex flex-col items-center">
           <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mb-6"></div>
           <h3 className="text-xl font-semibold text-slate-800 mb-2">Loading Donor Details</h3>
@@ -1109,11 +944,11 @@ const DonorDetailsPage = () => {
 
   if (error) {
     return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full">
           <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77 1.333-2.694 1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
           <h3 className="text-xl font-semibold text-slate-800 text-center mb-2">Error Loading Data</h3>
@@ -1150,8 +985,8 @@ const DonorDetailsPage = () => {
                 </p>
               </div>
               
-              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                <div className="relative flex-1">
+              <div className="w-full md:w-auto">
+                <div className="relative">
                   <input
                     type="text"
                     placeholder="Search donors..."
@@ -1174,16 +1009,6 @@ const DonorDetailsPage = () => {
                     />
                   </svg>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMemberFormVisible(!memberFormVisible)}
-                  className={`flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-xl font-medium transition duration-200 text-sm sm:text-base ${memberFormVisible ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-md hover:shadow-lg'}`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  {memberFormVisible ? 'Cancel' : 'Add Member'}
-                </button>
               </div>
             </div>
 
@@ -1206,213 +1031,6 @@ const DonorDetailsPage = () => {
             </div>
           </div>
         </header>
-
-        {/* Add Member Form */}
-        {memberFormVisible && (
-          <div className="mb-6 sm:mb-8 md:mb-10 bg-white rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-4 sm:mb-6">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Add New Member</h2>
-            </div>
-            
-            <form onSubmit={handleMemberSubmit} className="space-y-4 sm:space-y-6">
-              {memberError && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-red-700">{memberError}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-name">
-                    Full Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="member-name"
-                    name="name"
-                    type="text"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.name}
-                    onChange={handleMemberChange}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-dob">
-                    Date of Birth
-                  </label>
-                  <input
-                    id="member-dob"
-                    name="date_of_birth"
-                    type="date"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.date_of_birth}
-                    onChange={handleMemberChange}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-gender">
-                    Gender
-                  </label>
-                  <select
-                    id="member-gender"
-                    name="gender"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.gender}
-                    onChange={handleMemberChange}
-                  >
-                    <option value="">Select gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-star">
-                    Tamil Star
-                  </label>
-                  <select
-                    id="member-star"
-                    name="tamil_star"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.tamil_star}
-                    onChange={handleMemberChange}
-                  >
-                    <option value="">Select Nakshatra</option>
-                    {tamilStarOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-rasi">
-                    Rasi
-                  </label>
-                  <select
-                    id="member-rasi"
-                    name="rasi"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.rasi}
-                    onChange={handleMemberChange}
-                  >
-                    <option value="">Select Rasi</option>
-                    {rasiOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-gothra">
-                    Gothram
-                  </label>
-                  <select
-                    id="member-gothra"
-                    name="gothra"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.gothra}
-                    onChange={handleMemberChange}
-                  >
-                    <option value="">Select Gothram</option>
-                    {gothraOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-family">
-                    Family Name
-                  </label>
-                  <select
-                    id="member-family"
-                    name="family_name"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                    value={memberForm.family_name}
-                    onChange={handleMemberChange}
-                  >
-                    <option value="">Select family name</option>
-                    <option value="Arunachalam-Sambasiva Iyr">Arunachalam-Sambasiva Iyr</option>
-                    <option value="Kadakarar Subramani Iyr">Kadakarar Subramani Iyr</option>
-                    <option value="Sundaresa Iyr+ Pannai+Balu Fmly">Sundaresa Iyr+ Pannai+Balu Fmly</option>
-                    <option value="Narayanswamy fmly">Narayanswamy fmly</option>
-                    <option value="Mangalam Periyamma Fmly">Mangalam Periyamma Fmly</option>
-                    <option value="Koorakattu Fmly">Koorakattu Fmly</option>
-                    <option value="RamaniSastri Fmly">RamaniSastri Fmly</option>
-                    <option value="Pichu Iyr Fmly">Pichu Iyr Fmly</option>
-                    <option value="Pattamani Iyr Fmly">Pattamani Iyr Fmly</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                {memberForm.isOtherSelected && (
-                  <div className="sm:col-span-2 lg:col-span-3">
-                    <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="member-custom-family">
-                      Custom Family Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="member-custom-family"
-                      name="customFamilyName"
-                      type="text"
-                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                      value={memberForm.customFamilyName}
-                      onChange={handleMemberChange}
-                      placeholder="Enter custom family name"
-                      required={memberForm.isOtherSelected}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setMemberFormVisible(false)}
-                  className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 text-sm sm:text-base order-2 sm:order-1"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={memberSubmitting}
-                  className="px-5 py-2.5 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base order-1 sm:order-2"
-                >
-                  {memberSubmitting ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Adding...
-                    </span>
-                  ) : 'Add Member'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
 
         {/* Donor List */}
         <div className="space-y-4 sm:space-y-6">
@@ -1634,7 +1252,7 @@ const DonorDetailsPage = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mb-2">
                           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor={`donor-inline-number-${user.id}`}>
-                            Current Balance
+                            Opening Balance
                           </label>
                           <div className="flex items-center gap-2">
                             <input
@@ -1911,11 +1529,11 @@ const DonorDetailsPage = () => {
                                     ></textarea>
                                   </div>
                                   <div>
-                                    <label
-                                      className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1"
-                                      htmlFor={`donor-custom-number-${user.id}`}
-                                    >
-                                      Current Balance
+                                  <label
+                                    className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1"
+                                    htmlFor={`donor-custom-number-${user.id}`}
+                                  >
+                                    Opening Balance
                                     </label>
                                     <input
                                       id={`donor-custom-number-${user.id}`}
@@ -2432,312 +2050,6 @@ const DonorDetailsPage = () => {
             );
           })}
         </div>
-
-        {/* Admin Members Section */}
-        <section className="mt-6 sm:mt-8 md:mt-10 bg-white rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Admin-Added Members</h2>
-                <p className="text-slate-600 text-sm">Members created directly through this admin panel</p>
-              </div>
-            </div>
-            <span className="inline-flex items-center rounded-full bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 self-start sm:self-auto">
-              {adminMembers.length} member{adminMembers.length === 1 ? '' : 's'}
-            </span>
-          </div>
-
-          <div className="mt-4 sm:mt-6">
-            {adminMembersLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-              </div>
-            ) : adminMembersError ? (
-              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-red-700">{adminMembersError}</p>
-                  </div>
-                </div>
-              </div>
-            ) : adminMembers.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-slate-800 mb-1">No Admin Members Yet</h3>
-                <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base">Add new members using the "Add Member" button at the top of the page.</p>
-              </div>
-            ) : (
-              <div>
-                {adminMemberDeleteError && (
-                  <div className="mb-4">
-                    <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm text-red-700">{adminMemberDeleteError}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="divide-y divide-slate-200">
-                  {adminMembers.map((member) => {
-                    const isEditing = editingAdminMemberId === member.id;
-                    const isDeleting = adminMemberDeleteSubmitting && adminMemberDeleteId === member.id;
-                    return (
-                      <div key={member.id} className="py-5">
-                        {isEditing ? (
-                          <form onSubmit={handleAdminMemberEditSubmit} className="space-y-5">
-                          {adminMemberEditError && (
-                            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                              <div className="flex">
-                                <div className="flex-shrink-0">
-                                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                  </svg>
-                                </div>
-                                <div className="ml-3">
-                                  <p className="text-sm text-red-700">{adminMemberEditError}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-name-${member.id}`}>
-                                Full Name <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                id={`admin-member-name-${member.id}`}
-                                name="name"
-                                type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.name}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                                required
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-dob-${member.id}`}>
-                                Date of Birth
-                              </label>
-                              <input
-                                id={`admin-member-dob-${member.id}`}
-                                name="date_of_birth"
-                                type="date"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.date_of_birth}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-gender-${member.id}`}>
-                                Gender
-                              </label>
-                              <select
-                                id={`admin-member-gender-${member.id}`}
-                                name="gender"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.gender}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                              >
-                                <option value="">Select gender</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                                <option value="Other">Other</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-star-${member.id}`}>
-                                Tamil Star
-                              </label>
-                              <input
-                                id={`admin-member-star-${member.id}`}
-                                name="tamil_star"
-                                type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.tamil_star}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-gothra-${member.id}`}>
-                                Gothram
-                              </label>
-                              <select
-                                id={`admin-member-gothra-${member.id}`}
-                                name="gothra"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.gothra}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                              >
-                                <option value="">Select Gothram</option>
-                                  {gothraOptions.map((option) => (
-                                    <option key={option} value={option}>
-                                      {option}
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor={`admin-member-family-${member.id}`}>
-                                Family Name
-                              </label>
-                              <input
-                                id={`admin-member-family-${member.id}`}
-                                name="family_name"
-                                type="text"
-                                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none transition duration-200 text-sm sm:text-base"
-                                value={adminMemberEditForm.family_name}
-                                onChange={handleAdminMemberEditChange}
-                                disabled={adminMemberEditSubmitting || isDeleting}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-3 pt-2">
-                            <button
-                              type="submit"
-                              className="px-5 py-2.5 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 shadow-md hover:shadow-lg transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
-                              disabled={adminMemberEditSubmitting || isDeleting}
-                            >
-                              {adminMemberEditSubmitting ? (
-                                <span className="flex items-center gap-2">
-                                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                  Saving...
-                                </span>
-                              ) : 'Save Changes'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelAdminMemberEdit}
-                              className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 text-sm sm:text-base"
-                              disabled={adminMemberEditSubmitting || isDeleting}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAdminMemberDelete(member.id)}
-                              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
-                              disabled={isDeleting || adminMemberEditSubmitting}
-                            >
-                              {isDeleting ? (
-                                <span className="flex items-center gap-2">
-                                  <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                  Deleting...
-                                </span>
-                              ) : (
-                                <>
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 11v6M14 11v6" />
-                                  </svg>
-                                  Delete
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-sky-50 flex items-center justify-center">
-                              <span className="text-lg font-bold text-sky-700">{member.name.charAt(0)}</span>
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-slate-800">{member.name}</h3>
-                              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 mt-2 text-sm text-slate-600">
-                                <span>Gender: {member.gender || 'N/A'}</span>
-                                <span>Star: {member.tamil_star || 'N/A'}</span>
-                                <span>Gothram: {member.gothra || 'N/A'}</span>
-                                <span>DOB: {formatDonorDate(member.date_of_birth)}</span>
-                                <span>Family: {member.family_name || 'N/A'}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2 sm:gap-3">
-                            <button
-                              type="button"
-                              onClick={() => startAdminMemberEdit(member)}
-                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
-                              disabled={isDeleting}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAdminMemberDelete(member.id)}
-                              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 transition duration-200 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
-                              disabled={isDeleting}
-                            >
-                              {isDeleting ? (
-                                <span className="flex items-center gap-2">
-                                  <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                  Deleting...
-                                </span>
-                              ) : (
-                                <>
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-4 0a1 1 0 00-1 1v1h6V4a1 1 0 00-1-1m-4 0h4" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 11v6M14 11v6" />
-                                  </svg>
-                                  Delete
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
       </div>
     </div>
   );

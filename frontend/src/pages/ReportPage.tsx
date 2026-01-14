@@ -388,12 +388,12 @@ const REPORT_TABS: { key: ReportTabKey; label: string; description: string }[] =
   },
 ];
 
-const CURRENT_BALANCE_HEADERS: string[] = [
+const OPENING_BALANCE_HEADERS: string[] = [
   'S.no',
   'Donor ID',
   'Name',
   'Phone',
-  'Current Balance',
+  'Opening Balance',
 ] as const;
 
 const DATABASE_BUTTON_INFO = [
@@ -418,9 +418,9 @@ const DATABASE_BUTTON_INFO = [
       'Provides a compact list of temple donor IDs, names, and phone numbers for quick reference.',
   },
   {
-    label: 'Current Balance',
+    label: 'Opening Balance',
     description:
-      'Exports each donor\'s current balance to help review outstanding pledges or credits.',
+      'Exports each donor\'s opening balance to help review outstanding pledges or credits.',
   },
 ] as const;
 
@@ -783,7 +783,7 @@ const ReportPage = () => {
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [exportingCurrentBalance, setExportingCurrentBalance] = useState(false);
+  const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTabKey>('database');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -1058,11 +1058,11 @@ const ReportPage = () => {
     }
   }, [exportingDonorDetails, fetchDonors]);
 
-  const handleCurrentBalanceDownload = useCallback(async () => {
-    if (exportingCurrentBalance) return;
+  const handleOpeningBalanceDownload = useCallback(async () => {
+    if (exportingOpeningBalance) return;
 
     setExportError(null);
-    setExportingCurrentBalance(true);
+    setExportingOpeningBalance(true);
 
     try {
       const donors = await fetchDonors();
@@ -1076,27 +1076,27 @@ const ReportPage = () => {
         'Donor ID': displayValue(donor.profile?.donor_id),
         Name: displayValue(donor.user.name),
         Phone: displayValue(donor.user.phone_number),
-        'Current Balance': donor.profile?.custom_number ?? null,
+        'Opening Balance': donor.profile?.custom_number ?? null,
       }));
 
       const workbook = XLSX.utils.book_new();
-      const sheet = XLSX.utils.json_to_sheet(rows, { header: CURRENT_BALANCE_HEADERS });
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Current Balance');
+      const sheet = XLSX.utils.json_to_sheet(rows, { header: OPENING_BALANCE_HEADERS });
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Opening Balance');
 
-      downloadWorkbook(workbook, `current-balance-${formatFilenameDate(new Date())}.xlsx`);
+      downloadWorkbook(workbook, `opening-balance-${formatFilenameDate(new Date())}.xlsx`);
     } catch (error) {
       const detail =
         (error as AxiosError<{ detail?: string | null }>)?.response?.data?.detail ?? null;
-      console.error('Failed to download current balance report', error);
+      console.error('Failed to download opening balance report', error);
       if (typeof detail === 'string' && detail.length > 0) {
         setExportError(detail);
       } else {
-        setExportError('Unable to download the current balance report right now.');
+        setExportError('Unable to download the opening balance report right now.');
       }
     } finally {
-      setExportingCurrentBalance(false);
+      setExportingOpeningBalance(false);
     }
-  }, [exportingCurrentBalance, fetchDonors]);
+  }, [exportingOpeningBalance, fetchDonors]);
 
   const downloadPoojaReport = useCallback(
     async (key: PoojaReportKey, format: PoojaReportFormat) => {
@@ -1175,9 +1175,9 @@ const ReportPage = () => {
     [exportingPoojaRegistrationDatabase],
   );
 
-  const currentBalanceLabel = useMemo(
-    () => (exportingCurrentBalance ? 'Preparing download…' : 'Current Balance'),
-    [exportingCurrentBalance],
+  const openingBalanceLabel = useMemo(
+    () => (exportingOpeningBalance ? 'Preparing download…' : 'Opening Balance'),
+    [exportingOpeningBalance],
   );
 
   const openReportFormatDialog = useCallback(
@@ -1334,11 +1334,11 @@ const ReportPage = () => {
 
               <button
                 type="button"
-                onClick={handleCurrentBalanceDownload}
-                disabled={exportingCurrentBalance}
+                onClick={handleOpeningBalanceDownload}
+                disabled={exportingOpeningBalance}
                 className={OUTLINE_BUTTON_CLASSES}
               >
-                {currentBalanceLabel}
+                {openingBalanceLabel}
               </button>
             </div>
             
