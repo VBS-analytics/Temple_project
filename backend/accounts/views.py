@@ -3,11 +3,13 @@
 from decimal import Decimal
 import secrets
 
-from django.db.models import Max, Sum
+from django.db.models import Max, OuterRef, Subquery, Sum
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from payments.models import PaymentRecord, PaymentStatus
 
 from .models import DonorProfile, FamilyMember, GothraOption, User, UserRole
 from .serializers import (
@@ -249,10 +251,21 @@ class DonorListView(APIView):
     def get(self, request):
         if request.user.role != UserRole.ADMIN:
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        latest_payment_subquery = Subquery(
+            PaymentRecord.objects.filter(
+                donor=OuterRef('pk'),
+                status=PaymentStatus.SUCCESS,
+            )
+            .order_by('-created_at')
+            .values('created_at')[:1]
+        )
+
         donors = (
             User.objects.filter(role=UserRole.DONOR)
             .select_related('profile')
             .prefetch_related('family_members')
+            .annotate(latest_payment_date=latest_payment_subquery)
         )
         payload = []
         for donor in donors:

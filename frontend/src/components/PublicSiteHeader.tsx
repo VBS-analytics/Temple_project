@@ -24,11 +24,13 @@ const navLinks: NavLinkItem[] = [
       { label: 'Family Tree', href: '/about#family-tree', type: 'route' }
     ]
   },
-  { label: 'Darshan & Pooja', href: '#darshan', type: 'anchor' },
-  { label: 'Gallery', href: '/gallery', type: 'route' },
-  { label: 'Visit', href: '#visit', type: 'anchor' },
-  { label: 'Events', href: '/events', type: 'route' },
-  { label: 'Projects', href: '/projects', type: 'route' }
+  { label: 'About Kakkalani Village', href: '/about-kakkalani-village', type: 'route' },
+  {
+    label: 'Why we should visit our village',
+    href: '/why-visit-native-village',
+    type: 'route'
+  },
+  { label: 'History of Kakkalani', href: '/history', type: 'route' }
 ];
 
 const resolveAnchorTo = (hash: string): To => ({

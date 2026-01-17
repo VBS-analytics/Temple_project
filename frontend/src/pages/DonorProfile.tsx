@@ -7,8 +7,8 @@ import api, { extractResults } from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import { useCartStore } from '../store/cart';
-import type { CartItem } from '../store/cart';
-import type { RecurrenceKind } from '../types/recurrence';
+import type { CartItem, CartMember } from '../store/cart';
+import type { RecurrenceFrequency, RecurrenceKind } from '../types/recurrence';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { useMasterDataStore } from '../store/masterData';
 
@@ -459,6 +459,63 @@ const getPlanMemberNames = (metadata?: RecurringPlan['metadata']) => {
   });
 };
 
+const buildRecurringPlanMembers = (plan: RecurringPlan, fallbackName?: string | null) => {
+  const planMembers = getPlanMemberNames(plan.metadata);
+  const entries: CartMember[] = planMembers.map((name) => ({ id: null, name }));
+  if (entries.length === 0 && fallbackName) {
+    entries.push({ id: null, name: fallbackName });
+  }
+  return entries;
+};
+
+const resolveRecurringPlanAmount = (plan: RecurringPlan) => {
+  const dueRegistration = plan.due_registration;
+  const dueAmountValue = dueRegistration ? parseDecimalValue(dueRegistration.due_amount) : 0;
+  const planAmountValue = parseDecimalValue(plan.amount);
+  if (dueRegistration && dueAmountValue > 0) {
+    return dueAmountValue;
+  }
+  return planAmountValue;
+};
+
+const buildRecurringPlanCartItem = (
+  plan: RecurringPlan,
+  donorName?: string | null,
+  donorId?: number | null,
+): CartItem => {
+  const amountValue = resolveRecurringPlanAmount(plan);
+  const fallbackDate =
+    plan.due_registration?.start_date ??
+    plan.next_occurrence ??
+    plan.start_date ??
+    plan.origin_registration_created_at ??
+    new Date().toISOString();
+  const customDayDate = plan.next_occurrence ?? plan.start_date ?? plan.origin_registration_created_at ?? null;
+  const scheduleLabel = formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency);
+  return {
+    cartId: `recurring-plan-${plan.id}`,
+    poojaId: plan.origin_registration_id ?? plan.id,
+    poojaName: plan.pooja_option_name?.trim() || 'Recurring pooja',
+    poojaCode: plan.pooja_option_code ?? undefined,
+    poojaImage: '',
+    amount: String(amountValue),
+    bookingDate: fallbackDate,
+    fullName: donorName ?? 'Recurring pooja',
+    email: '',
+    phoneNumber: '',
+    address: '',
+    dayOptionCode: plan.pooja_option_code ?? undefined,
+    dayOptionDescription: plan.day_option_description ?? undefined,
+    customDayDate,
+    customDayNote: scheduleLabel,
+    postPrasadam: false,
+    recurrenceKind: 'recurring',
+    recurrenceFrequency: plan.recurrence_frequency as RecurrenceFrequency | undefined,
+    members: buildRecurringPlanMembers(plan, donorName),
+    targetDonorId: donorId ?? null,
+  };
+};
+
 const resolvePoojaId = (registration: PoojaRegistration) => {
   const trimmed = (registration.pooja_reg_id ?? '').trim();
   return trimmed.length > 0 ? trimmed : `#${registration.id}`;
@@ -541,6 +598,7 @@ const DonorProfile = () => {
   const cartKey = authUser ? String(authUser.id) : 'guest';
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const paymentSnapshot = usePaymentStore((state) => state.lastGeneralPaymentByUser[cartKey] ?? null);
+  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
   const location = useLocation();
   const navigate = useNavigate();
   const fromCartReview = useMemo(
@@ -1083,6 +1141,22 @@ const DonorProfile = () => {
     () => recurrencePlans.filter((plan) => plan.recurrence_kind === 'recurring'),
     [recurrencePlans],
   );
+  const recurringPlanCount = recurringPlansToShow.length;
+  const handleViewRecurringPayments = useCallback(() => {
+    if (recurringPlansToShow.length === 0) {
+      return;
+    }
+    const items = recurringPlansToShow.map((plan) =>
+      buildRecurringPlanCartItem(plan, authUser?.name ?? null, authUser?.id ?? null),
+    );
+    const totalAmount = items.reduce((sum, item) => sum + parseDecimalValue(item.amount), 0);
+    setGeneralPayment({
+      userKey: cartKey,
+      items,
+      totalAmount,
+    });
+    navigate('/payments/general');
+  }, [authUser?.id, authUser?.name, cartKey, navigate, recurringPlansToShow, setGeneralPayment]);
 
   const startAddingNew = () => {
     setFormData(createInitialFormState(profile ?? undefined));
@@ -2595,13 +2669,24 @@ const DonorProfile = () => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-800 sm:text-xl">Recurring Pooja Plans</h2>
-                <p className="text-sm text-slate-500">
-                  Track your ongoing monthly schedules or one-time extras so you know what’s coming up.
+                <p className="text-sm font-medium text-slate-600">
+                  Recurring pooja count: {recurringPlanCount}
+                  {recurringPlanCount === 1 ? '' : 's'}
                 </p>
               </div>
-              <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                {recurringPlansToShow.length} {recurringPlansToShow.length === 1 ? 'Plan' : 'Plans'}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                  {recurringPlansToShow.length} {recurringPlansToShow.length === 1 ? 'Plan' : 'Plans'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleViewRecurringPayments}
+                  disabled={recurringPlansToShow.length === 0}
+                  className="inline-flex items-center justify-center rounded-full border border-orange-200 bg-white px-3 py-1 text-sm font-semibold text-orange-700 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:text-orange-300 disabled:hover:bg-white"
+                >
+                  Payment
+                </button>
+              </div>
             </div>
 
             {pendingRecurringPlans.length > 0 && (

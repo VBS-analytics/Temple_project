@@ -80,6 +80,15 @@ A modern operations suite for the Kakkalani Gramam temple unifying a content-ric
 | Apply backend migrations | `python manage.py migrate` |
 | Create Django superuser | `python manage.py createsuperuser` |
 
+### Import donor opening balances
+When you receive a donor opening-balance workbook (for example, `opening-balance-december.xlsx`), run the new management command to seed each donor's `DonorProfile.custom_number` before reconciling payments:
+
+```bash
+python manage.py import_opening_balances opening-balance-december.xlsx
+```
+
+Use `--dry-run` to validate that the sheet parses cleanly without mutating data, `--sheet` to specify an alternate tab, or `--name-column`/`--phone-column`/`--balance-column` when your headers differ. The command matches donors by phone digits (falling back to the last ten digits for formatting differences) and reports any rows it could not match so you can resolve them before persisting.
+
 ## Repository Layout
 
 ```text

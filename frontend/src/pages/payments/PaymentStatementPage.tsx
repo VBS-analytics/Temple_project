@@ -7,6 +7,7 @@ import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import api, { extractResults } from '../../lib/api';
 import { loadPdfMake } from '../../lib/pdfMakeLoader';
 import { useCurrentBalance } from '../../hooks/useCurrentBalance';
+import { useCartStore } from '../../store/cart';
 import type { CartItem } from '../../store/cart';
 import { isAdmin, useAuthStore } from '../../store/auth';
 import { useCombineAccessStore } from '../../store/combineAccess';
@@ -26,6 +27,7 @@ interface PaymentRecordEntry {
   transaction_reference?: string | null;
   status?: string | null;
   created_at?: string | null;
+  payment_month?: string | null;
   registration_status?: string | null;
   registration_donor_name?: string | null;
   registration_is_group_registration?: boolean | null;
@@ -44,11 +46,24 @@ interface PoojaRegistrationEntry {
   is_group_registration?: boolean | null;
 }
 
+interface CartSnapshotItem {
+  cartId?: string | null;
+  poojaName?: string | null;
+  poojaCode?: string | null;
+  amount?: string | number | null;
+  bookingDate?: string | null;
+  customDayDate?: string | null;
+  dayOptionOccurrences?: { date?: string | null; label?: string | null }[];
+  recurrenceKind?: unknown;
+}
+
+type CartLikeItem = CartItem | CartSnapshotItem;
+
 interface CartSnapshotRecord {
   donor_id?: number | null;
   donor_name?: string | null;
   donor_phone?: string | null;
-  items?: CartItem[] | null;
+  items?: CartSnapshotItem[] | null;
   updated_at?: string | null;
 }
 
@@ -214,15 +229,17 @@ const PAYMENT_STATUS_FILTERS: { id: PaymentStatusFilter; label: string }[] = [
 
 const CURRENT_BALANCE_ENTRY_ID = 'current-balance-entry';
 const CURRENT_BALANCE_ENTRY_DATE = '2025-12-31';
-const CURRENT_BALANCE_ENTRY_DISPLAY_DATE = '31-Dec-2025';
+const CURRENT_BALANCE_ENTRY_DISPLAY_DATE = '31/12/2025';
 
 type PassbookEntry = {
   record: PaymentRecordEntry;
   dueAmount: number;
   paidAmount: number;
   closingDue: number;
+  openingBalance: number;
   displayDate?: string;
   isCurrentBalanceEntry?: boolean;
+  entryType?: 'due' | 'paid';
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -249,12 +266,15 @@ const formatDisplayDate = (value?: string | null) => {
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return parsed.toLocaleDateString('en-IN', {
+  return parsed.toLocaleDateString('en-GB', {
     day: '2-digit',
-    month: 'short',
+    month: '2-digit',
     year: 'numeric',
   });
 };
+
+const getRecordDateValue = (record: PaymentRecordEntry) =>
+  record.payment_month ?? record.created_at ?? record.registration_start_date ?? null;
 
 const formatMonthYearFromDate = (value?: string | null) => {
   if (!value) {
@@ -320,7 +340,7 @@ const formatYearMonthLabel = (value?: string | null) => {
 };
 
 const getRecordMonthKey = (record: PaymentRecordEntry) => {
-  const dateValue = record.registration_start_date ?? record.created_at;
+  const dateValue = getRecordDateValue(record);
   if (!dateValue) {
     return null;
   }
@@ -398,6 +418,14 @@ const getRecordTimestamp = (record: PaymentRecordEntry) => {
     return Number.isNaN(parsed) ? NaN : parsed;
   };
 
+  const preferredDate = getRecordDateValue(record);
+  if (preferredDate) {
+    const preferredTimestamp = parseTimestamp(preferredDate);
+    if (!Number.isNaN(preferredTimestamp)) {
+      return preferredTimestamp;
+    }
+  }
+
   const createdAt = parseTimestamp(record.created_at);
   if (!Number.isNaN(createdAt)) {
     return createdAt;
@@ -411,31 +439,134 @@ const getRecordTimestamp = (record: PaymentRecordEntry) => {
   return 0;
 };
 
+const computeCartAggregate = (items: CartLikeItem[]) => {
+  const totalDue = items.reduce((sum, item) => sum + parseNumeric(item.amount), 0);
+  const dateCandidates = items
+    .map((item) => item.customDayDate ?? item.bookingDate)
+    .filter((value): value is string => Boolean(value));
+  const earliestDate =
+    dateCandidates
+      .slice()
+      .sort()
+      .shift() ?? new Date().toISOString();
+  const names = items
+    .map((item) => item.poojaName ?? item.poojaCode ?? null)
+    .filter((value): value is string => Boolean(value));
+  const occurrences = items.flatMap((item) =>
+    Array.isArray(item.dayOptionOccurrences)
+      ? item.dayOptionOccurrences
+          .filter((entry): entry is { date: string; label?: string | null } =>
+            entry !== null && entry !== undefined && typeof entry.date === 'string' && entry.date !== ''
+          )
+          .map((entry) => ({ date: entry.date, label: entry.label ?? null }))
+      : [],
+  );
+  const hasRecurrence = items.some((item) => Boolean(item.recurrenceKind));
+  return { totalDue, earliestDate, names, occurrences, hasRecurrence };
+};
+
 const convertSnapshotToRecords = (snapshot: CartSnapshotRecord): PaymentRecordEntry[] => {
   const items = Array.isArray(snapshot.items) ? snapshot.items : [];
-  return items.map((item) => {
-    const startDate = item.customDayDate ?? item.bookingDate ?? null;
-    const dueValue = Number(item.amount);
-    const numericDue = Number.isFinite(dueValue) ? dueValue : 0;
-    const uniqueId = `cart-${snapshot.donor_id ?? 'unknown'}-${item.cartId}`;
-    return {
-      id: uniqueId,
+  if (!items.length) {
+    return [];
+  }
+  const { totalDue, earliestDate, names, occurrences, hasRecurrence } = computeCartAggregate(items);
+  const snapshotLabel = (snapshot.donor_name ?? '').trim() || 'Cart snapshot';
+  const idSuffix = snapshot.updated_at ?? earliestDate ?? new Date().toISOString();
+  const snapshotId = `cart-snapshot-${snapshot.donor_id ?? 'unknown'}-${idSuffix}`;
+  const poojaLabel =
+    names.length > 0
+      ? names.join(', ')
+      : `Cart snapshot — ${items.length} item${items.length === 1 ? '' : 's'}`;
+  return [
+    {
+      id: snapshotId,
       donor: snapshot.donor_id ?? null,
       donor_name: snapshot.donor_name ?? null,
-      pooja_option: item.poojaName ?? item.poojaCode ?? 'Cart item',
+      pooja_option: poojaLabel,
       registration: null,
-      registration_start_date: startDate,
-      registration_total_amount: numericDue,
-      pooja_due_amount: numericDue,
+      registration_start_date: earliestDate,
+      registration_total_amount: totalDue,
+      pooja_due_amount: totalDue,
       amount: 0,
       transaction_reference: null,
       status: 'pending',
       registration_status: 'pending',
       registration_donor_name: snapshot.donor_name ?? null,
-      registration_is_group_registration: Boolean(item.recurrenceKind),
-      created_at: snapshot.updated_at ?? startDate ?? null,
-    };
-  });
+      registration_is_group_registration: hasRecurrence,
+      created_at: snapshot.updated_at ?? earliestDate ?? null,
+      payment_month: earliestDate,
+      upcoming_occurrences: occurrences,
+    },
+  ];
+};
+
+const convertCartItemToRecord = (
+  item: CartItem,
+  donorId?: number | null,
+  donorName?: string | null,
+): PaymentRecordEntry => {
+  const startDate = item.customDayDate ?? item.bookingDate ?? null;
+  const dueAmount = parseNumeric(item.amount);
+  const uniqueId = `cart-local-${item.cartId}`;
+  const displayName = (donorName ?? item.fullName ?? '').trim() || null;
+  const occurrences = Array.isArray(item.dayOptionOccurrences)
+    ? item.dayOptionOccurrences
+        .filter((entry): entry is { date: string; label?: string | null } =>
+          entry !== null && entry !== undefined && typeof entry.date === 'string' && entry.date !== ''
+        )
+        .map((entry) => ({ date: entry.date, label: entry.label ?? null }))
+    : undefined;
+  return {
+    id: uniqueId,
+    donor: donorId ?? null,
+    donor_name: displayName,
+    pooja_option: item.poojaName ?? item.poojaCode ?? 'Cart item',
+    registration: null,
+    registration_start_date: startDate,
+    registration_total_amount: dueAmount,
+    pooja_due_amount: dueAmount,
+    amount: 0,
+    transaction_reference: null,
+    status: 'pending',
+    registration_status: 'pending',
+    registration_donor_name: displayName,
+    registration_is_group_registration: Boolean(item.recurrenceKind),
+    created_at: startDate ?? new Date().toISOString(),
+    payment_month: startDate ?? undefined,
+    upcoming_occurrences: occurrences,
+  };
+};
+
+const buildLocalCartRecord = (
+  items: CartItem[],
+  donorId?: number | null,
+  donorName?: string | null,
+): PaymentRecordEntry | null => {
+  if (!items.length) {
+    return null;
+  }
+  const { totalDue, earliestDate, names, occurrences, hasRecurrence } = computeCartAggregate(items);
+  return {
+    id: `cart-local-${items.map((item) => item.cartId).join('-')}`,
+    donor: donorId ?? null,
+    donor_name: (donorName ?? '').trim() || 'Cart payment',
+    pooja_option:
+      names.length > 0 ? names.join(', ') : `Cart payment — ${items.length} item${items.length === 1 ? '' : 's'}`,
+    registration: null,
+    registration_start_date: earliestDate,
+    registration_total_amount: totalDue,
+    pooja_due_amount: totalDue,
+    amount: 0,
+    transaction_reference: null,
+    status: 'pending',
+    registration_status: 'pending',
+    registration_donor_name: donorName ?? null,
+    registration_is_group_registration: hasRecurrence,
+    created_at: earliestDate,
+    payment_month: earliestDate,
+    upcoming_occurrences: occurrences,
+  };
 };
 
 const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
@@ -462,7 +593,9 @@ const PaymentStatementPage = () => {
   const combineLoading = useCombineAccessStore((state) => state.loading);
   const combineError = useCombineAccessStore((state) => state.error);
   const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
-  const { balance: currentBalance } = useCurrentBalance();
+  const { balance: currentBalance, openingBalance } = useCurrentBalance();
+  const cartKey = user ? String(user.id) : 'guest';
+  const localCartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
 
   useEffect(() => {
     if (combineRole === null && !combineLoading && !combineError) {
@@ -655,7 +788,12 @@ const PaymentStatementPage = () => {
   };
 
   const mergedRecords = useMemo(() => {
-    if (!records.length && !registrations.length && !cartSnapshots.length) {
+    if (
+      !records.length &&
+      !registrations.length &&
+      !cartSnapshots.length &&
+      !localCartItems.length
+    ) {
       return [];
     }
     const paidRegistrationIds = new Set<number>();
@@ -686,9 +824,21 @@ const PaymentStatementPage = () => {
           registration_is_group_registration: registration.is_group_registration ?? false,
         }),
       );
-    const cartRecords = cartSnapshots.flatMap((snapshot) => convertSnapshotToRecords(snapshot));
-    return [...records, ...registrationRecords, ...cartRecords];
-  }, [records, registrations, cartSnapshots]);
+    const cartRecords = cartSnapshots.flatMap((snapshot) =>
+      convertSnapshotToRecords(snapshot),
+    );
+    const localCartRecord = buildLocalCartRecord(
+      localCartItems,
+      user?.id ?? null,
+      user?.name ?? null,
+    );
+    return [
+      ...records,
+      ...registrationRecords,
+      ...cartRecords,
+      ...(localCartRecord ? [localCartRecord] : []),
+    ];
+  }, [records, registrations, cartSnapshots, localCartItems, user?.id, user?.name]);
 
   const filteredRecords = useMemo(() => {
     let nextRecords = mergedRecords;
@@ -799,9 +949,7 @@ const PaymentStatementPage = () => {
       'Upcoming Dates': record.upcoming_occurrences
         ? record.upcoming_occurrences.map((entry) => formatUpcomingOccurrenceLabel(entry)).join('; ')
         : '—',
-      'Pooja Date': record.registration_start_date
-        ? formatDisplayDate(record.registration_start_date)
-        : formatDisplayDate(record.created_at ?? ''),
+      'Pooja Date': formatDisplayDate(getRecordDateValue(record)),
       'Pooja Due Amount': formatCurrency(getDisplayedDueAmountValue(record)),
       'Paid Amount': formatCurrency(getDisplayedPaidAmountValue(record)),
       'Transaction ID': record.transaction_reference || '—',
@@ -951,13 +1099,62 @@ const PaymentStatementPage = () => {
     XLSX.writeFile(workbook, `${downloadFilenameBase}.xlsx`);
   };
 
+  const cachedOpeningBalanceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (openingBalance !== null && openingBalance !== undefined && cachedOpeningBalanceRef.current === null) {
+      cachedOpeningBalanceRef.current = openingBalance;
+    }
+  }, [openingBalance]);
+
+  // Calculate the opening balance for the selected month by looking at records from previous months
+  const monthOpeningBalance = useMemo(() => {
+    if (!selectedMonthKey) {
+      // No month filter, use the current opening balance
+      return null; // Will use cachedOpeningBalance or openingBalance
+    }
+
+    // Get all records (not just filtered ones) to calculate cumulative balance
+    const allRecords = mergedRecords;
+    
+    // Separate records into "before selected month" and "selected month"
+    const beforeSelectedMonth: PaymentRecordEntry[] = [];
+    
+    allRecords.forEach((record) => {
+      const recordMonthKey = getRecordMonthKey(record);
+      if (!recordMonthKey) {
+        return;
+      }
+      
+      // Compare month keys as strings (format: "YYYY-MM")
+      if (recordMonthKey < selectedMonthKey) {
+        beforeSelectedMonth.push(record);
+      }
+    });
+
+    // Calculate cumulative balance from all records before the selected month
+    let calculatedBalance = 0;
+    beforeSelectedMonth
+      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .forEach((record) => {
+        const paidAmount = getDisplayedPaidAmountValue(record);
+        const dueAmount = getDisplayedDueAmountValue(record);
+        calculatedBalance = calculatedBalance + paidAmount - dueAmount;
+      });
+
+    return calculatedBalance;
+  }, [selectedMonthKey, mergedRecords]);
+
   const passbookEntries = useMemo(() => {
     const sorted =
       filteredRecords.length > 0
         ? [...filteredRecords].sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
         : [];
     const hasBalanceEntry = currentBalance !== null && currentBalance !== undefined;
-    const baseBalance = hasBalanceEntry ? Math.max(0, currentBalance) : 0;
+    const cachedOpeningBalance = cachedOpeningBalanceRef.current;
+    // Use monthOpeningBalance if available (selected month), otherwise use current opening balance
+    const initialBalance =
+      monthOpeningBalance !== null ? monthOpeningBalance : cachedOpeningBalance ?? openingBalance ?? 0;
     const entries: PassbookEntry[] = [];
 
     if (hasBalanceEntry) {
@@ -971,90 +1168,80 @@ const PaymentStatementPage = () => {
         },
         dueAmount: 0,
         paidAmount: 0,
-        closingDue: Math.max(0, baseBalance),
+        closingDue: initialBalance,
+        openingBalance: initialBalance,
         displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
         isCurrentBalanceEntry: true,
       });
     }
 
-    type DonorHistoryGroup = {
-      key: string;
-      donorId: number | null;
-      donorLabel: string;
-      totalDue: number;
-      totalPaid: number;
-      latestTimestamp: number;
-      latestDate: string | null;
-      latestTransactionReference: string | null;
-    };
-
-    const donorGroups = new Map<string, DonorHistoryGroup>();
-
+    // Group records by transaction reference or by ID if no transaction reference
+    const groupedRecords = new Map<string, PaymentRecordEntry[]>();
     sorted.forEach((record) => {
-      const donorId = record.donor ?? null;
-      const groupKey =
-        donorId !== null && donorId !== undefined ? `donor-${donorId}` : `record-${record.id}`;
-      const dueAmount = getDisplayedDueAmountValue(record);
-      const paidAmount = getDisplayedPaidAmountValue(record);
-      const timestamp = getRecordTimestamp(record);
-      const dateValue = record.registration_start_date ?? record.created_at ?? null;
-      const displayLabel = resolveDonorDisplayLabel(record, donorId);
+      const groupKey = record.transaction_reference?.trim() || `record-${record.id}`;
+      if (!groupedRecords.has(groupKey)) {
+        groupedRecords.set(groupKey, []);
+      }
+      groupedRecords.get(groupKey)!.push(record);
+    });
 
-      const existing = donorGroups.get(groupKey);
-      if (existing) {
-        existing.totalDue += dueAmount;
-        existing.totalPaid += paidAmount;
-        if (timestamp >= existing.latestTimestamp) {
-          existing.latestTimestamp = timestamp;
-          existing.latestDate = dateValue;
-          existing.donorLabel = displayLabel;
-          existing.latestTransactionReference = record.transaction_reference ?? null;
-        }
-      } else {
-        donorGroups.set(groupKey, {
-          key: groupKey,
-          donorId,
-          donorLabel: displayLabel,
-          totalDue: dueAmount,
-          totalPaid: paidAmount,
-          latestTimestamp: timestamp,
-          latestDate: dateValue,
-          latestTransactionReference: record.transaction_reference ?? null,
-        });
+    let runningBalance = initialBalance;
+
+    // Process each group
+    Array.from(groupedRecords.values()).forEach((recordGroup) => {
+      // Use the first record in the group as the representative record
+      const primaryRecord = recordGroup[0];
+      
+      // Sum up dues and payments across all records in the group
+      const totalDueAmount = recordGroup.reduce(
+        (sum, record) => sum + getDisplayedDueAmountValue(record),
+        0
+      );
+      const totalPaidAmount = recordGroup.reduce(
+        (sum, record) => sum + getDisplayedPaidAmountValue(record),
+        0
+      );
+
+      // Create a DUE entry first - use registration_total_amount for original due
+      const totalRegistrationAmount = recordGroup.reduce(
+        (sum, record) => sum + parseNumeric(record.registration_total_amount ?? 0),
+        0
+      );
+      const dueEntry: PassbookEntry = {
+        record: primaryRecord,
+        dueAmount: totalRegistrationAmount,
+        paidAmount: 0,
+        openingBalance: runningBalance,
+        closingDue: runningBalance + totalRegistrationAmount,
+        entryType: 'due',
+      };
+      entries.push(dueEntry);
+      runningBalance = dueEntry.closingDue;
+
+      // Create a PAID entry if there is payment
+      if (totalPaidAmount > 0) {
+        const paidEntry: PassbookEntry = {
+          record: primaryRecord,
+          dueAmount: 0,
+          paidAmount: totalPaidAmount,
+          openingBalance: runningBalance,
+          closingDue: runningBalance - totalPaidAmount,
+          entryType: 'paid',
+        };
+        entries.push(paidEntry);
+        runningBalance = paidEntry.closingDue;
       }
     });
 
-    const groupedHistory = Array.from(donorGroups.values()).sort(
-      (a, b) => a.latestTimestamp - b.latestTimestamp,
-    );
-
-    groupedHistory.forEach((group) => {
-      const donorClosingDue = Math.max(0, group.totalDue - group.totalPaid);
-      entries.push({
-        record: {
-          id: group.key,
-          donor: group.donorId,
-          donor_name: group.donorLabel,
-          created_at: group.latestDate,
-          registration_start_date: group.latestDate,
-          transaction_reference: group.latestTransactionReference,
-        },
-        dueAmount: group.totalDue,
-        paidAmount: group.totalPaid,
-        closingDue: donorClosingDue,
-      });
-    });
-
     return entries;
-  }, [filteredRecords, currentBalance]);
+  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance]);
 
   const getEntryDateLabel = (entry: PassbookEntry) => {
-    const sourceDate =
-      entry.displayDate ??
-      entry.record.registration_start_date ??
-      entry.record.created_at ??
-      null;
-    return formatMonthYearFromDate(sourceDate);
+    if (entry.displayDate) {
+      return entry.displayDate;
+    }
+    const sourceDate = getRecordDateValue(entry.record);
+    return formatDisplayDate(sourceDate);
   };
 
   const getEntryDonorNameLabel = (entry: PassbookEntry) => {
@@ -1064,12 +1251,20 @@ const PaymentStatementPage = () => {
     return resolveDonorDisplayLabel(entry.record, entry.record.donor ?? null);
   };
 
-  const getEntryTransactionDetailsLabel = (entry: PassbookEntry) => {
+  const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: PaymentRecordEntry[]) => {
     if (entry.isCurrentBalanceEntry) {
       return '-';
     }
+    
+    if (entry.entryType === 'due') {
+      return '--- Pooja DUE ---';
+    }
+    
     const reference = entry.record.transaction_reference?.trim();
-    return reference ? reference : '—';
+    if (reference) {
+      return reference;
+    }
+    return 'Payment recorded';
   };
 
   const getEntryAmountLabel = (entry: PassbookEntry, amount: number) =>
@@ -1277,7 +1472,7 @@ const PaymentStatementPage = () => {
                       <th className="px-4 py-3 text-left font-semibold">Transaction Details</th>
                       <th className="px-4 py-3 text-right font-semibold">Due for current month</th>
                       <th className="px-4 py-3 text-right font-semibold">Amount received</th>
-                      <th className="px-4 py-3 text-right font-semibold">Closing balance due</th>
+                      <th className="px-4 py-3 text-right font-semibold">Closing due for current month</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1286,7 +1481,7 @@ const PaymentStatementPage = () => {
                         <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
                         <td className="px-4 py-3 text-slate-600">{getEntryDateLabel(entry)}</td>
                         <td className="px-4 py-3 text-slate-600">{getEntryDonorNameLabel(entry)}</td>
-                        <td className="px-4 py-3 text-slate-600">{getEntryTransactionDetailsLabel(entry)}</td>
+                        <td className="px-4 py-3 text-slate-600">{getEntryTransactionDetailsLabel(entry, filteredRecords)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-800">
                           {getEntryAmountLabel(entry, entry.dueAmount)}
                         </td>
@@ -1321,7 +1516,7 @@ const PaymentStatementPage = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-slate-600">Transaction Details</p>
-                      <p className="text-slate-700">{getEntryTransactionDetailsLabel(entry)}</p>
+                      <p className="text-slate-700">{getEntryTransactionDetailsLabel(entry, filteredRecords)}</p>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold text-slate-600">Due for current month</span>
@@ -1332,7 +1527,7 @@ const PaymentStatementPage = () => {
                       <span>{getEntryAmountLabel(entry, entry.paidAmount)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="font-semibold text-slate-600">Closing balance due</span>
+                      <span className="font-semibold text-slate-600">Closing due for current month</span>
                       <span>{formatCurrency(entry.closingDue)}</span>
                     </div>
                   </div>

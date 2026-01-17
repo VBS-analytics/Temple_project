@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Max, Subquery, Sum
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -60,6 +60,23 @@ def _compute_monthly_summary_for_user(user: User) -> dict[str, Decimal]:
     return {"due": due_total, "payments": payments_total}
 
 
+def _compute_opening_balance_for_user(user: User) -> Decimal:
+    """Get opening balance from the donor profile's custom_number field.
+    
+    This value should be imported from the opening-balance-december.xlsx file
+    and represents the closing balance from the previous month.
+    """
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        return Decimal("0.00")
+    
+    custom_number = getattr(profile, "custom_number", None)
+    if custom_number is None:
+        return Decimal("0.00")
+    
+    return Decimal(custom_number or 0)
+
+
 def build_phone_candidates(phone_number: str | None) -> list[str]:
     if not phone_number:
         return []
@@ -86,10 +103,13 @@ class DonorProfileSerializer(serializers.ModelSerializer):
     current_month_due = serializers.SerializerMethodField()
     current_month_payments = serializers.SerializerMethodField()
     calculated_current_balance = serializers.SerializerMethodField()
+    opening_balance = serializers.SerializerMethodField()
+    last_payment_date = serializers.SerializerMethodField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._monthly_summary_cache: dict[str, Decimal] | None = None
+        self._opening_balance_cache: Decimal | None = None
 
     class Meta:
         model = DonorProfile
@@ -111,16 +131,20 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "notes",
             "custom_number",
             "monthly_donation_amount",
+            "opening_balance",
             "current_month_due",
             "current_month_payments",
             "calculated_current_balance",
+            "last_payment_date",
         )
         read_only_fields = (
             "donor_id",
             "monthly_donation_amount",
+            "opening_balance",
             "current_month_due",
             "current_month_payments",
             "calculated_current_balance",
+            "last_payment_date",
         )
         extra_kwargs = {
             "gender": {"required": False, "allow_blank": True},
@@ -149,11 +173,31 @@ class DonorProfileSerializer(serializers.ModelSerializer):
         summary = self._summary_for(obj)
         return _decimal_to_string(summary["payments"])
 
+    def _get_opening_balance(self, obj: DonorProfile) -> Decimal:
+        if self._opening_balance_cache is None:
+            user = getattr(obj, "user", None)
+            if user is None:
+                self._opening_balance_cache = Decimal("0.00")
+            else:
+                self._opening_balance_cache = _compute_opening_balance_for_user(user)
+        return self._opening_balance_cache
+
+    def get_opening_balance(self, obj):
+        opening = self._get_opening_balance(obj)
+        return _decimal_to_string(opening)
+
     def get_calculated_current_balance(self, obj):
         summary = self._summary_for(obj)
-        opening = Decimal(getattr(obj, "custom_number", 0) or 0)
+        opening = self._get_opening_balance(obj)
         result = opening + summary["due"] - summary["payments"]
         return _decimal_to_string(result)
+
+    def get_last_payment_date(self, obj):
+        user = getattr(obj, "user", None)
+        last_payment = getattr(user, "latest_payment_date", None)
+        if last_payment is None:
+            return None
+        return last_payment.isoformat()
 
 
 PROFILE_FIELDS = [
@@ -508,7 +552,14 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         model = DonorProfile
         fields = [
             f for f in DonorProfileSerializer.Meta.fields
-            if f not in ("current_month_due", "current_month_payments", "calculated_current_balance")
+            if f
+            not in (
+                "opening_balance",
+                "current_month_due",
+                "current_month_payments",
+                "calculated_current_balance",
+                "last_payment_date",
+            )
         ]
 
     def update(self, instance, validated_data):

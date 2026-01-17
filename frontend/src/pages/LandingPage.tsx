@@ -402,45 +402,6 @@ const LandingPage = () => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
           </div>
-          <div className="responsive-layout relative z-10 flex flex-col gap-6 py-16 sm:py-20 md:py-28 md:px-10">
-            <p className="text-xs sm:text-sm uppercase tracking-[0.6em] text-slate-200">
-              கக்கழனி • Kakkalani Gramam
-            </p>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white max-w-2xl">
-              A living temple dedicated to{" "}
-              <span className="text-[#f3c428]">Lord Shivan</span> & Ambal
-            </h1>
-            <p className="text-base sm:text-lg text-slate-100 max-w-3xl">
-              A 2,500-year-old Dravidian masterpiece, renowned for its towering
-              gopurams, intricate carvings, and cultural legacy. Plan your
-              visit, participate in darshan & poojas, and immerse yourself in
-              timeless traditions.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm font-semibold uppercase tracking-wide">
-              <a
-                href="#visit"
-                className="rounded-full bg-[#f3c428] px-4 sm:px-6 py-2 sm:py-3 text-slate-900 transition hover:bg-[#ffd559]"
-              >
-                Plan Your Visit
-              </a>
-              <a
-                href="#darshan"
-                className="rounded-full border border-white/40 px-4 sm:px-6 py-2 sm:py-3 transition hover:border-[#f3c428] hover:text-[#f3c428]"
-              >
-                View Pooja Schedule
-              </a>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs sm:text-sm font-semibold uppercase tracking-[0.3em]">
-              <a
-                href={kakkalaniMapFullViewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full border border-white/40 bg-white/10 px-4 sm:px-6 py-2 sm:py-3 text-white transition hover:border-[#f3c428] hover:text-[#f3c428]"
-              >
-                Open full 3D map in Google Maps
-              </a>
-            </div>
-          </div>
         </section>
 
         {/* TIMINGS */}

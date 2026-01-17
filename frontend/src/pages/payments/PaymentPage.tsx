@@ -50,6 +50,15 @@ const formatDisplayDate = (value?: string | null) => {
   });
 };
 
+const normalizeIsoDate = (value?: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().split('T')[0];
+};
+
 const displayToIsoDate = (displayDate: string): string => {
   const parts = displayDate.split('/');
   if (parts.length !== 3) return '';
@@ -280,7 +289,7 @@ const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
   const payload: Record<string, unknown> = {
     pooja_option: item.poojaId,
     day_option: item.dayOptionId ?? undefined,
-    start_date: item.bookingDate,
+    start_date: normalizeIsoDate(item.customDayDate ?? item.bookingDate) ?? undefined,
     quantity,
     is_group_registration: quantity > 1,
     post_prasadam: Boolean(item.postPrasadam),
@@ -642,6 +651,9 @@ const PaymentPage = () => {
       setAmountPaidError('Enter a valid amount paid.');
       return;
     }
+    const paymentExcess = Number((parsedAmount - requiredPayment).toFixed(2));
+    const donationCreditAmount =
+      paymentExcess > 0 && paymentExcess <= 5 ? paymentExcess : 0;
     const displayDate = paymentDate.trim();
     if (!displayDate) {
       setPaymentDateError('Payment date is required.');
@@ -673,22 +685,12 @@ const PaymentPage = () => {
     }
 
     addGeneralPaymentHistory(paymentSnapshot, isoDate);
-    const snapshotAmount = paymentSnapshot.totalAmount ?? 0;
-    const baseBalance =
-      typeof openingBalance === 'number'
-        ? openingBalance
-        : typeof currentBalance === 'number'
-          ? currentBalance
-          : null;
-    if (baseBalance !== null) {
-      const updatedBalance = baseBalance + snapshotAmount - parsedAmount;
-      try {
-        await api.put('auth/profile/', { custom_number: updatedBalance });
-        refreshBalance();
-      } catch (balanceError) {
-        console.error('Unable to refresh opening balance after payment', balanceError);
-        setRegistrationError('Payment recorded but unable to refresh opening balance. Please reload.');
-      }
+    try {
+      await api.get('auth/profile/');
+      refreshBalance();
+    } catch (balanceError) {
+      console.error('Unable to refresh opening balance after payment', balanceError);
+      setRegistrationError('Payment recorded but unable to refresh opening balance. Please reload.');
     }
     setPetalSeed((seed) => seed + 1);
     setShowCelebration(true);
@@ -910,7 +912,7 @@ const PaymentPage = () => {
                     }
                   }}
                   placeholder="Enter the amount paid"
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 {amountPaidError && (
                   <p className="mt-2 text-sm text-rose-600">{amountPaidError}</p>
@@ -948,16 +950,6 @@ const PaymentPage = () => {
                 {paymentDateError && (
                   <p className="mt-2 text-sm text-rose-600">{paymentDateError}</p>
                 )}
-              </div>
-            </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment amount</p>
-                <p className="text-lg font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment date</p>
-                <p className="text-lg font-semibold text-slate-900">{lastPaymentDateLabel}</p>
               </div>
             </div>
           </div>
@@ -1004,20 +996,7 @@ const PaymentPage = () => {
         Click Payment to view the bank details, then tap Payment Completed after transferring funds.
       </div>
       <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opening Balance</p>
-            <p className="text-2xl font-semibold text-slate-900">{openingBalanceDisplay}</p>
-            {balanceError && (
-              <p className="text-xs text-rose-600">{balanceError}</p>
-            )}
-            <p className="text-[0.65rem] text-slate-500">
-              Opening Balance = Opening Balance + Current Month Due
-            </p>
-            <p className="text-[0.65rem] text-slate-500">
-              Current Month Due: ₹ {currentMonthDueLabel}
-            </p>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Amount</p>
             <p className="text-xl font-semibold text-slate-900">{lastPaymentAmountLabel}</p>

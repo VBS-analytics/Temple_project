@@ -1,9 +1,13 @@
+import os
+import tempfile
 from decimal import Decimal
 from datetime import timedelta
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from openpyxl import Workbook
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -175,3 +179,47 @@ class DonorProfileCurrentBalanceSerializerTests(TestCase):
         self.assertEqual(data["current_month_due"], "350.00")
         self.assertEqual(data["current_month_payments"], "100.00")
         self.assertEqual(data["calculated_current_balance"], "300.00")
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class ImportOpeningBalancesCommandTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            phone_number="+919000000000",
+            name="Import Test",
+            password="safepass123",
+        )
+        self.profile = DonorProfile.objects.get(user=self.user)
+
+    def _create_workbook(self, rows: list[tuple[str, str, str | int]]) -> str:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Name", "Phone", "Opening Balance"])
+        for row in rows:
+            sheet.append(row)
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        tmp_file.close()
+        workbook.save(tmp_file.name)
+        return tmp_file.name
+
+    def test_updates_balance_for_matching_phone(self):
+        workbook_path = self._create_workbook(
+            [("Import Test", "9000000000", "-750")]
+        )
+        try:
+            call_command("import_opening_balances", workbook_path)
+            self.profile.refresh_from_db()
+            self.assertEqual(self.profile.custom_number, -750)
+        finally:
+            os.unlink(workbook_path)
+
+    def test_dry_run_does_not_persist_changes(self):
+        workbook_path = self._create_workbook(
+            [("Import Test", "9000000000", "250")]
+        )
+        try:
+            call_command("import_opening_balances", workbook_path, "--dry-run")
+            self.profile.refresh_from_db()
+            self.assertIsNone(self.profile.custom_number)
+        finally:
+            os.unlink(workbook_path)

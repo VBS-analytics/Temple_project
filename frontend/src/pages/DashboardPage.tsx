@@ -590,7 +590,7 @@ const DashboardPage = () => {
       id: 'monthly-donations',
       label: 'Donation Amount (by all the donors)',
       value: donationDisplayValue,
-      description: 'Approximate monthly inflow (updated for recent pauses).',
+      description: 'Excess monthly inflow payment donation.',
       icon: WalletIcon,
       accent: 'bg-orange-100 text-orange-700',
     },
