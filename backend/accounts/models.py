@@ -135,6 +135,12 @@ class DonorProfile(models.Model):
         decimal_places=2,
         default=Decimal('0.00'),
     )
+    opening_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Opening balance for the current month/year",
+    )
     donor_number = models.PositiveIntegerField(unique=True, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

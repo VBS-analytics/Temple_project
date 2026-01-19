@@ -509,7 +509,7 @@ const PaymentPage = () => {
   const updatedOpeningBalanceValue = runningBalance + cartTotalAmount - netPaymentAmount;
   const updatedOpeningBalanceLabel = `₹ ${formatCurrency(updatedOpeningBalanceValue)}`;
   const lastPaymentAmountLabel = lastPaymentEntry
-    ? `₹ ${formatCurrency(lastPaymentEntry.totalAmount)}`
+    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.totalAmount)}`
     : '—';
   const lastPaymentDateLabel = lastPaymentEntry
     ? formatDate(lastPaymentEntry.paymentDate ?? lastPaymentEntry.completedAt)
@@ -775,7 +775,7 @@ const PaymentPage = () => {
       setRegistrationInProgress(false);
     }
 
-    addGeneralPaymentHistory(paymentSnapshot, isoDate);
+    addGeneralPaymentHistory(paymentSnapshot, isoDate, parsedAmount);
     try {
       await api.get('auth/profile/');
       refreshBalance();

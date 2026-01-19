@@ -1,9 +1,10 @@
 """Payment API views."""
 
 from datetime import date
+from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
@@ -104,7 +105,39 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
         return qs.filter(donor=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save()
+        payment = serializer.save()
+        
+        # After payment is created, update the donor's opening_balance
+        # to be the closing due after this payment
+        try:
+            donor = payment.donor
+            donor_profile = donor.profile
+            
+            # Get the current opening balance
+            opening_balance = Decimal(str(donor_profile.opening_balance))
+            
+            # Get all registrations for the donor to calculate total due
+            registrations = donor.pooja_registrations.filter(status='active')
+            total_due = sum(
+                Decimal(str(reg.total_amount or 0)) for reg in registrations
+            )
+            
+            # Get all paid amounts for the donor
+            paid_payments = PaymentRecord.objects.filter(
+                donor=donor,
+                status='success'
+            ).aggregate(total_paid=Sum('amount'))
+            total_paid = Decimal(str(paid_payments['total_paid'] or 0))
+            
+            # Calculate closing balance: opening_balance + total_due - total_paid
+            closing_balance = opening_balance + total_due - total_paid
+            
+            # Update the donor's opening_balance to the closing balance
+            donor_profile.opening_balance = closing_balance
+            donor_profile.save(update_fields=['opening_balance'])
+        except Exception as e:
+            # Log but don't fail the payment creation if balance update fails
+            print(f"Warning: Could not update opening_balance for donor {payment.donor.id}: {str(e)}")
 
 
 class ExpenseRecordViewSet(viewsets.ModelViewSet):
