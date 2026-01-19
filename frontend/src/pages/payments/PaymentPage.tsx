@@ -314,37 +314,111 @@ const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
   return payload;
 };
 
+const allocatePaymentAmounts = (items: CartItem[], totalAmount: number) => {
+  const toPaise = (value: number) => {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.round(value * 100));
+  };
+
+  let remainingPaise = Math.max(0, toPaise(totalAmount));
+  const allocations = items.map((item, idx) => {
+    if (remainingPaise <= 0) {
+      return 0;
+    }
+    const itemPaise = toPaise(parseAmount(item.amount));
+    const allocationPaise = Math.min(itemPaise, remainingPaise);
+    remainingPaise = Math.max(remainingPaise - allocationPaise, 0);
+    const allocation = allocationPaise / 100;
+    console.log(`  Item ${idx}: itemAmount=${parseAmount(item.amount)}, allocated=${allocation}, remainingPaise=${remainingPaise}`);
+    return allocation;
+  });
+  
+  const totalAllocated = allocations.reduce((sum, a) => sum + a, 0);
+  console.log('  Total allocated:', totalAllocated, 'Expected:', totalAmount);
+  
+  return allocations;
+};
+
 const recordRegistrations = async (
   items: CartItem[],
   transactionReference: string,
   amountPaid?: number,
   paymentDate?: string,
 ) => {
-  for (const item of items) {
+  const totalCartAmount = items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
+  const totalPaymentAmount =
+    typeof amountPaid === 'number' && Number.isFinite(amountPaid) ? amountPaid : totalCartAmount;
+  
+  // DEBUG: Log all amounts and items
+  console.log('🔍 recordRegistrations DEBUG:');
+  console.log('  Items:', items.map((item, idx) => ({ idx, amount: item.amount })));
+  console.log('  totalCartAmount:', totalCartAmount);
+  console.log('  amountPaid parameter:', amountPaid);
+  console.log('  totalPaymentAmount:', totalPaymentAmount);
+  
+  // Safety check: ensure totalPaymentAmount doesn't exceed totalCartAmount
+  const safePaymentAmount = Math.min(totalPaymentAmount, totalCartAmount);
+  
+  console.log('  safePaymentAmount:', safePaymentAmount);
+  
+  const paymentAllocations = allocatePaymentAmounts(items, safePaymentAmount);
+  
+  console.log('  paymentAllocations:', paymentAllocations);
+
+  // Collect all registration IDs before creating payment records
+  const registrationIds: (number | undefined)[] = [];
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
     const payload = buildRegistrationPayload(item);
     const response = await api.post('pooja/registrations/', payload);
     const registrationId = response.data?.id;
+    registrationIds.push(typeof registrationId === 'number' ? registrationId : undefined);
+    console.log(`  Registration ${index} created with ID:`, registrationId);
+  }
+
+  // Now create payment records with the allocated amounts
+  for (let index = 0; index < items.length; index += 1) {
+    const registrationId = registrationIds[index];
+    const paymentAmount = paymentAllocations[index] ?? 0;
+
+    // Only create payment records for amounts > 0
+    if (paymentAmount <= 0) {
+      console.log(`  Skipping payment record for index ${index}: amount is ${paymentAmount}`);
+      continue;
+    }
+
+    const item = items[index];
     const amountNote =
       typeof amountPaid === 'number' && Number.isFinite(amountPaid)
         ? `Amount Paid: ₹ ${formatCurrency(amountPaid)}`
         : null;
     const noteParts: string[] = [];
-    if (payload.additional_notes) {
-      noteParts.push(payload.additional_notes);
+    if (item.customDayNote?.trim()) {
+      noteParts.push(item.customDayNote.trim());
     }
     if (amountNote) {
       noteParts.push(amountNote);
     }
-    await api.post('payments/records/', {
-      registration: typeof registrationId === 'number' ? registrationId : undefined,
-      amount: Number(item.amount) || 0,
+
+    const paymentPayload = {
+      registration: registrationId,
+      amount: paymentAmount,
       mode: 'upi',
       status: 'success',
       transaction_reference: transactionReference,
       payment_month: paymentDate || undefined,
-      notes: noteParts.join(' • '),
-    });
+      notes: noteParts.length > 0 ? noteParts.join(' • ') : undefined,
+    };
+    
+    console.log(`  Creating payment record ${index}:`, paymentPayload);
+
+    await api.post('payments/records/', paymentPayload);
   }
+  
+  console.log('✅ recordRegistrations completed');
 };
 
 const emitPoojaDataUpdatedEvent = () => {
@@ -643,10 +717,20 @@ const PaymentPage = () => {
     }
     const parsedAmount = Number(trimmedAmount);
     const requiredPayment = netPaymentAmount;
+    
+    // DEBUG: Log form submission values
+    console.log('🎯 Payment Form Submission:');
+    console.log('  amountPaid (from state):', amountPaid);
+    console.log('  trimmedAmount:', trimmedAmount);
+    console.log('  parsedAmount:', parsedAmount);
+    console.log('  typeof parsedAmount:', typeof parsedAmount);
+    console.log('  Number.isNaN(parsedAmount):', Number.isNaN(parsedAmount));
+    console.log('  netPaymentAmount:', netPaymentAmount);
+    console.log('  requiredPayment:', requiredPayment);
+    
     if (
       Number.isNaN(parsedAmount) ||
-      parsedAmount < requiredPayment ||
-      (requiredPayment > 0 && parsedAmount <= 0)
+      parsedAmount <= 0
     ) {
       setAmountPaidError('Enter a valid amount paid.');
       return;
@@ -675,6 +759,13 @@ const PaymentPage = () => {
     setRegistrationError(null);
     setRegistrationInProgress(true);
     try {
+      console.log('🚀 Calling recordRegistrations with:', {
+        itemsCount: paymentSnapshot.items.length,
+        items: paymentSnapshot.items.map((item) => ({ amount: item.amount })),
+        transactionReference: trimmedReference,
+        amountPaid: parsedAmount,
+        isoDate,
+      });
       await recordRegistrations(paymentSnapshot.items, trimmedReference, parsedAmount, isoDate);
       emitPoojaDataUpdatedEvent();
     } catch (error) {

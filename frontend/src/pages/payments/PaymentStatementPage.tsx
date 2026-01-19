@@ -597,6 +597,13 @@ const PaymentStatementPage = () => {
   const cartKey = user ? String(user.id) : 'guest';
   const localCartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
 
+  // Auto-select current user's records on initial load
+  useEffect(() => {
+    if (user?.id && selectedDonorIds.length === 0) {
+      setSelectedDonorIds([user.id]);
+    }
+  }, [user?.id, selectedDonorIds.length]);
+
   useEffect(() => {
     if (combineRole === null && !combineLoading && !combineError) {
       fetchCombineAccess();
@@ -1192,31 +1199,50 @@ const PaymentStatementPage = () => {
       // Use the first record in the group as the representative record
       const primaryRecord = recordGroup[0];
       
-      // Sum up dues and payments across all records in the group
-      const totalDueAmount = recordGroup.reduce(
-        (sum, record) => sum + getDisplayedDueAmountValue(record),
-        0
-      );
-      const totalPaidAmount = recordGroup.reduce(
-        (sum, record) => sum + getDisplayedPaidAmountValue(record),
-        0
-      );
-
-      // Create a DUE entry first - use registration_total_amount for original due
-      const totalRegistrationAmount = recordGroup.reduce(
+      // For DUE entries: sum all registration_total_amount from:
+      // 1. Records with actual registration IDs (PoojaRegistration records)
+      // 2. Cart snapshot/pending items (registration=null but have registration_total_amount)
+      // This handles multiple registrations in one transaction AND cart items
+      const dueRecords = recordGroup.filter((record) => {
+        const hasRegistration = record.registration && record.registration > 0;
+        const isCartOrPending = record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
+        return hasRegistration || isCartOrPending;
+      });
+      const totalDueAmount = dueRecords.reduce(
         (sum, record) => sum + parseNumeric(record.registration_total_amount ?? 0),
         0
       );
-      const dueEntry: PassbookEntry = {
-        record: primaryRecord,
-        dueAmount: totalRegistrationAmount,
-        paidAmount: 0,
-        openingBalance: runningBalance,
-        closingDue: runningBalance + totalRegistrationAmount,
-        entryType: 'due',
-      };
-      entries.push(dueEntry);
-      runningBalance = dueEntry.closingDue;
+
+      // Create a single DUE entry for all registrations in this transaction
+      if (totalDueAmount > 0) {
+        const dueEntry: PassbookEntry = {
+          record: primaryRecord,
+          dueAmount: totalDueAmount,
+          paidAmount: 0,
+          openingBalance: runningBalance,
+          closingDue: runningBalance + totalDueAmount,
+          entryType: 'due',
+        };
+        entries.push(dueEntry);
+        runningBalance = dueEntry.closingDue;
+      }
+
+      // For PAID entries: only sum payment amounts from actual payment records
+      // Filter to records that represent actual payments (not auto-generated dues)
+      const paymentRecords = recordGroup.filter(
+        (record) => {
+          const hasTransRef = record.transaction_reference?.trim().length > 0;
+          const hasPaidAmount = parseNumeric(record.amount) > 0;
+          const isPaidStatus = (record.status ?? '').toLowerCase() === 'success';
+          return hasTransRef && (hasPaidAmount || isPaidStatus);
+        }
+      );
+
+      // Sum paid amounts from payment records only
+      const totalPaidAmount = paymentRecords.reduce(
+        (sum, record) => sum + getDisplayedPaidAmountValue(record),
+        0
+      );
 
       // Create a PAID entry if there is payment
       if (totalPaidAmount > 0) {
@@ -1297,7 +1323,7 @@ const PaymentStatementPage = () => {
       <div className="space-y-6">
         <section className="space-y-4 rounded-2xl border border-rose-200 bg-white/80 p-6 shadow-sm">
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold text-slate-800">Payment history managed by another donor</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">Payment History managed by another donor</h1>
             <p className="text-sm text-slate-600">
               Your payment records are overseen by {parentName} ({parentPhone}). Connect with them to access history.
             </p>
