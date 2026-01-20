@@ -215,6 +215,114 @@ function DonorNameMultiSelect({
   );
 }
 
+interface MonthOption {
+  value: string;
+  label: string;
+}
+
+interface MonthRangeSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+}
+
+function MonthRangeSelect({ value, onChange, onClear }: MonthRangeSelectProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const monthOptions = useMemo(() => {
+    const options: MonthOption[] = [];
+    const startDate = new Date(2025, 11); // December 2025
+    const endDate = new Date(2030, 11); // December 2030
+
+    for (let date = new Date(startDate); date <= endDate; date.setMonth(date.getMonth() + 1)) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const monthValue = `${year}-${month}`;
+      const label = date.toLocaleDateString('en-IN', {
+        month: 'short',
+        year: 'numeric',
+      });
+      options.push({ value: monthValue, label });
+    }
+    return options;
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const selectedLabel = useMemo(() => {
+    const selected = monthOptions.find((option) => option.value === value);
+    return selected ? selected.label : 'Select month';
+  }, [value, monthOptions]);
+
+  return (
+    <div ref={containerRef} className="relative w-full min-w-0">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:border-orange-400 hover:text-slate-800"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <span className="ml-2 text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          <div className="max-h-64 overflow-auto">
+            <ul className="divide-y divide-slate-100">
+              {monthOptions.map((option) => {
+                const isSelected = value === option.value;
+                return (
+                  <li key={option.value}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(option.value);
+                        setOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm transition ${
+                        isSelected
+                          ? 'bg-orange-100 font-semibold text-orange-700'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATUS_LABEL_PAYMENT_RECEIVED = 'Payment Received';
 const STATUS_LABEL_PAYMENT_NOT_RECEIVED = 'Payment Not Received';
 
@@ -240,6 +348,13 @@ type PassbookEntry = {
   displayDate?: string;
   isCurrentBalanceEntry?: boolean;
   entryType?: 'due' | 'paid';
+};
+
+type AdminDonorPassbookGroup = {
+  id: string;
+  donorId: number | null;
+  label: string;
+  records: PaymentRecordEntry[];
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -597,12 +712,13 @@ const PaymentStatementPage = () => {
   const cartKey = user ? String(user.id) : 'guest';
   const localCartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
 
-  // Auto-select current user's records on initial load
+  // Auto-select current user's records on initial load (for non-admin users)
+  // Admin users see all donors by default without auto-selecting
   useEffect(() => {
-    if (user?.id && selectedDonorIds.length === 0) {
+    if (user?.id && selectedDonorIds.length === 0 && !isAdminUser) {
       setSelectedDonorIds([user.id]);
     }
-  }, [user?.id, selectedDonorIds.length]);
+  }, [user?.id, selectedDonorIds.length, isAdminUser]);
 
   useEffect(() => {
     if (combineRole === null && !combineLoading && !combineError) {
@@ -1153,11 +1269,14 @@ const PaymentStatementPage = () => {
   }, [selectedMonthKey, mergedRecords]);
 
   const passbookEntries = useMemo(() => {
+    if (isAdminUser) {
+      return [];
+    }
     const sorted =
       filteredRecords.length > 0
         ? [...filteredRecords].sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
         : [];
-    const hasBalanceEntry = currentBalance !== null && currentBalance !== undefined;
+    const hasBalanceEntry = currentBalance !== null && currentBalance !== undefined && !isAdminUser;
     const cachedOpeningBalance = cachedOpeningBalanceRef.current;
     // Use monthOpeningBalance if available (selected month), otherwise use current opening balance
     const initialBalance =
@@ -1259,7 +1378,33 @@ const PaymentStatementPage = () => {
     });
 
     return entries;
-  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance]);
+  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser]);
+
+  const adminPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
+    if (!isAdminUser || filteredRecords.length === 0) {
+      return [];
+    }
+    const groupsByKey = new Map<string, AdminDonorPassbookGroup>();
+    filteredRecords.forEach((record) => {
+      const donorId = typeof record.donor === 'number' ? record.donor : null;
+      const donorLabel = resolveDonorDisplayLabel(record, donorId);
+      const groupKey = donorId !== null ? `donor-${donorId}` : `label-${donorLabel}`;
+      if (!groupsByKey.has(groupKey)) {
+        groupsByKey.set(groupKey, {
+          id: groupKey,
+          donorId,
+          label: donorLabel,
+          records: [],
+        });
+      }
+      groupsByKey.get(groupKey)!.records.push(record);
+    });
+    const groups = Array.from(groupsByKey.values());
+    groups.forEach((group) => {
+      group.records.sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
+    });
+    return groups.sort((a, b) => a.label.localeCompare(b.label));
+  }, [filteredRecords, isAdminUser]);
 
   const getEntryDateLabel = (entry: PassbookEntry) => {
     if (entry.displayDate) {
@@ -1292,8 +1437,31 @@ const PaymentStatementPage = () => {
     return 'Payment recorded';
   };
 
+  const getRecordTransactionDetailsLabel = (record: PaymentRecordEntry) => {
+    const statusLabel = resolveStatusLabel(record);
+    if (statusLabel === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+      return '--- Pooja DUE ---';
+    }
+    const reference = record.transaction_reference?.trim();
+    if (reference) {
+      return reference;
+    }
+    return 'Payment recorded';
+  };
+
   const getEntryAmountLabel = (entry: PassbookEntry, amount: number) =>
     entry.isCurrentBalanceEntry ? '-' : formatCurrency(amount);
+
+  const adminPassbookRecordCount = adminPassbookGroups.reduce(
+    (sum, group) => sum + group.records.length,
+    0,
+  );
+
+  const passbookSummaryText = isAdminUser
+    ? adminPassbookRecordCount > 0
+      ? `${adminPassbookRecordCount} record${adminPassbookRecordCount === 1 ? '' : 's'} • ${adminPassbookGroups.length} donor${adminPassbookGroups.length === 1 ? '' : 's'}`
+      : 'No payment records'
+    : `${passbookEntries.length} record${passbookEntries.length === 1 ? '' : 's'}`;
 
   const totalPaid = useMemo(
     () => filteredRecords.reduce((sum, record) => sum + getDisplayedPaidAmountValue(record), 0),
@@ -1410,24 +1578,10 @@ const PaymentStatementPage = () => {
               Filter by month
             </p>
             <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={selectedMonthKey ? `${selectedMonthKey}-01` : ''}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (!value) {
-                    setSelectedMonthKey('');
-                    return;
-                  }
-                  const [year, month] = value.split('-');
-                  if (year && month) {
-                    setSelectedMonthKey(`${year}-${month}`);
-                    return;
-                  }
-                  setSelectedMonthKey('');
-                }}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
-                placeholder="dd/mm/yyyy"
+              <MonthRangeSelect
+                value={selectedMonthKey}
+                onChange={(value) => setSelectedMonthKey(value)}
+                onClear={() => setSelectedMonthKey('')}
               />
               <button
                 type="button"
@@ -1438,9 +1592,6 @@ const PaymentStatementPage = () => {
                 Clear
               </button>
             </div>
-            <p className="text-xs text-slate-400">
-              Pick any date within the month (dd/mm/yyyy format).
-            </p>
           </div>
 
           <div className="flex-1 min-w-[220px] space-y-2">
@@ -1476,14 +1627,118 @@ const PaymentStatementPage = () => {
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Passbook</p>
             <p className="text-lg font-semibold text-slate-800">Payment history</p>
           </div>
-          <p className="text-xs text-slate-500">
-            {passbookEntries.length} record{passbookEntries.length === 1 ? '' : 's'}
-          </p>
+          <p className="text-xs text-slate-500">{passbookSummaryText}</p>
         </div>
         {loading ? (
           <div className="px-4 py-5 text-sm text-slate-500">Loading payment records…</div>
         ) : error ? (
           <div className="px-4 py-5 text-sm text-rose-600">{error}</div>
+        ) : isAdminUser ? (
+          adminPassbookGroups.length ? (
+            <div className="px-4 py-3 space-y-6">
+              {adminPassbookGroups.map((group) => (
+                <div
+                  key={group.id}
+                  className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Donor passbook
+                      </p>
+                      <p className="text-lg font-semibold text-slate-800">{group.label}</p>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {group.records.length} record{group.records.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    <div className="hidden md:block">
+                      <div className="max-h-[520px] overflow-auto rounded-2xl">
+                        <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
+                          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                            <tr>
+                              <th className="px-4 py-3 text-left font-semibold">S.no</th>
+                              <th className="px-4 py-3 text-left font-semibold">Date</th>
+                              <th className="px-4 py-3 text-left font-semibold">Transaction Details</th>
+                              <th className="px-4 py-3 text-right font-semibold">
+                                Due for current month
+                              </th>
+                              <th className="px-4 py-3 text-right font-semibold">Amount received</th>
+                              <th className="px-4 py-3 text-right font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {group.records.map((record, idx) => (
+                              <tr key={`${group.id}-record-${record.id ?? idx}`}>
+                                <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
+                                <td className="px-4 py-3 text-slate-600">
+                                  {formatDisplayDate(getRecordDateValue(record))}
+                                </td>
+                                <td className="px-4 py-3 text-slate-600">
+                                  {getRecordTransactionDetailsLabel(record)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                                  {formatCurrency(getDisplayedDueAmountValue(record))}
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                                  {formatCurrency(getDisplayedPaidAmountValue(record))}
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                                  {resolveStatusLabel(record)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="flex flex-col space-y-3 md:hidden">
+                      {group.records.map((record, idx) => (
+                        <div
+                          key={`${group.id}-mobile-record-${record.id ?? idx}`}
+                          className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-700">
+                              #{idx + 1} •{' '}
+                              <span className="font-normal text-slate-500">
+                                {formatDisplayDate(getRecordDateValue(record))}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="mt-2 space-y-2 text-xs text-slate-500">
+                            <div>
+                              <p className="font-semibold text-slate-600">Transaction Details</p>
+                              <p className="text-slate-700">
+                                {getRecordTransactionDetailsLabel(record)}
+                              </p>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-600">
+                                Due for current month
+                              </span>
+                              <span>{formatCurrency(getDisplayedDueAmountValue(record))}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-600">Amount received</span>
+                              <span>{formatCurrency(getDisplayedPaidAmountValue(record))}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-600">Status</span>
+                              <span>{resolveStatusLabel(record)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-5 text-sm text-slate-500">No payments found.</div>
+          )
         ) : passbookEntries.length ? (
           <div className="px-4 py-3">
             <div className="hidden rounded-t-2xl md:block">
@@ -1506,7 +1761,9 @@ const PaymentStatementPage = () => {
                         <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
                         <td className="px-4 py-3 text-slate-600">{getEntryDateLabel(entry)}</td>
                         <td className="px-4 py-3 text-slate-600">{getEntryDonorNameLabel(entry)}</td>
-                        <td className="px-4 py-3 text-slate-600">{getEntryTransactionDetailsLabel(entry, filteredRecords)}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {getEntryTransactionDetailsLabel(entry, filteredRecords)}
+                        </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-800">
                           {getEntryAmountLabel(entry, entry.dueAmount)}
                         </td>
@@ -1541,7 +1798,9 @@ const PaymentStatementPage = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-slate-600">Transaction Details</p>
-                      <p className="text-slate-700">{getEntryTransactionDetailsLabel(entry, filteredRecords)}</p>
+                      <p className="text-slate-700">
+                        {getEntryTransactionDetailsLabel(entry, filteredRecords)}
+                      </p>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold text-slate-600">Due for current month</span>
