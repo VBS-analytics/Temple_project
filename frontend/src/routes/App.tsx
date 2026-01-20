@@ -22,9 +22,12 @@ import Gallery from '../pages/Gallery';
 import Events from '../pages/Events';
 import Projects from '../pages/Projects';
 import About from '../pages/About';
+import AboutKakkalaniVillage from '../pages/AboutKakkalaniVillage';
 import DonorProfile from '../pages/DonorProfile';
 import CombinePaymentPage from '../pages/payments/CombinePaymentPage';
 import ReportPage from '../pages/ReportPage';
+import WhyVisitNativeVillage from '../pages/WhyVisitNativeVillage';
+import History from '../pages/History';
 import { useAuthStore } from '../store/auth';
 
 const HomeRoute = () => {
@@ -92,6 +95,9 @@ const App = () => (
     <Route path="/events" element={<Events />} />
     <Route path="/projects" element={<Projects />} />
     <Route path="/about" element={<About />} />
+    <Route path="/about-kakkalani-village" element={<AboutKakkalaniVillage />} />
+    <Route path="/why-visit-native-village" element={<WhyVisitNativeVillage />} />
+    <Route path="/history" element={<History />} />
 
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

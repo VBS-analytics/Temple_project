@@ -178,6 +178,17 @@ const toCurrencyString = (value?: string | number | null) => {
   return String(value);
 };
 
+const resolveOpeningBalanceValue = (profile: DonorProfile) => {
+  const calculated = profile.calculated_current_balance;
+  if (calculated !== null && calculated !== undefined && calculated !== '') {
+    return String(calculated);
+  }
+  if (profile.custom_number != null) {
+    return String(profile.custom_number);
+  }
+  return '';
+};
+
 const normalizePhone = (value?: string | null) => (value ? value.replace(/\D/g, '') : '');
 
 const formatNumber = (value: number) => value.toLocaleString('en-IN');
@@ -356,7 +367,7 @@ const DonorDetailsPage = () => {
     setCustomNumberValues((prev) => {
       const next = { ...prev };
       donors.forEach((donor) => {
-        const normalized = donor.profile.custom_number != null ? String(donor.profile.custom_number) : '';
+        const normalized = resolveOpeningBalanceValue(donor.profile);
         if (next[donor.user.id] !== normalized) {
           next[donor.user.id] = normalized;
         }
@@ -384,7 +395,7 @@ const DonorDetailsPage = () => {
       city: record.profile.city ?? '',
       state: record.profile.state ?? '',
       postal_code: record.profile.postal_code ?? '',
-      custom_number: record.profile.custom_number != null ? String(record.profile.custom_number) : '',
+      custom_number: resolveOpeningBalanceValue(record.profile),
     });
     setExpandedSections((prev) => {
       const current = prev[record.user.id] ?? { members: false, registrations: false, details: true };
@@ -506,7 +517,7 @@ const DonorDetailsPage = () => {
       }
       return { ...prev, [donorId]: currentValue };
     });
-    const originalValue = donor.profile.custom_number != null ? String(donor.profile.custom_number) : '';
+    const originalValue = resolveOpeningBalanceValue(donor.profile);
     if (currentValue === originalValue) {
       setCustomNumberErrors((prev) => {
         if (!prev[donorId]) {
@@ -1079,9 +1090,7 @@ const DonorDetailsPage = () => {
             const emailLabel = resolveText(user.email, 'Not provided');
             const roleLabel = resolveText(user.role, 'Not provided');
             const fullAddress = profileAddress || 'Not provided';
-            const inlineCustomNumber =
-              customNumberValues[user.id] ??
-              (profile.custom_number != null ? String(profile.custom_number) : '');
+            const inlineCustomNumber = customNumberValues[user.id] ?? resolveOpeningBalanceValue(profile);
             const customNumberError = customNumberErrors[user.id];
             const isCustomNumberSaving = customNumberSavingIds.has(user.id);
 

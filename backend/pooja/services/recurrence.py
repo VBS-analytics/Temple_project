@@ -300,8 +300,136 @@ def prepare_recurring_registration(plan: RecurringPoojaPlan, *, reference_date: 
     return registration
 
 
+def _create_due_payment_record(
+    donor_id: int,
+    total_amount: Decimal,
+    payment_month: date,
+) -> Optional[PaymentRecord]:
+    """Create a single pending payment record for a donor's total recurring contribution for the month.
+    
+    Uses get_or_create to prevent duplicates.
+    """
+    if total_amount <= 0:
+        return None
+    
+    # Use get_or_create to atomically create or return existing due
+    payment_record, created = PaymentRecord.objects.get_or_create(
+        donor_id=donor_id,
+        registration=None,
+        payment_month=payment_month,
+        defaults={
+            'amount': total_amount,
+            'currency': 'INR',
+            'mode': 'pending',
+            'status': PaymentStatus.PENDING,
+            'notes': 'Monthly recurring pooja contribution due',
+        }
+    )
+    
+    return payment_record if created else None
+
+
+def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> int:
+    """Generate due payment records for the 1st of each month for all active recurring plans.
+    
+    Creates ONE combined due per donor per month for all their active recurring plans.
+    Dues are generated starting from the month AFTER the last successful payment's payment_month.
+    """
+    now = today or timezone.localdate()
+    current_month = now.replace(day=1)
+    
+    # Find all active recurring plans
+    active_plans = RecurringPoojaPlan.objects.filter(
+        is_active=True,
+        recurrence_kind=RecurrenceKind.RECURRING,
+    )
+    
+    # Exclude paused plans
+    paused_now = Q(pause_from__lte=current_month, pause_until__gte=current_month)
+    active_plans = active_plans.exclude(paused_now)
+    
+    # Group plans by donor to create ONE due per donor per month
+    donors_to_process = {}  # donor_id -> (plans, should_create_due)
+    
+    for plan in active_plans:
+        donor_id = plan.donor_id
+        
+        if donor_id not in donors_to_process:
+            donors_to_process[donor_id] = {
+                'plans': [],
+                'total_amount': Decimal('0.00'),
+                'should_create_due': False
+            }
+        
+        donors_to_process[donor_id]['plans'].append(plan)
+        donors_to_process[donor_id]['total_amount'] += plan.amount or Decimal('0.00')
+    
+    created_count = 0
+    
+    # Process each donor's combined due
+    for donor_id, donor_data in donors_to_process.items():
+        plans = donor_data['plans']
+        total_amount = donor_data['total_amount']
+        
+        # Find the last successful payment for this donor
+        last_payment = (
+            PaymentRecord.objects
+            .filter(donor_id=donor_id, status=PaymentStatus.SUCCESS)
+            .order_by('-payment_month', '-created_at')
+            .first()
+        )
+        
+        # Determine if we should create a due for this month
+        should_create_due = False
+        
+        if last_payment and last_payment.payment_month:
+            # Use the month after the last successful payment
+            last_payment_month = last_payment.payment_month.replace(day=1)
+            # Calculate next month after last payment
+            next_month_after_payment = _add_months(last_payment_month, 1)
+            
+            # Create due if current month is at or after the next month after last payment
+            if current_month >= next_month_after_payment:
+                should_create_due = True
+        else:
+            # No previous payment found, check plan start dates
+            earliest_plan_date = None
+            for plan in plans:
+                plan_date = plan.start_date or (plan.created_at.date() if plan.created_at else None)
+                if plan_date:
+                    if earliest_plan_date is None or plan_date < earliest_plan_date:
+                        earliest_plan_date = plan_date
+            
+            if earliest_plan_date:
+                plan_start_month = earliest_plan_date.replace(day=1)
+                # Generate dues from the SECOND month onwards (after plan creation month)
+                if current_month > plan_start_month:
+                    should_create_due = True
+        
+        # Create a single combined due for this donor
+        if should_create_due:
+            try:
+                due_record = _create_due_payment_record(donor_id, total_amount, current_month)
+                if due_record:
+                    LOGGER.info(
+                        "Created combined due payment record for donor %s (total ₹%.2f) for month %s",
+                        donor_id,
+                        float(total_amount),
+                        current_month.isoformat(),
+                    )
+                    created_count += 1
+            except Exception as exc:  # pragma: no cover
+                LOGGER.exception("Unable to create due payment record for donor %s", donor_id)
+    
+    return created_count
+
+
 def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:
     now = today or timezone.localdate()
+    
+    # Generate due payment records for the current month
+    due_payments_created = _generate_due_payments_for_recurring_plans(now)
+    
     expired_pause_query = RecurringPoojaPlan.objects.filter(
         pause_until__isnull=False,
         pause_until__lt=now,
@@ -334,4 +462,8 @@ def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:
             LOGGER.exception("Unable to process recurring plan %s", plan.pk)
             failures.append(str(exc))
 
-    return {"processed": processed, "failures": failures}
+    return {
+        "processed": processed,
+        "failures": failures,
+        "due_payments_created": due_payments_created,
+    }

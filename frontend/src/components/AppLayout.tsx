@@ -154,7 +154,7 @@ const AppLayout = () => {
                       </span>
                       {sessionTimeout.timeLeftMs !== null && (
                         <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
-                          Expires in {formatCountdown(sessionTimeout.timeLeftMs)}
+                          Session Expires in {formatCountdown(sessionTimeout.timeLeftMs)}
                         </span>
                       )}
                     </div>

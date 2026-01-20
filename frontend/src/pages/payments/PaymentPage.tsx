@@ -50,6 +50,15 @@ const formatDisplayDate = (value?: string | null) => {
   });
 };
 
+const normalizeIsoDate = (value?: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().split('T')[0];
+};
+
 const displayToIsoDate = (displayDate: string): string => {
   const parts = displayDate.split('/');
   if (parts.length !== 3) return '';
@@ -247,7 +256,7 @@ interface RegistrationPayload {
   [key: string]: unknown;
 }
 
-const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
+const buildRegistrationPayload = (item: CartItem, paymentDate?: string): RegistrationPayload => {
   const members = buildRegistrationMembers(item.members);
   if (members.length === 0) {
     const fallbackName = item.fullName?.trim() || 'Member';
@@ -277,10 +286,22 @@ const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
 
   const quantity = Math.max(members.length, 1);
   const numericAmount = Number(item.amount);
+  // Use customDayDate if available, otherwise use bookingDate, otherwise use paymentDate
+  // Default to today's date if no date is provided to ensure start_date is never NULL
+  const registrationDate = item.customDayDate ?? item.bookingDate ?? paymentDate ?? new Date().toISOString();
+  const normalizedStartDate = normalizeIsoDate(registrationDate);
+  
+  console.log('🎯 buildRegistrationPayload DEBUG:');
+  console.log('  item.customDayDate:', item.customDayDate);
+  console.log('  item.bookingDate:', item.bookingDate);
+  console.log('  paymentDate param:', paymentDate);
+  console.log('  registrationDate (resolved):', registrationDate);
+  console.log('  normalizedStartDate:', normalizedStartDate);
+  
   const payload: Record<string, unknown> = {
     pooja_option: item.poojaId,
     day_option: item.dayOptionId ?? undefined,
-    start_date: item.bookingDate,
+    start_date: normalizedStartDate,
     quantity,
     is_group_registration: quantity > 1,
     post_prasadam: Boolean(item.postPrasadam),
@@ -305,37 +326,112 @@ const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
   return payload;
 };
 
+const allocatePaymentAmounts = (items: CartItem[], totalAmount: number) => {
+  const toPaise = (value: number) => {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.round(value * 100));
+  };
+
+  let remainingPaise = Math.max(0, toPaise(totalAmount));
+  const allocations = items.map((item, idx) => {
+    if (remainingPaise <= 0) {
+      return 0;
+    }
+    const itemPaise = toPaise(parseAmount(item.amount));
+    const allocationPaise = Math.min(itemPaise, remainingPaise);
+    remainingPaise = Math.max(remainingPaise - allocationPaise, 0);
+    const allocation = allocationPaise / 100;
+    console.log(`  Item ${idx}: itemAmount=${parseAmount(item.amount)}, allocated=${allocation}, remainingPaise=${remainingPaise}`);
+    return allocation;
+  });
+  
+  const totalAllocated = allocations.reduce((sum, a) => sum + a, 0);
+  console.log('  Total allocated:', totalAllocated, 'Expected:', totalAmount);
+  
+  return allocations;
+};
+
 const recordRegistrations = async (
   items: CartItem[],
   transactionReference: string,
   amountPaid?: number,
   paymentDate?: string,
 ) => {
-  for (const item of items) {
-    const payload = buildRegistrationPayload(item);
+  const totalCartAmount = items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
+  const totalPaymentAmount =
+    typeof amountPaid === 'number' && Number.isFinite(amountPaid) ? amountPaid : totalCartAmount;
+  
+  // DEBUG: Log all amounts and items
+  console.log('🔍 recordRegistrations DEBUG:');
+  console.log('  Items:', items.map((item, idx) => ({ idx, amount: item.amount })));
+  console.log('  totalCartAmount:', totalCartAmount);
+  console.log('  amountPaid parameter:', amountPaid);
+  console.log('  totalPaymentAmount:', totalPaymentAmount);
+  
+  // Safety check: ensure totalPaymentAmount doesn't exceed totalCartAmount
+  const safePaymentAmount = Math.min(totalPaymentAmount, totalCartAmount);
+  
+  console.log('  safePaymentAmount:', safePaymentAmount);
+  
+  const paymentAllocations = allocatePaymentAmounts(items, safePaymentAmount);
+  
+  console.log('  paymentAllocations:', paymentAllocations);
+
+  // Collect all registration IDs before creating payment records
+  const registrationIds: (number | undefined)[] = [];
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const payload = buildRegistrationPayload(item, paymentDate);
+    console.log(`  📦 Sending registration ${index} payload:`, payload);
     const response = await api.post('pooja/registrations/', payload);
     const registrationId = response.data?.id;
+    registrationIds.push(typeof registrationId === 'number' ? registrationId : undefined);
+    console.log(`  Registration ${index} created with ID:`, registrationId, 'Response:', response.data);
+  }
+
+  // Now create payment records with the allocated amounts
+  for (let index = 0; index < items.length; index += 1) {
+    const registrationId = registrationIds[index];
+    const paymentAmount = paymentAllocations[index] ?? 0;
+
+    // Only create payment records for amounts > 0
+    if (paymentAmount <= 0) {
+      console.log(`  Skipping payment record for index ${index}: amount is ${paymentAmount}`);
+      continue;
+    }
+
+    const item = items[index];
     const amountNote =
       typeof amountPaid === 'number' && Number.isFinite(amountPaid)
         ? `Amount Paid: ₹ ${formatCurrency(amountPaid)}`
         : null;
     const noteParts: string[] = [];
-    if (payload.additional_notes) {
-      noteParts.push(payload.additional_notes);
+    if (item.customDayNote?.trim()) {
+      noteParts.push(item.customDayNote.trim());
     }
     if (amountNote) {
       noteParts.push(amountNote);
     }
-    await api.post('payments/records/', {
-      registration: typeof registrationId === 'number' ? registrationId : undefined,
-      amount: Number(item.amount) || 0,
+
+    const paymentPayload = {
+      registration: registrationId,
+      amount: paymentAmount,
       mode: 'upi',
       status: 'success',
       transaction_reference: transactionReference,
       payment_month: paymentDate || undefined,
-      notes: noteParts.join(' • '),
-    });
+      notes: noteParts.length > 0 ? noteParts.join(' • ') : undefined,
+    };
+    
+    console.log(`  Creating payment record ${index}:`, paymentPayload);
+
+    await api.post('payments/records/', paymentPayload);
   }
+  
+  console.log('✅ recordRegistrations completed');
 };
 
 const emitPoojaDataUpdatedEvent = () => {
@@ -420,21 +516,22 @@ const PaymentPage = () => {
   );
 
   const cartTotalAmount = paymentSnapshot?.totalAmount ?? 0;
-  const runningBalance = openingBalance ?? currentBalance ?? 0;
+  const initialBalance = currentBalance ?? openingBalance;
+  const runningBalance = initialBalance ?? 0;
   const needToPayForPooja = Math.max(0, runningBalance + cartTotalAmount);
   const netPaymentAmount = needToPayForPooja;
   const updatedOpeningBalanceValue = runningBalance + cartTotalAmount - netPaymentAmount;
   const updatedOpeningBalanceLabel = `₹ ${formatCurrency(updatedOpeningBalanceValue)}`;
   const lastPaymentAmountLabel = lastPaymentEntry
-    ? `₹ ${formatCurrency(lastPaymentEntry.totalAmount)}`
+    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.totalAmount)}`
     : '—';
   const lastPaymentDateLabel = lastPaymentEntry
     ? formatDate(lastPaymentEntry.paymentDate ?? lastPaymentEntry.completedAt)
     : '—';
   const openingBalanceDisplay = balanceLoading
     ? 'Loading…'
-    : openingBalance != null
-      ? `₹ ${formatCurrency(openingBalance)}`
+    : initialBalance != null
+      ? `₹ ${formatCurrency(initialBalance)}`
       : 'Not set';
   const cartDueAmount = paymentSnapshot?.totalAmount ?? null;
   const currentMonthDueLabel =
@@ -634,14 +731,27 @@ const PaymentPage = () => {
     }
     const parsedAmount = Number(trimmedAmount);
     const requiredPayment = netPaymentAmount;
+    
+    // DEBUG: Log form submission values
+    console.log('🎯 Payment Form Submission:');
+    console.log('  amountPaid (from state):', amountPaid);
+    console.log('  trimmedAmount:', trimmedAmount);
+    console.log('  parsedAmount:', parsedAmount);
+    console.log('  typeof parsedAmount:', typeof parsedAmount);
+    console.log('  Number.isNaN(parsedAmount):', Number.isNaN(parsedAmount));
+    console.log('  netPaymentAmount:', netPaymentAmount);
+    console.log('  requiredPayment:', requiredPayment);
+    
     if (
       Number.isNaN(parsedAmount) ||
-      parsedAmount < requiredPayment ||
-      (requiredPayment > 0 && parsedAmount <= 0)
+      parsedAmount <= 0
     ) {
       setAmountPaidError('Enter a valid amount paid.');
       return;
     }
+    const paymentExcess = Number((parsedAmount - requiredPayment).toFixed(2));
+    const donationCreditAmount =
+      paymentExcess > 0 && paymentExcess <= 5 ? paymentExcess : 0;
     const displayDate = paymentDate.trim();
     if (!displayDate) {
       setPaymentDateError('Payment date is required.');
@@ -663,6 +773,13 @@ const PaymentPage = () => {
     setRegistrationError(null);
     setRegistrationInProgress(true);
     try {
+      console.log('🚀 Calling recordRegistrations with:', {
+        itemsCount: paymentSnapshot.items.length,
+        items: paymentSnapshot.items.map((item) => ({ amount: item.amount })),
+        transactionReference: trimmedReference,
+        amountPaid: parsedAmount,
+        isoDate,
+      });
       await recordRegistrations(paymentSnapshot.items, trimmedReference, parsedAmount, isoDate);
       emitPoojaDataUpdatedEvent();
     } catch (error) {
@@ -672,23 +789,13 @@ const PaymentPage = () => {
       setRegistrationInProgress(false);
     }
 
-    addGeneralPaymentHistory(paymentSnapshot, isoDate);
-    const snapshotAmount = paymentSnapshot.totalAmount ?? 0;
-    const baseBalance =
-      typeof openingBalance === 'number'
-        ? openingBalance
-        : typeof currentBalance === 'number'
-          ? currentBalance
-          : null;
-    if (baseBalance !== null) {
-      const updatedBalance = baseBalance + snapshotAmount - parsedAmount;
-      try {
-        await api.put('auth/profile/', { custom_number: updatedBalance });
-        refreshBalance();
-      } catch (balanceError) {
-        console.error('Unable to refresh opening balance after payment', balanceError);
-        setRegistrationError('Payment recorded but unable to refresh opening balance. Please reload.');
-      }
+    addGeneralPaymentHistory(paymentSnapshot, isoDate, parsedAmount);
+    try {
+      await api.get('auth/profile/');
+      refreshBalance();
+    } catch (balanceError) {
+      console.error('Unable to refresh opening balance after payment', balanceError);
+      setRegistrationError('Payment recorded but unable to refresh opening balance. Please reload.');
     }
     setPetalSeed((seed) => seed + 1);
     setShowCelebration(true);
@@ -910,7 +1017,7 @@ const PaymentPage = () => {
                     }
                   }}
                   placeholder="Enter the amount paid"
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 {amountPaidError && (
                   <p className="mt-2 text-sm text-rose-600">{amountPaidError}</p>
@@ -948,16 +1055,6 @@ const PaymentPage = () => {
                 {paymentDateError && (
                   <p className="mt-2 text-sm text-rose-600">{paymentDateError}</p>
                 )}
-              </div>
-            </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment amount</p>
-                <p className="text-lg font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payment date</p>
-                <p className="text-lg font-semibold text-slate-900">{lastPaymentDateLabel}</p>
               </div>
             </div>
           </div>
@@ -1004,20 +1101,7 @@ const PaymentPage = () => {
         Click Payment to view the bank details, then tap Payment Completed after transferring funds.
       </div>
       <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opening Balance</p>
-            <p className="text-2xl font-semibold text-slate-900">{openingBalanceDisplay}</p>
-            {balanceError && (
-              <p className="text-xs text-rose-600">{balanceError}</p>
-            )}
-            <p className="text-[0.65rem] text-slate-500">
-              Opening Balance = Opening Balance + Current Month Due
-            </p>
-            <p className="text-[0.65rem] text-slate-500">
-              Current Month Due: ₹ {currentMonthDueLabel}
-            </p>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Amount</p>
             <p className="text-xl font-semibold text-slate-900">{lastPaymentAmountLabel}</p>

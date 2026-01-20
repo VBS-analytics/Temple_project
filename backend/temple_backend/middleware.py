@@ -5,6 +5,29 @@ from __future__ import annotations
 from typing import Callable
 
 from django.http import HttpRequest, HttpResponse
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.exceptions import AuthenticationFailed
+
+
+class SilentJWTAuthentication(JWTAuthentication):
+    """
+    JWT authentication that gracefully handles missing/invalid tokens.
+    
+    Unlike the default JWTAuthentication, this class returns None (no user)
+    for missing or invalid tokens instead of raising an exception. This allows
+    permission_classes = [AllowAny] to work correctly on views like /api/auth/login/.
+    
+    When a valid JWT is provided, it authenticates normally. When no JWT or an
+    invalid JWT is provided, it silently returns None, allowing the permission
+    classes to decide access.
+    """
+    
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except AuthenticationFailed:
+            # Silently fail; let permission classes handle access control
+            return None
 
 
 class NoCacheForAuthenticatedMiddleware:

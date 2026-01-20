@@ -14,6 +14,7 @@ interface ProfilePayload {
   profile?: {
     custom_number?: number | null;
     monthly_donation_amount?: number | null;
+    opening_balance?: string | number | null;
     current_month_due?: string | number | null;
     current_month_payments?: string | number | null;
     calculated_current_balance?: string | number | null;
@@ -36,7 +37,7 @@ export const useCurrentBalance = () => {
       const response = await api.get<ProfilePayload>('auth/profile/');
       const profile = response.data?.profile;
       const calculatedValue = parseNumericValue(profile?.calculated_current_balance);
-      const openingValue = parseNumericValue(profile?.custom_number);
+      const openingValue = parseNumericValue(profile?.opening_balance);
       setBalance(calculatedValue ?? openingValue);
       setOpeningBalance(openingValue);
       setCurrentMonthDue(parseNumericValue(profile?.current_month_due));

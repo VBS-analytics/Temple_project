@@ -16,6 +16,7 @@ interface GeneralPaymentSnapshot {
 interface GeneralPaymentHistoryEntry extends GeneralPaymentSnapshot {
   completedAt: string;
   paymentDate?: string;
+  amountPaid?: number;
 }
 
 interface CombinePaymentHistoryEntry {
@@ -61,7 +62,7 @@ interface GeneralPaymentState {
   combineDrafts: Record<string, CombineDraft | null>;
   setGeneralPayment: (payload: { items: CartItem[]; totalAmount: number; userKey: string }) => void;
   clearGeneralPayment: (userKey: string) => void;
-  addGeneralPaymentHistory: (snapshot: GeneralPaymentSnapshot, paymentDate?: string) => void;
+  addGeneralPaymentHistory: (snapshot: GeneralPaymentSnapshot, paymentDate?: string, amountPaid?: number) => void;
   clearGeneralPaymentHistory: (userKey?: string) => void;
   addCombinePaymentHistory: (payload: CombinePaymentHistoryPayload) => void;
   clearCombinePaymentHistory: () => void;
@@ -100,13 +101,14 @@ export const usePaymentStore = create<GeneralPaymentState>()(
           delete next[userKey];
           return { lastGeneralPaymentByUser: next };
         }),
-      addGeneralPaymentHistory: (snapshot, paymentDate) =>
+      addGeneralPaymentHistory: (snapshot, paymentDate, amountPaid) =>
         set((state) => {
           const entry: GeneralPaymentHistoryEntry = {
             ...snapshot,
             items: snapshot.items.map(cloneCartItem),
             completedAt: new Date().toISOString(),
             paymentDate: paymentDate ?? undefined,
+            amountPaid: typeof amountPaid === 'number' ? amountPaid : undefined,
           };
           return {
             generalPaymentHistory: [entry, ...state.generalPaymentHistory].slice(0, HISTORY_LIMIT),

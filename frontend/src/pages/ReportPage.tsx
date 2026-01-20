@@ -15,25 +15,26 @@ interface DonorRecord {
     phone_number?: string | null;
     email?: string | null;
   };
-  profile?: {
-    donor_id?: string | null;
-    family_name?: string | null;
-    gothra?: string | null;
-    rasi?: string | null;
-    tamil_star?: string | null;
-    monthly_donation_amount?: number | string | null;
-    address_line1?: string | null;
-    address_line2?: string | null;
-    address_line3?: string | null;
-    city?: string | null;
-    state?: string | null;
-    postal_code?: string | null;
-    notes?: string | null;
-    custom_number?: number | null;
-    gender?: string | null;
-    date_of_birth?: string | null;
-    tamil_name?: string | null;
-  };
+    profile?: {
+      donor_id?: string | null;
+      family_name?: string | null;
+      gothra?: string | null;
+      rasi?: string | null;
+      tamil_star?: string | null;
+      monthly_donation_amount?: number | string | null;
+      address_line1?: string | null;
+      address_line2?: string | null;
+      address_line3?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postal_code?: string | null;
+      notes?: string | null;
+      custom_number?: number | null;
+      gender?: string | null;
+      date_of_birth?: string | null;
+      tamil_name?: string | null;
+      last_payment_date?: string | null;
+    };
   members?: {
     id?: number;
     name?: string | null;
@@ -396,6 +397,16 @@ const OPENING_BALANCE_HEADERS: string[] = [
   'Opening Balance',
 ] as const;
 
+const EXCESS_DONATION_HEADERS: string[] = [
+  'S.no',
+  'Temple Donor ID',
+  'Name',
+  'Phone',
+  'Excess Donation Amount',
+  'Donation Added Date',
+  'Export Date',
+] as const;
+
 const DATABASE_BUTTON_INFO = [
   {
     label: 'Download Database',
@@ -421,6 +432,11 @@ const DATABASE_BUTTON_INFO = [
     label: 'Opening Balance',
     description:
       'Exports each donor\'s opening balance to help review outstanding pledges or credits.',
+  },
+  {
+    label: 'Excess Donation',
+    description:
+      'Lists donors whose excess ₹1-₹5 contributions were routed to the temple donation pool.',
   },
 ] as const;
 
@@ -781,6 +797,7 @@ const ReportPage = () => {
   const [exportingDonorDetails, setExportingDonorDetails] = useState(false);
   const [exportingPoojaRegistrationDatabase, setExportingPoojaRegistrationDatabase] = useState(false);
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
+  const [exportingExcessDonation, setExportingExcessDonation] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
@@ -1098,6 +1115,53 @@ const ReportPage = () => {
     }
   }, [exportingOpeningBalance, fetchDonors]);
 
+  const handleExcessDonationDownload = useCallback(async () => {
+    if (exportingExcessDonation) return;
+
+    setExportError(null);
+    setExportingExcessDonation(true);
+
+    try {
+      const donors = await fetchDonors();
+      const filteredDonors = donors.filter((donor) => {
+        const donationValue = asNumericValue(donor.profile?.monthly_donation_amount);
+        return donationValue !== null && donationValue > 0;
+      });
+
+      if (!filteredDonors.length) {
+        setExportError('No excess donation records are available right now.');
+        return;
+      }
+
+      const todayLabel = formatDateValue(new Date().toISOString());
+      const rows = filteredDonors.map((donor, index) => ({
+        'S.no': index + 1,
+        'Temple Donor ID': displayValue(donor.profile?.donor_id ?? '—'),
+        Name: displayValue(donor.user.name),
+        Phone: displayValue(donor.user.phone_number),
+        'Excess Donation Amount': displayValue(donor.profile?.monthly_donation_amount),
+        'Donation Added Date': formatDateValue(donor.profile?.last_payment_date),
+        'Export Date': todayLabel,
+      }));
+
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(rows, { header: EXCESS_DONATION_HEADERS });
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Excess Donations');
+      downloadWorkbook(workbook, `excess-donation-${formatFilenameDate(new Date())}.xlsx`);
+    } catch (error) {
+      const detail =
+        (error as AxiosError<{ detail?: string | null }>)?.response?.data?.detail ?? null;
+      console.error('Failed to download excess donation report', error);
+      if (typeof detail === 'string' && detail.length > 0) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the excess donation report right now.');
+      }
+    } finally {
+      setExportingExcessDonation(false);
+    }
+  }, [exportingExcessDonation, fetchDonors]);
+
   const downloadPoojaReport = useCallback(
     async (key: PoojaReportKey, format: PoojaReportFormat) => {
       if (exportingReports[key]) return;
@@ -1339,6 +1403,15 @@ const ReportPage = () => {
                 className={OUTLINE_BUTTON_CLASSES}
               >
                 {openingBalanceLabel}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExcessDonationDownload}
+                disabled={exportingExcessDonation}
+                className={OUTLINE_BUTTON_CLASSES}
+              >
+                Excess Donation
               </button>
             </div>
             

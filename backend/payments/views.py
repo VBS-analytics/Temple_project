@@ -1,9 +1,10 @@
 """Payment API views."""
 
 from datetime import date
+from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
@@ -12,6 +13,7 @@ from rest_framework.views import APIView
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot
+from pooja.services.recurrence import process_recurring_plans
 
 from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer
@@ -39,6 +41,10 @@ def _parse_month_key(value):
 class PaymentRecordViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentRecordSerializer
     permission_classes = (permissions.IsAuthenticated,)
+
+    def list(self, request, *args, **kwargs):
+        process_recurring_plans()
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = (
@@ -99,7 +105,15 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
         return qs.filter(donor=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save()
+        payment = serializer.save()
+        
+        # Note: We do NOT update the opening_balance during the month.
+        # The opening_balance (custom_number) should remain constant for the entire month.
+        # It will be updated to the closing balance only at month-end or via admin action.
+        # 
+        # The closing due for the current month is calculated as:
+        # closing_balance = opening_balance + current_month_due - current_month_payments
+        # This is computed dynamically in the serializer and on the Payment Statement page.
 
 
 class ExpenseRecordViewSet(viewsets.ModelViewSet):
