@@ -354,7 +354,7 @@ type AdminDonorPassbookGroup = {
   id: string;
   donorId: number | null;
   label: string;
-  records: PaymentRecordEntry[];
+  entries: PassbookEntry[];
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -703,6 +703,7 @@ const PaymentStatementPage = () => {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
+  const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const combineRole = useCombineAccessStore((state) => state.role);
   const combinedTo = useCombineAccessStore((state) => state.combinedTo);
   const combineLoading = useCombineAccessStore((state) => state.loading);
@@ -886,6 +887,53 @@ const PaymentStatementPage = () => {
     };
   }, [isAdminUser]);
 
+  // Fetch opening balances for all donors for admin passbook view
+  useEffect(() => {
+    if (!isAdminUser || donorOptions.length === 0) {
+      setDonorOpeningBalances({});
+      return;
+    }
+
+    let isMounted = true;
+    const loadOpeningBalances = async () => {
+      try {
+        const response = await api.get('auth/donors/', {
+          params: { page_size: 500 },
+        });
+        if (!isMounted) {
+          return;
+        }
+        const donors = Array.isArray(response.data)
+          ? response.data
+          : extractResults<DonorListEntry>(response.data);
+        
+        const balances: Record<number, number> = {};
+        donors.forEach((donor) => {
+          const profile = (donor as any).profile;
+          if (profile && profile.opening_balance) {
+            balances[donor.user.id] = parseNumeric(profile.opening_balance);
+          } else {
+            balances[donor.user.id] = 0;
+          }
+        });
+        
+        if (isMounted) {
+          setDonorOpeningBalances(balances);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error('Unable to load donor opening balances', err);
+          setDonorOpeningBalances({});
+        }
+      }
+    };
+
+    loadOpeningBalances();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdminUser, donorOptions.length]);
+
   const selectedDonorLabels = useMemo(() => {
     if (selectedDonorIds.length === 0 || donorOptions.length === 0) {
       return [];
@@ -1038,6 +1086,101 @@ const PaymentStatementPage = () => {
       return 0;
     }
     return parseNumeric(record.amount);
+  };
+
+  const buildPassbookEntriesFromRecords = (
+    records: PaymentRecordEntry[],
+    initialBalance: number,
+    includeBalanceEntry: boolean,
+  ) => {
+    const sorted =
+      records.length > 0
+        ? [...records].sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+        : [];
+
+    const entries: PassbookEntry[] = [];
+    if (includeBalanceEntry) {
+      entries.push({
+        record: {
+          id: CURRENT_BALANCE_ENTRY_ID,
+          donor: null,
+          donor_name: null,
+          created_at: CURRENT_BALANCE_ENTRY_DATE,
+          registration_start_date: CURRENT_BALANCE_ENTRY_DATE,
+        },
+        dueAmount: 0,
+        paidAmount: 0,
+        closingDue: initialBalance,
+        openingBalance: initialBalance,
+        displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+        isCurrentBalanceEntry: true,
+      });
+    }
+
+    let runningBalance = initialBalance;
+
+    const dueRecords = sorted.filter((record) => {
+      const hasRegistration = record.registration && record.registration > 0;
+      const isCartOrPending =
+        record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
+      return hasRegistration || isCartOrPending;
+    });
+
+    const paidRecords = sorted.filter((record) => {
+      const hasTransRef = record.transaction_reference?.trim().length > 0;
+      const hasPaidAmount = parseNumeric(record.amount) > 0;
+      const isPaidStatus = (record.status ?? '').toLowerCase() === 'success';
+      return hasTransRef && (hasPaidAmount || isPaidStatus);
+    });
+
+    if (dueRecords.length > 0) {
+      const totalDueAmount = dueRecords.reduce(
+        (sum, record) => sum + parseNumeric(record.registration_total_amount ?? 0),
+        0,
+      );
+      if (totalDueAmount > 0) {
+        const dueEntry: PassbookEntry = {
+          record: dueRecords[0],
+          dueAmount: totalDueAmount,
+          paidAmount: 0,
+          openingBalance: runningBalance,
+          closingDue: runningBalance + totalDueAmount,
+          entryType: 'due',
+        };
+        entries.push(dueEntry);
+        runningBalance = dueEntry.closingDue;
+      }
+    }
+
+    const groupedPaidRecords = new Map<string, PaymentRecordEntry[]>();
+    paidRecords.forEach((record) => {
+      const groupKey = record.transaction_reference?.trim() || `record-${record.id}`;
+      if (!groupedPaidRecords.has(groupKey)) {
+        groupedPaidRecords.set(groupKey, []);
+      }
+      groupedPaidRecords.get(groupKey)!.push(record);
+    });
+
+    Array.from(groupedPaidRecords.values()).forEach((paymentGroup) => {
+      const totalPaidAmount = paymentGroup.reduce(
+        (sum, record) => sum + getDisplayedPaidAmountValue(record),
+        0,
+      );
+      if (totalPaidAmount > 0) {
+        const paidEntry: PassbookEntry = {
+          record: paymentGroup[0],
+          dueAmount: 0,
+          paidAmount: totalPaidAmount,
+          openingBalance: runningBalance,
+          closingDue: runningBalance - totalPaidAmount,
+          entryType: 'paid',
+        };
+        entries.push(paidEntry);
+        runningBalance = paidEntry.closingDue;
+      }
+    });
+
+    return entries;
   };
 
   const resolveDonorDisplayLabel = (
@@ -1269,142 +1412,12 @@ const PaymentStatementPage = () => {
   }, [selectedMonthKey, mergedRecords]);
 
   const passbookEntries = useMemo(() => {
-    if (isAdminUser) {
-      return [];
-    }
-    const sorted =
-      filteredRecords.length > 0
-        ? [...filteredRecords].sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
-        : [];
     const hasBalanceEntry = currentBalance !== null && currentBalance !== undefined && !isAdminUser;
     const cachedOpeningBalance = cachedOpeningBalanceRef.current;
-    // Use monthOpeningBalance if available (selected month), otherwise use current opening balance
     const initialBalance =
       monthOpeningBalance !== null ? monthOpeningBalance : cachedOpeningBalance ?? openingBalance ?? 0;
-    const entries: PassbookEntry[] = [];
-
-    if (hasBalanceEntry) {
-      entries.push({
-        record: {
-          id: CURRENT_BALANCE_ENTRY_ID,
-          donor: null,
-          donor_name: null,
-          created_at: CURRENT_BALANCE_ENTRY_DATE,
-          registration_start_date: CURRENT_BALANCE_ENTRY_DATE,
-        },
-        dueAmount: 0,
-        paidAmount: 0,
-        closingDue: initialBalance,
-        openingBalance: initialBalance,
-        displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
-        isCurrentBalanceEntry: true,
-      });
-    }
-
-    let runningBalance = initialBalance;
-
-    // Separate records into DUE (pending/unpaid) and PAID (payment records)
-    const dueRecords = sorted.filter((record) => {
-      const hasRegistration = record.registration && record.registration > 0;
-      const isCartOrPending = record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
-      return hasRegistration || isCartOrPending;
-    });
-
-    const paidRecords = sorted.filter((record) => {
-      const hasTransRef = record.transaction_reference?.trim().length > 0;
-      const hasPaidAmount = parseNumeric(record.amount) > 0;
-      const isPaidStatus = (record.status ?? '').toLowerCase() === 'success';
-      return hasTransRef && (hasPaidAmount || isPaidStatus);
-    });
-
-    console.log('🔍 PASSBOOK DEBUG:');
-    console.log('  Total sorted records:', sorted.length);
-    console.log('  DueRecords:', dueRecords.length, dueRecords.map((r) => ({ id: r.id, reg: r.registration, total: r.registration_total_amount })));
-    console.log('  PaidRecords:', paidRecords.length, paidRecords.map((r) => ({ id: r.id, ref: r.transaction_reference, amount: r.amount })));
-
-    // Create a single combined DUE entry for all pending registrations
-    if (dueRecords.length > 0) {
-      const totalDueAmount = dueRecords.reduce(
-        (sum, record) => sum + parseNumeric(record.registration_total_amount ?? 0),
-        0
-      );
-
-      console.log('  📊 DUE CALCULATION:');
-      console.log('  dueRecords.length:', dueRecords.length);
-      console.log('  totalDueAmount:', totalDueAmount);
-
-      if (totalDueAmount > 0) {
-        const dueEntry: PassbookEntry = {
-          record: dueRecords[0], // Use first DUE record as representative
-          dueAmount: totalDueAmount,
-          paidAmount: 0,
-          openingBalance: runningBalance,
-          closingDue: runningBalance + totalDueAmount,
-          entryType: 'due',
-        };
-        entries.push(dueEntry);
-        runningBalance = dueEntry.closingDue;
-      }
-    }
-
-    // Create individual PAID entries grouped by transaction reference
-    const groupedPaidRecords = new Map<string, PaymentRecordEntry[]>();
-    paidRecords.forEach((record) => {
-      const groupKey = record.transaction_reference?.trim() || `record-${record.id}`;
-      if (!groupedPaidRecords.has(groupKey)) {
-        groupedPaidRecords.set(groupKey, []);
-      }
-      groupedPaidRecords.get(groupKey)!.push(record);
-    });
-
-    Array.from(groupedPaidRecords.values()).forEach((paymentGroup) => {
-      const totalPaidAmount = paymentGroup.reduce(
-        (sum, record) => sum + getDisplayedPaidAmountValue(record),
-        0
-      );
-
-      if (totalPaidAmount > 0) {
-        const paidEntry: PassbookEntry = {
-          record: paymentGroup[0],
-          dueAmount: 0,
-          paidAmount: totalPaidAmount,
-          openingBalance: runningBalance,
-          closingDue: runningBalance - totalPaidAmount,
-          entryType: 'paid',
-        };
-        entries.push(paidEntry);
-        runningBalance = paidEntry.closingDue;
-      }
-    });
-
-    return entries;
+    return buildPassbookEntriesFromRecords(filteredRecords, initialBalance, hasBalanceEntry);
   }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser]);
-
-  const adminPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
-    if (!isAdminUser || filteredRecords.length === 0) {
-      return [];
-    }
-    const groupsByKey = new Map<string, AdminDonorPassbookGroup>();
-    filteredRecords.forEach((record) => {
-      const donorId = typeof record.donor === 'number' ? record.donor : null;
-      const donorLabel = resolveDonorDisplayLabel(record, donorId);
-      const groupKey = donorId !== null ? `donor-${donorId}` : `label-${donorLabel}`;
-      if (!groupsByKey.has(groupKey)) {
-        groupsByKey.set(groupKey, {
-          id: groupKey,
-          donorId,
-          label: donorLabel,
-          records: [],
-        });
-      }
-      groupsByKey.get(groupKey)!.records.push(record);
-    });
-    const groups = Array.from(groupsByKey.values());
-    groups.forEach((group) => {
-      group.records.sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
-    });
-    return groups.sort((a, b) => a.label.localeCompare(b.label));
-  }, [filteredRecords, isAdminUser]);
 
   const getEntryDateLabel = (entry: PassbookEntry) => {
     if (entry.displayDate) {
@@ -1452,14 +1465,62 @@ const PaymentStatementPage = () => {
   const getEntryAmountLabel = (entry: PassbookEntry, amount: number) =>
     entry.isCurrentBalanceEntry ? '-' : formatCurrency(amount);
 
+  const adminPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
+    if (!isAdminUser || mergedRecords.length === 0) {
+      return [];
+    }
+    const groupsByKey = new Map<
+      string,
+      { id: string; donorId: number | null; label: string; records: PaymentRecordEntry[] }
+    >();
+    // Use mergedRecords (ALL records) instead of filteredRecords to show complete donor history
+    mergedRecords.forEach((record) => {
+      const donorId = typeof record.donor === 'number' ? record.donor : null;
+      const donorLabel = resolveDonorDisplayLabel(record, donorId);
+      const groupKey = donorId !== null ? `donor-${donorId}` : `label-${donorLabel}`;
+      if (!groupsByKey.has(groupKey)) {
+        groupsByKey.set(groupKey, {
+          id: groupKey,
+          donorId,
+          label: donorLabel,
+          records: [],
+        });
+      }
+      groupsByKey.get(groupKey)!.records.push(record);
+    });
+    const groups = Array.from(groupsByKey.values())
+      .map((group) => {
+        const sortedRecords = [...group.records].sort(
+          (a, b) => getRecordTimestamp(a) - getRecordTimestamp(b),
+        );
+        
+        // Use the specific donor's opening balance from the API
+        // This ensures admin sees the exact same values as each individual donor
+        let donorBalance = openingBalance ?? 0;
+        if (group.donorId !== null && donorOpeningBalances[group.donorId] !== undefined) {
+          donorBalance = donorOpeningBalances[group.donorId];
+        }
+        
+        const entries = buildPassbookEntriesFromRecords(sortedRecords, donorBalance, true);
+        
+        return { id: group.id, donorId: group.donorId, label: group.label, entries };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return groups;
+  }, [mergedRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, openingBalance]);
+
   const adminPassbookRecordCount = adminPassbookGroups.reduce(
-    (sum, group) => sum + group.records.length,
+    (sum, group) => sum + group.entries.length,
     0,
   );
 
   const passbookSummaryText = isAdminUser
-    ? adminPassbookRecordCount > 0
-      ? `${adminPassbookRecordCount} record${adminPassbookRecordCount === 1 ? '' : 's'} • ${adminPassbookGroups.length} donor${adminPassbookGroups.length === 1 ? '' : 's'}`
+    ? adminPassbookGroups.length
+      ? `${adminPassbookRecordCount} record${
+          adminPassbookRecordCount === 1 ? '' : 's'
+        } • ${adminPassbookGroups.length} donor${
+          adminPassbookGroups.length === 1 ? '' : 's'
+        }`
       : 'No payment records'
     : `${passbookEntries.length} record${passbookEntries.length === 1 ? '' : 's'}`;
 
@@ -1636,11 +1697,11 @@ const PaymentStatementPage = () => {
         ) : isAdminUser ? (
           adminPassbookGroups.length ? (
             <div className="px-4 py-3 space-y-6">
-              {adminPassbookGroups.map((group) => (
-                <div
-                  key={group.id}
-                  className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
-                >
+                      {adminPassbookGroups.map((group) => (
+                        <div
+                          key={group.id}
+                          className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
+                        >
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1649,8 +1710,8 @@ const PaymentStatementPage = () => {
                       <p className="text-lg font-semibold text-slate-800">{group.label}</p>
                     </div>
                     <p className="text-xs text-slate-500">
-                      {group.records.length} record{group.records.length === 1 ? '' : 's'}
-                    </p>
+                      {group.entries.length} record{group.entries.length === 1 ? '' : 's'}
+For Admin, In the Payment Statement Passbook View,                     </p>
                   </div>
                   <div className="mt-3 space-y-3">
                     <div className="hidden md:block">
@@ -1665,27 +1726,27 @@ const PaymentStatementPage = () => {
                                 Due for current month
                               </th>
                               <th className="px-4 py-3 text-right font-semibold">Amount received</th>
-                              <th className="px-4 py-3 text-right font-semibold">Status</th>
+                              <th className="px-4 py-3 text-right font-semibold">Closing due</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {group.records.map((record, idx) => (
-                              <tr key={`${group.id}-record-${record.id ?? idx}`}>
+                            {group.entries.map((entry, idx) => (
+                              <tr key={`${group.id}-entry-${entry.record.id ?? idx}`}>
                                 <td className="px-4 py-3 font-medium text-slate-600">{idx + 1}</td>
                                 <td className="px-4 py-3 text-slate-600">
-                                  {formatDisplayDate(getRecordDateValue(record))}
+                                  {getEntryDateLabel(entry)}
                                 </td>
                                 <td className="px-4 py-3 text-slate-600">
-                                  {getRecordTransactionDetailsLabel(record)}
+                                  {getEntryTransactionDetailsLabel(entry, filteredRecords)}
                                 </td>
                                 <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                                  {formatCurrency(getDisplayedDueAmountValue(record))}
+                                  {formatCurrency(entry.dueAmount)}
                                 </td>
                                 <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                                  {formatCurrency(getDisplayedPaidAmountValue(record))}
+                                  {formatCurrency(entry.paidAmount)}
                                 </td>
                                 <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                                  {resolveStatusLabel(record)}
+                                  {formatCurrency(entry.closingDue)}
                                 </td>
                               </tr>
                             ))}
@@ -1694,16 +1755,16 @@ const PaymentStatementPage = () => {
                       </div>
                     </div>
                     <div className="flex flex-col space-y-3 md:hidden">
-                      {group.records.map((record, idx) => (
+                      {group.entries.map((entry, idx) => (
                         <div
-                          key={`${group.id}-mobile-record-${record.id ?? idx}`}
+                          key={`${group.id}-mobile-entry-${entry.record.id ?? idx}`}
                           className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-semibold text-slate-700">
                               #{idx + 1} •{' '}
                               <span className="font-normal text-slate-500">
-                                {formatDisplayDate(getRecordDateValue(record))}
+                                {getEntryDateLabel(entry)}
                               </span>
                             </p>
                           </div>
@@ -1711,22 +1772,22 @@ const PaymentStatementPage = () => {
                             <div>
                               <p className="font-semibold text-slate-600">Transaction Details</p>
                               <p className="text-slate-700">
-                                {getRecordTransactionDetailsLabel(record)}
+                                {getEntryTransactionDetailsLabel(entry, filteredRecords)}
                               </p>
                             </div>
                             <div className="flex justify-between">
                               <span className="font-semibold text-slate-600">
                                 Due for current month
                               </span>
-                              <span>{formatCurrency(getDisplayedDueAmountValue(record))}</span>
+                              <span>{formatCurrency(entry.dueAmount)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="font-semibold text-slate-600">Amount received</span>
-                              <span>{formatCurrency(getDisplayedPaidAmountValue(record))}</span>
+                              <span>{formatCurrency(entry.paidAmount)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="font-semibold text-slate-600">Status</span>
-                              <span>{resolveStatusLabel(record)}</span>
+                              <span className="font-semibold text-slate-600">Closing due</span>
+                              <span>{formatCurrency(entry.closingDue)}</span>
                             </div>
                           </div>
                         </div>

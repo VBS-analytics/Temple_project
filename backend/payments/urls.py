@@ -8,14 +8,17 @@ from .views import (
     CombinePaymentMappingView,
     ExpenseRecordViewSet,
     PaymentRecordViewSet,
+    PassbookEntryViewSet,
 )
 
 router = DefaultRouter()
 router.register('records', PaymentRecordViewSet, basename='payment-records')
 router.register('expenses', ExpenseRecordViewSet, basename='expense-records')
+router.register('passbook-entries', PassbookEntryViewSet, basename='passbook-entries')
 
 urlpatterns = router.urls
 urlpatterns += [
     path('combine-mappings/', CombinePaymentMappingView.as_view(), name='combine-payment-mappings'),
     path('combine-access/', CombinePaymentAccessView.as_view(), name='combine-payment-access'),
 ]
+

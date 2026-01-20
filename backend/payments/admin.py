@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from .models import ExpenseRecord, PaymentRecord
+from .models import ExpenseRecord, PaymentRecord, PassbookEntry
 
 
 @admin.register(PaymentRecord)
@@ -17,3 +17,12 @@ class ExpenseRecordAdmin(admin.ModelAdmin):
     list_display = ("id", "category", "amount", "transaction_date", "created_by", "created_at")
     list_filter = ("category", "transaction_date")
     search_fields = ("category", "created_by__name", "created_by__phone_number")
+
+
+@admin.register(PassbookEntry)
+class PassbookEntryAdmin(admin.ModelAdmin):
+    list_display = ("id", "donor", "entry_date", "entry_type", "closing_due", "created_at")
+    list_filter = ("entry_type", "entry_date", "donor")
+    search_fields = ("donor__name", "donor__phone_number", "transaction_details")
+    readonly_fields = ("opening_balance", "due_amount", "paid_amount", "closing_due", "created_at", "updated_at")
+
