@@ -107,37 +107,13 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         payment = serializer.save()
         
-        # After payment is created, update the donor's opening_balance
-        # to be the closing due after this payment
-        try:
-            donor = payment.donor
-            donor_profile = donor.profile
-            
-            # Get the current opening balance
-            opening_balance = Decimal(str(donor_profile.opening_balance))
-            
-            # Get all registrations for the donor to calculate total due
-            registrations = donor.pooja_registrations.filter(status='active')
-            total_due = sum(
-                Decimal(str(reg.total_amount or 0)) for reg in registrations
-            )
-            
-            # Get all paid amounts for the donor
-            paid_payments = PaymentRecord.objects.filter(
-                donor=donor,
-                status='success'
-            ).aggregate(total_paid=Sum('amount'))
-            total_paid = Decimal(str(paid_payments['total_paid'] or 0))
-            
-            # Calculate closing balance: opening_balance + total_due - total_paid
-            closing_balance = opening_balance + total_due - total_paid
-            
-            # Update the donor's opening_balance to the closing balance
-            donor_profile.opening_balance = closing_balance
-            donor_profile.save(update_fields=['opening_balance'])
-        except Exception as e:
-            # Log but don't fail the payment creation if balance update fails
-            print(f"Warning: Could not update opening_balance for donor {payment.donor.id}: {str(e)}")
+        # Note: We do NOT update the opening_balance during the month.
+        # The opening_balance (custom_number) should remain constant for the entire month.
+        # It will be updated to the closing balance only at month-end or via admin action.
+        # 
+        # The closing due for the current month is calculated as:
+        # closing_balance = opening_balance + current_month_due - current_month_payments
+        # This is computed dynamically in the serializer and on the Payment Statement page.
 
 
 class ExpenseRecordViewSet(viewsets.ModelViewSet):

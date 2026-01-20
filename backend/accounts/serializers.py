@@ -46,6 +46,17 @@ def _compute_monthly_summary_for_user(user: User) -> dict[str, Decimal]:
     )
     for total_amount in totals:
         due_total += Decimal(total_amount or 0)
+    due_records_total = (
+        PaymentRecord.objects.filter(
+            donor=user,
+            registration__isnull=True,
+            payment_month__gte=start,
+            payment_month__lt=end,
+        )
+        .aggregate(total=Sum("amount"))
+        .get("total")
+    )
+    due_total += Decimal(due_records_total or 0)
     raw_payments = (
         PaymentRecord.objects.filter(
             donor=user,

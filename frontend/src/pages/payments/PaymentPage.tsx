@@ -256,7 +256,7 @@ interface RegistrationPayload {
   [key: string]: unknown;
 }
 
-const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
+const buildRegistrationPayload = (item: CartItem, paymentDate?: string): RegistrationPayload => {
   const members = buildRegistrationMembers(item.members);
   if (members.length === 0) {
     const fallbackName = item.fullName?.trim() || 'Member';
@@ -286,10 +286,22 @@ const buildRegistrationPayload = (item: CartItem): RegistrationPayload => {
 
   const quantity = Math.max(members.length, 1);
   const numericAmount = Number(item.amount);
+  // Use customDayDate if available, otherwise use bookingDate, otherwise use paymentDate
+  // Default to today's date if no date is provided to ensure start_date is never NULL
+  const registrationDate = item.customDayDate ?? item.bookingDate ?? paymentDate ?? new Date().toISOString();
+  const normalizedStartDate = normalizeIsoDate(registrationDate);
+  
+  console.log('🎯 buildRegistrationPayload DEBUG:');
+  console.log('  item.customDayDate:', item.customDayDate);
+  console.log('  item.bookingDate:', item.bookingDate);
+  console.log('  paymentDate param:', paymentDate);
+  console.log('  registrationDate (resolved):', registrationDate);
+  console.log('  normalizedStartDate:', normalizedStartDate);
+  
   const payload: Record<string, unknown> = {
     pooja_option: item.poojaId,
     day_option: item.dayOptionId ?? undefined,
-    start_date: normalizeIsoDate(item.customDayDate ?? item.bookingDate) ?? undefined,
+    start_date: normalizedStartDate,
     quantity,
     is_group_registration: quantity > 1,
     post_prasadam: Boolean(item.postPrasadam),
@@ -372,11 +384,12 @@ const recordRegistrations = async (
 
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    const payload = buildRegistrationPayload(item);
+    const payload = buildRegistrationPayload(item, paymentDate);
+    console.log(`  📦 Sending registration ${index} payload:`, payload);
     const response = await api.post('pooja/registrations/', payload);
     const registrationId = response.data?.id;
     registrationIds.push(typeof registrationId === 'number' ? registrationId : undefined);
-    console.log(`  Registration ${index} created with ID:`, registrationId);
+    console.log(`  Registration ${index} created with ID:`, registrationId, 'Response:', response.data);
   }
 
   // Now create payment records with the allocated amounts
@@ -503,7 +516,8 @@ const PaymentPage = () => {
   );
 
   const cartTotalAmount = paymentSnapshot?.totalAmount ?? 0;
-  const runningBalance = openingBalance ?? currentBalance ?? 0;
+  const initialBalance = currentBalance ?? openingBalance;
+  const runningBalance = initialBalance ?? 0;
   const needToPayForPooja = Math.max(0, runningBalance + cartTotalAmount);
   const netPaymentAmount = needToPayForPooja;
   const updatedOpeningBalanceValue = runningBalance + cartTotalAmount - netPaymentAmount;
@@ -516,8 +530,8 @@ const PaymentPage = () => {
     : '—';
   const openingBalanceDisplay = balanceLoading
     ? 'Loading…'
-    : openingBalance != null
-      ? `₹ ${formatCurrency(openingBalance)}`
+    : initialBalance != null
+      ? `₹ ${formatCurrency(initialBalance)}`
       : 'Not set';
   const cartDueAmount = paymentSnapshot?.totalAmount ?? null;
   const currentMonthDueLabel =

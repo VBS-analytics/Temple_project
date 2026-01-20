@@ -1182,41 +1182,41 @@ const PaymentStatementPage = () => {
       });
     }
 
-    // Group records by transaction reference or by ID if no transaction reference
-    const groupedRecords = new Map<string, PaymentRecordEntry[]>();
-    sorted.forEach((record) => {
-      const groupKey = record.transaction_reference?.trim() || `record-${record.id}`;
-      if (!groupedRecords.has(groupKey)) {
-        groupedRecords.set(groupKey, []);
-      }
-      groupedRecords.get(groupKey)!.push(record);
-    });
-
     let runningBalance = initialBalance;
 
-    // Process each group
-    Array.from(groupedRecords.values()).forEach((recordGroup) => {
-      // Use the first record in the group as the representative record
-      const primaryRecord = recordGroup[0];
-      
-      // For DUE entries: sum all registration_total_amount from:
-      // 1. Records with actual registration IDs (PoojaRegistration records)
-      // 2. Cart snapshot/pending items (registration=null but have registration_total_amount)
-      // This handles multiple registrations in one transaction AND cart items
-      const dueRecords = recordGroup.filter((record) => {
-        const hasRegistration = record.registration && record.registration > 0;
-        const isCartOrPending = record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
-        return hasRegistration || isCartOrPending;
-      });
+    // Separate records into DUE (pending/unpaid) and PAID (payment records)
+    const dueRecords = sorted.filter((record) => {
+      const hasRegistration = record.registration && record.registration > 0;
+      const isCartOrPending = record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
+      return hasRegistration || isCartOrPending;
+    });
+
+    const paidRecords = sorted.filter((record) => {
+      const hasTransRef = record.transaction_reference?.trim().length > 0;
+      const hasPaidAmount = parseNumeric(record.amount) > 0;
+      const isPaidStatus = (record.status ?? '').toLowerCase() === 'success';
+      return hasTransRef && (hasPaidAmount || isPaidStatus);
+    });
+
+    console.log('🔍 PASSBOOK DEBUG:');
+    console.log('  Total sorted records:', sorted.length);
+    console.log('  DueRecords:', dueRecords.length, dueRecords.map((r) => ({ id: r.id, reg: r.registration, total: r.registration_total_amount })));
+    console.log('  PaidRecords:', paidRecords.length, paidRecords.map((r) => ({ id: r.id, ref: r.transaction_reference, amount: r.amount })));
+
+    // Create a single combined DUE entry for all pending registrations
+    if (dueRecords.length > 0) {
       const totalDueAmount = dueRecords.reduce(
         (sum, record) => sum + parseNumeric(record.registration_total_amount ?? 0),
         0
       );
 
-      // Create a single DUE entry for all registrations in this transaction
+      console.log('  📊 DUE CALCULATION:');
+      console.log('  dueRecords.length:', dueRecords.length);
+      console.log('  totalDueAmount:', totalDueAmount);
+
       if (totalDueAmount > 0) {
         const dueEntry: PassbookEntry = {
-          record: primaryRecord,
+          record: dueRecords[0], // Use first DUE record as representative
           dueAmount: totalDueAmount,
           paidAmount: 0,
           openingBalance: runningBalance,
@@ -1226,28 +1226,27 @@ const PaymentStatementPage = () => {
         entries.push(dueEntry);
         runningBalance = dueEntry.closingDue;
       }
+    }
 
-      // For PAID entries: only sum payment amounts from actual payment records
-      // Filter to records that represent actual payments (not auto-generated dues)
-      const paymentRecords = recordGroup.filter(
-        (record) => {
-          const hasTransRef = record.transaction_reference?.trim().length > 0;
-          const hasPaidAmount = parseNumeric(record.amount) > 0;
-          const isPaidStatus = (record.status ?? '').toLowerCase() === 'success';
-          return hasTransRef && (hasPaidAmount || isPaidStatus);
-        }
-      );
+    // Create individual PAID entries grouped by transaction reference
+    const groupedPaidRecords = new Map<string, PaymentRecordEntry[]>();
+    paidRecords.forEach((record) => {
+      const groupKey = record.transaction_reference?.trim() || `record-${record.id}`;
+      if (!groupedPaidRecords.has(groupKey)) {
+        groupedPaidRecords.set(groupKey, []);
+      }
+      groupedPaidRecords.get(groupKey)!.push(record);
+    });
 
-      // Sum paid amounts from payment records only
-      const totalPaidAmount = paymentRecords.reduce(
+    Array.from(groupedPaidRecords.values()).forEach((paymentGroup) => {
+      const totalPaidAmount = paymentGroup.reduce(
         (sum, record) => sum + getDisplayedPaidAmountValue(record),
         0
       );
 
-      // Create a PAID entry if there is payment
       if (totalPaidAmount > 0) {
         const paidEntry: PassbookEntry = {
-          record: primaryRecord,
+          record: paymentGroup[0],
           dueAmount: 0,
           paidAmount: totalPaidAmount,
           openingBalance: runningBalance,

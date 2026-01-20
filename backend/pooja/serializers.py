@@ -223,6 +223,16 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def validate(self, attrs):
+        """Ensure start_date is always set to prevent NULL values in database."""
+        from django.utils import timezone
+        
+        # If start_date is not provided, default to today
+        if attrs.get("start_date") is None:
+            attrs["start_date"] = timezone.localdate()
+        
+        return attrs
+
     @transaction.atomic
     def create(self, validated_data):
         members = validated_data.pop("members", [])

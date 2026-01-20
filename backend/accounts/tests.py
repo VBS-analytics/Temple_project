@@ -180,6 +180,21 @@ class DonorProfileCurrentBalanceSerializerTests(TestCase):
         self.assertEqual(data["current_month_payments"], "100.00")
         self.assertEqual(data["calculated_current_balance"], "300.00")
 
+    def test_includes_due_payment_records_in_summary(self):
+        today = timezone.localdate()
+        PaymentRecord.objects.create(
+            donor=self.user,
+            amount=Decimal("200.00"),
+            currency="INR",
+            mode=PaymentMode.CASH,
+            status=PaymentStatus.PENDING,
+            payment_month=today.replace(day=1),
+        )
+        serializer = DonorProfileSerializer(self.profile)
+        data = serializer.data
+        self.assertEqual(data["current_month_due"], "550.00")
+        self.assertEqual(data["calculated_current_balance"], "450.00")
+
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
 class ImportOpeningBalancesCommandTests(TestCase):
