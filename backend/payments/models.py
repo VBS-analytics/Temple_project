@@ -60,6 +60,62 @@ class PaymentRecord(models.Model):
         return f"Payment {self.pk} - {self.donor}"
 
 
+class PassbookEntry(models.Model):
+    """
+    Stores pre-calculated passbook entries for each donor.
+    These are the final calculated values shown in the payment statement passbook.
+    """
+    ENTRY_TYPE_CHOICES = [
+        ("balance", "Opening Balance"),
+        ("due", "Pooja Due"),
+        ("paid", "Payment Received"),
+    ]
+
+    donor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="passbook_entries",
+    )
+    entry_date = models.DateField(help_text="Date of the transaction/entry (e.g., 31/12/2025 for opening balance)")
+    entry_type = models.CharField(max_length=10, choices=ENTRY_TYPE_CHOICES)
+    
+    # Transaction details
+    transaction_details = models.CharField(max_length=255, blank=True, help_text="e.g., transaction ID or 'Pooja DUE'")
+    payment_record = models.ForeignKey(
+        PaymentRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="passbook_entries",
+    )
+    registration = models.ForeignKey(
+        PoojaRegistration,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="passbook_entries",
+    )
+    
+    # Calculated amounts
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    due_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Due for current month")
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Amount received")
+    closing_due = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Closing due for current month")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("donor", "entry_date")
+        indexes = [
+            models.Index(fields=["donor", "entry_date"]),
+            models.Index(fields=["donor", "-entry_date"]),
+        ]
+
+    def __str__(self):
+        return f"Passbook {self.donor} - {self.entry_date} ({self.entry_type})"
+
+
 class CombinePaymentMapping(models.Model):
     main_donor = models.ForeignKey(
         settings.AUTH_USER_MODEL,

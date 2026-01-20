@@ -523,10 +523,10 @@ const PaymentPage = () => {
   const updatedOpeningBalanceValue = runningBalance + cartTotalAmount - netPaymentAmount;
   const updatedOpeningBalanceLabel = `₹ ${formatCurrency(updatedOpeningBalanceValue)}`;
   const lastPaymentAmountLabel = lastPaymentEntry
-    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.totalAmount)}`
+    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.amount ?? lastPaymentEntry.totalAmount)}`
     : '—';
   const lastPaymentDateLabel = lastPaymentEntry
-    ? formatDate(lastPaymentEntry.paymentDate ?? lastPaymentEntry.completedAt)
+    ? formatDate(lastPaymentEntry.paymentDate ?? lastPaymentEntry.created_at ?? lastPaymentEntry.completedAt)
     : '—';
   const openingBalanceDisplay = balanceLoading
     ? 'Loading…'
@@ -637,6 +637,51 @@ const PaymentPage = () => {
       setPaymentDateError(null);
     }
   }, [paymentSnapshot]);
+
+  // Load backend payment records on component mount to show last payment
+  useEffect(() => {
+    let isMounted = true;
+    
+    const loadPaymentRecords = async () => {
+      try {
+        const response = await api.get('payments/records/', {
+          params: { page_size: 10, ordering: '-created_at' },
+        });
+        
+        if (!isMounted) return;
+        
+        const records = Array.isArray(response.data) 
+          ? response.data 
+          : response.data?.results || [];
+        
+        // Add backend records to local payment history for display
+        records.forEach((record: any) => {
+          if (record.amount && record.created_at) {
+            addGeneralPaymentHistory(
+              {
+                id: `backend-${record.id}`,
+                createdAt: record.created_at,
+                totalAmount: Number(record.amount) || 0,
+                items: [],
+                userKey: cartKey,
+              },
+              record.payment_month || record.created_at,
+              Number(record.amount) || 0
+            );
+          }
+        });
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('Failed to load payment records for last payment display', error);
+      }
+    };
+    
+    loadPaymentRecords();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [cartKey, addGeneralPaymentHistory]);
 
   const handleOpenUpiApp = useCallback(
     (amount?: number) => {

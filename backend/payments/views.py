@@ -15,8 +15,8 @@ from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot
 from pooja.services.recurrence import process_recurring_plans
 
-from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord
-from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer
+from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord, PassbookEntry
+from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer, PassbookEntrySerializer
 
 
 def _parse_month_key(value):
@@ -466,3 +466,50 @@ class CombinePaymentAccessView(APIView):
                 "parent_donors": parent_donors,
             }
         )
+
+
+class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for pre-calculated passbook entries.
+    Returns stored passbook values for donors instead of calculating dynamically.
+    """
+    serializer_class = PassbookEntrySerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_queryset(self):
+        """Get passbook entries for current user or all donors if admin."""
+        user = self.request.user
+        
+        if user.role == UserRole.ADMIN:
+            # Admins can see all passbook entries
+            qs = PassbookEntry.objects.all()
+        else:
+            # Non-admin users see only their own entries
+            qs = PassbookEntry.objects.filter(donor=user)
+        
+        # Filter by donor_id if provided
+        donor_id = self.request.query_params.get('donor_id')
+        if donor_id:
+            try:
+                donor_id_int = int(donor_id)
+                if user.role == UserRole.ADMIN:
+                    qs = qs.filter(donor_id=donor_id_int)
+                elif user.id == donor_id_int:
+                    qs = qs.filter(donor_id=donor_id_int)
+                else:
+                    qs = qs.none()
+            except ValueError:
+                qs = qs.none()
+        
+        # Filter by month if provided (format: YYYY-MM)
+        month_param = self.request.query_params.get('month')
+        if month_param:
+            month_date = _parse_month_key(month_param)
+            if month_date:
+                qs = qs.filter(
+                    entry_date__year=month_date.year,
+                    entry_date__month=month_date.month
+                )
+        
+        return qs.order_by('donor', 'entry_date')
+

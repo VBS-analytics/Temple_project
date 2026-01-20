@@ -1259,43 +1259,6 @@ const DonorDetailsPage = () => {
                           )}
                           <h2 className="text-lg sm:text-xl font-bold text-slate-800">{user.name}</h2>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 mb-2">
-                          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor={`donor-inline-number-${user.id}`}>
-                            Opening Balance
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id={`donor-inline-number-${user.id}`}
-                              type="number"
-                              inputMode="numeric"
-                              step="1"
-                              className="no-spinner w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none"
-                              value={inlineCustomNumber}
-                              onChange={(event) => handleCustomNumberChange(user.id, event.target.value)}
-                              onBlur={(event) => handleCustomNumberSave(donor, event.currentTarget.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault();
-                                  handleCustomNumberSave(donor, event.currentTarget.value);
-                                }
-                              }}
-                            />
-                            {isCustomNumberSaving && (
-                              <svg
-                                className="h-4 w-4 animate-spin text-slate-500"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                              </svg>
-                            )}
-                          </div>
-                        </div>
-                        {customNumberError && (
-                          <p className="text-xs text-rose-600 mb-3">{customNumberError}</p>
-                        )}
                         
                         <div className="flex flex-wrap gap-2 mb-3">
                           {profile.family_name && (
@@ -1536,25 +1499,6 @@ const DonorDetailsPage = () => {
                                       onChange={handleDonorEditChange}
                                       disabled={donorEditSubmitting}
                                     ></textarea>
-                                  </div>
-                                  <div>
-                                  <label
-                                    className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1"
-                                    htmlFor={`donor-custom-number-${user.id}`}
-                                  >
-                                    Opening Balance
-                                    </label>
-                                    <input
-                                      id={`donor-custom-number-${user.id}`}
-                                      name="custom_number"
-                                      type="number"
-                                      inputMode="numeric"
-                                      step="1"
-                                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 focus:outline-none text-sm"
-                                      value={donorEditForm.custom_number}
-                                      onChange={handleDonorEditChange}
-                                      disabled={donorEditSubmitting}
-                                    />
                                   </div>
                                 </div>
                               </div>

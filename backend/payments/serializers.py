@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from .models import ExpenseRecord, PaymentRecord
+from .models import ExpenseRecord, PaymentRecord, PassbookEntry
 from pooja.services.calendar import get_calendar_service
 
 
@@ -175,3 +175,39 @@ class ExpenseRecordSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_by", "created_by_name", "created_at", "updated_at")
+
+
+class PassbookEntrySerializer(serializers.ModelSerializer):
+    """Serializer for pre-calculated passbook entries."""
+    donor_name = serializers.CharField(source="donor.name", read_only=True)
+    entry_type_display = serializers.CharField(source="get_entry_type_display", read_only=True)
+
+    class Meta:
+        model = PassbookEntry
+        fields = (
+            "id",
+            "donor",
+            "donor_name",
+            "entry_date",
+            "entry_type",
+            "entry_type_display",
+            "transaction_details",
+            "payment_record",
+            "registration",
+            "opening_balance",
+            "due_amount",
+            "paid_amount",
+            "closing_due",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "created_at",
+            "updated_at",
+            "opening_balance",
+            "due_amount",
+            "paid_amount",
+            "closing_due",
+        )
+

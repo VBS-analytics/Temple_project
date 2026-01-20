@@ -17,6 +17,9 @@ interface GeneralPaymentHistoryEntry extends GeneralPaymentSnapshot {
   completedAt: string;
   paymentDate?: string;
   amountPaid?: number;
+  // Backend payment record fields
+  amount?: number;
+  created_at?: string;
 }
 
 interface CombinePaymentHistoryEntry {
