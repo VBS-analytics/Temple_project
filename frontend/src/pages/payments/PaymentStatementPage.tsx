@@ -704,6 +704,7 @@ const PaymentStatementPage = () => {
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
+  const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const combineRole = useCombineAccessStore((state) => state.role);
   const combinedTo = useCombineAccessStore((state) => state.combinedTo);
   const combineLoading = useCombineAccessStore((state) => state.loading);
@@ -929,6 +930,51 @@ const PaymentStatementPage = () => {
     };
 
     loadOpeningBalances();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdminUser, donorOptions.length]);
+
+  // Fetch phone numbers for all donors for admin passbook view
+  useEffect(() => {
+    if (!isAdminUser || donorOptions.length === 0) {
+      setDonorPhones({});
+      return;
+    }
+
+    let isMounted = true;
+    const loadDonorPhones = async () => {
+      try {
+        const response = await api.get('auth/donors/', {
+          params: { page_size: 500 },
+        });
+        if (!isMounted) {
+          return;
+        }
+        const donors = Array.isArray(response.data)
+          ? response.data
+          : extractResults<DonorListEntry>(response.data);
+        
+        const phones: Record<number, string> = {};
+        donors.forEach((donor) => {
+          const phone = (donor.user.phone_number ?? '').trim();
+          if (phone) {
+            phones[donor.user.id] = phone;
+          }
+        });
+        
+        if (isMounted) {
+          setDonorPhones(phones);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error('Unable to load donor phone numbers', err);
+          setDonorPhones({});
+        }
+      }
+    };
+
+    loadDonorPhones();
     return () => {
       isMounted = false;
     };
@@ -1186,22 +1232,38 @@ const PaymentStatementPage = () => {
   const resolveDonorDisplayLabel = (
     record?: Partial<PaymentRecordEntry> | null,
     fallbackDonorId?: number | null,
+    phoneNumber?: string | null,
   ) => {
     if (!record) {
       if (fallbackDonorId != null) {
-        return `Donor #${fallbackDonorId}`;
+        const baseLabel = `Donor #${fallbackDonorId}`;
+        if (phoneNumber) {
+          return `${baseLabel} - ${phoneNumber}`;
+        }
+        return baseLabel;
       }
       return 'Donor';
     }
     const trimmedName = (record.donor_name ?? record.registration_donor_name ?? '').trim();
     if (trimmedName) {
+      if (phoneNumber) {
+        return `${trimmedName} - ${phoneNumber}`;
+      }
       return trimmedName;
     }
     if (fallbackDonorId != null) {
-      return `Donor #${fallbackDonorId}`;
+      const baseLabel = `Donor #${fallbackDonorId}`;
+      if (phoneNumber) {
+        return `${baseLabel} - ${phoneNumber}`;
+      }
+      return baseLabel;
     }
     if (record.donor != null) {
-      return `Donor #${record.donor}`;
+      const baseLabel = `Donor #${record.donor}`;
+      if (phoneNumber) {
+        return `${baseLabel} - ${phoneNumber}`;
+      }
+      return baseLabel;
     }
     return 'Donor';
   };
@@ -1476,7 +1538,8 @@ const PaymentStatementPage = () => {
     // Use mergedRecords (ALL records) instead of filteredRecords to show complete donor history
     mergedRecords.forEach((record) => {
       const donorId = typeof record.donor === 'number' ? record.donor : null;
-      const donorLabel = resolveDonorDisplayLabel(record, donorId);
+      const phoneNumber = donorId !== null ? (donorPhones[donorId] ?? null) : null;
+      const donorLabel = resolveDonorDisplayLabel(record, donorId, phoneNumber);
       const groupKey = donorId !== null ? `donor-${donorId}` : `label-${donorLabel}`;
       if (!groupsByKey.has(groupKey)) {
         groupsByKey.set(groupKey, {
@@ -1507,7 +1570,7 @@ const PaymentStatementPage = () => {
       })
       .sort((a, b) => a.label.localeCompare(b.label));
     return groups;
-  }, [mergedRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, openingBalance]);
+  }, [mergedRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, donorPhones, openingBalance]);
 
   const adminPassbookRecordCount = adminPassbookGroups.reduce(
     (sum, group) => sum + group.entries.length,

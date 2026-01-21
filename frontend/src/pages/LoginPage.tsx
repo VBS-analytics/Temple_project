@@ -294,7 +294,6 @@ const LoginPage = () => {
             <div className="space-y-6 sm:space-y-8 animate-fade-in text-center sm:text-left">
               <div className="space-y-3 sm:space-y-4">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-[#f4c956] backdrop-blur-sm">
-                  Welcome Back
                 </div>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4 tracking-tight">
                   Reconnect with Your <span className="text-amber-300">Sacred Journey</span>
