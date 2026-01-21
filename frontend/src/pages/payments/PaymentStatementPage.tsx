@@ -1,5 +1,44 @@
 'use client';
 
+/**
+ * ============================================================================
+ * PAYMENT STATEMENT PAGE MODULE
+ * ============================================================================
+ * 
+ * Purpose:
+ *   Displays comprehensive payment history and passbook for donors and admins.
+ *   Provides detailed tracking of pooja dues, payments, and account balance.
+ * 
+ * Key Features:
+ *   - Passbook View: Shows payment history with running balance calculations
+ *   - Recurring Pooja Dates: Auto-generates monthly due dates (1st of each month)
+ *   - One-time Registrations: Shows current date for single-occurrence poojas
+ *   - Admin Passbook: Multi-donor view with phone numbers and balance tracking
+ *   - Filters: By donor, month, and payment status
+ *   - Downloads: Export as PDF or Excel
+ * 
+ * Data Flow:
+ *   1. Fetch payment records, registrations, and cart snapshots
+ *   2. Merge and transform records (apply date logic)
+ *   3. Apply user filters (donor, month, status)
+ *   4. Build passbook entries with running balance
+ *   5. Display in table format with download options
+ * 
+ * Main Components:
+ *   - DonorNameMultiSelect: Multi-select dropdown for donor filtering
+ *   - MonthRangeSelect: Month selector for filtering by month
+ *   - Passbook Table: Main display for payment history
+ * 
+ * Admin Features:
+ *   - View all donors' passbooks
+ *   - See donor phone numbers
+ *   - Access complete payment history
+ *   - Download reports by donor
+ * 
+ * ============================================================================
+ */
+
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
@@ -554,6 +593,91 @@ const getRecordTimestamp = (record: PaymentRecordEntry) => {
   return 0;
 };
 
+// ============================================================================
+// DATE TRANSFORMATION UTILITY
+// ============================================================================
+// Purpose: Transform pooja occurrence dates based on registration type
+// - Recurring Poojas: Generate 1st of each month for 12 months
+// - One-time Registrations: Use current date
+// 
+// This ensures proper display of pooja due dates in payment statements
+// ============================================================================
+const transformOccurrencesForDisplay = (
+  occurrences: { date: string; label?: string | null }[] | undefined,
+  isRecurring: boolean,
+): { date: string; label?: string | null }[] | undefined => {
+  if (isRecurring) {
+    // For recurring poojas, generate dates for the 1st of each month
+    const uniqueMonths = new Set<string>();
+    const transformedOccurrences: { date: string; label?: string | null }[] = [];
+    const baseLabel = occurrences?.[0]?.label ?? null;
+
+    // First, add any existing occurrences transformed to 1st of month
+    if (occurrences && occurrences.length > 0) {
+      occurrences.forEach((occurrence) => {
+        try {
+          const date = new Date(occurrence.date);
+          if (!Number.isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const monthKey = `${year}-${month}`;
+
+            if (!uniqueMonths.has(monthKey)) {
+              uniqueMonths.add(monthKey);
+              const firstOfMonth = new Date(year, date.getMonth(), 1).toISOString();
+              transformedOccurrences.push({
+                date: firstOfMonth,
+                label: occurrence.label ?? baseLabel,
+              });
+            }
+          }
+        } catch (err) {
+          // If date parsing fails, skip
+        }
+      });
+    }
+
+    // Generate future months starting from the next month
+    // (12 months ahead to show a full year of recurring dues)
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    for (let i = 0; i < 12; i++) {
+      const monthOffset = currentMonth + i;
+      const year = currentYear + Math.floor(monthOffset / 12);
+      const month = (monthOffset % 12) + 1;
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+
+      if (!uniqueMonths.has(monthKey)) {
+        uniqueMonths.add(monthKey);
+        const firstOfMonth = new Date(year, month - 1, 1).toISOString();
+        transformedOccurrences.push({
+          date: firstOfMonth,
+          label: baseLabel,
+        });
+      }
+    }
+
+    // Sort by date
+    transformedOccurrences.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return transformedOccurrences.length > 0 ? transformedOccurrences : undefined;
+  } else {
+    // For one-time registrations, use the current date
+    if (!occurrences || occurrences.length === 0) {
+      return undefined;
+    }
+    const today = new Date().toISOString();
+    return [
+      {
+        date: today,
+        label: occurrences[0]?.label ?? null,
+      },
+    ];
+  }
+};
+
 const computeCartAggregate = (items: CartLikeItem[]) => {
   const totalDue = items.reduce((sum, item) => sum + parseNumeric(item.amount), 0);
   const dateCandidates = items
@@ -586,6 +710,7 @@ const convertSnapshotToRecords = (snapshot: CartSnapshotRecord): PaymentRecordEn
     return [];
   }
   const { totalDue, earliestDate, names, occurrences, hasRecurrence } = computeCartAggregate(items);
+  const transformedOccurrences = transformOccurrencesForDisplay(occurrences, hasRecurrence);
   const snapshotLabel = (snapshot.donor_name ?? '').trim() || 'Cart snapshot';
   const idSuffix = snapshot.updated_at ?? earliestDate ?? new Date().toISOString();
   const snapshotId = `cart-snapshot-${snapshot.donor_id ?? 'unknown'}-${idSuffix}`;
@@ -611,7 +736,7 @@ const convertSnapshotToRecords = (snapshot: CartSnapshotRecord): PaymentRecordEn
       registration_is_group_registration: hasRecurrence,
       created_at: snapshot.updated_at ?? earliestDate ?? null,
       payment_month: earliestDate,
-      upcoming_occurrences: occurrences,
+      upcoming_occurrences: transformedOccurrences,
     },
   ];
 };
@@ -632,6 +757,8 @@ const convertCartItemToRecord = (
         )
         .map((entry) => ({ date: entry.date, label: entry.label ?? null }))
     : undefined;
+  const isRecurring = Boolean(item.recurrenceKind);
+  const transformedOccurrences = transformOccurrencesForDisplay(occurrences, isRecurring);
   return {
     id: uniqueId,
     donor: donorId ?? null,
@@ -646,10 +773,10 @@ const convertCartItemToRecord = (
     status: 'pending',
     registration_status: 'pending',
     registration_donor_name: displayName,
-    registration_is_group_registration: Boolean(item.recurrenceKind),
+    registration_is_group_registration: isRecurring,
     created_at: startDate ?? new Date().toISOString(),
     payment_month: startDate ?? undefined,
-    upcoming_occurrences: occurrences,
+    upcoming_occurrences: transformedOccurrences,
   };
 };
 
@@ -662,6 +789,7 @@ const buildLocalCartRecord = (
     return null;
   }
   const { totalDue, earliestDate, names, occurrences, hasRecurrence } = computeCartAggregate(items);
+  const transformedOccurrences = transformOccurrencesForDisplay(occurrences, hasRecurrence);
   return {
     id: `cart-local-${items.map((item) => item.cartId).join('-')}`,
     donor: donorId ?? null,
@@ -680,7 +808,7 @@ const buildLocalCartRecord = (
     registration_is_group_registration: hasRecurrence,
     created_at: earliestDate,
     payment_month: earliestDate,
-    upcoming_occurrences: occurrences,
+    upcoming_occurrences: transformedOccurrences,
   };
 };
 
@@ -689,6 +817,35 @@ const resolveRegisteredByLabel = (record: PaymentRecordEntry) =>
 
 const resolveBookedByLabel = (record: PaymentRecordEntry) => record.donor_name || '—';
 
+// ============================================================================
+// PAYMENT STATEMENT PAGE COMPONENT
+// ============================================================================
+// Main component that renders the payment statement/passbook interface
+//
+// State Management:
+//   - records: Payment records fetched from API
+//   - registrations: Pending pooja registrations
+//   - donorOptions: List of all donors (for filtering)
+//   - selectedDonorIds: Currently filtered donors
+//   - selectedMonthKey: Currently filtered month (YYYY-MM)
+//   - paymentStatusFilter: Filter by payment status (all/due/paid)
+//   - donorOpeningBalances: Opening balance per donor (admin use)
+//   - donorPhones: Phone number mapping for donor names
+//
+// Data Fetching:
+//   1. loadRecords: Fetch payment records from API
+//   2. loadRegistrations: Fetch pending registrations
+//   3. loadCartSnapshots: Fetch cart snapshots (admin only)
+//   4. loadDonors: Fetch donor list for filtering
+//   5. loadOpeningBalances: Fetch opening balance per donor
+//   6. loadDonorPhones: Fetch phone numbers for donors
+//
+// Key Features:
+//   - Automatic user selection for non-admin users
+//   - Combine access checking for group account views
+//   - Cart snapshot monitoring for real-time updates
+//   - Opening balance calculation for selected month
+// ============================================================================
 const PaymentStatementPage = () => {
   const [records, setRecords] = useState<PaymentRecordEntry[]>([]);
   const [registrations, setRegistrations] = useState<PoojaRegistrationEntry[]>([]);
@@ -704,6 +861,7 @@ const PaymentStatementPage = () => {
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
+  const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const combineRole = useCombineAccessStore((state) => state.role);
   const combinedTo = useCombineAccessStore((state) => state.combinedTo);
   const combineLoading = useCombineAccessStore((state) => state.loading);
@@ -721,12 +879,14 @@ const PaymentStatementPage = () => {
     }
   }, [user?.id, selectedDonorIds.length, isAdminUser]);
 
+  // Fetch combine access permissions for linked accounts
   useEffect(() => {
     if (combineRole === null && !combineLoading && !combineError) {
       fetchCombineAccess();
     }
   }, [combineRole, combineLoading, combineError, fetchCombineAccess]);
 
+  // Monitor cart snapshot updates for real-time passbook refresh
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -740,6 +900,7 @@ const PaymentStatementPage = () => {
     };
   }, []);
 
+  // Fetch payment records (transaction history and pending dues)
   useEffect(() => {
     let isMounted = true;
     const loadRecords = async () => {
@@ -934,6 +1095,51 @@ const PaymentStatementPage = () => {
     };
   }, [isAdminUser, donorOptions.length]);
 
+  // Fetch phone numbers for all donors for admin passbook view
+  useEffect(() => {
+    if (!isAdminUser || donorOptions.length === 0) {
+      setDonorPhones({});
+      return;
+    }
+
+    let isMounted = true;
+    const loadDonorPhones = async () => {
+      try {
+        const response = await api.get('auth/donors/', {
+          params: { page_size: 500 },
+        });
+        if (!isMounted) {
+          return;
+        }
+        const donors = Array.isArray(response.data)
+          ? response.data
+          : extractResults<DonorListEntry>(response.data);
+        
+        const phones: Record<number, string> = {};
+        donors.forEach((donor) => {
+          const phone = (donor.user.phone_number ?? '').trim();
+          if (phone) {
+            phones[donor.user.id] = phone;
+          }
+        });
+        
+        if (isMounted) {
+          setDonorPhones(phones);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error('Unable to load donor phone numbers', err);
+          setDonorPhones({});
+        }
+      }
+    };
+
+    loadDonorPhones();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdminUser, donorOptions.length]);
+
   const selectedDonorLabels = useMemo(() => {
     if (selectedDonorIds.length === 0 || donorOptions.length === 0) {
       return [];
@@ -1088,6 +1294,27 @@ const PaymentStatementPage = () => {
     return parseNumeric(record.amount);
   };
 
+  // ============================================================================
+  // BUILD PASSBOOK ENTRIES - Core Balance Calculation Logic
+  // ============================================================================
+  // Purpose: Transform payment records into passbook entries with running balance
+  // 
+  // Process:
+  //   1. Sort records chronologically
+  //   2. Add opening balance entry (if requested)
+  //   3. Aggregate due amounts from registrations/pending items
+  //   4. Group paid records by transaction reference
+  //   5. Calculate closing due after each transaction
+  //
+  // Balance Formula: Closing Due = Previous Balance + Due Amount - Paid Amount
+  // 
+  // Inputs:
+  //   - records: Array of payment records to process
+  //   - initialBalance: Starting balance for the period
+  //   - includeBalanceEntry: Whether to show opening balance row
+  //
+  // Output: Array of PassbookEntry objects ready for display in UI
+  // ============================================================================
   const buildPassbookEntriesFromRecords = (
     records: PaymentRecordEntry[],
     initialBalance: number,
@@ -1186,22 +1413,38 @@ const PaymentStatementPage = () => {
   const resolveDonorDisplayLabel = (
     record?: Partial<PaymentRecordEntry> | null,
     fallbackDonorId?: number | null,
+    phoneNumber?: string | null,
   ) => {
     if (!record) {
       if (fallbackDonorId != null) {
-        return `Donor #${fallbackDonorId}`;
+        const baseLabel = `Donor #${fallbackDonorId}`;
+        if (phoneNumber) {
+          return `${baseLabel} - ${phoneNumber}`;
+        }
+        return baseLabel;
       }
       return 'Donor';
     }
     const trimmedName = (record.donor_name ?? record.registration_donor_name ?? '').trim();
     if (trimmedName) {
+      if (phoneNumber) {
+        return `${trimmedName} - ${phoneNumber}`;
+      }
       return trimmedName;
     }
     if (fallbackDonorId != null) {
-      return `Donor #${fallbackDonorId}`;
+      const baseLabel = `Donor #${fallbackDonorId}`;
+      if (phoneNumber) {
+        return `${baseLabel} - ${phoneNumber}`;
+      }
+      return baseLabel;
     }
     if (record.donor != null) {
-      return `Donor #${record.donor}`;
+      const baseLabel = `Donor #${record.donor}`;
+      if (phoneNumber) {
+        return `${baseLabel} - ${phoneNumber}`;
+      }
+      return baseLabel;
     }
     return 'Donor';
   };
@@ -1419,10 +1662,31 @@ const PaymentStatementPage = () => {
     return buildPassbookEntriesFromRecords(filteredRecords, initialBalance, hasBalanceEntry);
   }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser]);
 
+  // ============================================================================
+  // GET ENTRY DATE LABEL - Display Date Resolution
+  // ============================================================================
+  // Purpose: Return the appropriate date to display in passbook DATE column
+  // 
+  // Logic:
+  //   - displayDate: Use if explicitly set (e.g., current balance entry)
+  //   - DUE entry: Show pooja due date (1st of month for recurring)
+  //   - PAID entry: Show payment transaction date
+  //
+  // Example:
+  //   - Due entry for recurring pooja: 01/01/2026 (from upcoming_occurrences)
+  //   - Paid entry: 15/01/2026 (when payment was received)
+  //   - Opening balance: 31/12/2025 (CURRENT_BALANCE_ENTRY_DISPLAY_DATE)
+  // ============================================================================
   const getEntryDateLabel = (entry: PassbookEntry) => {
     if (entry.displayDate) {
       return entry.displayDate;
     }
+    // For due entries, show the pooja due date from upcoming_occurrences (1st of month)
+    if (entry.entryType === 'due' && entry.record.upcoming_occurrences && entry.record.upcoming_occurrences.length > 0) {
+      const firstOccurrence = entry.record.upcoming_occurrences[0];
+      return formatDisplayDate(firstOccurrence.date);
+    }
+    // For paid entries, show the transaction date
     const sourceDate = getRecordDateValue(entry.record);
     return formatDisplayDate(sourceDate);
   };
@@ -1476,7 +1740,8 @@ const PaymentStatementPage = () => {
     // Use mergedRecords (ALL records) instead of filteredRecords to show complete donor history
     mergedRecords.forEach((record) => {
       const donorId = typeof record.donor === 'number' ? record.donor : null;
-      const donorLabel = resolveDonorDisplayLabel(record, donorId);
+      const phoneNumber = donorId !== null ? (donorPhones[donorId] ?? null) : null;
+      const donorLabel = resolveDonorDisplayLabel(record, donorId, phoneNumber);
       const groupKey = donorId !== null ? `donor-${donorId}` : `label-${donorLabel}`;
       if (!groupsByKey.has(groupKey)) {
         groupsByKey.set(groupKey, {
@@ -1507,7 +1772,7 @@ const PaymentStatementPage = () => {
       })
       .sort((a, b) => a.label.localeCompare(b.label));
     return groups;
-  }, [mergedRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, openingBalance]);
+  }, [mergedRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, donorPhones, openingBalance]);
 
   const adminPassbookRecordCount = adminPassbookGroups.reduce(
     (sum, group) => sum + group.entries.length,

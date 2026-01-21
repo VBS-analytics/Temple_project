@@ -1,3 +1,46 @@
+/**
+ * ============================================================================
+ * COMBINED PAYMENT PAGE MODULE
+ * ============================================================================
+ * 
+ * Purpose:
+ *   Handles combined payment processing for related donor accounts.
+ *   Enables group or family accounts to make unified payments.
+ * 
+ * Key Features:
+ *   - Combined Donor View: Show cart items from multiple linked donors
+ *   - Aggregated Payment: Single payment for entire combined account
+ *   - Member Display: Show all members in combined account with details
+ *   - Payment Processing: Record payment for combined account
+ *   - Access Control: Verify permissions to pay for combined accounts
+ * 
+ * Combined Account Concept:
+ *   Multiple donors can be "combined" under a primary account.
+ *   All payments are tracked together.
+ *   A single payment covers all combined members' dues.
+ * 
+ * Payment Flow:
+ *   1. Verify user has combine access permissions
+ *   2. Load cart items from combined account
+ *   3. Fetch combined account balance
+ *   4. Display aggregated payment details for all members
+ *   5. Show payment methods (UPI, manual transfer)
+ *   6. Record combined payment in backend
+ *   7. Clear combined cart and refresh balance
+ * 
+ * Main Components:
+ *   - Members List: Display all members in combined account
+ *   - Cart Summary: Aggregated items from all members
+ *   - Payment Section: Handle payment for entire combined account
+ *   - Bank Account Section: Reveal sensitive account details
+ * 
+ * Access Control:
+ *   - Only primary donor or authorized users can access
+ *   - Checked via useCombineAccessStore
+ *   - Redirects to main page if no access
+ * 
+ * ============================================================================
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';
