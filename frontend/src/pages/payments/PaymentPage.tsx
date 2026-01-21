@@ -1,3 +1,42 @@
+/**
+ * ============================================================================
+ * PAYMENT PAGE MODULE
+ * ============================================================================
+ * 
+ * Purpose:
+ *   Handles payment processing, cart management, and payment initiation for donors.
+ *   Displays poojas in cart, payment history, and provides multiple payment methods.
+ * 
+ * Key Features:
+ *   - Cart Management: Display and manage poojas added to cart
+ *   - Payment Methods: UPI links, manual transfer via bank account
+ *   - Current Balance: Display donor's account balance
+ *   - Payment History: Show last payment amount and date
+ *   - Payment Recording: Submit payment details (reference, date, amount)
+ *   - QR Code Sharing: Share payment QR code via various channels
+ * 
+ * Payment Flow:
+ *   1. Load cart items for current user
+ *   2. Calculate total amount from cart
+ *   3. Fetch payment history and current balance
+ *   4. Display payment details and bank account
+ *   5. User initiates payment (UPI or manual)
+ *   6. Record payment details in backend
+ *   7. Clear cart and show confirmation
+ * 
+ * Main Components:
+ *   - Cart Summary: Show poojas with amounts and dates
+ *   - Payment Methods: UPI link generation and manual transfer details
+ *   - Bank Account Section: Reveal sensitive account details
+ *   - Payment History: Last payment information
+ * 
+ * Payment Methods:
+ *   - UPI: Generate UPI link for instant payment
+ *   - Manual Transfer: Show bank account details for manual transfer
+ *   - QR Code: Share QR code for mobile scanning
+ * 
+ * ============================================================================
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';

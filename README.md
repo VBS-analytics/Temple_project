@@ -255,6 +255,32 @@ The repository includes a development `.env`. Key variables:
 4. Admin staff curate day codes, featured poojas, and message templates; exports support offline rituals planning.
 5. Astronomy service answers next-occurrence queries for Tamil star and weekday codes, enabling accurate scheduling.
 
+## Payment Module Overview
+
+The Payment Module handles all payment tracking, statement generation, and payment processing:
+
+### Payment Statement Page
+- **Donor View**: Personal passbook showing payment history with running balance
+- **Admin View**: Multi-donor passbook with phone numbers and complete payment tracking
+- **Recurring Poojas**: Automatically shows 1st of each month for 12 months (e.g., 01/01/2026, 01/02/2026, etc.)
+- **One-time Registrations**: Shows current date
+- **Filters**: By donor name, month, and payment status
+- **Exports**: PDF and Excel download options
+
+### Payment Tracking
+- **Opening Balance**: Displayed as first entry (31/12/2025)
+- **Pooja Due**: Amount due for registered poojas
+- **Paid Amount**: Payment received against dues
+- **Closing Balance**: Running balance = Opening + Due - Paid
+
+### Payment Processing
+- **Payment Page**: Donors submit payments with UPI links and manual transfer details
+- **Combined Payment**: Multiple linked donor accounts can make single unified payments
+- **Payment Recording**: Track payment reference, date, and amount
+- **Payment History**: View all past payments and current dues
+
+For detailed documentation, see `docs/PAYMENT_MODULE.md`.
+
 ## Further Reading
 
 - `docs/architecture.md` — architecture goals, data model overview, and future roadmap.

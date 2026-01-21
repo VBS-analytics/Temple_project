@@ -49,6 +49,56 @@
 - UI library: Tailwind CSS for quick layout (configured locally).
 - Mock payment step with modal (future integration point).
 
+## Payment Module Architecture
+
+### Components
+1. **PaymentStatementPage** (`frontend/src/pages/payments/PaymentStatementPage.tsx`)
+   - Displays payment history and passbook for donors and admins
+   - Shows pooja dues with recurring date logic (1st of each month)
+   - Calculates running balance with opening balance from database
+   - Provides multi-donor view for admins with phone number display
+   - Supports filtering by donor, month, and payment status
+   - Enables PDF and Excel exports
+
+2. **PaymentPage** (`frontend/src/pages/payments/PaymentPage.tsx`)
+   - Handles payment processing for individual donors
+   - Displays cart items with amounts and dates
+   - Provides UPI payment link generation
+   - Shows bank account details for manual transfer
+   - Records payment details (reference, date, amount)
+   - Tracks payment history
+
+3. **CombinePaymentPage** (`frontend/src/pages/payments/CombinePaymentPage.tsx`)
+   - Manages combined/group account payments
+   - Aggregates items from linked donor accounts
+   - Makes unified payment for entire combined group
+   - Displays all group members and their contributions
+   - Access controlled via combine permissions
+
+### Data Flow
+```
+Payment Records → Transform Dates → Apply Filters → Build Passbook Entries
+    ↓                ↓                  ↓                    ↓
+Fetch from API    Recurring Logic    Donor/Month/Status    Calculate Balance
+              (1st of month)            Filters
+```
+
+### Date Logic for Recurring Poojas
+- **Recurring Pooja**: Generates 12 months starting from current month, all on 1st of month
+  - Example: Jan 2026 recurring → 01/01/2026, 01/02/2026, ..., 01/12/2026
+- **One-time Registration**: Shows current date
+  - Example: Today's date in passbook
+
+### Balance Calculation
+```
+Closing Due = Opening Balance + Pooja Due - Payment Received
+```
+- Opens with opening balance (typically 31/12/2025)
+- Each due entry increases closing due
+- Each paid entry decreases closing due
+- Running total carried through passbook
+
+
 ## Docker & Environment
 - `docker-compose.yml` builds three services.
 - `.env.example` holds shared environment variables.
