@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { indianCities } from '../data/indianCities';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
+import { publicHeaderLinks } from '../data/publicHeaderLinks';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
 import { useMasterDataStore } from '../store/masterData';
@@ -57,16 +58,6 @@ interface FormValues {
   confirm_password: string;
   otp_code: string;
 }
-
-const navLinks = [
-  { label: 'Home', href: '/' },
-  { label: 'Darshan & Pooja', href: '/#darshan' },
-  { label: 'Gallery', href: '/gallery' },
-  { label: 'Visit', href: '/#visit' },
-  { label: 'Events', href: '/events' },
-  { label: 'Projects', href: '/projects' },
-  { label: 'About', href: '/about' },
-] as const;
 
 const benefits = [
   { icon: '📱', title: 'Mobile Access', description: 'Access all services from your mobile device' },
@@ -411,14 +402,14 @@ const RegisterPage = () => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-white">
-              {navLinks.map((item) => (
-                <a
+              {publicHeaderLinks.map((item) => (
+                <Link
                   key={item.label}
-                  href={item.href}
+                  to={item.to}
                   className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <div className="flex items-center gap-3">
                 <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
@@ -446,15 +437,15 @@ const RegisterPage = () => {
           {mobileMenuOpen && (
             <div className="md:hidden bg-black/70 backdrop-blur-lg">
               <div className="px-4 py-3 space-y-3">
-                {navLinks.map((item) => (
-                  <a
+                {publicHeaderLinks.map((item) => (
+                  <Link
                     key={item.label}
-                    href={item.href}
+                    to={item.to}
                     className="block text-white text-base font-medium py-2 px-3 rounded-lg hover:bg-amber-900/30 transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {item.label}
-                  </a>
+                  </Link>
                 ))}
                 <div className="flex flex-col gap-3 pt-2 pb-1">
                   <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] justify-center`}>

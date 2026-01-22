@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
+import { publicHeaderLinks } from '../data/publicHeaderLinks';
 import { CountryCodePicker } from '../components/CountryCodePicker';
 import { CountryOption } from '../types/country';
 import api from '../lib/api';
@@ -12,16 +13,6 @@ type FormValues = {
   phone_number: string;
   password: string;
 };
-
-const navLinks = [
-  { label: 'Home', href: '/' },
-  { label: 'Darshan & Pooja', href: '/#darshan' },
-  { label: 'Gallery', href: '/gallery' },
-  { label: 'Visit', href: '/#visit' },
-  { label: 'Events', href: '/events' },
-  { label: 'Projects', href: '/projects' },
-  { label: 'About', href: '/about' },
-] as const;
 
 const features = [
   { icon: '🙏', title: 'Daily Darshan', description: 'Priority access to temple darshan slots' },
@@ -185,15 +176,15 @@ const LoginPage = () => {
               
               {/* Desktop Nav */}
               <div className="hidden md:flex items-center gap-4 sm:gap-6 text-sm font-semibold">
-                {navLinks.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
-                  >
-                    {item.label}
-                  </a>
-                ))}
+              {publicHeaderLinks.map((item) => (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
+                >
+                  {item.label}
+                </Link>
+              ))}
                 <div className="flex items-center gap-2 sm:gap-3">
                   <Link
                     to="/register"
@@ -254,15 +245,15 @@ const LoginPage = () => {
               </button>
             </div>
             <nav className="flex flex-col space-y-4">
-              {navLinks.map((item) => (
-                <a
+              {publicHeaderLinks.map((item) => (
+                <Link
                   key={item.label}
-                  href={item.href}
+                  to={item.to}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="rounded-md px-3 py-3 text-base font-medium text-white transition-all duration-300 hover:bg-white/10 hover:text-[#f4ba1a]"
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <hr className="border-white/20 pt-4" />
               <div className="flex flex-col space-y-3">

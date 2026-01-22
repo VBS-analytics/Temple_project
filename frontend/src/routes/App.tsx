@@ -18,9 +18,6 @@ import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
 import ExpensesPage from '../pages/admin/ExpensesPage';
 import PoojaDetailsPage from '../pages/admin/PoojaDetailsPage';
 import LandingPage from '../pages/LandingPage';
-import Gallery from '../pages/Gallery';
-import Events from '../pages/Events';
-import Projects from '../pages/Projects';
 import About from '../pages/About';
 import AboutKakkalaniVillage from '../pages/AboutKakkalaniVillage';
 import DonorProfile from '../pages/DonorProfile';
@@ -91,9 +88,6 @@ const App = () => (
       </Route>
     </Route>
 
-    <Route path="/gallery" element={<Gallery />} />
-    <Route path="/events" element={<Events />} />
-    <Route path="/projects" element={<Projects />} />
     <Route path="/about" element={<About />} />
     <Route path="/about-kakkalani-village" element={<AboutKakkalaniVillage />} />
     <Route path="/why-visit-native-village" element={<WhyVisitNativeVillage />} />
