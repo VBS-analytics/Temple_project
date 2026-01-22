@@ -483,19 +483,7 @@ const formatMemberNames = (members?: RegistrationMember[]) => {
 const formatRegistrationTimeline = (registration: PoojaRegistration) => {
   const createdAt = registration.created_at;
   if (!createdAt) return '—';
-  const createdText = formatDateTime(createdAt);
-  const updatedAt = registration.updated_at;
-  if (!updatedAt) return createdText;
-
-  const createdTime = new Date(createdAt).getTime();
-  const updatedTime = new Date(updatedAt).getTime();
-  if (
-    Number.isNaN(createdTime) ||
-    Number.isNaN(updatedTime) ||
-    Math.abs(createdTime - updatedTime) < 1000
-  ) return createdText;
-
-  return `${formatDateTime(updatedAt)}** updated`;
+  return formatDate(createdAt);
 };
 
 const formatPlanRegistrationTimeline = (

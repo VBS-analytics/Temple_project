@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
+import { publicHeaderLinks } from '../data/publicHeaderLinks';
 
 import api from '../lib/api';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
@@ -57,17 +58,6 @@ const getApiErrorMessage = (detail: unknown): string => {
   const flattened = flattenErrorValues(detail);
   return flattened.length > 0 ? flattened.join(' ') : 'Check the details and try again.';
 };
-
-const navLinks = [
-  { label: 'Home', href: '#top' },
-  { label: 'Darshan & Pooja', href: '#darshan' },
-  { label: 'Architecture', href: '#architecture' },
-  { label: 'Gallery', href: '#gallery' },
-  { label: 'Visit', href: '#visit' },
-  { label: 'Events', href: '#top' },
-  { label: 'Projects', href: '#top' },
-  { label: 'About', href: '#top' },
-] as const;
 
 const features = [
   { icon: '🔐', title: 'Secure Reset', description: 'Safely reset your password in just a couple of steps' },
@@ -188,14 +178,14 @@ const ForgotPasswordPage = () => {
             </Link>
 
             <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-white">
-              {navLinks.map((item) => (
-                <a
+              {publicHeaderLinks.map((item) => (
+                <Link
                   key={item.label}
-                  href={item.href}
+                  to={item.to}
                   className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <div className="flex items-center gap-3">
                 <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
