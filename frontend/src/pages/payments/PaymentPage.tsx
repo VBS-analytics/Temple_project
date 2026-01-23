@@ -295,7 +295,11 @@ interface RegistrationPayload {
   [key: string]: unknown;
 }
 
-const buildRegistrationPayload = (item: CartItem, paymentDate?: string): RegistrationPayload => {
+const buildRegistrationPayload = (
+  item: CartItem,
+  paymentDate?: string,
+  createdAtOverride?: string,
+): RegistrationPayload => {
   const members = buildRegistrationMembers(item.members);
   if (members.length === 0) {
     const fallbackName = item.fullName?.trim() || 'Member';
@@ -349,6 +353,10 @@ const buildRegistrationPayload = (item: CartItem, paymentDate?: string): Registr
     cart_item: sanitizeCartItemForPlan(item),
   };
 
+  if (createdAtOverride) {
+    payload.created_at_override = createdAtOverride;
+  }
+
   if (Number.isFinite(numericAmount)) {
     payload.total_amount = numericAmount;
   }
@@ -397,6 +405,7 @@ const recordRegistrations = async (
   transactionReference: string,
   amountPaid?: number,
   paymentDate?: string,
+  createdAtOverride?: string,
 ) => {
   const totalCartAmount = items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
   const totalPaymentAmount =
@@ -423,7 +432,7 @@ const recordRegistrations = async (
 
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    const payload = buildRegistrationPayload(item, paymentDate);
+    const payload = buildRegistrationPayload(item, paymentDate, createdAtOverride);
     console.log(`  📦 Sending registration ${index} payload:`, payload);
     const response = await api.post('pooja/registrations/', payload);
     const registrationId = response.data?.id;
@@ -856,6 +865,7 @@ const PaymentPage = () => {
     setTransactionReferenceError(null);
     setRegistrationError(null);
     setRegistrationInProgress(true);
+    const registrationCreatedAt = paymentSnapshot?.createdAt;
     try {
       console.log('🚀 Calling recordRegistrations with:', {
         itemsCount: paymentSnapshot.items.length,
@@ -864,7 +874,13 @@ const PaymentPage = () => {
         amountPaid: parsedAmount,
         isoDate,
       });
-      await recordRegistrations(paymentSnapshot.items, trimmedReference, parsedAmount, isoDate);
+      await recordRegistrations(
+        paymentSnapshot.items,
+        trimmedReference,
+        parsedAmount,
+        isoDate,
+        registrationCreatedAt,
+      );
       emitPoojaDataUpdatedEvent();
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));

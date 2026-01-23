@@ -1,4 +1,5 @@
 import React from 'react';
+import PublicSiteHeader from "../components/PublicSiteHeader";
 
 // Types for the content structure
 interface Section {
@@ -35,7 +36,9 @@ const sections: Section[] = [
 
 const AboutKakkalaniVillage: React.FC = () => {
   return (
-    <main className="bg-stone-50 font-sans text-slate-800 antialiased selection:bg-amber-200 selection:text-amber-900">
+    <div className="bg-stone-50 font-sans text-slate-800 antialiased selection:bg-amber-200 selection:text-amber-900">
+      <PublicSiteHeader />
+      <main>
       
       {/* --- Header Section --- */}
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
@@ -138,6 +141,7 @@ const AboutKakkalaniVillage: React.FC = () => {
       </section>
 
     </main>
+    </div>
   );
 };
 
