@@ -1220,13 +1220,19 @@ const PaymentStatementPage = () => {
   const filteredRecords = useMemo(() => {
     let nextRecords = mergedRecords;
 
+    // For admin users: if no donors are selected, show all donors
+    // For non-admin users: if no donors are selected, show only their own records
     if (selectedDonorIds.length > 0) {
       const selectedSet = new Set(selectedDonorIds);
       nextRecords = nextRecords.filter((record) => {
         const donorId = record.donor;
         return typeof donorId === 'number' && selectedSet.has(donorId);
       });
+    } else if (!isAdminUser && user?.id) {
+      // Non-admin users default to their own records
+      nextRecords = nextRecords.filter((record) => record.donor === user.id);
     }
+    // For admin users with no selection: show all records (nextRecords = mergedRecords)
 
     if (selectedMonthKey) {
       nextRecords = nextRecords.filter(
@@ -1245,7 +1251,7 @@ const PaymentStatementPage = () => {
     }
 
     return nextRecords;
-  }, [mergedRecords, selectedDonorIds, selectedMonthKey, paymentStatusFilter]);
+  }, [mergedRecords, selectedDonorIds, selectedMonthKey, paymentStatusFilter, isAdminUser, user?.id]);
 
   const selectedMonthLabel = useMemo(
     () =>
