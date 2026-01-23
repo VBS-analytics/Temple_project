@@ -82,6 +82,32 @@ interface PaymentRecordExportEntry {
   registration_is_group_registration?: boolean | null;
 }
 
+interface PoojaRegistrationRecord {
+  id?: number | null;
+  donor?: number | null;
+  donor_name?: string | null;
+  pooja_option?: string | null;
+  day_option?: string | null;
+  start_date?: string | null;
+  quantity?: number | null;
+  is_group_registration?: boolean | null;
+  post_prasadam?: boolean | null;
+  additional_notes?: string | null;
+  total_amount?: string | number | null;
+  status?: string | null;
+  registration_number?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  members?: Array<{
+    name?: string | null;
+    phone_number?: string | null;
+    relationship?: string | null;
+    date_of_birth?: string | null;
+    family_name?: string | null;
+    tamil_star?: string | null;
+  }> | null;
+}
+
 const formatFilenameDate = (value: Date) =>
   value.toISOString().replace(/[:.]/g, '').replace(/-/g, '').slice(0, 15);
 
@@ -535,6 +561,48 @@ const buildCartSnapshotRows = (snapshots: CartSnapshotRecord[]) => {
         Members: joinCartMemberNames(item.members),
         'Snapshot Updated At': formatDateValue(snapshot.updated_at),
       });
+    });
+  });
+  return output;
+};
+
+const POOJA_REGISTRATIONS_HEADERS: string[] = [
+  'S.no',
+  'Registration ID',
+  'Donor ID',
+  'Donor Name',
+  'Pooja Option',
+  'Day Option',
+  'Start Date',
+  'Quantity',
+  'Is Group Registration',
+  'Post Prasadam',
+  'Additional Notes',
+  'Total Amount',
+  'Status',
+  'Created At',
+  'Updated At',
+] as const;
+
+const buildPoojaRegistrationRows = (registrations: PoojaRegistrationRecord[]) => {
+  const output: Record<string, string | number | null>[] = [];
+  registrations.forEach((registration, index) => {
+    output.push({
+      'S.no': index + 1,
+      'Registration ID': displayValue(registration.registration_number),
+      'Donor ID': registration.donor ?? '—',
+      'Donor Name': displayValue(registration.donor_name),
+      'Pooja Option': displayValue(registration.pooja_option),
+      'Day Option': displayValue(registration.day_option),
+      'Start Date': formatDateValue(registration.start_date),
+      'Quantity': registration.quantity ?? 1,
+      'Is Group Registration': formatBooleanValue(registration.is_group_registration),
+      'Post Prasadam': formatBooleanValue(registration.post_prasadam),
+      'Additional Notes': displayValue(registration.additional_notes),
+      'Total Amount': asNumericValue(registration.total_amount),
+      'Status': displayValue(registration.status),
+      'Created At': formatDateValue(registration.created_at),
+      'Updated At': formatDateValue(registration.updated_at),
     });
   });
   return output;
@@ -994,32 +1062,54 @@ const ReportPage = () => {
     setExportingPoojaRegistrationDatabase(true);
 
     try {
-      const [cartResponse, completedPayments] = await Promise.all([
+      // Fetch all pooja registrations, cart snapshots, and payment records in parallel
+      const [registrationsResponse, cartResponse, completedPayments] = await Promise.all([
+        api.get<PoojaRegistrationRecord[]>('pooja/registrations/'),
         api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/'),
         fetchAllPayments({ status: 'success' }),
       ]);
+
+      const registrations: PoojaRegistrationRecord[] = Array.isArray(registrationsResponse.data)
+        ? registrationsResponse.data
+        : [];
       const snapshots: CartSnapshotRecord[] = Array.isArray(cartResponse.data)
         ? cartResponse.data
         : [];
+
+      const registrationRows = buildPoojaRegistrationRows(registrations);
       const cartRows = buildCartSnapshotRows(snapshots);
       const paymentRows = buildPaymentCompletedRows(completedPayments);
 
-      if (!cartRows.length && !paymentRows.length) {
-        setExportError('No cart snapshots or completed payments are available at the moment.');
+      if (!registrationRows.length && !cartRows.length && !paymentRows.length) {
+        setExportError('No pooja registrations, cart snapshots, or completed payments are available at the moment.');
         return;
       }
 
       const timestamp = formatFilenameDate(new Date());
 
-      const cartWorkbook = XLSX.utils.book_new();
-      const cartSheet = XLSX.utils.json_to_sheet(cartRows, { header: CART_SNAPSHOT_HEADERS });
-      XLSX.utils.book_append_sheet(cartWorkbook, cartSheet, 'Cart Snapshot');
-      downloadWorkbook(cartWorkbook, `pooja-cart-snapshots-${timestamp}.xlsx`);
+      // Create a single comprehensive workbook with all data
+      const workbook = XLSX.utils.book_new();
 
-      const paymentWorkbook = XLSX.utils.book_new();
-      const paymentSheet = XLSX.utils.json_to_sheet(paymentRows, { header: PAYMENT_COMPLETED_HEADERS });
-      XLSX.utils.book_append_sheet(paymentWorkbook, paymentSheet, 'Paid Registrations');
-      downloadWorkbook(paymentWorkbook, `pooja-registrations-paid-${timestamp}.xlsx`);
+      // Add Registrations sheet
+      if (registrationRows.length > 0) {
+        const registrationSheet = XLSX.utils.json_to_sheet(registrationRows, { header: POOJA_REGISTRATIONS_HEADERS });
+        XLSX.utils.book_append_sheet(workbook, registrationSheet, 'Registrations');
+      }
+
+      // Add Cart Snapshots sheet
+      if (cartRows.length > 0) {
+        const cartSheet = XLSX.utils.json_to_sheet(cartRows, { header: CART_SNAPSHOT_HEADERS });
+        XLSX.utils.book_append_sheet(workbook, cartSheet, 'Cart Snapshots');
+      }
+
+      // Add Payment Records sheet
+      if (paymentRows.length > 0) {
+        const paymentSheet = XLSX.utils.json_to_sheet(paymentRows, { header: PAYMENT_COMPLETED_HEADERS });
+        XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment Records');
+      }
+
+      // Download the consolidated workbook
+      downloadWorkbook(workbook, `pooja-registration-database-${timestamp}.xlsx`);
     } catch (error) {
       const detail =
         (error as AxiosError<{ detail?: string | null }>)?.response?.data?.detail ?? null;
