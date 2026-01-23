@@ -1066,7 +1066,7 @@ const ReportPage = () => {
       const [registrationsResponse, cartResponse, completedPayments] = await Promise.all([
         api.get<PoojaRegistrationRecord[]>('pooja/registrations/'),
         api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/'),
-        fetchAllPayments({}), // Fetch ALL payment records regardless of status
+        fetchAllPayments({ status: 'success' }),
       ]);
 
       const registrations: PoojaRegistrationRecord[] = Array.isArray(registrationsResponse.data)
