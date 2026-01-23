@@ -1730,15 +1730,15 @@ const PaymentStatementPage = () => {
     entry.isCurrentBalanceEntry ? '-' : formatCurrency(amount);
 
   const adminPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
-    if (!isAdminUser || mergedRecords.length === 0) {
+    if (!isAdminUser || filteredRecords.length === 0) {
       return [];
     }
     const groupsByKey = new Map<
       string,
       { id: string; donorId: number | null; label: string; records: PaymentRecordEntry[] }
     >();
-    // Use mergedRecords (ALL records) instead of filteredRecords to show complete donor history
-    mergedRecords.forEach((record) => {
+    // Use filteredRecords to apply donor name, month, and payment status filters
+    filteredRecords.forEach((record) => {
       const donorId = typeof record.donor === 'number' ? record.donor : null;
       const phoneNumber = donorId !== null ? (donorPhones[donorId] ?? null) : null;
       const donorLabel = resolveDonorDisplayLabel(record, donorId, phoneNumber);
@@ -1772,7 +1772,7 @@ const PaymentStatementPage = () => {
       })
       .sort((a, b) => a.label.localeCompare(b.label));
     return groups;
-  }, [mergedRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, donorPhones, openingBalance]);
+  }, [filteredRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, donorPhones, openingBalance]);
 
   const adminPassbookRecordCount = adminPassbookGroups.reduce(
     (sum, group) => sum + group.entries.length,
