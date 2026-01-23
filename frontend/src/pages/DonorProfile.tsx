@@ -694,50 +694,6 @@ const DonorProfile = () => {
     [reloadRecurrencePlans],
   );
 
-  const handlePrepareRecurringPayment = useCallback(
-    async (plan: RecurringPlan) => {
-      setPlanActionState((prev) => ({
-        ...prev,
-        [plan.id]: 'prepare',
-      }));
-      setRecurrenceError(null);
-      try {
-        const response = await api.post<PoojaRegistration>(`pooja/recurrence/plans/${plan.id}/prepare-payment/`);
-        await reloadRecurrencePlans();
-        const params = new URLSearchParams();
-        params.set('registration', String(response.data.id));
-        const amountValue = response.data.total_amount;
-        if (amountValue !== undefined && amountValue !== null) {
-          params.set('amount', String(amountValue));
-        } else if (plan.amount !== undefined && plan.amount !== null) {
-          params.set('amount', String(plan.amount));
-        }
-        navigate(`/payments/general?${params.toString()}`);
-      } catch (error) {
-        setRecurrenceError(extractErrorMessage(error));
-      } finally {
-        setPlanActionState((prev) => ({
-          ...prev,
-          [plan.id]: null,
-        }));
-      }
-    },
-    [navigate, reloadRecurrencePlans],
-  );
-
-  const handlePayRecurringPlan = useCallback(
-    (registration?: PlanDueRegistration) => {
-      if (!registration?.id) return;
-      const params = new URLSearchParams();
-      params.set('registration', String(registration.id));
-      if (registration.due_amount) {
-        params.set('amount', registration.due_amount);
-      }
-      navigate(`/payments/general?${params.toString()}`);
-    },
-    [navigate],
-  );
-
   const startEditingPlan = useCallback((plan: RecurringPlan) => {
     setEditingPlanId(plan.id);
     setPlanEditValues({
@@ -792,10 +748,6 @@ const DonorProfile = () => {
       setPlanEditSubmitting(false);
     }
   }, [editingPlanId, planEditValues, reloadRecurrencePlans, cancelPlanEditing]);
-  const [editingRegistrationId, setEditingRegistrationId] = useState<number | null>(null);
-  const [registrationEditDate, setRegistrationEditDate] = useState('');
-  const [registrationEditError, setRegistrationEditError] = useState<string | null>(null);
-  const [registrationEditSubmitting, setRegistrationEditSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
@@ -1138,44 +1090,6 @@ const DonorProfile = () => {
     setEditingMemberId(null);
     setFormData(createInitialFormState(profile ?? undefined));
     setFormError(null);
-  };
-
-  const startEditingRegistration = (registration: PoojaRegistration) => {
-    if (registrationEditSubmitting) return;
-    setEditingRegistrationId(registration.id);
-    setRegistrationEditDate(formatDateForInput(registration.start_date));
-    setRegistrationEditError(null);
-  };
-
-  const cancelRegistrationEditing = () => {
-    if (registrationEditSubmitting) return;
-    setEditingRegistrationId(null);
-    setRegistrationEditDate('');
-    setRegistrationEditError(null);
-  };
-
-  const submitRegistrationEdit = async () => {
-    if (!editingRegistrationId) return;
-    if (!registrationEditDate) {
-      setRegistrationEditError('Pooja date is required');
-      return;
-    }
-    setRegistrationEditSubmitting(true);
-    setRegistrationEditError(null);
-    try {
-      const response = await api.patch<PoojaRegistration>(`pooja/registrations/${editingRegistrationId}/`, {
-        start_date: registrationEditDate,
-      });
-      setRegistrations((prev) =>
-        prev.map((item) => (item.id === editingRegistrationId ? { ...item, ...response.data } : item))
-      );
-      setEditingRegistrationId(null);
-      setRegistrationEditDate('');
-    } catch (err) {
-      setRegistrationEditError(extractErrorMessage(err));
-    } finally {
-      setRegistrationEditSubmitting(false);
-    }
   };
 
   const handleSubmit = async () => {
@@ -1975,101 +1889,52 @@ const DonorProfile = () => {
                 <div className="p-6">
                   {/* Mobile Card View */}
                   <div className="md:hidden space-y-4">
-                    {visibleRegistrations.map((registration) => {
-                      const isEditingRegistration = editingRegistrationId === registration.id;
-                      return (
-                        <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h3 className="text-base font-medium text-indigo-700">
-                                {resolvePoojaId(registration)}
-                              </h3>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => startEditingRegistration(registration)}
-                              className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
-                            >
-                              Edit Date
-                            </button>
+                    {visibleRegistrations.map((registration) => (
+                      <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="text-base font-medium text-indigo-700">
+                              {resolvePoojaId(registration)}
+                            </h3>
                           </div>
-
-                          <dl className="space-y-2 text-sm">
-                            <div>
-                              <dt className="text-xs text-slate-500">Pooja Name</dt>
-                              <dd className="text-slate-700">{registration.pooja_option_name?.trim() || '—'}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs text-slate-500">Day Option</dt>
-                              <dd className="text-slate-700">{registration.day_option_description?.trim() || '—'}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs text-slate-500">Devotees</dt>
-                              <dd className="text-slate-700">{formatMemberNames(registration.members)}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs text-slate-500">Post Prasadam</dt>
-                              <dd className="text-slate-700">
-                                <span
-                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                    registration.post_prasadam
-                                      ? 'bg-rose-100 text-rose-700'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}
-                                >
-                                  {registration.post_prasadam ? 'Yes' : 'No'}
-                                </span>
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs text-slate-500">Registered On</dt>
-                              <dd className="text-slate-700" title={formatRegistrationTimeline(registration)}>
-                                {formatRegistrationTimeline(registration)}
-                              </dd>
-                            </div>
-                          </dl>
-
-                          {isEditingRegistration && (
-                            <div className="mt-4 space-y-3">
-                              <div className="space-y-2 text-sm">
-                                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor={`mobile-date-${registration.id}`}>
-                                  Pooja Date
-                                </label>
-                                <input
-                                  id={`mobile-date-${registration.id}`}
-                                  type="date"
-                                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                                  value={registrationEditDate}
-                                  onChange={(event) => setRegistrationEditDate(event.target.value)}
-                                  max="9999-12-31"
-                                />
-                                {registrationEditError && (
-                                  <span className="text-xs text-red-600">{registrationEditError}</span>
-                                )}
-                              </div>
-                              <div className="flex justify-end space-x-3">
-                                <button
-                                  type="button"
-                                  onClick={cancelRegistrationEditing}
-                                  className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                                  disabled={registrationEditSubmitting}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={submitRegistrationEdit}
-                                  className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
-                                  disabled={registrationEditSubmitting}
-                                >
-                                  {registrationEditSubmitting ? 'Saving...' : 'Save'}
-                                </button>
-                              </div>
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
+
+                        <dl className="space-y-2 text-sm">
+                          <div>
+                            <dt className="text-xs text-slate-500">Pooja Name</dt>
+                            <dd className="text-slate-700">{registration.pooja_option_name?.trim() || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Day Option</dt>
+                            <dd className="text-slate-700">{registration.day_option_description?.trim() || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Devotees</dt>
+                            <dd className="text-slate-700">{formatMemberNames(registration.members)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Post Prasadam</dt>
+                            <dd className="text-slate-700">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                  registration.post_prasadam
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : 'bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {registration.post_prasadam ? 'Yes' : 'No'}
+                              </span>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Registered On</dt>
+                            <dd className="text-slate-700" title={formatRegistrationTimeline(registration)}>
+                              {formatRegistrationTimeline(registration)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Desktop Table View */}
@@ -2084,98 +1949,43 @@ const DonorProfile = () => {
                             <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
                             <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
                             <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                          {visibleRegistrations.map((registration, index) => {
-                            const isEditingRegistration = editingRegistrationId === registration.id;
-                            return (
-                              <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
-                                <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
-                                  {resolvePoojaId(registration)}
-                                </td>
-                                <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
-                                  {registration.pooja_option_name?.trim() || '—'}
-                                </td>
-                                <td
-                                  className="px-4 py-3 text-slate-700"
-                                  title={registration.day_option_description ?? undefined}
+                          {visibleRegistrations.map((registration, index) => (
+                            <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
+                              <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
+                                {resolvePoojaId(registration)}
+                              </td>
+                              <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
+                                {registration.pooja_option_name?.trim() || '—'}
+                              </td>
+                              <td
+                                className="px-4 py-3 text-slate-700"
+                                title={registration.day_option_description ?? undefined}
+                              >
+                                {registration.day_option_description?.trim() || '—'}
+                              </td>
+                              <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
+                              <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    registration.post_prasadam
+                                      ? 'bg-rose-100 text-rose-700'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
                                 >
-                                  {registration.day_option_description?.trim() || '—'}
-                                </td>
-                                <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
-                                <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                                  <span
-                                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                      registration.post_prasadam
-                                        ? 'bg-rose-100 text-rose-700'
-                                        : 'bg-slate-100 text-slate-700'
-                                    }`}
-                                  >
-                                    {registration.post_prasadam ? 'Yes' : 'No'}
-                                  </span>
-                                </td>
-                                <td
-                                  className="whitespace-nowrap px-4 py-3 text-slate-700"
-                                  title={formatRegistrationTimeline(registration)}
-                                >
-                                  {formatRegistrationTimeline(registration)}
-                                </td>
-                                <td className="px-4 py-3 text-right min-w-[160px]">
-                                  {isEditingRegistration ? (
-                                    <div className="space-y-3">
-                                      <div className="space-y-2 text-sm text-left">
-                                        <label
-                                          htmlFor={`desktop-date-${registration.id}`}
-                                          className="text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                        >
-                                          Pooja Date
-                                        </label>
-                                        <input
-                                          id={`desktop-date-${registration.id}`}
-                                          type="date"
-                                          className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                                          value={registrationEditDate}
-                                          onChange={(event) => setRegistrationEditDate(event.target.value)}
-                                          max="9999-12-31"
-                                        />
-                                        {registrationEditError && (
-                                          <span className="text-xs text-red-600">{registrationEditError}</span>
-                                        )}
-                                      </div>
-                                      <div className="flex flex-col items-stretch gap-2 sm:inline-flex sm:flex-row sm:justify-end">
-                                        <button
-                                          type="button"
-                                          onClick={cancelRegistrationEditing}
-                                          className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
-                                          disabled={registrationEditSubmitting}
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={submitRegistrationEdit}
-                                          className="rounded bg-orange-600 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-70"
-                                          disabled={registrationEditSubmitting}
-                                        >
-                                          {registrationEditSubmitting ? 'Saving...' : 'Save'}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => startEditingRegistration(registration)}
-                                      className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
-                                    >
-                                      Edit Date
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                  {registration.post_prasadam ? 'Yes' : 'No'}
+                                </span>
+                              </td>
+                              <td
+                                className="whitespace-nowrap px-4 py-3 text-slate-700"
+                                title={formatRegistrationTimeline(registration)}
+                              >
+                                {formatRegistrationTimeline(registration)}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -2321,7 +2131,6 @@ const DonorProfile = () => {
                       const dueAmountValue = dueRegistration
                         ? parseDecimalValue(dueRegistration.due_amount)
                         : 0;
-                      const planAmountValue = parseDecimalValue(plan.amount);
                       const paymentReadyLabel =
                         dueRegistration && dueAmountValue <= 0 ? 'Payment up to date' : null;
                       const upcomingLabel =
@@ -2329,11 +2138,6 @@ const DonorProfile = () => {
                           ? 'Upcoming payment will appear here'
                           : null;
                       const statusLabel = paymentReadyLabel ?? upcomingLabel;
-                      const amountToPay =
-                        dueRegistration && dueAmountValue > 0 ? dueRegistration.due_amount : plan.amount ?? planAmountValue;
-                      const buttonAmountLabel = formatCartAmount(amountToPay ?? planAmountValue);
-                      const shouldShowPayButton = isRecurringPlan && plan.is_active;
-                      const preparingPayment = currentAction === 'prepare';
                       const planRegistrationLabel =
                         plan.origin_registration_created_at
                           ? formatPlanRegistrationTimeline(
@@ -2465,77 +2269,57 @@ const DonorProfile = () => {
                                 {statusLabel}
                               </div>
                             )}
-                            
-                            {/* Action Buttons */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {shouldShowPayButton && (
-                                <div className="flex flex-col gap-0.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePrepareRecurringPayment(plan)}
-                                    disabled={actionLoading}
-                                    className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                  >
-                                    {preparingPayment ? 'Preparing payment…' : 'Pay'}
-                                  </button>
-                                  <span className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                    {buttonAmountLabel}
-                                  </span>
-                                </div>
-                              )}
-                              
-                              {isRecurringPlan && (
-                                <>
-                                  {isPlanActive ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => togglePauseForm(plan.id)}
-                                        disabled={actionLoading}
-                                        className="inline-flex items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
-                                      >
-                                        {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCancelPlan(plan)}
-                                        disabled={actionLoading}
-                                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
-                                      >
-                                        {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => togglePauseForm(plan.id)}
-                                        disabled={actionLoading}
-                                        className="inline-flex items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
-                                      >
-                                        {activePausePlanId === plan.id ? 'Hide pause details' : 'Edit pause details'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResumePlan(plan.id)}
-                                        disabled={actionLoading}
-                                        className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                      >
-                                        {currentAction === 'resume' ? 'Resuming...' : 'Resume plan'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCancelPlan(plan)}
-                                        disabled={actionLoading}
-                                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                      >
-                                        {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
-                                      </button>
-                                    </>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                            {isRecurringPlan && (
+                              <>
+                                {isPlanActive ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePauseForm(plan.id)}
+                                      disabled={actionLoading}
+                                      className="inline-flex items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
+                                    >
+                                      {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelPlan(plan)}
+                                      disabled={actionLoading}
+                                      className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
+                                    >
+                                      {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePauseForm(plan.id)}
+                                      disabled={actionLoading}
+                                      className="inline-flex items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
+                                    >
+                                      {activePausePlanId === plan.id ? 'Hide pause details' : 'Edit pause details'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleResumePlan(plan.id)}
+                                      disabled={actionLoading}
+                                      className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
+                                    >
+                                      {currentAction === 'resume' ? 'Resuming...' : 'Resume plan'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelPlan(plan)}
+                                      disabled={actionLoading}
+                                      className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
+                                    >
+                                      {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            )}
                           </div>
 
                           {/* Pause Form (Inline) */}
