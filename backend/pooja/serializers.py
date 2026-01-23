@@ -179,6 +179,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
     day_option_description = serializers.SerializerMethodField()
     day_option_category = serializers.SerializerMethodField()
     pooja_reg_id = serializers.SerializerMethodField()
+    created_at_override = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = PoojaRegistration
@@ -208,6 +209,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "recurrence_frequency",
             "recurrence_one_time_date",
             "cart_item",
+            "created_at_override",
         )
         read_only_fields = (
             "id",
@@ -240,6 +242,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
         recurrence_frequency = validated_data.pop("recurrence_frequency", None)
         recurrence_one_time_date = validated_data.pop("recurrence_one_time_date", None)
         cart_item_payload = validated_data.pop("cart_item", None)
+        created_at_override = validated_data.pop("created_at_override", None)
         registration = PoojaRegistration.objects.create(**validated_data)
         self._sync_members(registration, members)
         if recurrence_kind:
@@ -250,6 +253,8 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
                 recurrence_one_time_date=recurrence_one_time_date,
                 cart_item_payload=cart_item_payload,
             )
+        if created_at_override:
+            PoojaRegistration.objects.filter(pk=registration.pk).update(created_at=created_at_override)
         return registration
 
     @transaction.atomic

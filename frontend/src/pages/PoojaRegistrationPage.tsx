@@ -1050,22 +1050,55 @@ const PoojaRegistrationPage = () => {
   const cartCountLabel = cartTotals.count === 1 ? 'pooja' : 'poojas';
   const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
   const navigate = useNavigate();
+  const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
+  const [selectedRegistrationDate, setSelectedRegistrationDate] = useState(todayIso);
+  const [isDatePromptOpen, setIsDatePromptOpen] = useState(false);
+  const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
+  const selectedRegistrationDateDisplay = useMemo(
+    () => formatDisplayDate(selectedRegistrationDate),
+    [selectedRegistrationDate],
+  );
+  const handleUseSystemDate = useCallback(() => {
+    setSelectedRegistrationDate(todayIso);
+  }, [todayIso]);
   const handleViewCart = useCallback(() => {
+    if (!selectedRegistrationDate) {
+      return;
+    }
+    const createdAtIso = new Date(selectedRegistrationDate).toISOString();
     setGeneralPayment({
       userKey: cartKey,
       items: cartItems,
       totalAmount: cartTotalAmount,
+      createdAt: createdAtIso,
     });
     navigate('/payments/general?fromCart=1');
-  }, [cartItems, cartKey, cartTotalAmount, navigate, setGeneralPayment]);
+  }, [
+    cartItems,
+    cartKey,
+    cartTotalAmount,
+    navigate,
+    selectedRegistrationDate,
+    setGeneralPayment,
+  ]);
+  const openDatePrompt = useCallback(() => setIsDatePromptOpen(true), []);
+  const closeDatePrompt = useCallback(() => setIsDatePromptOpen(false), []);
+  const handleDatePromptSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!selectedRegistrationDate) {
+        return;
+      }
+      handleViewCart();
+      setIsDatePromptOpen(false);
+    },
+    [handleViewCart, selectedRegistrationDate],
+  );
   const handleClearFilters = useCallback(() => {
     setSearchQuery('');
     setDeityFilter('');
     setSelectedCategory('all');
   }, []);
-  const registrationDateLabel = useMemo(() => formatDisplayDate(toLocalIsoDate(new Date())), []);
-  const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
-  const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
   const isAdminUser = (profile?.user?.role ?? user?.role) === 'admin';
   const requiresMemberSelection = !isAdminUser;
   const fallbackMemberSelection = useMemo(() => [], []);
@@ -3354,9 +3387,41 @@ const PoojaRegistrationPage = () => {
                     <span>One-time ₹ {formattedOneTimeAmount}</span>
                   </div>
                 </div>
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <label className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">
+                    Registration date
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      lang="en-GB"
+                      className="w-[170px] rounded-2xl border border-gray-300 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                      value={selectedRegistrationDate}
+                      onChange={(event) => setSelectedRegistrationDate(event.target.value)}
+                      placeholder="dd/mm/yyyy"
+                      required
+                      aria-label="Registration created date"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUseSystemDate}
+                      className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-orange-600 transition hover:text-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400"
+                    >
+                      Use today
+                    </button>
+                  </div>
+                  <p className="text-[0.65rem] text-slate-400">
+                    {selectedRegistrationDateDisplay
+                      ? `Selected: ${selectedRegistrationDateDisplay}`
+                      : 'Select date dd/mm/yyyy'}
+                  </p>
+                  <p className="text-[0.55rem] text-slate-400">
+                    This value becomes the <span className="font-semibold">created_at</span> date.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={handleViewCart}
+                  onClick={openDatePrompt}
                   className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
                 >
                   View cart & Payment
@@ -3909,17 +3974,74 @@ const PoojaRegistrationPage = () => {
                 <span>Recurring ₹ {formattedRecurringAmount}</span>
                 <span>One-time ₹ {formattedOneTimeAmount}</span>
               </span>
+              <span className="text-[0.65rem] text-slate-500">
+                Created {selectedRegistrationDateDisplay || '—'}
+              </span>
             </div>
             <button
               type="button"
-              onClick={handleViewCart}
+              onClick={openDatePrompt}
               className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
             >
               View cart & Payment
             </button>
           </div>
-        </div>
       </div>
+    </div>
+
+    {isDatePromptOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6">
+        <form
+          onSubmit={handleDatePromptSubmit}
+          className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-xl"
+        >
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Select registration date</h3>
+              <p className="text-sm text-slate-500">
+                Please confirm the created_at date for this cart. Choose manually or use the system date before
+                proceeding to payment.
+              </p>
+            </div>
+            <label className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Date</label>
+            <input
+              type="date"
+              className="w-full rounded-2xl border border-gray-300 px-4 py-2 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+              value={selectedRegistrationDate}
+              onChange={(event) => setSelectedRegistrationDate(event.target.value)}
+              required
+              data-testid="registration-date-input"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <button
+                type="button"
+                onClick={handleUseSystemDate}
+                className="rounded-full border border-slate-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-orange-600 transition hover:border-orange-400 hover:text-orange-500"
+              >
+                Use system date
+              </button>
+              <span className="text-[0.65rem] text-slate-400">Manual entry is also accepted.</span>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-600 transition hover:border-slate-400"
+              onClick={closeDatePrompt}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-sky-700 transition hover:bg-sky-100 disabled:border-slate-200 disabled:text-slate-400"
+              disabled={!selectedRegistrationDate}
+            >
+              Continue to Payment
+            </button>
+          </div>
+        </form>
+      </div>
+    )}
 
       {/* Booking Modal */}
       {selectedPooja && (
