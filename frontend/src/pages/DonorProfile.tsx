@@ -335,7 +335,7 @@ const DONOR_PROFILE_TABS = ['overview', 'family', 'registrations', 'recurring', 
 type DonorProfileTab = (typeof DONOR_PROFILE_TABS)[number];
 
 const DonorProfile = () => {
-const [activeTab, setActiveTab] = useState('chrt_pooja');
+  const [activeTab, setActiveTab] = useState<DonorProfileTab>('overview');
   const [user, setUser] = useState<ApiUser | null>(null);
   const [profile, setProfile] = useState<ApiDonorProfile | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -554,6 +554,29 @@ const [activeTab, setActiveTab] = useState('chrt_pooja');
     return name.charAt(0).toUpperCase();
   };
 
+  const donorProfileTabs: Array<{
+    id: DonorProfileTab;
+    label: string;
+    icon: string;
+    count?: number;
+  }> = [
+    { id: 'overview', label: 'Overview', icon: '👤' },
+    { id: 'family', label: 'Family Members', icon: '👨‍👩‍👧‍👦', count: members.length },
+    {
+      id: 'registrations',
+      label: 'Registrations',
+      icon: '📋',
+      count: visibleRegistrations.length,
+    },
+    {
+      id: 'recurring',
+      label: 'Recurring Plans',
+      icon: '🔄',
+      count: recurringPlansToShow.length,
+    },
+    { id: 'chrt_pooja', label: 'CHRT Pooja', icon: '🙏', count: chrtPoojaCount },
+  ];
+
   const fullAddress = () => {
     if (!profile) return '—';
     const parts = [
@@ -708,13 +731,7 @@ const [activeTab, setActiveTab] = useState('chrt_pooja');
             {/* Tab Navigation */}
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
               <div className="flex gap-1 overflow-x-auto pb-0">
-                {[
-                  { id: 'overview', label: 'Overview', icon: '👤' },
-                  { id: 'family', label: 'Family Members', icon: '👨‍👩‍👧‍👦', count: members.length },
-                  { id: 'registrations', label: 'Registrations', icon: '📋', count: visibleRegistrations.length },
-                  { id: 'recurring', label: 'Recurring Plans', icon: '🔄', count: recurringPlansToShow.length },
-                  { id: 'chrt_pooja', label: 'CHRT Pooja', icon: '🙏', count: chrtPoojaCount },
-                ].map((tab) => (
+                {donorProfileTabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -727,9 +744,11 @@ const [activeTab, setActiveTab] = useState('chrt_pooja');
                     <span className="text-base">{tab.icon}</span>
                     <span>{tab.label}</span>
                     {tab.count !== undefined && (
-                      <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-                        activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
+                      <span
+                        className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                          activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
                         {tab.count}
                       </span>
                     )}
