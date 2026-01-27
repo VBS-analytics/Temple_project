@@ -10,14 +10,16 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
+import axios from 'axios';
 import api, { extractResults } from '../lib/api';
 import { CartItem, createCartItem, useCartStore } from '../store/cart';
 import { useAuthStore } from '../store/auth';
 import { usePaymentStore } from '../store/payments';
 import { RecurrenceSelection, RecurrenceFrequency } from '../types/recurrence';
-import { useNavigate } from 'react-router-dom';
 import { nakshatraOptions } from '../data/nakshatraOptions';
 import { createPortal } from 'react-dom';
+import { buildRegistrationPayload, emitPoojaDataUpdatedEvent } from '../lib/registrationPayload';
+import { useNavigate } from 'react-router-dom';
 
 type SSOption = { value: string; label: string };
 
@@ -425,6 +427,34 @@ const formatCurrency = (value?: string | null) => {
     return value;
   }
   return amountNumber.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const extractErrorMessage = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    const responseData = error.response?.data;
+    if (typeof responseData === 'string') {
+      const trimmed = responseData.trim();
+      if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+        if (error.response?.status === 404) return 'Requested resource was not found.';
+        return 'Unexpected server response.';
+      }
+      return trimmed;
+    }
+    if (responseData && typeof responseData === 'object') {
+      if ('detail' in responseData && typeof responseData.detail === 'string') {
+        return responseData.detail;
+      }
+      const values = Object.values(responseData);
+      if (values.length > 0) {
+        const messageValue = values[0];
+        if (Array.isArray(messageValue)) return messageValue.join(', ');
+        if (typeof messageValue === 'string') return messageValue;
+      }
+    }
+    return error.message || 'Unexpected error';
+  }
+  if (error instanceof Error) return error.message;
+  return 'Unexpected error';
 };
 
 const TAMIL_STAR_DESCRIPTION_MAP: Record<string, string> = {
@@ -1014,10 +1044,13 @@ const PoojaRegistrationPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const isListView = viewMode === 'list';
   const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   const cartKey = user ? String(user.id) : 'guest';
   const addToCart = useCartStore((state) => state.addItem);
   const removeFromCart = useCartStore((state) => state.removeItem);
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const clearCart = useCartStore((state) => state.clear);
+  const clearGeneralPayment = usePaymentStore((state) => state.clearGeneralPayment);
   const baseUserId = typeof profile?.user?.id === 'number' ? profile.user.id : null;
   const cartTotals = useMemo(() => {
     const count = cartItems.length;
@@ -1048,11 +1081,10 @@ const PoojaRegistrationPage = () => {
   const formattedOneTimeAmount =
     formatCurrency(cartAmountBreakdown.oneTimeAmount.toString()) || '0';
   const cartCountLabel = cartTotals.count === 1 ? 'pooja' : 'poojas';
-  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
-  const navigate = useNavigate();
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const [selectedRegistrationDate, setSelectedRegistrationDate] = useState(todayIso);
   const [isDatePromptOpen, setIsDatePromptOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
   const selectedRegistrationDateDisplay = useMemo(
     () => formatDisplayDate(selectedRegistrationDate),
@@ -1061,38 +1093,56 @@ const PoojaRegistrationPage = () => {
   const handleUseSystemDate = useCallback(() => {
     setSelectedRegistrationDate(todayIso);
   }, [todayIso]);
-  const handleViewCart = useCallback(() => {
-    if (!selectedRegistrationDate) {
-      return;
+  const handleSavePooja = useCallback(async (): Promise<boolean> => {
+    if (cartItems.length === 0) {
+      setTableMessage({
+        status: 'error',
+        text: 'Add at least one pooja before saving.',
+      });
+      return false;
     }
-    const createdAtIso = new Date(selectedRegistrationDate).toISOString();
-    setGeneralPayment({
-      userKey: cartKey,
-      items: cartItems,
-      totalAmount: cartTotalAmount,
-      createdAt: createdAtIso,
-    });
-    navigate('/payments/general?fromCart=1');
-  }, [
-    cartItems,
-    cartKey,
-    cartTotalAmount,
-    navigate,
-    selectedRegistrationDate,
-    setGeneralPayment,
-  ]);
+    const createdAtOverride = selectedRegistrationDate
+      ? new Date(selectedRegistrationDate).toISOString()
+      : undefined;
+    setIsSaving(true);
+    try {
+      for (const item of cartItems) {
+        const payload = buildRegistrationPayload(item, undefined, createdAtOverride);
+        await api.post('pooja/registrations/', payload);
+      }
+      clearCart(cartKey);
+      clearGeneralPayment(cartKey);
+      emitPoojaDataUpdatedEvent();
+      setTableMessage({
+        status: 'info',
+        text: 'Poojas saved successfully. Use the Payments button on the Donor Profile to complete the contribution.',
+      });
+      navigate('/profile?tab=registrations');
+      return true;
+    } catch (error) {
+      setTableMessage({
+        status: 'error',
+        text: extractErrorMessage(error),
+      });
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [cartItems, cartKey, clearCart, clearGeneralPayment, navigate, selectedRegistrationDate]);
   const openDatePrompt = useCallback(() => setIsDatePromptOpen(true), []);
   const closeDatePrompt = useCallback(() => setIsDatePromptOpen(false), []);
   const handleDatePromptSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!selectedRegistrationDate) {
         return;
       }
-      handleViewCart();
-      setIsDatePromptOpen(false);
+      const saved = await handleSavePooja();
+      if (saved) {
+        setIsDatePromptOpen(false);
+      }
     },
-    [handleViewCart, selectedRegistrationDate],
+    [handleSavePooja, selectedRegistrationDate],
   );
   const handleClearFilters = useCallback(() => {
     setSearchQuery('');
@@ -2664,6 +2714,35 @@ const PoojaRegistrationPage = () => {
     setSelectedTamilStar(disableDayOption ? null : tamilStarSelectionMap[pooja.id] ?? null);
     setSelectedDayOptionId(resolvedDayOptionId);
     ensureChartDetailState(pooja.id, resolvedDayOptionId);
+    
+    // For CHRT poojas, synchronously hydrate groups from cart IMMEDIATELY
+    const selectedDayOption = resolvedDayOptionId ? dayOptionMap.get(resolvedDayOptionId) : undefined;
+    if (isChartDayOption(selectedDayOption)) {
+      const existingGroups = chartPreferredDateGroupsMap[pooja.id];
+      if (!existingGroups || existingGroups.length === 0) {
+        const chartCartItems = cartItems.filter(
+          (item) =>
+            item.poojaId === pooja.id &&
+            (item.dayOptionCode?.trim().toUpperCase() ?? '') === CHART_DAY_OPTION_CODE,
+        );
+        if (chartCartItems.length > 0) {
+          // Synchronously hydrate state before render
+          const hydrated = chartCartItems
+            .map(buildPreferredDateGroupFromCartItem)
+            .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+          setChartPreferredDateGroupsMap((prev) => ({
+            ...prev,
+            [pooja.id]: hydrated,
+          }));
+        }
+      }
+    }
+    
+    // Restore recurrence selection from map if available
+    const recurrenceSelection = recurrenceSelectionMap[pooja.id];
+    if (recurrenceSelection) {
+      applyRecurrenceSelection(pooja.id, recurrenceSelection);
+    }
   };
 
   const handleMasterRowAction = (row: MasterRow, mode: BookingMode) => {
@@ -2969,8 +3048,13 @@ const PoojaRegistrationPage = () => {
   };
 
   const handleCloseModal = () => {
-    if (selectedPooja) {
-      clearChartDetailsForPooja(selectedPooja.id);
+    if (selectedPooja && selectedDayOptionId) {
+      const selectedDayOption = dayOptionMap.get(selectedDayOptionId);
+      // Only clear CHRT details if NOT a CHRT pooja
+      // This preserves CHRT data when closing the modal
+      if (!isChartDayOption(selectedDayOption)) {
+        clearChartDetailsForPooja(selectedPooja.id);
+      }
     }
     setSelectedPooja(null);
     setDateValue('');
@@ -3240,7 +3324,23 @@ const PoojaRegistrationPage = () => {
   ]);
 
   const renderPreferredDateGroupsEditor = (poojaId: number, availableOptions: SSOption[]) => {
-    const groups = chartPreferredDateGroupsMap[poojaId] ?? [];
+    // Ensure hydration: if groups are not in map but exist in cart, hydrate them now
+    let groups = chartPreferredDateGroupsMap[poojaId];
+    if (!groups || groups.length === 0) {
+      // Try to hydrate from cart items
+      const chartCartItems = cartItems.filter(
+        (item) =>
+          item.poojaId === poojaId &&
+          (item.dayOptionCode?.trim().toUpperCase() ?? '') === CHART_DAY_OPTION_CODE,
+      );
+      if (chartCartItems.length > 0) {
+        groups = chartCartItems
+          .map(buildPreferredDateGroupFromCartItem)
+          .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+      }
+    }
+    groups = groups ?? [];
+
     const handleCountChange = (event: ChangeEvent<HTMLInputElement>) => {
       const parsed = Number(event.target.value);
       const nextCount = Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
@@ -3365,9 +3465,6 @@ const PoojaRegistrationPage = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
               <div>
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Available Poojas</h2>
-                <p className="text-sm sm:text-base text-gray-700 mt-1">
-                  Select a pooja, choose your preferred day option, and add to cart
-                </p>
               </div>
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
                 <p className="text-orange-900 font-medium">
@@ -3402,21 +3499,11 @@ const PoojaRegistrationPage = () => {
                       required
                       aria-label="Registration created date"
                     />
-                    <button
-                      type="button"
-                      onClick={handleUseSystemDate}
-                      className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-orange-600 transition hover:text-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400"
-                    >
-                      Use today
-                    </button>
                   </div>
                   <p className="text-[0.65rem] text-slate-400">
                     {selectedRegistrationDateDisplay
                       ? `Selected: ${selectedRegistrationDateDisplay}`
                       : 'Select date dd/mm/yyyy'}
-                  </p>
-                  <p className="text-[0.55rem] text-slate-400">
-                    This value becomes the <span className="font-semibold">created_at</span> date.
                   </p>
                 </div>
                 <button
@@ -3424,7 +3511,7 @@ const PoojaRegistrationPage = () => {
                   onClick={openDatePrompt}
                   className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
                 >
-                  View cart & Payment
+                  Save Pooja
                 </button>
               </div>
             </div>
@@ -3454,9 +3541,6 @@ const PoojaRegistrationPage = () => {
                   })}
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                  <label className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-700">
-                    View
-                  </label>
                   {VIEW_MODES.map((mode) => (
                     <button
                       key={mode}
@@ -3983,7 +4067,7 @@ const PoojaRegistrationPage = () => {
               onClick={openDatePrompt}
               className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
             >
-              View cart & Payment
+              Save Pooja
             </button>
           </div>
       </div>
@@ -4000,7 +4084,7 @@ const PoojaRegistrationPage = () => {
               <h3 className="text-lg font-semibold text-gray-900">Select registration date</h3>
               <p className="text-sm text-slate-500">
                 Please confirm the created_at date for this cart. Choose manually or use the system date before
-                proceeding to payment.
+                saving the pooja's.
               </p>
             </div>
             <label className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Date</label>
@@ -4033,10 +4117,10 @@ const PoojaRegistrationPage = () => {
             </button>
             <button
               type="submit"
-              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-sky-700 transition hover:bg-sky-100 disabled:border-slate-200 disabled:text-slate-400"
-              disabled={!selectedRegistrationDate}
+              disabled={isSaving || !selectedRegistrationDate}
+              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-sky-700 transition hover:bg-sky-100 disabled:border-slate-200 disabled:text-slate-400 disabled:cursor-wait disabled:opacity-50"
             >
-              Continue to Payment
+              {isSaving ? 'Saving…' : 'Save the Pooja'}
             </button>
           </div>
         </form>

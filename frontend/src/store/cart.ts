@@ -62,6 +62,8 @@ export interface CartItem {
   recurrenceOneTimeDate?: string | null;
   targetDonorId?: number | null;
   members?: CartMember[];
+  day_option_code?: string | null;
+  day_option_description?: string | null;
 }
 
 type CartCollection = Record<string, CartItem[]>;

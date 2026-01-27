@@ -620,6 +620,13 @@ class RecurringPoojaPlanViewSet(
             "donor", "pooja_option", "day_option", "origin_registration"
         )
         if self.request.user.role == UserRole.ADMIN:
+            # Allow admin to filter by donor if donor parameter is provided
+            donor_id = self.request.query_params.get('donor')
+            if donor_id:
+                try:
+                    qs = qs.filter(donor_id=int(donor_id))
+                except (ValueError, TypeError):
+                    pass
             return qs.order_by("donor__name", "-next_occurrence", "-created_at")
         return qs.filter(donor=self.request.user).order_by("-next_occurrence", "-created_at")
 

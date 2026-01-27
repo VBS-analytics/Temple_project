@@ -1356,7 +1356,8 @@ const PaymentStatementPage = () => {
       const hasRegistration = record.registration && record.registration > 0;
       const isCartOrPending =
         record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
-      return hasRegistration || isCartOrPending;
+      const isPending = resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+      return isPending && (hasRegistration || isCartOrPending);
     });
 
     const paidRecords = sorted.filter((record) => {
@@ -1368,7 +1369,7 @@ const PaymentStatementPage = () => {
 
     if (dueRecords.length > 0) {
       const totalDueAmount = dueRecords.reduce(
-        (sum, record) => sum + parseNumeric(record.registration_total_amount ?? 0),
+        (sum, record) => sum + getDisplayedDueAmountValue(record),
         0,
       );
       if (totalDueAmount > 0) {

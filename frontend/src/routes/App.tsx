@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-
 import AppLayout from '../components/AppLayout';
 import AuthLayout from '../components/AuthLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -17,6 +16,7 @@ import BulkDonorUploadPage from '../pages/admin/BulkDonorUploadPage';
 import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
 import ExpensesPage from '../pages/admin/ExpensesPage';
 import PoojaDetailsPage from '../pages/admin/PoojaDetailsPage';
+import PoojaPauseCancelPage from '../pages/admin/PoojaPauseCancelPage';
 import LandingPage from '../pages/LandingPage';
 import About from '../pages/About';
 import AboutKakkalaniVillage from '../pages/AboutKakkalaniVillage';
@@ -26,7 +26,6 @@ import ReportPage from '../pages/ReportPage';
 import WhyVisitNativeVillage from '../pages/WhyVisitNativeVillage';
 import History from '../pages/History';
 import { useAuthStore } from '../store/auth';
-
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
@@ -34,7 +33,6 @@ const HomeRoute = () => {
   }
   return <LandingPage />;
 };
-
 const App = () => (
   <Routes>
     <Route path="/" element={<HomeRoute />} />
@@ -62,7 +60,6 @@ const App = () => (
         </AuthLayout>
       }
     />
-
     <Route element={<ProtectedRoute />}>
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -74,7 +71,6 @@ const App = () => (
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>
-
     <Route element={<ProtectedRoute requireAdmin />}>
       <Route element={<AppLayout />}>
         <Route path="/admin/master" element={<AdminMasterPage />} />
@@ -82,19 +78,17 @@ const App = () => (
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
         <Route path="/admin/combine-payment-donor" element={<CombinePaymentDonorPage />} />
+        <Route path="/admin/pooja-pause-cancel" element={<PoojaPauseCancelPage />} />
         <Route path="/reports" element={<ReportPage />} />
         <Route path="/admin/expenses" element={<ExpensesPage />} />
         <Route path="/admin/donor-pooja-registrations" element={<Navigate to="/admin/donors" replace />} />
       </Route>
     </Route>
-
     <Route path="/about" element={<About />} />
     <Route path="/about-kakkalani-village" element={<AboutKakkalaniVillage />} />
     <Route path="/why-visit-native-village" element={<WhyVisitNativeVillage />} />
     <Route path="/history" element={<History />} />
-
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
 );
-
 export default App;

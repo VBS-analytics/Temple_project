@@ -334,15 +334,20 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
     
     Creates ONE combined due per donor per month for all their active recurring plans.
     Dues are generated starting from the month AFTER the last successful payment's payment_month.
+    
+    NOTE: Excludes CHRT (Choose Your Preferred Date) poojas which are handled separately.
     """
     now = today or timezone.localdate()
     current_month = now.replace(day=1)
     
-    # Find all active recurring plans
+    # Find all active recurring plans (excluding CHRT poojas)
     active_plans = RecurringPoojaPlan.objects.filter(
         is_active=True,
         recurrence_kind=RecurrenceKind.RECURRING,
-    )
+    ).select_related('day_option')
+    
+    # Exclude CHRT poojas - they are handled separately in _generate_due_payments_for_chrt_poojas
+    active_plans = active_plans.exclude(day_option__code='CHRT')
     
     # Exclude paused plans
     paused_now = Q(pause_from__lte=current_month, pause_until__gte=current_month)
@@ -424,11 +429,104 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
     return created_count
 
 
+def _generate_due_payments_for_chrt_poojas(today: Optional[date] = None) -> int:
+    """Generate due payment records for CHRT (Choose Your Preferred Date) poojas.
+    
+    CHRT poojas only generate dues for the month when their preferred date falls.
+    For example, a CHRT pooja with preferred date Feb 5, 2026 and annual recurrence will:
+    - Generate due in February 2026
+    - Generate due in February 2027
+    - NOT generate dues in other months
+    
+    Creates ONE combined due per donor per month for all their CHRT poojas due that month.
+    """
+    now = today or timezone.localdate()
+    current_month = now.replace(day=1)
+    
+    # Find all active recurring CHRT plans
+    chrt_plans = RecurringPoojaPlan.objects.filter(
+        is_active=True,
+        recurrence_kind=RecurrenceKind.RECURRING,
+        day_option__code='CHRT',
+    ).select_related('day_option')
+    
+    # Group by donor
+    donors_to_process = {}  # donor_id -> (plans, total_amount)
+    
+    for plan in chrt_plans:
+        if not plan.start_date:
+            continue
+        
+        # Check if this is a CHRT pooja that should generate a due in the current month
+        # CHRT poojas only generate dues when the current month matches the preferred month
+        preferred_month = plan.start_date.replace(day=1)
+        
+        # For recurring CHRT poojas, check if current month is a valid month for this pooja
+        # based on its recurrence frequency
+        frequency = RecurrenceFrequency(plan.recurrence_frequency or RecurrenceFrequency.MONTHLY)
+        months_between = (current_month.year - preferred_month.year) * 12 + (current_month.month - preferred_month.month)
+        
+        # Determine if we should generate a due based on recurrence frequency
+        frequency_months = FREQUENCY_MONTHS.get(frequency, 1)
+        should_generate_due = (months_between % frequency_months == 0) and (months_between >= 0)
+        
+        if not should_generate_due:
+            continue
+        
+        donor_id = plan.donor_id
+        if donor_id not in donors_to_process:
+            donors_to_process[donor_id] = {
+                'plans': [],
+                'total_amount': Decimal('0.00'),
+            }
+        
+        donors_to_process[donor_id]['plans'].append(plan)
+        donors_to_process[donor_id]['total_amount'] += plan.amount or Decimal('0.00')
+    
+    created_count = 0
+    
+    # Process each donor's combined CHRT due
+    for donor_id, donor_data in donors_to_process.items():
+        total_amount = donor_data['total_amount']
+        
+        if total_amount <= 0:
+            continue
+        
+        try:
+            # Create a combined due for this donor for their CHRT poojas
+            due_record, created = PaymentRecord.objects.get_or_create(
+                donor_id=donor_id,
+                registration=None,
+                payment_month=current_month,
+                defaults={
+                    'amount': total_amount,
+                    'currency': 'INR',
+                    'mode': 'pending',
+                    'status': PaymentStatus.PENDING,
+                    'notes': 'CHRT (Preferred Date) pooja contribution due',
+                }
+            )
+            
+            if created:
+                LOGGER.info(
+                    "Created CHRT pooja due payment record for donor %s (total ₹%.2f) for month %s",
+                    donor_id,
+                    float(total_amount),
+                    current_month.isoformat(),
+                )
+                created_count += 1
+        except Exception as exc:  # pragma: no cover
+            LOGGER.exception("Unable to create due payment record for CHRT pooja for donor %s", donor_id)
+    
+    return created_count
+
+
 def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:
     now = today or timezone.localdate()
     
-    # Generate due payment records for the current month
+    # Generate due payment records for the current month for both recurring and CHRT poojas
     due_payments_created = _generate_due_payments_for_recurring_plans(now)
+    chrt_due_payments_created = _generate_due_payments_for_chrt_poojas(now)
     
     expired_pause_query = RecurringPoojaPlan.objects.filter(
         pause_until__isnull=False,
@@ -466,4 +564,5 @@ def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:
         "processed": processed,
         "failures": failures,
         "due_payments_created": due_payments_created,
+        "chrt_due_payments_created": chrt_due_payments_created,
     }

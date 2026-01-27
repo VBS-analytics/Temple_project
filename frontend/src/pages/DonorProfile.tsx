@@ -4,11 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import api, { extractResults } from '../lib/api';
-import { useAuthStore } from '../store/auth';
-import { usePaymentStore } from '../store/payments';
-import { useCartStore } from '../store/cart';
-import type { CartItem, CartMember } from '../store/cart';
-import type { RecurrenceFrequency, RecurrenceKind } from '../types/recurrence';
+import type { RecurrenceKind } from '../types/recurrence';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { useMasterDataStore } from '../store/masterData';
 
@@ -69,23 +65,6 @@ interface FamilyMemberFormState {
   family_selection: string;
 }
 
-interface DonorProfileFormState {
-  family_name: string;
-  notes: string;
-  gender: string;
-  date_of_birth: string;
-  gothra: string;
-  tamil_star: string;
-  rasi: string;
-  tamil_name: string;
-  address_line1: string;
-  address_line2: string;
-  address_line3: string;
-  city: string;
-  state: string;
-  postal_code: string;
-}
-
 interface RegistrationMember {
   id?: number;
   name?: string | null;
@@ -108,6 +87,10 @@ interface RegistrationCartItem {
   recurrenceFrequency?: string | null;
   recurrenceOneTimeDate?: string | null;
   recurrence_kind?: RecurrenceKind | null;
+  dayOptionCode?: string | null;
+  day_option_code?: string | null;
+  dayOptionDescription?: string | null;
+  day_option_description?: string | null;
 }
 
 interface PoojaRegistration {
@@ -126,6 +109,7 @@ interface PoojaRegistration {
   members?: RegistrationMember[];
   status?: string | null;
   cart_item?: RegistrationCartItem | null;
+  pooja_option_code?: string | null;
 }
 
 interface RecurringPlan {
@@ -133,6 +117,7 @@ interface RecurringPlan {
   pooja_option_name?: string | null;
   pooja_option_code?: string | null;
   day_option_description?: string | null;
+  day_option_code?: string | null;
   recurrence_kind: RecurrenceKind;
   recurrence_frequency?: string | null;
   start_date?: string | null;
@@ -148,38 +133,11 @@ interface RecurringPlan {
   origin_registration_created_at?: string | null;
   origin_registration_updated_at?: string | null;
   origin_registration_id?: number | null;
+  cart_payload?: Record<string, unknown> | null;
 }
 
-interface PaymentRecordEntry {
-  id: number;
-  registration?: number | null;
-  status?: string | null;
-  transaction_reference?: string | null;
-  created_at?: string | null;
-}
-
-interface PlanEditFormState {
-  recurrence_frequency: string;
-  amount: string;
-}
-
-type PlanActionType = 'pause' | 'resume' | 'cancel' | 'prepare';
 
 // --- CONSTANTS ---
-const PLAN_FREQUENCY_OPTIONS = [
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'annually', label: 'Annually' },
-];
-
-const PAUSE_REASON_OPTIONS = [
-  'No Pooja and No Payment',
-  'No Pooja and use the money for temple purpose',
-  "Continue the pooja with the Samy's names",
-];
-
-const PAUSE_MONTH_OPTIONS = Array.from({ length: 50 }, (_, index) => index + 1);
-
 const FAMILY_OPTIONS = [
   'Arunachalam-Sambasiva Iyr',
   'Kadakarar Subramani Iyr',
@@ -221,14 +179,6 @@ const formatGender = (value?: string | null) => {
     .join(' ');
 };
 
-const formatCurrencyValue = (value?: number | null) => {
-  if (value == null) return '—';
-  return `₹ ${new Intl.NumberFormat('en-IN', {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
-  }).format(value)}`;
-};
-
 const sortMembers = (list: FamilyMember[]) =>
   [...list].sort((a, b) => {
     const left = (a.name || '').toLowerCase();
@@ -238,18 +188,6 @@ const sortMembers = (list: FamilyMember[]) =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
-const addMonthsToIso = (iso: string, months: number) => {
-  if (months <= 0) return iso;
-  const date = new Date(iso);
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
-  const targetMonth = month + months;
-  const result = new Date(year, targetMonth, day);
-  const adjusted = result.toISOString().split('T')[0];
-  return adjusted;
-};
 
 const getPauseReasonLabel = (metadata?: Record<string, unknown>) => {
   if (!isRecord(metadata)) return null;
@@ -288,39 +226,16 @@ const extractErrorMessage = (error: unknown) => {
   return 'Unexpected error';
 };
 
-const formatDateTime = (value?: string | null) => {
-  if (!value) return '—';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return formatDate(value);
-  return parsed.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const formatDateForInput = (value?: string | null) => {
-  if (!value) return '';
-  const isoMatch = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
-  if (isoMatch) return isoMatch[1];
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const formatPlanFrequencyLabel = (kind: RecurringPlan['recurrence_kind'], frequency?: string | null) => {
   if (kind === 'recurring') {
     const frequencyLabel =
-      frequency === 'quarterly'
-        ? 'Quarterly'
-        : frequency === 'monthly'
-          ? 'Monthly'
-          : 'Recurring';
+      frequency === 'monthly'
+        ? 'Monthly'
+        : frequency === 'quarterly'
+          ? 'Quarterly'
+          : frequency === 'annually'
+            ? 'Annually'
+            : 'Recurring';
     return `${frequencyLabel} recurring`;
   }
   return 'One-time extra';
@@ -341,64 +256,6 @@ const parseDecimalValue = (value?: string | number | null) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
-const formatCartAmount = (value?: string | number | null) => {
-  if (value === null || value === undefined || value === '') return '—';
-  const numeric = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(numeric)) return String(value);
-  return `₹ ${numeric.toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-};
-
-const formatCartFrequencyLabel = (frequency?: string | null) => {
-  switch (frequency) {
-    case 'monthly': return 'Monthly recurring';
-    case 'quarterly': return 'Quarterly recurring';
-    case 'annually':
-    case 'annual': return 'Annual recurring';
-    default: return 'Recurring';
-  }
-};
-
-const STATUS_PAYMENT_RECEIVED_LABEL = 'Payment Received';
-const STATUS_PAYMENT_NOT_RECEIVED_LABEL = 'Payment not received';
-const STATUS_ADMIN_PENDING_LABEL = 'Admin action is pending';
-const STATUS_POOJA_COMPLETED_LABEL = 'Pooja Completed';
-const STATUS_LOADING_LABEL = 'Loading status...';
-
-const STATUS_BADGE_CLASSES: Record<string, string> = {
-  [STATUS_PAYMENT_RECEIVED_LABEL]: 'bg-emerald-100 text-emerald-800',
-  [STATUS_PAYMENT_NOT_RECEIVED_LABEL]: 'bg-rose-100 text-rose-800',
-  [STATUS_ADMIN_PENDING_LABEL]: 'bg-amber-100 text-amber-800',
-  [STATUS_POOJA_COMPLETED_LABEL]: 'bg-emerald-100 text-emerald-800',
-  [STATUS_LOADING_LABEL]: 'bg-slate-100 text-slate-600',
-};
-
-const getRegistrationStatusLabel = (
-  registration: PoojaRegistration,
-  recordsByRegistration: Map<number, PaymentRecordEntry[]>,
-  recordsLoaded: boolean,
-) => {
-  if (!recordsLoaded) return STATUS_LOADING_LABEL;
-  const normalizedRegistrationStatus = (registration.status ?? '').toLowerCase();
-  if (normalizedRegistrationStatus === 'completed') return STATUS_POOJA_COMPLETED_LABEL;
-  const records = recordsByRegistration.get(registration.id) ?? [];
-  if (records.length === 0) return STATUS_PAYMENT_NOT_RECEIVED_LABEL;
-  return STATUS_ADMIN_PENDING_LABEL;
-};
-
-const getRegistrationStatusBadgeClasses = (label: string) =>
-  STATUS_BADGE_CLASSES[label] ?? 'bg-slate-100 text-slate-600';
-
-const buildCartMemberNames = (members?: CartItem['members']) => {
-  if (!members || members.length === 0) return '—';
-  const names = members
-    .map((member) => member?.name?.trim())
-    .filter((name): name is string => Boolean(name && name.length > 0));
-  return names.length > 0 ? names.join(', ') : '—';
-};
-
 const getPlanMemberNames = (metadata?: RecurringPlan['metadata']) => {
   if (!metadata) return [];
   const members = (metadata as { members?: unknown }).members;
@@ -412,59 +269,46 @@ const getPlanMemberNames = (metadata?: RecurringPlan['metadata']) => {
   });
 };
 
-const buildRecurringPlanMembers = (plan: RecurringPlan, fallbackName?: string | null) => {
-  const planMembers = getPlanMemberNames(plan.metadata);
-  const entries: CartMember[] = planMembers.map((name) => ({ id: null, name }));
-  if (entries.length === 0 && fallbackName) {
-    entries.push({ id: null, name: fallbackName });
+const normalizeCode = (value?: string | null) => (value ?? '').trim().toUpperCase();
+
+const getPayloadDayOptionCode = (payload?: unknown) => {
+  if (!payload || typeof payload !== 'object') return '';
+  const record = payload as Record<string, unknown>;
+  const keys = ['dayOptionCode', 'day_option_code'] as const;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim().toUpperCase();
+    }
   }
-  return entries;
+  return '';
 };
 
-const resolveRecurringPlanAmount = (plan: RecurringPlan) => {
-  const dueRegistration = plan.due_registration;
-  const dueAmountValue = dueRegistration ? parseDecimalValue(dueRegistration.due_amount) : 0;
-  const planAmountValue = parseDecimalValue(plan.amount);
-  if (dueRegistration && dueAmountValue > 0) return dueAmountValue;
-  return planAmountValue;
+const includesCHRTKeyword = (value?: string | null) => {
+  const normalized = (value ?? '').toLowerCase();
+  return normalized.includes('preferred date') || normalized.includes('chrt');
 };
 
-const buildRecurringPlanCartItem = (
-  plan: RecurringPlan,
-  donorName?: string | null,
-  donorId?: number | null,
-): CartItem => {
-  const amountValue = resolveRecurringPlanAmount(plan);
-  const fallbackDate =
-    plan.due_registration?.start_date ??
-    plan.next_occurrence ??
-    plan.start_date ??
-    plan.origin_registration_created_at ??
-    new Date().toISOString();
-  const customDayDate = plan.next_occurrence ?? plan.start_date ?? plan.origin_registration_created_at ?? null;
-  const scheduleLabel = formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency);
-  return {
-    cartId: `recurring-plan-${plan.id}`,
-    poojaId: plan.origin_registration_id ?? plan.id,
-    poojaName: plan.pooja_option_name?.trim() || 'Recurring pooja',
-    poojaCode: plan.pooja_option_code ?? undefined,
-    poojaImage: '',
-    amount: String(amountValue),
-    bookingDate: fallbackDate,
-    fullName: donorName ?? 'Recurring pooja',
-    email: '',
-    phoneNumber: '',
-    address: '',
-    dayOptionCode: plan.pooja_option_code ?? undefined,
-    dayOptionDescription: plan.day_option_description ?? undefined,
-    customDayDate,
-    customDayNote: scheduleLabel,
-    postPrasadam: false,
-    recurrenceKind: 'recurring',
-    recurrenceFrequency: plan.recurrence_frequency as RecurrenceFrequency | undefined,
-    members: buildRecurringPlanMembers(plan, donorName),
-    targetDonorId: donorId ?? null,
-  };
+const isCHRTPlan = (plan: RecurringPlan) => {
+  const code =
+    normalizeCode(plan.day_option_code) || getPayloadDayOptionCode(plan.cart_payload ?? undefined);
+  if (code === 'CHRT') {
+    return true;
+  }
+  return includesCHRTKeyword(plan.day_option_description);
+};
+
+const isCHRTRegistration = (registration: PoojaRegistration) => {
+  const code = getPayloadDayOptionCode(registration.cart_item ?? undefined);
+  if (code === 'CHRT') {
+    return true;
+  }
+  if (includesCHRTKeyword(registration.day_option_description)) {
+    return true;
+  }
+  const cartDescription =
+    registration.cart_item?.dayOptionDescription ?? registration.cart_item?.day_option_description ?? '';
+  return includesCHRTKeyword(cartDescription);
 };
 
 const resolvePoojaId = (registration: PoojaRegistration) => {
@@ -480,86 +324,50 @@ const formatMemberNames = (members?: RegistrationMember[]) => {
   return names.length > 0 ? names.join(', ') : '—';
 };
 
-const formatRegistrationTimeline = (registration: PoojaRegistration) => {
-  const createdAt = registration.created_at;
-  if (!createdAt) return '—';
-  return formatDate(createdAt);
-};
-
-const formatPlanRegistrationTimeline = (
-  createdAt?: string | null,
-  updatedAt?: string | null,
-) => {
-  if (!createdAt) return '—';
-  const timelineRegistration: PoojaRegistration = {
-    id: 0,
-    created_at: createdAt,
-    updated_at: updatedAt,
-  };
-  return formatRegistrationTimeline(timelineRegistration);
-};
-
 // --- COMPONENT ---
+const formatCurrency = (value?: number | string | null) => {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return '0';
+  return numeric.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+};
+
+const DONOR_PROFILE_TABS = ['overview', 'family', 'registrations', 'recurring', 'chrt_pooja'] as const;
+type DonorProfileTab = (typeof DONOR_PROFILE_TABS)[number];
+
 const DonorProfile = () => {
+const [activeTab, setActiveTab] = useState('chrt_pooja');
   const [user, setUser] = useState<ApiUser | null>(null);
   const [profile, setProfile] = useState<ApiDonorProfile | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [registrations, setRegistrations] = useState<PoojaRegistration[]>([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(true);
   const [registrationsError, setRegistrationsError] = useState<string | null>(null);
-  const [paymentRecords, setPaymentRecords] = useState<PaymentRecordEntry[]>([]);
-  const [paymentRecordsLoading, setPaymentRecordsLoading] = useState(true);
-  const [paymentRecordsError, setPaymentRecordsError] = useState<string | null>(null);
   const [recurrencePlans, setRecurrencePlans] = useState<RecurringPlan[]>([]);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
-  const [pauseDurationSelection, setPauseDurationSelection] = useState<Record<number, number>>({});
-  const [pauseReasonSelections, setPauseReasonSelections] = useState<Record<number, string>>({});
-  const [activePausePlanId, setActivePausePlanId] = useState<number | null>(null);
-  const [planActionState, setPlanActionState] = useState<Record<number, PlanActionType | null>>({});
-  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
-  const [planEditValues, setPlanEditValues] = useState<PlanEditFormState>({
-    recurrence_frequency: 'monthly',
-    amount: '',
-  });
-  const [planEditSubmitting, setPlanEditSubmitting] = useState(false);
-  const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const authUser = useAuthStore((state) => state.user);
-  const cartKey = authUser ? String(authUser.id) : 'guest';
-  const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
-  const paymentSnapshot = usePaymentStore((state) => state.lastGeneralPaymentByUser[cartKey] ?? null);
-  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
+  
+  // Navigation
   const location = useLocation();
   const navigate = useNavigate();
-  const fromCartReview = useMemo(
-    () => new URLSearchParams(location.search).get('fromCart') === '1',
-    [location.search],
-  );
-  const mergedCartItems = useMemo(() => {
-    const itemsMap = new Map<string, CartItem>();
-    (paymentSnapshot?.items ?? []).forEach((item) => {
-      itemsMap.set(item.cartId, item);
-    });
-    cartItems.forEach((item) => {
-      itemsMap.set(item.cartId, item);
-    });
-    return Array.from(itemsMap.values());
-  }, [paymentSnapshot, cartItems]);
-  const pendingRegistrations = useMemo(
-    () => mergedCartItems.filter((item) => item.recurrenceKind !== 'recurring'),
-    [mergedCartItems],
-  );
-  const pendingRecurringPlans = useMemo(
-    () => mergedCartItems.filter((item) => item.recurrenceKind === 'recurring'),
-    [mergedCartItems],
-  );
-  const pendingCartCount = pendingRegistrations.length + pendingRecurringPlans.length;
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+
+  useEffect(() => {
+    const tabParam = queryParams.get('tab');
+    if (!tabParam) return;
+    const normalizedTab = tabParam.toLowerCase();
+    if (DONOR_PROFILE_TABS.includes(normalizedTab as DonorProfileTab)) {
+      setActiveTab(normalizedTab as DonorProfileTab);
+    }
+  }, [queryParams]);
+
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+
   useEffect(() => {
     loadGothraOptions();
   }, [loadGothraOptions]);
+
+  // --- ACTIONS ---
 
   const reloadRecurrencePlans = useCallback(
     async (options?: { activeCheck?: () => boolean }) => {
@@ -572,185 +380,23 @@ const DonorProfile = () => {
         const response = await api.get('pooja/recurrence/plans/', { params: { page_size: 200 } });
         if (!isActive()) return;
         setRecurrencePlans(extractResults<RecurringPlan>(response.data));
-        setPauseReasonSelections({});
-        setActivePausePlanId(null);
-        setPlanActionState({});
       } catch (err) {
         if (!isActive()) return;
         setRecurrencePlans([]);
         setRecurrenceError(extractErrorMessage(err));
       } finally {
-        if (!isActive()) return;
-        setRecurrenceLoading(false);
+        if (isActive()) {
+          setRecurrenceLoading(false);
+        }
       }
     },
     [],
   );
-
-  const togglePauseForm = useCallback(
-    (planId: number) => {
-      setActivePausePlanId((prev) => (prev === planId ? null : planId));
-      setPauseReasonSelections((prev) => {
-        if (prev[planId]) return prev;
-        return {
-          ...prev,
-          [planId]: PAUSE_REASON_OPTIONS[0],
-        };
-      });
-      setPauseDurationSelection((prev) => ({
-        ...prev,
-        [planId]: prev[planId] ?? 1,
-      }));
-      setRecurrenceError(null);
-    },
-    [setRecurrenceError],
-  );
-
-  const handlePausePlan = useCallback(
-    async (plan: RecurringPlan, pauseReason: string) => {
-      const months = pauseDurationSelection[plan.id] ?? 1;
-      if (months <= 0) {
-        setRecurrenceError('Select at least one month for the pause duration.');
-        return;
-      }
-      if (!pauseReason?.trim()) {
-        setRecurrenceError('Select how you’d like to handle pause.');
-        return;
-      }
-      const start = todayIso;
-      const end = addMonthsToIso(start, months);
-      setPlanActionState((prev) => ({
-        ...prev,
-        [plan.id]: 'pause',
-      }));
-      setRecurrenceError(null);
-      try {
-        await api.post(`pooja/recurrence/plans/${plan.id}/pause/`, {
-          pause_from: start,
-          pause_until: end,
-          pause_reason: pauseReason,
-          pause_months: months,
-        });
-        setActivePausePlanId(null);
-        await reloadRecurrencePlans();
-      } catch (error) {
-        setRecurrenceError(extractErrorMessage(error));
-      } finally {
-        setPlanActionState((prev) => ({
-          ...prev,
-          [plan.id]: null,
-        }));
-      }
-    },
-    [reloadRecurrencePlans, todayIso, pauseDurationSelection],
-  );
-
-  const handleResumePlan = useCallback(
-    async (planId: number) => {
-      setPlanActionState((prev) => ({
-        ...prev,
-        [planId]: 'resume',
-      }));
-      setRecurrenceError(null);
-      try {
-        await api.post(`pooja/recurrence/plans/${planId}/resume/`);
-        setActivePausePlanId(null);
-        await reloadRecurrencePlans();
-      } catch (error) {
-        setRecurrenceError(extractErrorMessage(error));
-      } finally {
-        setPlanActionState((prev) => ({
-          ...prev,
-          [planId]: null,
-        }));
-      }
-    },
-    [reloadRecurrencePlans],
-  );
-
-  const handleCancelPlan = useCallback(
-    async (plan: RecurringPlan) => {
-      const confirmText =
-        'Canceling this plan will stop future poojas and payments. Continue?';
-      if (!window.confirm(confirmText)) return;
-      setPlanActionState((prev) => ({
-        ...prev,
-        [plan.id]: 'cancel',
-      }));
-      setRecurrenceError(null);
-      try {
-        await api.post(`pooja/recurrence/plans/${plan.id}/cancel/`);
-        setActivePausePlanId(null);
-        await reloadRecurrencePlans();
-      } catch (error) {
-        setRecurrenceError(extractErrorMessage(error));
-      } finally {
-        setPlanActionState((prev) => ({
-          ...prev,
-          [plan.id]: null,
-        }));
-      }
-    },
-    [reloadRecurrencePlans],
-  );
-
-  const startEditingPlan = useCallback((plan: RecurringPlan) => {
-    setEditingPlanId(plan.id);
-    setPlanEditValues({
-      recurrence_frequency: plan.recurrence_frequency ?? 'monthly',
-      amount: plan.amount != null ? String(plan.amount) : '',
-    });
-    setRecurrenceError(null);
-  }, []);
-
-  const cancelPlanEditing = useCallback(() => {
-    setEditingPlanId(null);
-    setPlanEditValues({
-      recurrence_frequency: 'monthly',
-      amount: '',
-    });
-    setRecurrenceError(null);
-  }, []);
-
-  const handlePlanEditChange = useCallback(
-    (field: keyof PlanEditFormState, value: string) => {
-      setPlanEditValues((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    },
-    [],
-  );
-
-  const handlePlanEditSave = useCallback(async () => {
-    if (editingPlanId === null) return;
-    const payload: Record<string, string> = {};
-    if (planEditValues.recurrence_frequency) {
-      payload.recurrence_frequency = planEditValues.recurrence_frequency;
-    }
-    const amountValue = planEditValues.amount.trim();
-    if (amountValue) {
-      payload.amount = amountValue;
-    }
-    if (Object.keys(payload).length === 0) {
-      setRecurrenceError('Update at least one field.');
-      return;
-    }
-    setPlanEditSubmitting(true);
-    setRecurrenceError(null);
-    try {
-      await api.patch(`pooja/recurrence/plans/${editingPlanId}/`, payload);
-      await reloadRecurrencePlans();
-      cancelPlanEditing();
-    } catch (error) {
-      setRecurrenceError(extractErrorMessage(error));
-    } finally {
-      setPlanEditSubmitting(false);
-    }
-  }, [editingPlanId, planEditValues, reloadRecurrencePlans, cancelPlanEditing]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+
+  // --- DATA LOADING ---
 
   const createInitialFormState = (profileData?: ApiDonorProfile): FamilyMemberFormState => ({
     name: '',
@@ -768,35 +414,11 @@ const DonorProfile = () => {
     })(),
   });
 
-  const createDonorProfileFormState = (profileData?: ApiDonorProfile): DonorProfileFormState => ({
-    family_name: (profileData?.family_name ?? '').trim(),
-    notes: (profileData?.notes ?? '').trim(),
-    gender: (profileData?.gender ?? '').trim(),
-    date_of_birth: profileData?.date_of_birth ?? '',
-    gothra: (profileData?.gothra ?? '').trim(),
-    tamil_star: (profileData?.tamil_star ?? '').trim(),
-    rasi: (profileData?.rasi ?? '').trim(),
-    tamil_name: (profileData?.tamil_name ?? '').trim(),
-    address_line1: (profileData?.address_line1 ?? '').trim(),
-    address_line2: (profileData?.address_line2 ?? '').trim(),
-    address_line3: (profileData?.address_line3 ?? '').trim(),
-    city: (profileData?.city ?? '').trim(),
-    state: (profileData?.state ?? '').trim(),
-    postal_code: (profileData?.postal_code ?? '').trim(),
-  });
-
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
   const [formData, setFormData] = useState<FamilyMemberFormState>(() => createInitialFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileFormData, setProfileFormData] = useState<DonorProfileFormState>(() =>
-    createDonorProfileFormState()
-  );
-  const [profileFormError, setProfileFormError] = useState<string | null>(null);
-  const [profileSubmitting, setProfileSubmitting] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -832,119 +454,47 @@ const DonorProfile = () => {
     }
   }, []);
 
-  const fetchPaymentRecords = useCallback(async () => {
-    setPaymentRecordsLoading(true);
-    setPaymentRecordsError(null);
-    try {
-      const response = await api.get('payments/records/', {
-        params: { page_size: 250, ordering: '-created_at' },
-      });
-      if (!isMountedRef.current) return;
-      setPaymentRecords(extractResults<PaymentRecordEntry>(response.data));
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      setPaymentRecords([]);
-      setPaymentRecordsError(extractErrorMessage(err));
-    } finally {
-      if (isMountedRef.current) setPaymentRecordsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     isMountedRef.current = true;
     loadProfile();
     fetchRegistrations();
-    fetchPaymentRecords();
     let activeCheck = () => isMountedRef.current;
     reloadRecurrencePlans({ activeCheck });
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchPaymentRecords, fetchRegistrations, loadProfile, reloadRecurrencePlans]);
+  }, [fetchRegistrations, loadProfile, reloadRecurrencePlans]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && isMountedRef.current) {
         fetchRegistrations();
-        fetchPaymentRecords();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchPaymentRecords, fetchRegistrations]);
+  }, [fetchRegistrations]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (!isMountedRef.current) return;
       fetchRegistrations();
-      fetchPaymentRecords();
     }, 30000);
     return () => {
       window.clearInterval(interval);
     };
-  }, [fetchPaymentRecords, fetchRegistrations]);
-
-  useEffect(() => {
-    if (!isEditingProfile) {
-      setProfileFormData(createDonorProfileFormState(profile ?? undefined));
-    }
-  }, [profile, isEditingProfile]);
+  }, [fetchRegistrations]);
 
   const handleManualPaymentRedirect = useCallback(() => {
-    if (redirectTimerRef.current) {
-      clearTimeout(redirectTimerRef.current);
-      redirectTimerRef.current = null;
-    }
     navigate('/payments/general?tab=summary');
   }, [navigate]);
 
-  useEffect(() => {
-    if (!fromCartReview || pendingCartCount === 0) {
-      return () => {
-        if (redirectTimerRef.current) {
-          clearTimeout(redirectTimerRef.current);
-          redirectTimerRef.current = null;
-        }
-      };
-    }
-    if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
-    const startTimeout = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
-    redirectTimerRef.current = startTimeout(() => {
-      redirectTimerRef.current = null;
-      navigate('/payments/general?tab=summary');
-    }, 2400);
-    return () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-        redirectTimerRef.current = null;
-      }
-    };
-  }, [fromCartReview, navigate, pendingCartCount]);
-
-  const paymentRecordsByRegistration = useMemo(() => {
-    const sortedRecords = [...paymentRecords].sort((a, b) => {
-      const left = a.created_at ?? '';
-      const right = b.created_at ?? '';
-      return right.localeCompare(left);
-    });
-    const map = new Map<number, PaymentRecordEntry[]>();
-    for (const record of sortedRecords) {
-      const registrationId = record.registration;
-      if (typeof registrationId !== 'number') continue;
-      const bucket = map.get(registrationId);
-      if (bucket) {
-        bucket.push(record);
-      } else {
-        map.set(registrationId, [record]);
-      }
-    }
-    return map;
-  }, [paymentRecords]);
-
-  const paymentRecordsLoaded = !paymentRecordsLoading;
+  const handleStartRegistration = useCallback(() => {
+    navigate('/pooja/register');
+  }, [navigate]);
 
   const visibleRegistrations = useMemo(() => {
     const recurringRegistrationIds = new Set<number>();
@@ -963,28 +513,63 @@ const DonorProfile = () => {
   }, [registrations, recurrencePlans]);
 
   const recurringPlansToShow = useMemo(
-    () => recurrencePlans.filter((plan) => plan.recurrence_kind === 'recurring'),
+    () => recurrencePlans.filter((plan) => plan.recurrence_kind === 'recurring' && !isCHRTPlan(plan)),
     [recurrencePlans],
   );
-  const recurringPlanCount = recurringPlansToShow.length;
+  const chrtPlansToShow = useMemo(
+    () => recurrencePlans.filter((plan) => isCHRTPlan(plan)),
+    [recurrencePlans],
+  );
+  const chrtRegistrations = useMemo(() => visibleRegistrations.filter((registration) => isCHRTRegistration(registration)), [
+    visibleRegistrations,
+  ]);
+  const chrtPoojaCount = chrtPlansToShow.length + chrtRegistrations.length;
+  const registrationTotals = useMemo(() => {
+    const count = visibleRegistrations.length;
+    const amount = visibleRegistrations.reduce((total, registration) => {
+      const numeric = Number(registration.total_amount);
+      return total + (Number.isFinite(numeric) ? numeric : 0);
+    }, 0);
+    return { count, amount };
+  }, [visibleRegistrations]);
+  const isChrtDataLoading =
+    (recurrenceLoading && chrtPlansToShow.length === 0) ||
+    (registrationsLoading && chrtRegistrations.length === 0);
   const recurringPlansTotalAmount = useMemo(
     () => recurringPlansToShow.reduce((sum, plan) => sum + parseDecimalValue(plan.amount), 0),
     [recurringPlansToShow],
   );
-  const handleViewRecurringPayments = useCallback(() => {
-    if (recurringPlansToShow.length === 0) return;
-    const items = recurringPlansToShow.map((plan) =>
-      buildRecurringPlanCartItem(plan, authUser?.name ?? null, authUser?.id ?? null),
-    );
-    const totalAmount = items.reduce((sum, item) => sum + parseDecimalValue(item.amount), 0);
-    setGeneralPayment({
-      userKey: cartKey,
-      items,
-      totalAmount,
-    });
-    navigate('/payments/general');
-  }, [authUser?.id, authUser?.name, cartKey, navigate, recurringPlansToShow, setGeneralPayment]);
+  const hasRecurringPaymentItems = useMemo(
+    () => recurringPlansToShow.length > 0 || chrtPlansToShow.length > 0 || chrtRegistrations.length > 0,
+    [recurringPlansToShow, chrtPlansToShow, chrtRegistrations],
+  );
 
+  const handleViewRecurringPayments = useCallback(() => {
+    if (!hasRecurringPaymentItems) return;
+    navigate('/payments/general');
+  }, [hasRecurringPaymentItems, navigate]);
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return 'U';
+    return name.charAt(0).toUpperCase();
+  };
+
+  const fullAddress = () => {
+    if (!profile) return '—';
+    const parts = [
+      profile.address_line1,
+      profile.address_line2,
+      profile.address_line3,
+      profile.city,
+      profile.state,
+      profile.postal_code,
+    ]
+      .map((part) => (part ?? '').trim())
+      .filter((part) => part.length > 0);
+    return parts.length > 0 ? parts.join(', ') : '—';
+  };
+
+  // Profile Logic
   const startAddingNew = () => {
     setFormData(createInitialFormState(profile ?? undefined));
     setFormError(null);
@@ -996,64 +581,6 @@ const DonorProfile = () => {
     setIsAddingNew(false);
     setFormError(null);
     setFormData(createInitialFormState(profile ?? undefined));
-  };
-
-  const startEditingProfile = () => {
-    setProfileFormData(createDonorProfileFormState(profile ?? undefined));
-    setIsEditingProfile(true);
-    setProfileFormError(null);
-  };
-
-  const cancelProfileEditing = () => {
-    if (profileSubmitting) return;
-    setIsEditingProfile(false);
-    setProfileFormError(null);
-    setProfileFormData(createDonorProfileFormState(profile ?? undefined));
-  };
-
-  const handleProfileInputChange =
-    (field: keyof DonorProfileFormState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-      const { value } = event.target;
-      setProfileFormData((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    };
-
-  const submitProfileForm = async () => {
-    setProfileSubmitting(true);
-    setProfileFormError(null);
-    try {
-      const payload = {
-        family_name: profileFormData.family_name.trim(),
-        notes: profileFormData.notes.trim(),
-        gender: profileFormData.gender.trim(),
-        date_of_birth: profileFormData.date_of_birth || null,
-        gothra: profileFormData.gothra.trim(),
-        tamil_star: profileFormData.tamil_star.trim(),
-        rasi: profileFormData.rasi.trim(),
-        tamil_name: profileFormData.tamil_name.trim(),
-        address_line1: profileFormData.address_line1.trim(),
-        address_line2: profileFormData.address_line2.trim(),
-        address_line3: profileFormData.address_line3.trim(),
-        city: profileFormData.city.trim(),
-        state: profileFormData.state.trim(),
-        postal_code: profileFormData.postal_code.trim(),
-      };
-      const response = await api.put<ApiDonorProfile>('auth/profile/', payload);
-      const updatedProfile = {
-        ...response.data,
-        rasi: response.data.rasi?.trim() || payload.rasi,
-        tamil_name: response.data.tamil_name?.trim() ?? payload.tamil_name,
-      };
-      setProfile(updatedProfile);
-      setIsEditingProfile(false);
-      setProfileFormData(createDonorProfileFormState(updatedProfile));
-    } catch (err) {
-      setProfileFormError(extractErrorMessage(err));
-    } finally {
-      setProfileSubmitting(false);
-    }
   };
 
   const handleInputChange =
@@ -1128,1405 +655,852 @@ const DonorProfile = () => {
     }
   };
 
-  const profileAddress = () => {
-    if (!profile) return '—';
-    const parts = [
-      profile.address_line1,
-      profile.address_line2,
-      profile.address_line3,
-      profile.city,
-      profile.state,
-      profile.postal_code,
-    ]
-      .map((part) => (part ?? '').trim())
-      .filter((part) => part.length > 0);
-    return parts.length > 0 ? parts.join(', ') : '—';
-  };
-
-  const donorDetails: Array<{ label: string; value: string; span?: string }> = [
-    { label: 'Donor ID', value: resolveText(profile?.donor_id ?? '') },
-    { label: 'Family Name', value: resolveText(profile?.family_name) },
-    { label: 'Donor Name', value: resolveText(user?.name ?? '') },
-    { label: 'Tamil Name (Saravam)', value: resolveText(profile?.tamil_name) },
-    { label: 'Donor Header Text', value: resolveText(profile?.notes) },
-    { label: 'Gender', value: formatGender(profile?.gender) },
-    { label: 'Date of Birth', value: formatDate(profile?.date_of_birth) },
-    { label: 'Gothra', value: resolveText(profile?.gothra) },
-    { label: 'Tamil Star', value: resolveText(profile?.tamil_star) },
-    { label: 'Rasi', value: resolveText(profile?.rasi) },
-    { label: 'Phone No', value: resolveText(user?.phone_number ?? '') },
-    { label: 'Address', value: profileAddress(), span: 'sm:col-span-2 lg:col-span-3' },
-  ];
+  // --- RENDER ---
 
   return (
-    <div className="min-h-screen bg-slate-50 py-6 sm:py-8">
-      <div className="mx-auto w-full max-w-[90rem] px-4 lg:px-8">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Donor Profile</h1>
-            <p className="mt-1 text-base text-slate-500">Review your donor details and manage your family members.</p>
+    <div className="min-h-screen bg-slate-50">
+      {/* Loading Screen */}
+      {loading && (
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-orange-600"></div>
+            <span className="text-sm text-slate-500">Loading profile...</span>
           </div>
-          {authUser && (
-            <div className="flex items-center gap-3 rounded-xl bg-white px-4 py-2 shadow-sm border border-slate-200">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-700 font-bold text-sm">
-                {authUser.name ? authUser.name.charAt(0).toUpperCase() : 'U'}
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-sm font-semibold text-slate-900">{authUser.name}</p>
-                <p className="text-xs text-slate-500">{authUser.email || authUser.phone_number}</p>
-              </div>
-            </div>
-          )}
-        </header>
+        </div>
+      )}
 
-        {loading ? (
-          <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-orange-600"></div>
-              <span className="text-sm text-slate-500">Loading profile...</span>
-            </div>
-          </div>
-        ) : error ? (
+      {/* Error Screen */}
+      {!loading && error && (
+        <div className="p-6">
           <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700 shadow-sm">
             {error}
           </div>
-        ) : (
-          <div className="space-y-8">
-            
-            {/* SECTION: DONOR DETAILS */}
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-800">Donor Details</h2>
-                  <p className="text-sm text-slate-500">Review and update information we have on file for you.</p>
+        </div>
+      )}
+
+      {/* Main Content */}
+      {!loading && !error && user && profile && (
+        <>
+          {/* Sticky Header */}
+          <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+            <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-orange-200 to-orange-300 text-xl font-bold text-orange-700">
+                    {getInitials(user.name)}
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-slate-800">{user.name}</h1>
+                    <p className="text-sm text-slate-500">{profile.donor_id} • {user.phone_number}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {isEditingProfile ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={cancelProfileEditing}
-                        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                        disabled={profileSubmitting}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={submitProfileForm}
-                        className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
-                        disabled={profileSubmitting}
-                      >
-                        {profileSubmitting ? 'Saving...' : 'Save Changes'}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={startEditingProfile}
-                      className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-600 hover:bg-orange-50 transition-colors"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                      Edit Profile
-                    </button>
-                  )}
+                  <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Verified
+                  </span>
                 </div>
               </div>
+            </div>
 
-              {profileFormError && (
-                <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {profileFormError}
+            {/* Tab Navigation */}
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="flex gap-1 overflow-x-auto pb-0">
+                {[
+                  { id: 'overview', label: 'Overview', icon: '👤' },
+                  { id: 'family', label: 'Family Members', icon: '👨‍👩‍👧‍👦', count: members.length },
+                  { id: 'registrations', label: 'Registrations', icon: '📋', count: visibleRegistrations.length },
+                  { id: 'recurring', label: 'Recurring Plans', icon: '🔄', count: recurringPlansToShow.length },
+                  { id: 'chrt_pooja', label: 'CHRT Pooja', icon: '🙏', count: chrtPoojaCount },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-orange-600 text-orange-600'
+                        : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="text-base">{tab.icon}</span>
+                    <span>{tab.label}</span>
+                    {tab.count !== undefined && (
+                      <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                        activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            
+            {/* OVERVIEW TAB */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                {/* Quick Stats */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 p-5 ring-1 ring-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-blue-600">Family Members</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-900">{members.length}</p>
+                      </div>
+                      <div className="text-3xl">👨‍👩‍👧‍👦</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 p-5 ring-1 ring-violet-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-violet-600">Registrations</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-900">{visibleRegistrations.length}</p>
+                      </div>
+                      <div className="text-3xl">📋</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 ring-1 ring-emerald-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-emerald-600">Active Plans</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-900">{recurringPlansToShow.length}</p>
+                      </div>
+                      <div className="text-3xl">🔄</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 p-5 ring-1 ring-amber-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-amber-600">Monthly Contribution</p>
+                        <p className="mt-2 text-2xl font-bold text-slate-900">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
+                      </div>
+                      <div className="text-3xl">💰</div>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              <div className="p-6">
-                {isEditingProfile ? (
-                  <div className="space-y-6">
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Family Name</label>
-                        <input
-                          type="text"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.family_name}
-                          onChange={handleProfileInputChange('family_name')}
-                        />
+                {/* Profile Details Grid */}
+                <div className="grid gap-6 lg:grid-cols-3">
+                  {/* Personal Info */}
+                  <div className="lg:col-span-2 space-y-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-bold text-slate-800">Personal Information</h3>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Full Name</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{user.name}</p>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Gender</label>
-                        <select
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.gender}
-                          onChange={handleProfileInputChange('gender')}
-                        >
-                          <option value="">Select</option>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                        </select>
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Tamil Name</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{resolveText(profile.tamil_name)}</p>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Tamil Name (Saravam)</label>
-                        <input
-                          type="text"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.tamil_name}
-                          onChange={handleProfileInputChange('tamil_name')}
-                          placeholder="Enter Tamil name (optional)"
-                        />
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Family Name</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{resolveText(profile.family_name)}</p>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Date of Birth</label>
-                        <input
-                          type="date"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.date_of_birth}
-                          onChange={handleProfileInputChange('date_of_birth')}
-                        />
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Gender</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{formatGender(profile.gender)}</p>
                       </div>
-                      <div className="sm:col-span-2 lg:col-span-3">
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Donor Header Text</label>
-                        <textarea
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          rows={2}
-                          value={profileFormData.notes}
-                          onChange={handleProfileInputChange('notes')}
-                        />
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Date of Birth</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{formatDate(profile.date_of_birth)}</p>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Gothra</label>
-                        <select
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.gothra}
-                          onChange={handleProfileInputChange('gothra')}
-                        >
-                          <option value="">Select Gothra</option>
-                          {gothraOptions.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Phone Number</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{user.phone_number}</p>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Tamil Star</label>
-                        <select
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.tamil_star}
-                          onChange={handleProfileInputChange('tamil_star')}
-                        >
-                          <option value="">Select Tamil star</option>
-                          {tamilStarOptions.map((star) => (
-                            <option key={star} value={star}>
-                              {star}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Rasi</label>
-                        <select
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.rasi}
-                          onChange={handleProfileInputChange('rasi')}
-                        >
-                          <option value="">Select Rasi</option>
-                          {rasiOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Address Line 1</label>
-                        <input
-                          type="text"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.address_line1}
-                          onChange={handleProfileInputChange('address_line1')}
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">City</label>
-                        <input
-                          type="text"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.city}
-                          onChange={handleProfileInputChange('city')}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">State</label>
-                        <input
-                          type="text"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.state}
-                          onChange={handleProfileInputChange('state')}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">Postal Code</label>
-                        <input
-                          type="text"
-                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                          value={profileFormData.postal_code}
-                          onChange={handleProfileInputChange('postal_code')}
-                        />
+                      <div className="sm:col-span-2 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
+                        <p className="text-xs font-bold uppercase text-amber-700">Donor Header Text</p>
+                        <p className="mt-2 text-sm text-slate-900">{resolveText(profile.notes)}</p>
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {donorDetails.map(({ label, value, span }) => (
-                      <div
-                        key={label}
-                        className={`flex flex-col rounded-lg border border-slate-100 bg-slate-50/60 p-4 ${span ?? ''}`}
-                      >
-                        <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</dt>
-                        <dd className="mt-2 text-sm font-semibold text-slate-800 break-words leading-snug">{value}</dd>
+
+                  {/* Religious Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <span>🕉️</span>
+                      Religious Details
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Gothra</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{resolveText(profile.gothra)}</p>
                       </div>
-                    ))}
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Tamil Star</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{resolveText(profile.tamil_star)}</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-500">Rasi</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{resolveText(profile.rasi)}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
+                      <p className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
+                        <span>📍</span>
+                        Address
+                      </p>
+                      <p className="mt-2 text-sm text-slate-900 leading-relaxed">{fullAddress()}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* FAMILY MEMBERS TAB */}
+            {activeTab === 'family' && (
+              <div>
+                  <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Family Members</h2>
+                    <p className="text-sm text-slate-500">Manage your family members for pooja registrations</p>
+                  </div>
+                  <button
+                    onClick={startAddingNew}
+                    className="inline-flex items-center gap-2 rounded-lg border-2 border-dashed border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Member
+                  </button>
+                </div>
+
+                {formError && (
+                  <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {formError}
                   </div>
                 )}
-              </div>
-            </section>
 
-            {/* SECTION: FAMILY MEMBERS */}
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-800">Family Members</h2>
-                  <p className="text-sm text-slate-500">Keep your family list current for Pooja registrations.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={startAddingNew}
-                  className="inline-flex items-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100 transition-colors sm:mt-0"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Member
-                </button>
-              </div>
-
-              {formError && (
-                <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {formError}
-                </div>
-              )}
-
-              <div className="p-0">
-                {members.length === 0 && !isAddingNew ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400">
-                      <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-slate-500">No family members added yet. Click &quot;Add Member&quot; to include your family details.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        <tr>
-                          <th scope="col" className="px-6 py-3">Name</th>
-                          <th scope="col" className="px-6 py-3">Relationship</th>
-                          <th scope="col" className="px-6 py-3">Gender</th>
-                          <th scope="col" className="px-6 py-3">Date of Birth</th>
-                          <th scope="col" className="px-6 py-3">Rasi</th>
-                          <th scope="col" className="px-6 py-3">Tamil Star</th>
-                          <th scope="col" className="px-6 py-3">Gothra</th>
-                          <th scope="col" className="px-6 py-3">Family Name</th>
-                          <th scope="col" className="px-6 py-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
-                        {isAddingNew && (
-                          <tr className="bg-orange-50/50">
-                            <td className="px-6 py-4 align-top">
-                              <input
-                                type="text"
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.name}
-                                onChange={handleInputChange('name')}
-                                placeholder="Enter full name"
-                              />
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <input
-                                type="text"
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.relationship}
-                                onChange={handleInputChange('relationship')}
-                                placeholder="e.g., Son, Daughter"
-                              />
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <select
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.gender}
-                                onChange={handleInputChange('gender')}
-                              >
-                                <option value="">Select</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                                <option value="Other">Other</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <input
-                                type="date"
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.date_of_birth}
-                                onChange={handleInputChange('date_of_birth')}
-                              />
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <select
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.rasi}
-                                onChange={(event) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    rasi: event.target.value,
-                                  }))
-                                }
-                              >
-                                <option value="">Select Rasi</option>
-                                {rasiOptions.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <select
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.tamil_star}
-                                onChange={(event) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    tamil_star: event.target.value,
-                                  }))
-                                }
-                              >
-                                <option value="">Select Tamil star</option>
-                                {tamilStarOptions.map((star) => (
-                                  <option key={star} value={star}>
-                                    {star}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <select
-                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                value={formData.gothra}
-                                onChange={handleInputChange('gothra')}
-                              >
-                                <option value="">Select Gothra</option>
-                                {gothraOptions.map((opt) => (
-                                  <option key={opt} value={opt}>
-                                    {opt}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 align-top">
-                              <div className="flex flex-col gap-2">
-                                <select
-                                  className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                  value={formData.family_selection}
-                                  onChange={(e) => {
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Add Member Form */}
+                  {isAddingNew && (
+                    <div className="rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/50 p-6">
+                      <div className="flex flex-col gap-4">
+                        <h4 className="mb-2 text-base font-semibold text-slate-900">Add New Member</h4>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Name</label>
+                            <input type="text" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.name} onChange={handleInputChange('name')} placeholder="Enter full name" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Relationship</label>
+                            <input type="text" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.relationship} onChange={handleInputChange('relationship')} placeholder="e.g. Son" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Gender</label>
+                            <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.gender} onChange={handleInputChange('gender')}>
+                              <option value="">Select</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Date of Birth</label>
+                            <input type="date" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.date_of_birth} onChange={handleInputChange('date_of_birth')} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Rasi</label>
+                            <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.rasi} onChange={handleInputChange('rasi')}>
+                              <option value="">Select Rasi</option>
+                              {rasiOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Tamil Star</label>
+                            <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.tamil_star} onChange={handleInputChange('tamil_star')}>
+                              <option value="">Select Tamil Star</option>
+                              {tamilStarOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Gothra</label>
+                            <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.gothra} onChange={handleInputChange('gothra')}>
+                              <option value="">Select Gothra</option>
+                              {gothraOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2">
+                             <label className="block text-xs font-semibold text-slate-700 mb-1">Family Name</label>
+                             <div className="flex gap-2">
+                                <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.family_selection} onChange={(e) => {
                                     const val = e.target.value;
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      family_selection: val,
-                                      family_name: val === 'Other' ? '' : val,
-                                    }));
-                                  }}
-                                >
-                                  <option value="">Select a family</option>
-                                  {FAMILY_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
-                                      {opt}
-                                    </option>
-                                  ))}
+                                    setFormData(prev => ({ ...prev, family_selection: val, family_name: val === 'Other' ? '' : val, }));
+                                }}>
+                                    <option value="">Select a family</option>
+                                    {FAMILY_OPTIONS.map((opt) => <option key={opt} value={opt === 'Other' ? 'Other' : opt}>{opt}</option>)}
                                 </select>
-                                {formData.family_selection === 'Other' && (
-                                  <input
-                                    type="text"
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.family_name}
-                                    onChange={handleInputChange('family_name')}
-                                    placeholder="Enter family name"
-                                  />
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 align-top text-right">
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={cancelAddingNew}
-                                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                  disabled={submitting}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleSubmit}
-                                  className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-70"
-                                  disabled={submitting}
-                                >
-                                  {submitting ? 'Saving...' : 'Save'}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        {members.map((member) => (
-                          <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
-                            {editingMemberId === member.id ? (
-                              <>
-                                <td className="px-6 py-4 align-top">
-                                  <input
-                                    type="text"
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.name}
-                                    onChange={handleInputChange('name')}
-                                    placeholder="Enter full name"
-                                  />
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <input
-                                    type="text"
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.relationship}
-                                    onChange={handleInputChange('relationship')}
-                                    placeholder="e.g., Son, Daughter"
-                                  />
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <select
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.gender}
-                                    onChange={handleInputChange('gender')}
-                                  >
+                                {formData.family_selection === 'Other' && <input type="text" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.family_name} onChange={handleInputChange('family_name')} placeholder="Enter family name" />}
+                             </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={cancelAddingNew} className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" disabled={submitting}>Cancel</button>
+                          <button onClick={handleSubmit} className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {members.length === 0 && !isAddingNew && (
+                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-white/70 p-6 text-center shadow-sm">
+                      <p className="text-base font-semibold text-slate-900">No family members yet</p>
+                      <p className="mt-2 text-sm text-slate-500">Add members to tie them to your pooja registrations.</p>
+                      <button
+                        type="button"
+                        onClick={startAddingNew}
+                        className="mt-4 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm hover:bg-indigo-500"
+                      >
+                        Add Member
+                      </button>
+                    </div>
+                  )}
+
+                  {members.map((member) => (
+                    <div key={member.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-indigo-300 transition-all">
+                      {editingMemberId === member.id ? (
+                        // Edit Mode
+                        <div className="flex flex-col gap-3">
+                          <h4 className="mb-2 text-base font-semibold text-slate-900">Edit Member</h4>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                             <div className="sm:col-span-2">
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Name</label>
+                                <input type="text" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.name} onChange={handleInputChange('name')} />
+                             </div>
+                             <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Relationship</label>
+                                <input type="text" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.relationship} onChange={handleInputChange('relationship')} />
+                             </div>
+                             <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Gender</label>
+                                <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.gender} onChange={handleInputChange('gender')}>
                                     <option value="">Select</option>
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
                                     <option value="Other">Other</option>
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <input
-                                    type="date"
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.date_of_birth}
-                                    onChange={handleInputChange('date_of_birth')}
-                                  />
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <select
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.rasi}
-                                    onChange={(event) =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        rasi: event.target.value,
-                                      }))
-                                    }
-                                  >
+                                </select>
+                             </div>
+                             <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Date of Birth</label>
+                                <input type="date" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.date_of_birth} onChange={handleInputChange('date_of_birth')} />
+                             </div>
+                             <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Rasi</label>
+                                <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.rasi} onChange={handleInputChange('rasi')}>
                                     <option value="">Select Rasi</option>
-                                    {rasiOptions.map((option) => (
-                                      <option key={option} value={option}>
-                                        {option}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <select
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.tamil_star}
-                                    onChange={(event) =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        tamil_star: event.target.value,
-                                      }))
-                                    }
-                                  >
-                                    <option value="">Select Tamil star</option>
-                                    {tamilStarOptions.map((star) => (
-                                      <option key={star} value={star}>
-                                        {star}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <select
-                                    className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                    value={formData.gothra}
-                                    onChange={handleInputChange('gothra')}
-                                  >
+                                    {rasiOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                             </div>
+                             <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Tamil Star</label>
+                                <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.tamil_star} onChange={handleInputChange('tamil_star')}>
+                                    <option value="">Select Tamil Star</option>
+                                    {tamilStarOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                             </div>
+                             <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Gothra</label>
+                                <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.gothra} onChange={handleInputChange('gothra')}>
                                     <option value="">Select Gothra</option>
-                                    {gothraOptions.map((opt) => (
-                                      <option key={opt} value={opt}>
-                                        {opt}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 align-top">
-                                  <div className="flex flex-col gap-2">
-                                    <select
-                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                      value={formData.family_selection}
-                                      onChange={(e) => {
+                                    {gothraOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                             </div>
+                             <div className="sm:col-span-2">
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Family Name</label>
+                                <div className="flex gap-2">
+                                    <select className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.family_selection} onChange={(e) => {
                                         const val = e.target.value;
-                                        setFormData((prev) => ({
-                                          ...prev,
-                                          family_selection: val,
-                                          family_name: val === 'Other' ? '' : val,
-                                        }));
-                                      }}
-                                    >
-                                      <option value="">Select a family</option>
-                                      {FAMILY_OPTIONS.map((opt) => (
-                                        <option key={opt} value={opt === 'Other' ? 'Other' : opt}>
-                                          {opt}
-                                        </option>
-                                      ))}
+                                        setFormData(prev => ({ ...prev, family_selection: val, family_name: val === 'Other' ? '' : val, }));
+                                    }}>
+                                        <option value="">Select a family</option>
+                                        {FAMILY_OPTIONS.map((opt) => <option key={opt} value={opt === 'Other' ? 'Other' : opt}>{opt}</option>)}
                                     </select>
-                                    {formData.family_selection === 'Other' && (
-                                      <input
-                                        type="text"
-                                        className="block w-full rounded-md border-slate-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                        value={formData.family_name}
-                                        onChange={handleInputChange('family_name')}
-                                        placeholder="Enter family name"
-                                      />
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 align-top text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={cancelEditing}
-                                      className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                      disabled={submitting}
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={handleSubmit}
-                                      className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-70"
-                                      disabled={submitting}
-                                    >
-                                      {submitting ? 'Saving...' : 'Save'}
-                                    </button>
-                                  </div>
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="px-6 py-4 font-medium text-slate-900">{resolveText(member.name)}</td>
-                                <td className="px-6 py-4 text-slate-600">{resolveText(member.relationship)}</td>
-                                <td className="px-6 py-4 text-slate-600">{resolveText(member.gender)}</td>
-                                <td className="px-6 py-4 text-slate-600">{formatDate(member.date_of_birth)}</td>
-                                <td className="px-6 py-4 text-slate-600">{resolveText(member.rasi)}</td>
-                                <td className="px-6 py-4 text-slate-600">{resolveText(member.tamil_star)}</td>
-                                <td className="px-6 py-4 text-slate-600">{resolveText(member.gothra)}</td>
-                                <td className="px-6 py-4 text-slate-600">
-                                  {resolveText(member.family_name ?? profile?.family_name ?? '')}
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditing(member)}
-                                    className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                                  >
-                                    Edit
-                                  </button>
-                                </td>
-                              </>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* SECTION: ONE-TIME REGISTERED POOJAS */}
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-800">One-time Registered Pooja's</h2>
-                  <p className="text-sm text-slate-500">Review all pooja registrations linked to your account.</p>
-                </div>
-                <span className="inline-flex items-center justify-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600">
-                  {visibleRegistrations.length} {visibleRegistrations.length === 1 ? 'Registration' : 'Registrations'}
-                </span>
-              </div>
-
-              {paymentRecordsError && (
-                <div className="mx-6 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                  Unable to load payment status updates. {paymentRecordsError}
-                </div>
-              )}
-
-              {fromCartReview && pendingCartCount > 0 && (
-                <div className="m-6 space-y-2 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
-                  <p className="font-semibold">
-                    You&apos;re reviewing {pendingCartCount} cart item
-                    {pendingCartCount === 1 ? '' : 's'} before saving. We will redirect you to the Payment Page shortly.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleManualPaymentRedirect}
-                      className="inline-flex items-center justify-center rounded-full bg-orange-600 px-4 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700"
-                    >
-                      Continue to Payment
-                    </button>
-                    <span className="text-xs font-semibold uppercase tracking-wide text-orange-700">
-                      Redirecting in a moment...
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {pendingRegistrations.length > 0 && (
-                <div className="m-6 space-y-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-800">Cart preview (pending registrations)</p>
-                    <span className="rounded-full bg-amber-100 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                      Pending
-                    </span>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {pendingRegistrations.map((item) => {
-                      const serviceDate = item.customDayDate || item.bookingDate;
-                      const membersLabel = buildCartMemberNames(item.members);
-                      const amountLabel = formatCartAmount(item.amount);
-                      return (
-                        <article key={item.cartId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-xs uppercase tracking-wider text-slate-500">
-                                {item.poojaCode ?? 'POOJA'}
-                              </p>
-                              <h3 className="text-lg font-semibold text-slate-900">{item.poojaName}</h3>
-                              {item.dayOptionDescription && (
-                                <p className="text-sm text-slate-500">{item.dayOptionDescription}</p>
-                              )}
-                            </div>
-                            <span className="rounded-full bg-amber-100 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                              Cart
-                            </span>
+                                    {formData.family_selection === 'Other' && <input type="text" className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={formData.family_name} onChange={handleInputChange('family_name')} />}
+                                </div>
+                             </div>
                           </div>
-                          <dl className="mt-4 grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
-                            <div>
-                              <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Service Date</dt>
-                              <dd className="text-slate-800">{formatDate(serviceDate)}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Members</dt>
-                              <dd className="text-slate-800">{membersLabel}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Amount</dt>
-                              <dd className="text-slate-800">{amountLabel}</dd>
-                            </div>
-                          </dl>
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            <span
-                              className={`rounded-full px-3 py-0.5 ${
-                                item.postPrasadam ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              Post Prasadam {item.postPrasadam ? 'Yes' : 'No'}
-                            </span>
-                          </div>
-                          {item.customDayNote && (
-                            <p className="mt-3 text-sm text-slate-600">Notes: {item.customDayNote}</p>
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {registrationsLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
-                  <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600"></div>
-                  Loading pooja registrations...
-                </div>
-              ) : registrationsError ? (
-                <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                  {registrationsError}
-                </div>
-              ) : visibleRegistrations.length === 0 ? (
-                <div className="m-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                  No pooja registrations found for your account.
-                </div>
-              ) : (
-                <div className="p-6">
-                  {/* Mobile Card View */}
-                  <div className="md:hidden space-y-4">
-                    {visibleRegistrations.map((registration) => (
-                      <div key={registration.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="text-base font-medium text-indigo-700">
-                              {resolvePoojaId(registration)}
-                            </h3>
+                          <div className="flex gap-2 mt-2">
+                             <button onClick={cancelEditing} className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" disabled={submitting}>Cancel</button>
+                             <button onClick={handleSubmit} className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
                           </div>
                         </div>
+                      ) : (
+                        // View Mode
+                        <>
+                          <div className="flex items-start gap-3 mb-4">
+                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-200 to-indigo-300 text-xl font-bold text-indigo-700">
+                              {getInitials(member.name)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-base font-bold text-slate-900 truncate">{member.name}</h4>
+                              <p className="text-sm text-slate-500">{member.relationship || '—'}</p>
+                            </div>
+                          </div>
 
-                        <dl className="space-y-2 text-sm">
-                          <div>
-                            <dt className="text-xs text-slate-500">Pooja Name</dt>
-                            <dd className="text-slate-700">{registration.pooja_option_name?.trim() || '—'}</dd>
+                          <div className="space-y-2 text-xs mb-4">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Gender</span>
+                              <span className="font-medium text-slate-900">{member.gender || '—'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Date of Birth</span>
+                              <span className="font-medium text-slate-900">{formatDate(member.date_of_birth)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Star</span>
+                              <span className="font-medium text-slate-900">{member.tamil_star || '—'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Rasi</span>
+                              <span className="font-medium text-slate-900">{member.rasi || '—'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Gothra</span>
+                              <span className="font-medium text-slate-900">{member.gothra || '—'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Family Name</span>
+                              <span className="font-medium text-slate-900">{member.family_name || profile?.family_name || '—'}</span>
+                            </div>
                           </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Day Option</dt>
-                            <dd className="text-slate-700">{registration.day_option_description?.trim() || '—'}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Devotees</dt>
-                            <dd className="text-slate-700">{formatMemberNames(registration.members)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Post Prasadam</dt>
-                            <dd className="text-slate-700">
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  registration.post_prasadam
-                                    ? 'bg-rose-100 text-rose-700'
-                                    : 'bg-slate-100 text-slate-700'
-                                }`}
-                              >
-                                {registration.post_prasadam ? 'Yes' : 'No'}
-                              </span>
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Registered On</dt>
-                            <dd className="text-slate-700" title={formatRegistrationTimeline(registration)}>
-                              {formatRegistrationTimeline(registration)}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-                    ))}
-                  </div>
 
-                  {/* Desktop Table View */}
-                  <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-                          <tr>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja ID</th>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Pooja Name</th>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Day Option</th>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Devotees</th>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Post Prasadam</th>
-                            <th scope="col" className="px-4 py-3 text-left font-semibold">Registered On</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {visibleRegistrations.map((registration, index) => (
-                            <tr key={registration.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
-                              <td className="whitespace-nowrap px-4 py-3 font-medium text-indigo-700">
-                                {resolvePoojaId(registration)}
-                              </td>
-                              <td className="px-4 py-3 text-slate-700" title={registration.pooja_option_name ?? undefined}>
-                                {registration.pooja_option_name?.trim() || '—'}
-                              </td>
-                              <td
-                                className="px-4 py-3 text-slate-700"
-                                title={registration.day_option_description ?? undefined}
-                              >
-                                {registration.day_option_description?.trim() || '—'}
-                              </td>
-                              <td className="px-4 py-3 text-slate-700">{formatMemberNames(registration.members)}</td>
-                              <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                                <span
-                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                    registration.post_prasadam
-                                      ? 'bg-rose-100 text-rose-700'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}
-                                >
-                                  {registration.post_prasadam ? 'Yes' : 'No'}
-                                </span>
-                              </td>
-                              <td
-                                className="whitespace-nowrap px-4 py-3 text-slate-700"
-                                title={formatRegistrationTimeline(registration)}
-                              >
-                                {formatRegistrationTimeline(registration)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          <button onClick={() => startEditing(member)} className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Edit</button>
+                        </>
+                      )}
                     </div>
-                  </div>
+                  ))}
                 </div>
-              )}
-            </section>
+              </div>
+            )}
 
-            {/* SECTION: RECURRING PLANS */}
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-800">Recurring Pooja Plans</h2>
-                  <p className="text-sm text-slate-500">Manage your active recurring donations and schedules.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                   <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    {recurringPlanCount} Plan{recurringPlanCount === 1 ? '' : 's'}
-                  </span>
+            {/* REGISTRATIONS TAB */}
+            {activeTab === 'registrations' && (
+              <div>
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">One-time Registrations</h2>
+                    <p className="text-sm text-slate-500">View all your pooja registrations</p>
+                  </div>
                   <button
-                    type="button"
-                    onClick={handleViewRecurringPayments}
-                    disabled={recurringPlansToShow.length === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 py-1.5 text-sm font-semibold text-orange-600 shadow-sm hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={handleManualPaymentRedirect}
+                    className="inline-flex items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                   >
-                    <svg className="h-4 w-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     Payments
                   </button>
                 </div>
-              </div>
 
-              {recurringPlansToShow.length > 0 && (
-                <div className="m-6 rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 to-white p-6 shadow-sm">
+                <div className="mb-6 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 p-6 ring-1 ring-slate-200">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-orange-600 uppercase tracking-wider">
-                        Total Recurring Contribution
-                      </p>
-                      <h3 className="mt-2 text-3xl font-bold text-slate-900">
-                        {formatCartAmount(recurringPlansTotalAmount)}
-                      </h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Aggregated across {recurringPlanCount} plan{recurringPlanCount !== 1 ? 's' : ''}
+                      <p className="text-xs font-bold uppercase text-slate-600">Total one-time contribution</p>
+                      <p className="mt-2 text-4xl font-bold text-slate-900">₹ {formatCurrency(registrationTotals.amount)}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Across {registrationTotals.count} {registrationTotals.count === 1 ? 'pooja' : 'poojas'}
                       </p>
                     </div>
                     <div className="hidden sm:block">
-                      <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shadow-sm">
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 ring-4 ring-white">
+                        <span className="text-3xl">🎁</span>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
 
-              {pendingRecurringPlans.length > 0 && (
-                <div className="m-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div className="flex items-center justify-between gap-2 mb-4">
-                    <p className="text-sm font-semibold text-slate-900">Cart preview (pending recurring plans)</p>
-                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold uppercase text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
-                      Recurring
-                    </span>
+                {registrationsError && (
+                  <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{registrationsError}</div>
+                )}
+                
+                {/* Registered Poojas Grid */}
+                {registrationsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                    <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-violet-600"></div>
+                    Loading pooja registrations...
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {pendingRecurringPlans.map((item) => {
-                      const membersLabel = buildCartMemberNames(item.members);
-                      const amountLabel = formatCartAmount(item.amount);
+                ) : visibleRegistrations.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {visibleRegistrations.map((registration) => {
+                      const memberNames = formatMemberNames(registration.members);
+                      const registeredOn = formatDate(registration.created_at);
                       return (
-                        <article key={item.cartId} className="flex flex-col gap-3 rounded-xl border border-white bg-white p-4 shadow-sm">
-                          <div className="flex items-start justify-between gap-3">
+                        <div key={registration.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-violet-300 transition-all">
+                          <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 text-xs font-semibold text-orange-600 uppercase tracking-wider">
-                                <span>{item.poojaCode ?? 'PLAN'}</span>
-                                <span className="h-1.5 w-1.5 rounded-full bg-orange-600"></span>
-                                <span>{formatCartFrequencyLabel(item.recurrenceFrequency ?? null)}</span>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="inline-block rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-700">One-time</span>
+                                <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-700">Registration</span>
                               </div>
-                              <h3 className="mt-1 text-base font-bold text-slate-900">{item.poojaName}</h3>
-                              {item.dayOptionDescription && (
-                                <p className="text-sm text-slate-500">{item.dayOptionDescription}</p>
-                              )}
+                              <h3 className="text-lg font-bold text-slate-900">{registration.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
                             </div>
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                              </svg>
-                            </span>
-                          </div>
-                          <dl className="flex items-center gap-6 text-sm text-slate-600">
-                            <div>
-                              <dt className="text-xs font-semibold uppercase text-slate-500">Members</dt>
-                              <dd className="font-medium text-slate-900">{membersLabel}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs font-semibold uppercase text-slate-500">Amount</dt>
-                              <dd className="font-medium text-slate-900">{amountLabel}</dd>
-                            </div>
-                          </dl>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {recurrenceLoading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                  <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-emerald-600"></div>
-                  <p className="text-sm font-medium">Loading recurring plans...</p>
-                </div>
-              ) : recurrenceError ? (
-                <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-center">
-                  {recurrenceError}
-                </div>
-              ) : recurringPlansToShow.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-4 rounded-full bg-slate-100 p-3 text-slate-400">
-                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-slate-500">No recurring plans found yet. Start by adding a recurring pooja from registration page.</p>
-                </div>
-              ) : (
-                <div className="p-6">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {recurringPlansToShow.map((plan) => {
-                      const memberNames = getPlanMemberNames(plan.metadata);
-                      const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
-                      const pauseDuration = pauseDurationSelection[plan.id] ?? 1;
-                      const currentAction = planActionState[plan.id] ?? null;
-                      const actionLoading = Boolean(currentAction);
-                      const isRecurringPlan = plan.recurrence_kind === 'recurring';
-                      const selectedPauseReason = pauseReasonSelections[plan.id] ?? PAUSE_REASON_OPTIONS[0];
-                      const isPlanActive = plan.is_active && isRecurringPlan;
-                      const cancellationDate =
-                        isRecord(plan.metadata) && typeof plan.metadata.canceled_at === 'string'
-                          ? plan.metadata.canceled_at
-                          : null;
-                      const dueRegistration = plan.due_registration ?? null;
-                      const dueAmountValue = dueRegistration
-                        ? parseDecimalValue(dueRegistration.due_amount)
-                        : 0;
-                      const paymentReadyLabel =
-                        dueRegistration && dueAmountValue <= 0 ? 'Payment up to date' : null;
-                      const upcomingLabel =
-                        !dueRegistration && !paymentReadyLabel
-                          ? 'Upcoming payment will appear here'
-                          : null;
-                      const statusLabel = paymentReadyLabel ?? upcomingLabel;
-                      const planRegistrationLabel =
-                        plan.origin_registration_created_at
-                          ? formatPlanRegistrationTimeline(
-                              plan.origin_registration_created_at,
-                              plan.origin_registration_updated_at,
-                            )
-                          : null;
-                      const rawPlanPaymentStatusLabel =
-                        dueRegistration && dueRegistration.id
-                          ? getRegistrationStatusLabel(
-                              { id: dueRegistration.id, status: dueRegistration.status ?? undefined } as PoojaRegistration,
-                              paymentRecordsByRegistration,
-                              paymentRecordsLoaded,
-                            )
-                          : null;
-                      const planPaymentStatusLabel =
-                        rawPlanPaymentStatusLabel === STATUS_ADMIN_PENDING_LABEL ? null : rawPlanPaymentStatusLabel;
-                      const planPaymentStatusClasses = planPaymentStatusLabel
-                        ? getRegistrationStatusBadgeClasses(planPaymentStatusLabel)
-                        : null;
-
-                      return (
-                        <div
-                          key={plan.id}
-                          className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-5 transition-all hover:border-slate-300 hover:bg-slate-50"
-                        >
-                          {/* Header */}
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="flex-1">
-                              <div className="mb-2">
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 ring-1 ring-inset ring-slate-300">
-                                  {plan.pooja_option_code || 'Pooja'}
-                                </span>
-                              </div>
-                              <h3 className="text-base font-semibold text-slate-900 leading-tight">
-                                {plan.pooja_option_name?.trim() || 'Unnamed pooja'}
-                              </h3>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {plan.day_option_description?.trim() || '—'}
-                              </p>
-                              {planRegistrationLabel && planRegistrationLabel !== '—' && (
-                                <p className="mt-1 text-[10px] text-slate-400">Registered on {planRegistrationLabel}</p>
-                              )}
-                            </div>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                plan.is_active ? 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-600/20' : 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/10'
-                              }`}
-                            >
-                              {plan.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </div>
-
-                          {/* Info Grid */}
-                          <div className="flex flex-col gap-3 border-t border-slate-200/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Schedule</p>
-                              <p className="text-sm font-semibold text-slate-900">
-                                {formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency)}
-                              </p>
-                            </div>
-                            <div className="text-right sm:text-left">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Amount</p>
-                              <p className="text-sm font-semibold text-slate-900">
-                                ₹ {formatPlanAmount(plan.amount)}
-                              </p>
+                            <div className="flex flex-col items-end gap-1 text-right">
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">One-time</span>
+                              <span className="text-lg font-bold text-slate-800">₹ {formatCurrency(registration.total_amount)}</span>
                             </div>
                           </div>
 
-                          {/* Pause Notice */}
-                          {(plan.pause_from || plan.pause_until) && (
-                            <div className="rounded-lg bg-orange-50 p-3 text-xs font-semibold text-orange-800 ring-1 ring-inset ring-orange-200">
-                              {plan.pause_from && plan.pause_until
-                                ? `Paused from ${formatDate(plan.pause_from)} until ${formatDate(plan.pause_until)}.`
-                                : plan.pause_until
-                                  ? `Paused until ${formatDate(plan.pause_until)}.`
-                                  : `Pause scheduled from ${formatDate(plan.pause_from)}.`}
-                              {pauseReasonLabel && (
-                                <p className="mt-1 font-normal text-orange-700">
-                                  Handling: {pauseReasonLabel}
-                                </p>
-                              )}
+                          <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Registered On</span>
+                              <span className="font-medium text-slate-900">{registeredOn}</span>
                             </div>
-                          )}
-                          
-                          {/* Members */}
-                          {memberNames.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Members</p>
-                              <p className="mt-0.5 text-xs text-slate-600">{memberNames.join(', ')}</p>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Pooja Day Option</span>
+                              <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">
+                                {registration.day_option_description?.trim() || '—'}
+                              </span>
                             </div>
-                          )}
-
-                          {/* Due Info */}
-                          {dueRegistration && (
-                            <div className="grid grid-cols-2 gap-3 rounded-lg bg-white p-3 ring-1 ring-slate-100">
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Due amount</p>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {formatCartAmount(dueRegistration.due_amount)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Paid amount</p>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {formatCartAmount(dueRegistration.paid_amount)}
-                                </p>
-                              </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Members</span>
+                              <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames}</span>
                             </div>
-                          )}
-
-                          {/* Status & Actions */}
-                          <div className="space-y-3 pt-2">
-                            {planPaymentStatusLabel && planPaymentStatusClasses && (
-                              <div className="flex flex-wrap gap-2">
-                                <span
-                                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${planPaymentStatusClasses}`}
-                                >
-                                  {planPaymentStatusLabel}
-                                </span>
-                              </div>
-                            )}
-                            {statusLabel && (
-                              <div
-                                className={`text-xs font-semibold uppercase tracking-wide ${
-                                  paymentReadyLabel ? 'text-emerald-600' : 'text-slate-400'
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Prasadam</span>
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  registration.post_prasadam ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
                                 }`}
                               >
-                                {statusLabel}
-                              </div>
-                            )}
-                            {isRecurringPlan && (
-                              <>
-                                {isPlanActive ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => togglePauseForm(plan.id)}
-                                      disabled={actionLoading}
-                                      className="inline-flex items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
-                                    >
-                                      {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCancelPlan(plan)}
-                                      disabled={actionLoading}
-                                      className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
-                                    >
-                                      {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => togglePauseForm(plan.id)}
-                                      disabled={actionLoading}
-                                      className="inline-flex items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-70 transition-colors"
-                                    >
-                                      {activePausePlanId === plan.id ? 'Hide pause details' : 'Edit pause details'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleResumePlan(plan.id)}
-                                      disabled={actionLoading}
-                                      className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                    >
-                                      {currentAction === 'resume' ? 'Resuming...' : 'Resume plan'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCancelPlan(plan)}
-                                      disabled={actionLoading}
-                                      className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                    >
-                                      {currentAction === 'cancel' ? 'Canceling...' : 'Cancel'}
-                                    </button>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </div>
-
-                          {/* Pause Form (Inline) */}
-                          {isRecurringPlan && (
-                            <div className="space-y-3">
-                              {editingPlanId === plan.id && (
-                                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                                  <h4 className="mb-3 text-sm font-semibold text-slate-800">Edit Plan Details</h4>
-                                  <div className="mb-3 grid gap-3 sm:grid-cols-2">
-                                    <div>
-                                      <label htmlFor={`plan-frequency-${plan.id}`} className="block text-xs font-semibold text-slate-700 mb-1">
-                                        Recurrence frequency
-                                      </label>
-                                      <select
-                                        id={`plan-frequency-${plan.id}`}
-                                        value={planEditValues.recurrence_frequency}
-                                        onChange={(event) =>
-                                          handlePlanEditChange('recurrence_frequency', event.target.value)
-                                        }
-                                        className="block w-full rounded-md border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm"
-                                      >
-                                        {PLAN_FREQUENCY_OPTIONS.map((option) => (
-                                          <option key={option.value} value={option.value}>
-                                            {option.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label htmlFor={`plan-amount-${plan.id}`} className="block text-xs font-semibold text-slate-700 mb-1">
-                                        Amount
-                                      </label>
-                                      <input
-                                        id={`plan-amount-${plan.id}`}
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={planEditValues.amount}
-                                        onChange={(event) => handlePlanEditChange('amount', event.target.value)}
-                                        className="block w-full rounded-md border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={handlePlanEditSave}
-                                      disabled={planEditSubmitting}
-                                      className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-70"
-                                    >
-                                      {planEditSubmitting ? 'Saving...' : 'Save changes'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={cancelPlanEditing}
-                                      disabled={planEditSubmitting}
-                                      className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {isPlanActive ? (
-                                <>
-                                  {activePausePlanId === plan.id && (
-                                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 shadow-sm">
-                                      <h4 className="mb-3 text-sm font-semibold text-orange-900">Pause Plan</h4>
-                                      <div className="mb-3 space-y-3">
-                                        <div>
-                                          <label htmlFor={`pause-reason-${plan.id}`} className="block text-xs font-semibold text-orange-900 mb-1">
-                                            Pause handling
-                                          </label>
-                                          <select
-                                            id={`pause-reason-${plan.id}`}
-                                            value={selectedPauseReason}
-                                            onChange={(event) =>
-                                              setPauseReasonSelections((prev) => ({
-                                                ...prev,
-                                                [plan.id]: event.target.value,
-                                              }))
-                                            }
-                                            className="block w-full rounded-md border-orange-200 bg-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                          >
-                                            {PAUSE_REASON_OPTIONS.map((option) => (
-                                              <option key={option} value={option}>
-                                                {option}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                        <div>
-                                          <label htmlFor={`pause-months-${plan.id}`} className="block text-xs font-semibold text-orange-900 mb-1">
-                                            Pause duration (months)
-                                          </label>
-                                          <select
-                                            id={`pause-months-${plan.id}`}
-                                            value={pauseDuration}
-                                            onChange={(event) =>
-                                              setPauseDurationSelection((prev) => ({
-                                                ...prev,
-                                                [plan.id]: Number(event.target.value),
-                                              }))
-                                            }
-                                            className="block w-full rounded-md border-orange-200 bg-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                          >
-                                            {PAUSE_MONTH_OPTIONS.map((option) => (
-                                              <option key={option} value={option}>
-                                                {option} month{option > 1 ? 's' : ''}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePausePlan(plan, selectedPauseReason)}
-                                        disabled={actionLoading}
-                                        className="w-full rounded-md border border-orange-300 bg-white px-3 py-2 text-sm font-semibold text-orange-700 shadow-sm hover:bg-orange-50 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                      >
-                                        {currentAction === 'pause' ? 'Pausing...' : 'Pause plan'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  {cancellationDate && (
-                                    <div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-rose-700 ring-1 ring-inset ring-rose-200">
-                                      Canceled on {formatDate(cancellationDate)}
-                                    </div>
-                                  )}
-                                  {activePausePlanId === plan.id && (
-                                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 shadow-sm">
-                                      <h4 className="mb-3 text-sm font-semibold text-orange-900">Update Pause Window</h4>
-                                      <div className="mb-3 space-y-3">
-                                        <div>
-                                          <label htmlFor={`pause-months-${plan.id}`} className="block text-xs font-semibold text-orange-900 mb-1">
-                                            Pause duration (months)
-                                          </label>
-                                          <select
-                                            id={`pause-months-${plan.id}`}
-                                            value={pauseDuration}
-                                            onChange={(event) =>
-                                              setPauseDurationSelection((prev) => ({
-                                                ...prev,
-                                                [plan.id]: Number(event.target.value),
-                                              }))
-                                            }
-                                            className="block w-full rounded-md border-orange-200 bg-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                          >
-                                            {PAUSE_MONTH_OPTIONS.map((option) => (
-                                              <option key={option} value={option}>
-                                                {option} month{option > 1 ? 's' : ''}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                        <div>
-                                          <label htmlFor={`pause-reason-${plan.id}`} className="block text-xs font-semibold text-orange-900 mb-1">
-                                            Pause handling
-                                          </label>
-                                          <select
-                                            id={`pause-reason-${plan.id}`}
-                                            value={selectedPauseReason}
-                                            onChange={(event) =>
-                                              setPauseReasonSelections((prev) => ({
-                                                ...prev,
-                                                [plan.id]: event.target.value,
-                                              }))
-                                            }
-                                            className="block w-full rounded-md border-orange-200 bg-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
-                                          >
-                                            {PAUSE_REASON_OPTIONS.map((option) => (
-                                              <option key={option} value={option}>
-                                                {option}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePausePlan(plan, selectedPauseReason)}
-                                        disabled={actionLoading}
-                                        className="w-full rounded-md border border-orange-300 bg-white px-3 py-2 text-sm font-semibold text-orange-700 shadow-sm hover:bg-orange-50 disabled:cursor-wait disabled:opacity-70 transition-colors"
-                                      >
-                                        {currentAction === 'pause' ? 'Updating...' : 'Update pause'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
+                                {registration.post_prasadam ? 'Yes' : 'No'}
+                              </span>
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
+                ) : visibleRegistrations.length === 0 ? (
+                  <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center shadow-sm">
+                    <p className="text-base font-semibold text-slate-900">No registrations yet</p>
+                    <p className="mt-2 text-sm text-slate-500">Book a pooja to see it listed here.</p>
+                    <button
+                      type="button"
+                      onClick={handleStartRegistration}
+                      className="mt-4 inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-100"
+                    >
+                      Register for a pooja
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* RECURRING PLANS TAB */}
+            {activeTab === 'recurring' && (
+              <div>
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Recurring Pooja Plans</h2>
+                    <p className="text-sm text-slate-500">Manage your active recurring donations</p>
+                  </div>
+                  <button onClick={handleViewRecurringPayments} disabled={!hasRecurringPaymentItems} className="inline-flex items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    Payments
+                  </button>
                 </div>
-              )}
-            </section>
+
+                {/* Summary Banner */}
+                <div className="mb-6 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 p-6 ring-1 ring-emerald-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-emerald-600">Total Monthly Contribution</p>
+                      <p className="mt-2 text-4xl font-bold text-slate-900">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
+                      <p className="mt-1 text-sm text-slate-600">Across {recurringPlansToShow.length} active plan{recurringPlansToShow.length !== 1 ? 's' : ''}</p>
+                      <p className="mt-1 text-sm font-semibold text-red-600">
+                        {recurringPlansToShow.length} Recurring Pooja{recurringPlansToShow.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="hidden sm:block">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 ring-4 ring-white">
+                        <span className="text-3xl">💰</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {recurrenceError && <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-center">{recurrenceError}</div>}
+
+                {recurrenceLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                    <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-emerald-600"></div>
+                    <p className="text-sm font-medium">Loading recurring plans...</p>
+                  </div>
+                ) : recurringPlansToShow.length > 0 ? (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {recurringPlansToShow.map((plan) => {
+                      const memberNames = getPlanMemberNames(plan.metadata);
+                      const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
+                      const isPlanActive = plan.is_active && plan.recurrence_kind === 'recurring';
+                      const scheduleLabel = formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency);
+                      const registeredOn = plan.origin_registration_created_at
+                        ? formatDate(plan.origin_registration_created_at)
+                        : '—';
+
+                      return (
+                        <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-emerald-300 transition-all">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">{plan.pooja_option_code || 'Pooja'}</span>
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isPlanActive ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {isPlanActive ? 'Active' : 'Paused'}
+                                </span>
+                              </div>
+                              <h3 className="text-lg font-bold text-slate-900">{plan.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 text-right">
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-amber-600 bg-amber-50">
+                                {scheduleLabel}
+                              </span>
+                              <span className="text-lg font-bold text-slate-800">
+                                ₹ {formatPlanAmount(plan.amount)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {(plan.pause_from || plan.pause_until) && (
+                            <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
+                              <p className="text-xs font-semibold text-orange-800">
+                                {plan.pause_from && plan.pause_until
+                                  ? `Paused from ${formatDate(plan.pause_from)} until ${formatDate(plan.pause_until)}.`
+                                  : plan.pause_until
+                                    ? `Paused until ${formatDate(plan.pause_until)}.`
+                                    : `Pause scheduled from ${formatDate(plan.pause_from)}.`}
+                              </p>
+                              {pauseReasonLabel && <p className="mt-1 text-xs text-orange-700">Handling: {pauseReasonLabel}</p>}
+                            </div>
+                          )}
+
+                          <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Registered On</span>
+                              <span className="font-medium text-slate-900">{registeredOn}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Pooja Day Option</span>
+                              <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{plan.day_option_description?.trim() || '—'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Members</span>
+                              <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames.length > 0 ? memberNames.join(', ') : '—'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : recurringPlansToShow.length === 0 ? (
+                  <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center shadow-sm">
+                    <p className="text-base font-semibold text-slate-900">No recurring plans yet</p>
+                    <p className="mt-2 text-sm text-slate-500">Start a recurring donation to keep giving consistently.</p>
+                    <button
+                      type="button"
+                      onClick={handleStartRegistration}
+                      className="mt-4 inline-flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-100"
+                    >
+                      Explore recurring poojas
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* CHRT POOJA TAB */}
+            {activeTab === 'chrt_pooja' && (
+              <div>
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Choose Your Preferred Date - CHRT Pooja</h2>
+                    <p className="text-sm text-slate-500">Manage your CHRT poojas with custom selected dates</p>
+                  </div>
+                  <button onClick={handleViewRecurringPayments} disabled={chrtPoojaCount === 0} className="inline-flex items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    Payments
+                  </button>
+                </div>
+
+                {/* Summary Banner */}
+                <div className="mb-6 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 p-6 ring-1 ring-purple-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-purple-600">Total CHRT Poojas</p>
+                      <p className="mt-2 text-4xl font-bold text-slate-900">{chrtPoojaCount}</p>
+                      <p className="mt-1 text-sm text-slate-600">CHRT Pooja{chrtPoojaCount !== 1 ? 's' : ''} registered</p>
+                    </div>
+                    <div className="hidden sm:block">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 ring-4 ring-white">
+                        <span className="text-3xl">🙏</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {recurrenceError && <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-center">{recurrenceError}</div>}
+                {registrationsError && <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-center">{registrationsError}</div>}
+
+            {isChrtDataLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                    <div className="mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-purple-600"></div>
+                    <p className="text-sm font-medium">Loading CHRT poojas...</p>
+                  </div>
+                ) : chrtPoojaCount > 0 ? (
+                  <>
+                    {chrtPlansToShow.length > 0 && (
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        {chrtPlansToShow.map((plan) => {
+                          const memberNames = getPlanMemberNames(plan.metadata);
+                          const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
+                          const isPlanActive = plan.is_active && plan.recurrence_kind === 'recurring';
+                          const scheduleLabel = formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency);
+                          const registeredOn = plan.origin_registration_created_at
+                            ? formatDate(plan.origin_registration_created_at)
+                            : '—';
+
+                          return (
+                            <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="inline-block rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">CHRT</span>
+                                    <span
+                                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                        isPlanActive ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
+                                      }`}
+                                    >
+                                      {isPlanActive ? 'Active' : 'Paused'}
+                                    </span>
+                                  </div>
+                                  <h3 className="text-lg font-bold text-slate-900">{plan.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
+                                </div>
+                                <div className="flex flex-col items-end gap-1 text-right">
+                                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">
+                                    {scheduleLabel}
+                                  </span>
+                                  <span className="text-lg font-bold text-slate-800">
+                                    ₹ {formatPlanAmount(plan.amount)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {(plan.pause_from || plan.pause_until) && (
+                                <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
+                                  <p className="text-xs font-semibold text-orange-800">
+                                    {plan.pause_from && plan.pause_until
+                                      ? `Paused from ${formatDate(plan.pause_from)} until ${formatDate(plan.pause_until)}.`
+                                      : plan.pause_until
+                                        ? `Paused until ${formatDate(plan.pause_until)}.`
+                                        : `Pause scheduled from ${formatDate(plan.pause_from)}.`}
+                                  </p>
+                                  {pauseReasonLabel && <p className="mt-1 text-xs text-orange-700">Handling: {pauseReasonLabel}</p>}
+                                </div>
+                              )}
+
+                              <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Preferred Date</span>
+                                  <span className="font-bold text-purple-700 text-right">{formatDate(plan.one_time_date)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Registered On</span>
+                                  <span className="font-medium text-slate-900">{registeredOn}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Pooja Day Option</span>
+                                  <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{plan.day_option_description?.trim() || '—'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Members</span>
+                                  <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames.length > 0 ? memberNames.join(', ') : '—'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {chrtRegistrations.length > 0 && (
+                      <div className={`grid gap-4 lg:grid-cols-2 ${chrtPlansToShow.length > 0 ? 'mt-6' : ''}`}>
+                        {chrtRegistrations.map((registration) => (
+                          <div key={`chrt-registration-${registration.id}`} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="inline-block rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">CHRT</span>
+                                  <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-purple-50 text-purple-600">Registration</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900">{registration.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
+                                <p className="text-sm text-slate-500">{registration.day_option_description?.trim() || '—'}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 text-right">
+                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">
+                                  One-time
+                                </span>
+                                <span className="text-lg font-bold text-slate-800">
+                                  ₹ {formatPlanAmount(registration.total_amount)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Preferred Date</span>
+                                <span className="font-bold text-purple-700 text-right">{formatDate(registration.start_date)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Registered On</span>
+                                <span className="font-medium text-slate-900">{formatDate(registration.created_at)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Members</span>
+                                <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{formatMemberNames(registration.members)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Prasadam</span>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    registration.post_prasadam ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  {registration.post_prasadam ? 'Yes' : 'No'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center shadow-sm">
+                    <p className="text-base font-semibold text-slate-900">No CHRT poojas registered</p>
+                    <p className="mt-2 text-sm text-slate-500">Register a CHRT pooja to add it here.</p>
+                    <button
+                      type="button"
+                      onClick={handleStartRegistration}
+                      className="mt-4 inline-flex items-center justify-center rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-purple-700 shadow-sm hover:border-purple-300 hover:bg-purple-100"
+                    >
+                      Register CHRT Pooja
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 };
-
 export default DonorProfile;

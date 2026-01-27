@@ -383,6 +383,7 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
     pooja_option_name = serializers.CharField(source="pooja_option.name", read_only=True)
     pooja_option_code = serializers.CharField(source="pooja_option.code", read_only=True)
     day_option_description = serializers.SerializerMethodField()
+    day_option_code = serializers.CharField(source="day_option.code", read_only=True)
     donor_name = serializers.SerializerMethodField()
     donor_phone = serializers.SerializerMethodField()
     donor_email = serializers.SerializerMethodField()
@@ -402,6 +403,7 @@ class RecurringPoojaPlanSerializer(serializers.ModelSerializer):
             "pooja_option_name",
             "pooja_option_code",
             "day_option_description",
+            "day_option_code",
             "donor_name",
             "donor_phone",
             "donor_email",
