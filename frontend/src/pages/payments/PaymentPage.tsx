@@ -38,10 +38,9 @@
  * ============================================================================
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';
-
-import api from '../../lib/api';
+import api, { extractResults } from '../../lib/api';
 import { useCartStore } from '../../store/cart';
 import { usePaymentStore } from '../../store/payments';
 import { useAuthStore } from '../../store/auth';
@@ -50,9 +49,9 @@ import { useCombineAccessStore } from '../../store/combineAccess';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
 import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
-import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 import type { CartItem } from '../../store/cart';
-import RevealableAccountSection from '../../components/RevealableAccountSection';
+import { buildRegistrationPayload, emitPoojaDataUpdatedEvent } from '../../lib/registrationPayload';
+import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 
 const formatCurrency = (value?: number | string | null) => {
   if (value === null || value === undefined) {
@@ -108,12 +107,6 @@ const displayToIsoDate = (displayDate: string): string => {
   return `${year}-${month}-${day}`;
 };
 
-const DAY_CATEGORY_LABELS: Record<string, string> = {
-  weekday: '',
-  tamil_star: '',
-  code: 'Template Code',
-};
-
 const formatDate = (value?: string | null) => {
   if (!value) {
     return '—';
@@ -127,21 +120,6 @@ const formatDate = (value?: string | null) => {
     month: '2-digit',
     year: 'numeric',
   });
-};
-
-const formatDayOptionLabel = (description?: string | null, code?: string | null) => {
-  const trimmedDescription = description?.trim();
-  const trimmedCode = code?.trim();
-  if (trimmedDescription && trimmedCode) {
-    return `${trimmedDescription} — ${trimmedCode}`;
-  }
-  if (trimmedDescription) {
-    return trimmedDescription;
-  }
-  if (trimmedCode) {
-    return trimmedCode;
-  }
-  return null;
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -159,6 +137,22 @@ const formatDateTime = (value?: string | null) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+interface PassbookSummaryEntry {
+  id: number | string;
+  entry_date?: string | null;
+  due_amount?: string | number | null;
+  paid_amount?: string | number | null;
+  closing_due?: string | number | null;
+}
+
+const parsePassbookAmount = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isNaN(numeric) ? null : numeric;
 };
 
 const formatCombineMonthLabel = (value?: string | null) => {
@@ -181,198 +175,6 @@ const formatCombineMonthLabel = (value?: string | null) => {
   });
 };
 
-const formatMonthKey = (value?: string | Date | null) => {
-  if (!value) {
-    return null;
-  }
-  const parsed = typeof value === 'string' ? new Date(value) : value;
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const formatMonthLabel = (key: string) => {
-  const [yearPart, monthPart] = key.split('-');
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) {
-    return key;
-  }
-  const date = new Date(year, month - 1, 1);
-  return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-};
-
-const buildHistoryMonthOptions = <T,>(
-  entries: T[],
-  resolveDate: (entry: T) => string | Date | null | undefined,
-) => {
-  const keys = new Set<string>();
-  const currentKey = formatMonthKey(new Date());
-  if (currentKey) {
-    keys.add(currentKey);
-  }
-  entries.forEach((entry) => {
-    const key = formatMonthKey(resolveDate(entry));
-    if (key) {
-      keys.add(key);
-    }
-  });
-  const sortedKeys = Array.from(keys).sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
-  return sortedKeys.map((key) => ({ key, label: formatMonthLabel(key) }));
-};
-
-const buildMembersLabel = (members?: CartItem['members']) => {
-  if (!members || members.length === 0) {
-    return null;
-  }
-  const names = members
-    .map((member) => member?.name?.toString().trim())
-    .filter((name): name is string => Boolean(name && name.length > 0));
-  if (names.length === 0) {
-    return null;
-  }
-  return names.join(', ');
-};
-
-type RegistrationMemberPayload = {
-  name: string;
-  relationship?: string;
-  phone_number?: string;
-  tamil_star?: string;
-  rasi?: string;
-  gothra?: string;
-  family_name?: string;
-  date_of_birth?: string;
-};
-
-const buildRegistrationMembers = (members?: CartItem['members']) => {
-  if (!Array.isArray(members) || members.length === 0) {
-    return [];
-  }
-  return members.map((member) => {
-    const payload: RegistrationMemberPayload = {
-      name: member?.name?.trim() || 'Member',
-    };
-    const relationship = member?.relationship?.trim();
-    if (relationship) {
-      payload.relationship = relationship;
-    }
-    const phone = member?.donorPhone?.trim();
-    if (phone) {
-      payload.phone_number = phone;
-    }
-    const tamilStar = member?.tamilStar?.trim();
-    if (tamilStar) {
-      payload.tamil_star = tamilStar;
-    }
-    const rasi = member?.rasi?.trim();
-    if (rasi) {
-      payload.rasi = rasi;
-    }
-    const gothra = member?.gothra?.trim();
-    if (gothra) {
-      payload.gothra = gothra;
-    }
-    const familyName = member?.familyName?.trim();
-    if (familyName) {
-      payload.family_name = familyName;
-    }
-    if (member?.dob) {
-      payload.date_of_birth = member.dob;
-    }
-    return payload;
-  });
-};
-
-const sanitizeCartItemForPlan = (item: CartItem) => {
-  const { cartId, ...rest } = item;
-  return rest;
-};
-
-interface RegistrationPayload {
-  additional_notes?: string;
-  [key: string]: unknown;
-}
-
-const buildRegistrationPayload = (
-  item: CartItem,
-  paymentDate?: string,
-  createdAtOverride?: string,
-): RegistrationPayload => {
-  const members = buildRegistrationMembers(item.members);
-  if (members.length === 0) {
-    const fallbackName = item.fullName?.trim() || 'Member';
-    const fallback: RegistrationMemberPayload = {
-      name: fallbackName,
-    };
-    if (item.memberRelationship) {
-      fallback.relationship = item.memberRelationship.trim();
-    }
-    if (item.memberTamilStar) {
-      fallback.tamil_star = item.memberTamilStar.trim();
-    }
-    if (item.memberRasi) {
-      fallback.rasi = item.memberRasi.trim();
-    }
-    if (item.memberGothra) {
-      fallback.gothra = item.memberGothra.trim();
-    }
-    if (item.memberFamilyName) {
-      fallback.family_name = item.memberFamilyName.trim();
-    }
-    if (item.memberDob) {
-      fallback.date_of_birth = item.memberDob;
-    }
-    members.push(fallback);
-  }
-
-  const quantity = Math.max(members.length, 1);
-  const numericAmount = Number(item.amount);
-  // Use customDayDate if available, otherwise use bookingDate, otherwise use paymentDate
-  // Default to today's date if no date is provided to ensure start_date is never NULL
-  const registrationDate = item.customDayDate ?? item.bookingDate ?? paymentDate ?? new Date().toISOString();
-  const normalizedStartDate = normalizeIsoDate(registrationDate);
-  
-  console.log('🎯 buildRegistrationPayload DEBUG:');
-  console.log('  item.customDayDate:', item.customDayDate);
-  console.log('  item.bookingDate:', item.bookingDate);
-  console.log('  paymentDate param:', paymentDate);
-  console.log('  registrationDate (resolved):', registrationDate);
-  console.log('  normalizedStartDate:', normalizedStartDate);
-  
-  const payload: Record<string, unknown> = {
-    pooja_option: item.poojaId,
-    day_option: item.dayOptionId ?? undefined,
-    start_date: normalizedStartDate,
-    quantity,
-    is_group_registration: quantity > 1,
-    post_prasadam: Boolean(item.postPrasadam),
-    additional_notes: item.customDayNote?.trim() ?? '',
-    members,
-    cart_item: sanitizeCartItemForPlan(item),
-  };
-
-  if (createdAtOverride) {
-    payload.created_at_override = createdAtOverride;
-  }
-
-  if (Number.isFinite(numericAmount)) {
-    payload.total_amount = numericAmount;
-  }
-  if (item.recurrenceKind) {
-    payload.recurrence_kind = item.recurrenceKind;
-  }
-  if (item.recurrenceFrequency) {
-    payload.recurrence_frequency = item.recurrenceFrequency;
-  }
-  if (item.recurrenceOneTimeDate) {
-    payload.recurrence_one_time_date = item.recurrenceOneTimeDate;
-  }
-
-  return payload;
-};
-
 const allocatePaymentAmounts = (items: CartItem[], totalAmount: number) => {
   const toPaise = (value: number) => {
     if (!Number.isFinite(value)) {
@@ -380,23 +182,16 @@ const allocatePaymentAmounts = (items: CartItem[], totalAmount: number) => {
     }
     return Math.max(0, Math.round(value * 100));
   };
-
   let remainingPaise = Math.max(0, toPaise(totalAmount));
-  const allocations = items.map((item, idx) => {
+  const allocations = items.map((item) => {
     if (remainingPaise <= 0) {
       return 0;
     }
     const itemPaise = toPaise(parseAmount(item.amount));
     const allocationPaise = Math.min(itemPaise, remainingPaise);
     remainingPaise = Math.max(remainingPaise - allocationPaise, 0);
-    const allocation = allocationPaise / 100;
-    console.log(`  Item ${idx}: itemAmount=${parseAmount(item.amount)}, allocated=${allocation}, remainingPaise=${remainingPaise}`);
-    return allocation;
+    return allocationPaise / 100;
   });
-  
-  const totalAllocated = allocations.reduce((sum, a) => sum + a, 0);
-  console.log('  Total allocated:', totalAllocated, 'Expected:', totalAmount);
-  
   return allocations;
 };
 
@@ -410,47 +205,22 @@ const recordRegistrations = async (
   const totalCartAmount = items.reduce((sum, item) => sum + parseAmount(item.amount), 0);
   const totalPaymentAmount =
     typeof amountPaid === 'number' && Number.isFinite(amountPaid) ? amountPaid : totalCartAmount;
-  
-  // DEBUG: Log all amounts and items
-  console.log('🔍 recordRegistrations DEBUG:');
-  console.log('  Items:', items.map((item, idx) => ({ idx, amount: item.amount })));
-  console.log('  totalCartAmount:', totalCartAmount);
-  console.log('  amountPaid parameter:', amountPaid);
-  console.log('  totalPaymentAmount:', totalPaymentAmount);
-  
-  // Safety check: ensure totalPaymentAmount doesn't exceed totalCartAmount
   const safePaymentAmount = Math.min(totalPaymentAmount, totalCartAmount);
-  
-  console.log('  safePaymentAmount:', safePaymentAmount);
-  
   const paymentAllocations = allocatePaymentAmounts(items, safePaymentAmount);
-  
-  console.log('  paymentAllocations:', paymentAllocations);
-
-  // Collect all registration IDs before creating payment records
   const registrationIds: (number | undefined)[] = [];
-
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     const payload = buildRegistrationPayload(item, paymentDate, createdAtOverride);
-    console.log(`  📦 Sending registration ${index} payload:`, payload);
     const response = await api.post('pooja/registrations/', payload);
     const registrationId = response.data?.id;
     registrationIds.push(typeof registrationId === 'number' ? registrationId : undefined);
-    console.log(`  Registration ${index} created with ID:`, registrationId, 'Response:', response.data);
   }
-
-  // Now create payment records with the allocated amounts
   for (let index = 0; index < items.length; index += 1) {
     const registrationId = registrationIds[index];
     const paymentAmount = paymentAllocations[index] ?? 0;
-
-    // Only create payment records for amounts > 0
     if (paymentAmount <= 0) {
-      console.log(`  Skipping payment record for index ${index}: amount is ${paymentAmount}`);
       continue;
     }
-
     const item = items[index];
     const amountNote =
       typeof amountPaid === 'number' && Number.isFinite(amountPaid)
@@ -463,7 +233,6 @@ const recordRegistrations = async (
     if (amountNote) {
       noteParts.push(amountNote);
     }
-
     const paymentPayload = {
       registration: registrationId,
       amount: paymentAmount,
@@ -473,26 +242,26 @@ const recordRegistrations = async (
       payment_month: paymentDate || undefined,
       notes: noteParts.length > 0 ? noteParts.join(' • ') : undefined,
     };
-    
-    console.log(`  Creating payment record ${index}:`, paymentPayload);
-
     await api.post('payments/records/', paymentPayload);
   }
-  
-  console.log('✅ recordRegistrations completed');
 };
 
-const emitPoojaDataUpdatedEvent = () => {
-  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
-    return;
-  }
-  const event = new CustomEvent(POOJA_DATA_UPDATED_EVENT);
-  window.dispatchEvent(event);
-};
+interface PassbookDueEntry {
+  id: number | string;
+  transaction_details?: string | null;
+  due_amount?: string | number | null;
+  entry_date?: string | null;
+  created_at?: string | null;
+  payment_month?: string | null;
+  pooja_option?: string | null;
+  notes?: string | null;
+  due_amount_name?: string | null;
+  entry_type?: string | null;
+}
 
 const buildRegistrationErrorMessage = (error: unknown) => {
   if (!error) {
-    return 'Unable to register the poojas right now.';
+    return 'Unable to register poojas right now.';
   }
   if (typeof error === 'string') {
     return error;
@@ -509,29 +278,53 @@ const buildRegistrationErrorMessage = (error: unknown) => {
       return err.message;
     }
   }
-  return 'Unable to register the poojas right now.';
+  return 'Unable to register poojas right now.';
 };
+
+// Helper function to check if a CHRT pooja is in its scheduled month
+const isCHRTInScheduledMonth = (item: CartItem): boolean => {
+  // If it's not a CHRT pooja, include it
+  if (item.dayOptionCode?.trim().toUpperCase() !== 'CHRT') {
+    return true;
+  }
+  
+  // For CHRT poojas, check if the booking date month matches current month
+  if (!item.bookingDate) {
+    return false;
+  }
+  
+  try {
+    const today = new Date();
+    const currentMonth = today.getMonth(); // 0-11
+    const currentYear = today.getFullYear();
+    
+    const bookingDate = new Date(item.bookingDate);
+    const bookingMonth = bookingDate.getMonth(); // 0-11
+    const bookingYear = bookingDate.getFullYear();
+    
+    // Include CHRT pooja only if we're in the same month/year as the booking date
+    return currentMonth === bookingMonth && currentYear === bookingYear;
+  } catch (error) {
+    console.error('Error checking CHRT month validity:', error);
+    return true; // Include by default if there's an error
+  }
+};
+
+interface ValidationError {
+  field: 'reference' | 'amount' | 'date';
+  message: string;
+}
 
 const PaymentPage = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
   const navigate = useNavigate();
-
-  const setItemsForUser = useCartStore((state) => state.setItemsForUser);
-  const removeCartItem = useCartStore((state) => state.removeItem);
   const clearCartItems = useCartStore((state) => state.clear);
   const paymentSnapshot = usePaymentStore((state) => state.lastGeneralPaymentByUser[cartKey] ?? null);
   const clearPaymentSnapshot = usePaymentStore((state) => state.clearGeneralPayment);
   const generalPaymentHistory = usePaymentStore((state) => state.generalPaymentHistory);
   const addGeneralPaymentHistory = usePaymentStore((state) => state.addGeneralPaymentHistory);
-  const setGeneralPayment = usePaymentStore((state) => state.setGeneralPayment);
-
-  const userHistory = useMemo(
-    () => generalPaymentHistory.filter((entry) => entry.userKey === cartKey),
-    [generalPaymentHistory, cartKey],
-  );
-
-  const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+  const [activePaymentTab, setActivePaymentTab] = useState<'upi' | 'bank'>('upi');
   const [showCelebration, setShowCelebration] = useState(false);
   const [registrationInProgress, setRegistrationInProgress] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
@@ -540,9 +333,18 @@ const PaymentPage = () => {
   const [amountPaidError, setAmountPaidError] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentDateError, setPaymentDateError] = useState<string | null>(null);
+  
+  // Initialize paymentDate in dd/mm/yyyy format (Display format)
   const [paymentDate, setPaymentDate] = useState(() => formatDisplayDate(new Date().toISOString()));
+  const [dueRecords, setDueRecords] = useState<PassbookDueEntry[]>([]);
+  const [dueLoading, setDueLoading] = useState(false);
+  const [dueError, setDueError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+  const [latestPassbookEntry, setLatestPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
+  const [latestPaidPassbookEntry, setLatestPaidPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
+  const [passbookSummaryLoading, setPassbookSummaryLoading] = useState(false);
   const {
     balance: currentBalance,
     openingBalance,
@@ -558,39 +360,200 @@ const PaymentPage = () => {
   const combineLoading = useCombineAccessStore((state) => state.loading);
   const combineError = useCombineAccessStore((state) => state.error);
   const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
-  const lastPaymentEntry = useMemo(
-    () => (userHistory.length > 0 ? userHistory[0] : null),
-    [userHistory],
-  );
+  const loadDueRecords = useCallback(async () => {
+    setDueLoading(true);
+    setDueError(null);
+    try {
+      const response = await api.get('payments/passbook-entries/', {
+        params: {
+          entry_type: 'due',
+          ordering: '-entry_date',
+        },
+      });
+      const payload = extractResults<PassbookDueEntry>(response.data);
+      setDueRecords(payload);
+    } catch (error) {
+      console.error('Unable to load pending dues', error);
+      setDueError('Unable to load pending dues right now.');
+      setDueRecords([]);
+    } finally {
+      setDueLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    loadDueRecords();
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    const handleEvent = () => {
+      loadDueRecords();
+    };
+    window.addEventListener(POOJA_DATA_UPDATED_EVENT, handleEvent);
+    return () => {
+      window.removeEventListener(POOJA_DATA_UPDATED_EVENT, handleEvent);
+    };
+  }, [loadDueRecords]);
 
-  const cartTotalAmount = paymentSnapshot?.totalAmount ?? 0;
+  const latestPassbookMountedRef = useRef(true);
+  const latestPaidPassbookMountedRef = useRef(true);
+
+  const loadLatestPassbookEntry = useCallback(async () => {
+    setPassbookSummaryLoading(true);
+    try {
+      const response = await api.get('payments/passbook-entries/', {
+        params: {
+          page_size: 1,
+          ordering: '-entry_date',
+        },
+      });
+      if (!latestPassbookMountedRef.current) {
+        return;
+      }
+      const payload = extractResults<PassbookSummaryEntry>(response.data);
+      setLatestPassbookEntry(payload.length > 0 ? payload[0] : null);
+    } catch (error) {
+      console.error('Unable to load latest passbook entry', error);
+      if (latestPassbookMountedRef.current) {
+        setLatestPassbookEntry(null);
+      }
+    } finally {
+      if (latestPassbookMountedRef.current) {
+        setPassbookSummaryLoading(false);
+      }
+    }
+  }, []);
+
+  const loadLatestPaidPassbookEntry = useCallback(async () => {
+    setPassbookSummaryLoading(true);
+    try {
+      const response = await api.get('payments/passbook-entries/', {
+        params: {
+          page_size: 1,
+          ordering: '-entry_date',
+          entry_type: 'paid',
+        },
+      });
+      if (!latestPaidPassbookMountedRef.current) {
+        return;
+      }
+      const payload = extractResults<PassbookSummaryEntry>(response.data);
+      setLatestPaidPassbookEntry(payload.length > 0 ? payload[0] : null);
+    } catch (error) {
+      console.error('Unable to load latest paid passbook entry', error);
+      if (latestPaidPassbookMountedRef.current) {
+        setLatestPaidPassbookEntry(null);
+      }
+    } finally {
+      if (latestPaidPassbookMountedRef.current) {
+        setPassbookSummaryLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    latestPassbookMountedRef.current = true;
+    loadLatestPassbookEntry();
+    return () => {
+      latestPassbookMountedRef.current = false;
+    };
+  }, [loadLatestPassbookEntry]);
+
+  useEffect(() => {
+    latestPaidPassbookMountedRef.current = true;
+    loadLatestPaidPassbookEntry();
+    return () => {
+      latestPaidPassbookMountedRef.current = false;
+    };
+  }, [loadLatestPaidPassbookEntry]);
+  
+  // Filter cart items to exclude CHRT poojas outside their scheduled month
+  const validCartItems = useMemo(() => {
+    if (!paymentSnapshot) {
+      return [];
+    }
+    return paymentSnapshot.items.filter(isCHRTInScheduledMonth);
+  }, [paymentSnapshot]);
+  
+  // Calculate total for valid items only
+  const filteredCartTotalAmount = useMemo(() => {
+    return validCartItems.reduce((total, item) => total + (Number(item.amount) || 0), 0);
+  }, [validCartItems]);
+  
+  const cartTotalAmount = filteredCartTotalAmount;
+  const dueTotalAmount = useMemo(
+    () =>
+      dueRecords.reduce((total, record) => total + parseAmount(record.due_amount), 0),
+    [dueRecords],
+  );
+  const computedDueAmount = paymentSnapshot ? cartTotalAmount : dueTotalAmount;
   const initialBalance = currentBalance ?? openingBalance;
   const runningBalance = initialBalance ?? 0;
-  const needToPayForPooja = Math.max(0, runningBalance + cartTotalAmount);
+  const effectiveCartAmount = paymentSnapshot ? cartTotalAmount : dueTotalAmount;
+  const needToPayForPooja = Math.max(0, runningBalance + effectiveCartAmount);
   const netPaymentAmount = needToPayForPooja;
-  const updatedOpeningBalanceValue = runningBalance + cartTotalAmount - netPaymentAmount;
-  const updatedOpeningBalanceLabel = `₹ ${formatCurrency(updatedOpeningBalanceValue)}`;
-  const lastPaymentAmountLabel = lastPaymentEntry
-    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.amount ?? lastPaymentEntry.totalAmount)}`
-    : '—';
-  const lastPaymentDateLabel = lastPaymentEntry
-    ? formatDate(lastPaymentEntry.paymentDate ?? lastPaymentEntry.created_at ?? lastPaymentEntry.completedAt)
-    : '—';
   const openingBalanceDisplay = balanceLoading
     ? 'Loading…'
     : initialBalance != null
       ? `₹ ${formatCurrency(initialBalance)}`
       : 'Not set';
-  const cartDueAmount = paymentSnapshot?.totalAmount ?? null;
-  const currentMonthDueLabel =
-    cartDueAmount !== null
-      ? formatCurrency(cartDueAmount)
+  const lastPaymentEntry = useMemo(
+    () => {
+      const history = generalPaymentHistory.filter((entry) => entry.userKey === cartKey);
+      return history.length > 0 ? history[0] : null;
+    },
+    [generalPaymentHistory, cartKey],
+  );
+  const lastPaymentAmountLabel = lastPaymentEntry
+    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.amount ?? lastPaymentEntry.totalAmount)}`
+    : '—';
+  const lastPaymentDateLabel = lastPaymentEntry
+    ? formatDate(
+        lastPaymentEntry.paymentDate ??
+          lastPaymentEntry.created_at ??
+          lastPaymentEntry.completedAt ??
+          lastPaymentEntry.createdAt,
+      )
+    : '—';
+  const currentDueValue =
+    computedDueAmount > 0
+      ? computedDueAmount
       : currentMonthDue != null
-        ? formatCurrency(currentMonthDue)
-        : '—';
-  const currentMonthPaymentsLabel = currentMonthPayments != null ? formatCurrency(currentMonthPayments) : '—';
+        ? currentMonthDue
+        : null;
   const monthlyDueAmount = monthlyDonation ?? currentBalance ?? null;
   const monthlyDueLabel = monthlyDueAmount !== null ? formatCurrency(monthlyDueAmount) : 'Not set';
+  const passbookDueValue = parsePassbookAmount(latestPassbookEntry?.due_amount);
+  const passbookClosingValue = parsePassbookAmount(latestPassbookEntry?.closing_due);
+  const paidPassbookEntry = latestPaidPassbookEntry ?? latestPassbookEntry;
+  const paidPassbookDueValue = parsePassbookAmount(paidPassbookEntry?.due_amount);
+  const paidPassbookPaidValue = parsePassbookAmount(paidPassbookEntry?.paid_amount);
+  const paidPassbookDateLabel = paidPassbookEntry?.entry_date
+    ? formatDate(paidPassbookEntry.entry_date)
+    : null;
+  const paymentPageCurrentDueLabel = (() => {
+    if (paymentSnapshot) {
+      return `₹ ${formatCurrency(cartTotalAmount)}`;
+    }
+    const sourceValue =
+      paidPassbookDueValue != null ? paidPassbookDueValue : passbookDueValue != null ? passbookDueValue : currentDueValue;
+    if (sourceValue != null) {
+      return `₹ ${formatCurrency(sourceValue)}`;
+    }
+    return '—';
+  })();
+  const paymentPageLastPaymentLabel =
+    paidPassbookPaidValue != null ? `₹ ${formatCurrency(paidPassbookPaidValue)}` : lastPaymentAmountLabel;
+  const paymentPageDateLabel = paidPassbookDateLabel ?? lastPaymentDateLabel;
+  const paymentPageClosingDueLabel = (() => {
+    if (paymentSnapshot) {
+      return `₹ ${formatCurrency(computedDueAmount)}`;
+    }
+    if (passbookClosingValue != null) {
+      return `₹ ${formatCurrency(passbookClosingValue)}`;
+    }
+    return '—';
+  })();
   const parentName = combinedTo?.name ?? 'Parent donor';
   const parentPhone = combinedTo?.phone ? combinedTo.phone : 'Phone not available';
   const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
@@ -600,12 +563,9 @@ const PaymentPage = () => {
     [],
   );
   const isIos = useMemo(
-    () =>
-      typeof navigator !== 'undefined' &&
-      /iPhone|iPad|iPod/i.test(navigator.userAgent),
+    () => typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent),
     [],
   );
-
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const petals = useMemo(
     () =>
@@ -620,6 +580,44 @@ const PaymentPage = () => {
     [petalSeed],
   );
 
+  // Validation function
+  const validatePaymentForm = (): ValidationError[] => {
+    const errors: ValidationError[] = [];
+    
+    const trimmedReference = transactionReference.trim();
+    if (!trimmedReference) {
+      errors.push({ field: 'reference', message: 'Transaction ID or UPI ID is required.' });
+    }
+    
+    const trimmedAmount = amountPaid.trim();
+    if (!trimmedAmount) {
+      errors.push({ field: 'amount', message: 'Amount Paid is required.' });
+    } else {
+      const parsedAmount = Number(trimmedAmount);
+      if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+        errors.push({ field: 'amount', message: 'Enter a valid amount paid.' });
+      }
+    }
+    
+    const displayDate = paymentDate.trim();
+    if (!displayDate) {
+      errors.push({ field: 'date', message: 'Payment date is required.' });
+    } else {
+      const isoDate = displayToIsoDate(displayDate);
+      if (!isoDate) {
+        errors.push({ field: 'date', message: 'Invalid date format. Use dd/mm/yyyy' });
+      } else {
+        const parsedDate = new Date(isoDate);
+        if (Number.isNaN(parsedDate.getTime())) {
+          errors.push({ field: 'date', message: 'Enter a valid payment date.' });
+        }
+      }
+    }
+    
+    return errors;
+  };
+  
+  // Combined Role Check
   if (combineRole === 'subordinate') {
     const effectiveRange = [
       effectiveFromLabel ? `Effective from ${effectiveFromLabel}` : null,
@@ -627,54 +625,32 @@ const PaymentPage = () => {
     ]
       .filter(Boolean)
       .join(' • ');
-
     return (
-      <div className="space-y-6">
-        <section className="space-y-4 rounded-2xl border border-rose-200 bg-white/80 p-6 shadow-sm">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold text-slate-800">Combined payment handled elsewhere</h1>
-            <p className="text-sm text-slate-600">
-              All payments and history requests are managed by {parentName} ({parentPhone}). This account
-              cannot be used to log payments.
-            </p>
-            <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
-              Payments &amp; history are disabled for this profile.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">Monthly dues</p>
-              <p className="text-xl font-semibold text-slate-900">{monthlyDueLabel}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
+        <div className="mx-auto max-w-7xl">
+          <section className="space-y-4 rounded-2xl border border-rose-200 bg-white/80 p-6 shadow-sm">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold text-slate-800">Combined payment handled elsewhere</h1>
+              <p className="text-sm text-slate-600">
+                All payments and history requests are managed by {parentName} ({parentPhone}). This account cannot be
+                used to log payments.
+              </p>
+              {effectiveRange && (
+                <p className="text-xs text-slate-500 mt-2">{effectiveRange}</p>
+              )}
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">Parent donor</p>
-              <p className="text-lg font-semibold text-slate-900">{parentName}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">Phone</p>
-              <p className="text-lg font-semibold text-slate-900">{parentPhone}</p>
-            </div>
-          </div>
-          {effectiveRange && (
-            <p className="text-xs text-slate-500">{effectiveRange}</p>
-          )}
-        </section>
+          </section>
+        </div>
       </div>
     );
   }
-
-  useEffect(() => {
-    if (!paymentSnapshot) {
-      setShowPaymentDetails(false);
-    }
-  }, [paymentSnapshot]);
-
+  
   useEffect(() => {
     if (combineRole === null && !combineLoading && !combineError) {
       fetchCombineAccess();
     }
   }, [combineRole, combineLoading, combineError, fetchCombineAccess]);
-
+  
   useEffect(() => {
     if (!paymentSnapshot) {
       setRegistrationError(null);
@@ -685,7 +661,7 @@ const PaymentPage = () => {
       setPaymentDateError(null);
     }
   }, [paymentSnapshot]);
-
+  
   // Load backend payment records on component mount to show last payment
   useEffect(() => {
     let isMounted = true;
@@ -730,7 +706,15 @@ const PaymentPage = () => {
       isMounted = false;
     };
   }, [cartKey, addGeneralPaymentHistory]);
-
+  
+  useEffect(() => {
+    return () => {
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current);
+      }
+    };
+  }, []);
+  
   const handleOpenUpiApp = useCallback(
     (amount?: number) => {
       if (!isAndroid && !isIos) {
@@ -740,18 +724,18 @@ const PaymentPage = () => {
     },
     [isAndroid, isIos],
   );
-
+  
   const handleSharePaymentQr = useCallback(
     async (amount?: number) => {
       if (!isIos || typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
-        setShareError('Sharing is unavailable on this device; please use your bank/UPI app to scan the QR displayed above.');
+        setShareError('Sharing is unavailable on this device.');
         return;
       }
       setShareError(null);
       try {
         const shareText = amount
-          ? `Pay ₹ ${formatCurrency(amount)} using this QR. Choose your UPI app from the share panel.`
-          : 'Pay via the temple QR. Choose your UPI app from the share panel.';
+          ? `Pay ₹ ${formatCurrency(amount)} using this QR.`
+          : 'Pay via temple QR.';
         await shareImageFile({
           url: PAYMENT_QR_IMAGE_URL,
           filename: 'temple-payment-qr-code.jpg',
@@ -760,136 +744,89 @@ const PaymentPage = () => {
         });
       } catch (error) {
         console.error('Failed to share payment QR', error);
-        setShareError('Sharing is unavailable on this device; please use your bank/UPI app to scan the QR displayed above.');
+        setShareError('Sharing is unavailable on this device.');
       }
     },
     [isIos],
   );
-
-  useEffect(() => {
-    return () => {
-      if (celebrationTimeoutRef.current) {
-        clearTimeout(celebrationTimeoutRef.current);
-      }
-    };
+  
+  const handleCopyUpi = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText('alamelu7@icici');
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy UPI ID', err);
+    }
   }, []);
-
-  const scrollToCartSection = () => {
-    const element = document.getElementById('payment-cart-section');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleClearSummary = () => {
-    if (celebrationTimeoutRef.current) {
-      clearTimeout(celebrationTimeoutRef.current);
-      celebrationTimeoutRef.current = null;
-    }
-    setShowCelebration(false);
-    setShowPaymentDetails(false);
-    clearCartItems(cartKey);
-    clearPaymentSnapshot(cartKey);
-  };
-
-  const triggerPaymentDetails = () => {
-    const defaultAmount = netPaymentAmount > 0 ? netPaymentAmount.toFixed(2) : '0.00';
-    setAmountPaid(defaultAmount);
-    setAmountPaidError(null);
-    setPaymentDate(formatDisplayDate(new Date().toISOString()));
-    setPaymentDateError(null);
-    setShowPaymentDetails(true);
-  };
-
-  const restoreCartFromSnapshot = () => {
-    if (!paymentSnapshot) {
-      return;
-    }
-    setItemsForUser(cartKey, paymentSnapshot.items);
-    setShowPaymentDetails(false);
-    scrollToCartSection();
-  };
-
+  
   const handlePaymentCompleted = async () => {
-    if (!paymentSnapshot || registrationInProgress) return;
-    const trimmedReference = transactionReference.trim();
-    if (!trimmedReference) {
-      setTransactionReferenceError('Transaction ID or UPI ID is required.');
-      return;
-    }
-    const trimmedAmount = amountPaid.trim();
-    if (!trimmedAmount) {
-      setAmountPaidError('Amount Paid is required.');
-      return;
-    }
-    const parsedAmount = Number(trimmedAmount);
-    const requiredPayment = netPaymentAmount;
+    if (registrationInProgress) return;
     
-    // DEBUG: Log form submission values
-    console.log('🎯 Payment Form Submission:');
-    console.log('  amountPaid (from state):', amountPaid);
-    console.log('  trimmedAmount:', trimmedAmount);
-    console.log('  parsedAmount:', parsedAmount);
-    console.log('  typeof parsedAmount:', typeof parsedAmount);
-    console.log('  Number.isNaN(parsedAmount):', Number.isNaN(parsedAmount));
-    console.log('  netPaymentAmount:', netPaymentAmount);
-    console.log('  requiredPayment:', requiredPayment);
+    // Validate form
+    const validationErrors = validatePaymentForm();
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(({ field, message }) => {
+        if (field === 'reference') setTransactionReferenceError(message);
+        if (field === 'amount') setAmountPaidError(message);
+        if (field === 'date') setPaymentDateError(message);
+      });
+      return;
+    }
     
-    if (
-      Number.isNaN(parsedAmount) ||
-      parsedAmount <= 0
-    ) {
-      setAmountPaidError('Enter a valid amount paid.');
-      return;
-    }
-    const paymentExcess = Number((parsedAmount - requiredPayment).toFixed(2));
-    const donationCreditAmount =
-      paymentExcess > 0 && paymentExcess <= 5 ? paymentExcess : 0;
-    const displayDate = paymentDate.trim();
-    if (!displayDate) {
-      setPaymentDateError('Payment date is required.');
-      return;
-    }
-    const isoDate = displayToIsoDate(displayDate);
-    if (!isoDate) {
-      setPaymentDateError('Enter a valid payment date (dd/mm/yyyy).');
-      return;
-    }
-    const parsedDate = new Date(isoDate);
-    if (Number.isNaN(parsedDate.getTime())) {
-      setPaymentDateError('Enter a valid payment date (dd/mm/yyyy).');
-      return;
-    }
-
+    // Clear all errors
     setAmountPaidError(null);
     setTransactionReferenceError(null);
+    setPaymentDateError(null);
     setRegistrationError(null);
+    
+    const trimmedReference = transactionReference.trim();
+    const parsedAmount = Number(amountPaid.trim());
+    const displayDate = paymentDate.trim();
+    const isoDate = displayToIsoDate(displayDate);
+    
     setRegistrationInProgress(true);
-    const registrationCreatedAt = paymentSnapshot?.createdAt;
+    const isDuePayment = !paymentSnapshot;
+    const dueNames = dueRecords
+      .map((record) => record.pooja_option?.trim())
+      .filter((name): name is string => !!name);
+    const paymentMode = activePaymentTab === 'bank' ? 'bank' : 'upi';
+    
     try {
-      console.log('🚀 Calling recordRegistrations with:', {
-        itemsCount: paymentSnapshot.items.length,
-        items: paymentSnapshot.items.map((item) => ({ amount: item.amount })),
-        transactionReference: trimmedReference,
-        amountPaid: parsedAmount,
-        isoDate,
-      });
-      await recordRegistrations(
-        paymentSnapshot.items,
-        trimmedReference,
-        parsedAmount,
-        isoDate,
-        registrationCreatedAt,
-      );
+      if (isDuePayment) {
+        await api.post('payments/records/', {
+          amount: parsedAmount,
+          currency: 'INR',
+          mode: paymentMode,
+          status: 'success',
+          transaction_reference: trimmedReference,
+          payment_month: isoDate,
+          notes: dueNames.length > 0 ? dueNames.join(' • ') : undefined,
+        });
+      } else {
+        const registrationCreatedAt = paymentSnapshot?.createdAt;
+        await recordRegistrations(
+          paymentSnapshot.items,
+          trimmedReference,
+          parsedAmount,
+          isoDate,
+          registrationCreatedAt,
+        );
+      }
       emitPoojaDataUpdatedEvent();
+      await loadDueRecords();
+      await loadLatestPassbookEntry();
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
       return;
     } finally {
       setRegistrationInProgress(false);
     }
-
-    addGeneralPaymentHistory(paymentSnapshot, isoDate, parsedAmount);
+    
+    if (paymentSnapshot) {
+      addGeneralPaymentHistory(paymentSnapshot, isoDate, parsedAmount);
+    }
+    
     try {
       await api.get('auth/profile/');
       refreshBalance();
@@ -897,327 +834,23 @@ const PaymentPage = () => {
       console.error('Unable to refresh opening balance after payment', balanceError);
       setRegistrationError('Payment recorded but unable to refresh opening balance. Please reload.');
     }
+    
     setPetalSeed((seed) => seed + 1);
     setShowCelebration(true);
     if (celebrationTimeoutRef.current) {
       clearTimeout(celebrationTimeoutRef.current);
     }
     celebrationTimeoutRef.current = setTimeout(() => {
-      handleClearSummary();
+      clearCartItems(cartKey);
+      clearPaymentSnapshot(cartKey);
+      setShowCelebration(false);
       navigate('/profile');
     }, 1800);
   };
-
-  const handleRemoveFromSummary = useCallback(
-    (cartId: string) => {
-      if (!paymentSnapshot) {
-        return;
-      }
-      removeCartItem(cartKey, cartId);
-      const remainingItems = paymentSnapshot.items.filter((item) => item.cartId !== cartId);
-      if (remainingItems.length === 0) {
-        clearPaymentSnapshot(cartKey);
-        return;
-      }
-      const nextTotal = remainingItems.reduce((sum, item) => sum + parseAmount(item.amount), 0);
-      setGeneralPayment({
-        userKey: cartKey,
-        items: remainingItems,
-        totalAmount: nextTotal,
-      });
-    },
-    [cartKey, clearPaymentSnapshot, paymentSnapshot, removeCartItem, setGeneralPayment],
-  );
-
-  const renderSummaryContent = () => {
-    if (!paymentSnapshot) {
-      return (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-          <p className="text-sm font-medium text-slate-600">
-            There are no saved payment details yet. Add poojas to your cart, click Save, and you will be redirected
-            here with the payment summary.
-          </p>
-          <Link
-            to="/pooja/register"
-            className="mt-4 inline-flex items-center justify-center rounded-full bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-          >
-            Go to Pooja Registration page
-          </Link>
-        </div>
-      );
-    }
-
-    const { items: snapshotItems, totalAmount: snapshotTotal } = paymentSnapshot;
-
-    return (
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          <div className="font-medium">
-            <p>
-              {snapshotItems.length} {snapshotItems.length === 1 ? 'pooja' : 'poojas'} saved
-            </p>
-            <p className="text-xs text-slate-500">Review and confirm before recording payment</p>
-          </div>
-          <div className="rounded-full bg-white px-4 py-2 text-right text-base font-semibold text-orange-600 shadow-sm">
-            ₹ {formatCurrency(snapshotTotal)}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {snapshotItems.map((item) => {
-            const amountLabel = item.amount ? `₹ ${formatCurrency(item.amount)}` : '₹ 0.00';
-            const membersLabel = buildMembersLabel(item.members);
-            const quantity = item.members?.length && item.members.length > 0 ? item.members.length : 1;
-            const memberSummary = membersLabel ?? `${quantity} devotee${quantity === 1 ? '' : 's'}`;
-            const selectedDate = formatDate(item.customDayDate || item.bookingDate);
-            const notes = item.customDayNote?.trim();
-            const dayOptionLabel = formatDayOptionLabel(item.dayOptionDescription, item.dayOptionCode);
-
-            return (
-              <div
-                key={`${paymentSnapshot.id}-${item.cartId}`}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
-              >
-                <div className="min-w-0 space-y-1">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">
-                    {item.poojaCode ?? 'Pooja'}
-                  </p>
-                  <p className="text-base font-semibold text-slate-900">{item.poojaName}</p>
-                  {dayOptionLabel && (
-                    <p className="text-xs text-slate-500">Day option: {dayOptionLabel}</p>
-                  )}
-                  <p className="text-xs text-slate-500">Date: {selectedDate}</p>
-                  <p className="text-xs text-slate-500">Members: {memberSummary}</p>
-                  {notes && <p className="text-xs text-slate-500">Notes: {notes}</p>}
-                </div>
-
-                <div className="text-right">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">Amount</p>
-                  <p className="text-lg font-semibold text-orange-600">{amountLabel}</p>
-                  <p className="text-[0.65rem] text-slate-500">Qty {quantity}</p>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFromSummary(item.cartId)}
-                    className="mt-2 text-xs font-semibold uppercase tracking-wide text-red-600 transition hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {showPaymentDetails && (
-          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ring-1 ring-orange-100">
-            <h3 className="text-lg font-semibold text-slate-900">Complete Your Payment</h3>
-            <p className="text-sm text-slate-600">Scan the QR code or use the account details to transfer the total amount.</p>
-            <div className="mt-5 grid gap-6 md:grid-cols-2">
-              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <img
-                  src={PAYMENT_QR_IMAGE_URL}
-                  alt="Temple payment QR code"
-                  className="h-72 w-72 rounded-lg border border-slate-200 bg-white p-3 object-contain"
-                />
-                <p className="mt-3 text-sm font-medium text-slate-700">Scan & pay ₹ {formatCurrency(netPaymentAmount)}</p>
-                {isAndroid && (
-                  <>
-                    <p className="mt-1 text-xs text-center text-slate-500">
-                      Tap "Open UPI apps" to launch whichever handler you already installed; only UPI apps will be shown.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenUpiApp(netPaymentAmount)}
-                      className="mt-2 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-slate-50"
-                    >
-                      Open UPI apps
-                    </button>
-                  </>
-                )}
-                {isIos && (
-                  <>
-                    <p className="mt-1 text-xs text-center text-slate-500">
-                      Tap "Open UPI apps" to launch whichever handler you already installed; only UPI apps will be shown.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleSharePaymentQr(netPaymentAmount)}
-                      className="mt-2 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-slate-50"
-                    >
-                      Share QR with UPI app
-                    </button>
-                  </>
-                )}
-                {!isAndroid && !isIos && (
-                  <p className="mt-1 text-xs text-center text-slate-500">
-                    This option requires a mobile browser; scan the QR from your phone’s banking/UPI app if you’re on a desktop.
-                  </p>
-                )}
-                {shareError && (
-                  <p className="mt-2 text-xs text-rose-600">{shareError}</p>
-                )}
-              </div>
-              <RevealableAccountSection className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                  <p className="text-lg font-semibold text-slate-900">ALAMELU V</p>
-                  <p className="text-lg font-semibold text-slate-900">SRIRAM RAJU</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
-                  <p className="text-lg font-semibold text-slate-900">007701028012</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
-                  <p className="text-lg font-semibold text-slate-900">ICIC0000077</p>
-                </div>
-                {/*<div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</p>
-                  <p className="text-lg font-semibold text-slate-900">Mylapore, Chennai</p>
-                </div>*/}
-              </RevealableAccountSection>
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="transaction-reference">
-                  Transaction ID or UPI ID
-                </label>
-                <input
-                  id="transaction-reference"
-                  type="text"
-                  value={transactionReference}
-                  onChange={(event) => {
-                    setTransactionReference(event.target.value);
-                    if (transactionReferenceError) {
-                      setTransactionReferenceError(null);
-                    }
-                  }}
-                  placeholder="Enter the transaction reference or UPI ID used"
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
-                />
-                {transactionReferenceError && (
-                  <p className="mt-2 text-sm text-rose-600">{transactionReferenceError}</p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="amount-paid">
-                  Amount Paid
-                </label>
-                <input
-                  id="amount-paid"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={amountPaid}
-                  onChange={(event) => {
-                    setAmountPaid(event.target.value);
-                    if (amountPaidError) {
-                      setAmountPaidError(null);
-                    }
-                  }}
-                  placeholder="Enter the amount paid"
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                {amountPaidError && (
-                  <p className="mt-2 text-sm text-rose-600">{amountPaidError}</p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="payment-date">
-                  Payment Date
-                </label>
-                <input
-                  id="payment-date"
-                  type="text"
-                  value={paymentDate}
-                  placeholder="dd/mm/yyyy"
-                  onChange={(event) => {
-                    const displayValue = event.target.value;
-                    setPaymentDate(displayValue);
-                    if (paymentDateError && displayValue.length > 0) {
-                      setPaymentDateError(null);
-                    }
-                  }}
-                  onBlur={(event) => {
-                    const displayValue = event.target.value;
-                    if (displayValue && displayValue.length === 10) {
-                      const isoDate = displayToIsoDate(displayValue);
-                      if (!isoDate) {
-                        setPaymentDateError('Invalid date format. Use dd/mm/yyyy');
-                      }
-                    }
-                  }}
-                  maxLength={10}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
-                  style={{ textAlign: 'center' }}
-                />
-                {paymentDateError && (
-                  <p className="mt-2 text-sm text-rose-600">{paymentDateError}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          {!showPaymentDetails ? (
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={triggerPaymentDetails}
-                className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-              >
-                Payment
-              </button>
-            </div>
-          ) : (
-            <div>
-              <button
-                type="button"
-                onClick={handlePaymentCompleted}
-                disabled={registrationInProgress}
-                className="inline-flex items-center justify-center rounded-full border border-transparent bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60"
-              >
-                {registrationInProgress ? 'Saving...' : 'Payment Completed'}
-              </button>
-              {registrationError && (
-                <p className="mt-2 text-sm text-rose-600">{registrationError}</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const summarySection = (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Payment Page</h2>
-        </div>
-      </div>
-      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-700 shadow-sm">
-        Click Payment to view the bank details, then tap Payment Completed after transferring funds.
-      </div>
-      <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Amount</p>
-            <p className="text-xl font-semibold text-slate-900">{lastPaymentAmountLabel}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Payment Date</p>
-            <p className="text-xl font-semibold text-slate-900">{lastPaymentDateLabel}</p>
-          </div>
-        </div>
-      </div>
-      <div>{renderSummaryContent()}</div>
-    </div>
-  );
-
+  
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-white p-4 sm:p-6">
+      {/* Celebration Animation */}
       {showCelebration && (
         <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
           <div className="absolute inset-0">
@@ -1245,11 +878,281 @@ const PaymentPage = () => {
           </div>
         </div>
       )}
-      <section id="payment-cart-section" className="rounded-lg bg-white p-6 shadow-sm space-y-8">
-        <div className="divide-y divide-slate-100">
-          {summarySection}
+      
+      {/* Error Notification */}
+      {registrationError && (
+        <div className="fixed top-4 right-4 z-50 max-w-md rounded-lg bg-red-50 border-2 border-red-500 p-4 shadow-lg animate-slide-in">
+          <div className="flex items-start gap-3">
+            <svg className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900 text-sm">Payment Error</h3>
+              <p className="text-xs text-red-700 mt-1">{registrationError}</p>
+            </div>
+            <button 
+              onClick={() => setRegistrationError(null)} 
+              className="text-red-600 hover:text-red-800 text-xl leading-none"
+              aria-label="Close error notification"
+            >
+              ×
+            </button>
+          </div>
         </div>
-      </section>
+      )}
+      
+      <div className="mx-auto max-w-7xl">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900">💳 Payment Page</h1>
+          <p className="mt-1 text-sm text-slate-600">Manage your pooja payments securely and efficiently</p>
+        </div>
+        
+        {/* Quick Stats - 4 Cards */}
+        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 text-center hover:border-orange-600 hover:shadow-md transition">
+            <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Current Due</p>
+            <p className="text-xl font-bold text-orange-600">{paymentPageCurrentDueLabel}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 text-center hover:border-orange-600 hover:shadow-md transition">
+            <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Last Payment</p>
+            <p className="text-xl font-bold text-orange-600">{paymentPageLastPaymentLabel}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 text-center hover:border-orange-600 hover:shadow-md transition">
+            <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Payment Date</p>
+            <p className="text-xl font-bold text-orange-600">{paymentPageDateLabel}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 text-center hover:border-orange-600 hover:shadow-md transition">
+            <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Closing Due</p>
+            <p className="text-xl font-bold text-orange-600">{paymentPageClosingDueLabel}</p>
+          </div>
+        </div>
+        
+        {/* Main 2-Column Layout */}
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+          {/* Payment Method (Tabs) */}
+          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="h-5 w-1 rounded bg-gradient-to-b from-orange-600 to-orange-700"></div>
+              <h2 className="text-lg font-bold text-slate-900">Payment Method</h2>
+            </div>
+            {/* Tab Navigation */}
+            <div className="flex border-b border-slate-200 mb-6">
+              <button
+                onClick={() => setActivePaymentTab('upi')}
+                className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+                  activePaymentTab === 'upi'
+                    ? 'text-orange-600 border-orange-600'
+                    : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+                }`}
+                aria-current={activePaymentTab === 'upi' ? 'page' : undefined}
+              >
+                UPI
+              </button>
+              <button
+                onClick={() => setActivePaymentTab('bank')}
+                className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+                  activePaymentTab === 'bank'
+                    ? 'text-orange-600 border-orange-600'
+                    : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+                }`}
+                aria-current={activePaymentTab === 'bank' ? 'page' : undefined}
+              >
+                Bank Transfer
+              </button>
+            </div>
+            {/* Tab Content */}
+            <div className="min-h-[300px]">
+              {activePaymentTab === 'upi' ? (
+                <div className="flex flex-col items-center gap-4">
+                  <img
+                    src={PAYMENT_QR_IMAGE_URL}
+                    alt="Payment QR Code"
+                    className="h-64 w-64 rounded-lg border border-slate-200 bg-white p-2 object-contain"
+                  />
+                  
+                  {/* UPI ID Section */}
+                  <div className="w-full bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between shadow-sm hover:border-orange-300 transition">
+                    <div className="flex flex-col">
+                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">UPI ID</p>
+                      <p className="text-sm font-mono font-bold text-slate-900 mt-0.5">alamelu7@icici</p>
+                    </div>
+                    <button
+                      onClick={handleCopyUpi}
+                      title={copiedUpi ? "Copied!" : "Copy UPI ID"}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 transition active:scale-95"
+                      aria-label="Copy UPI ID"
+                    >
+                      {copiedUpi ? (
+                        <span className="text-green-600 font-bold flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          Copied
+                        </span>
+                      ) : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-center text-sm text-slate-600">Scan with any UPI app to pay instantly</p>
+                  <div className="flex w-full gap-2">
+                    {isAndroid && (
+                      <button
+                        onClick={() => handleOpenUpiApp(netPaymentAmount)}
+                        className="flex-1 rounded-lg border-2 border-orange-600 bg-white px-3 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-50 transition"
+                      >
+                        📲 Open UPI
+                      </button>
+                    )}
+                    {isIos && (
+                      <button
+                        onClick={() => handleSharePaymentQr(netPaymentAmount)}
+                        className="flex-1 rounded-lg border-2 border-orange-600 bg-white px-3 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-50 transition"
+                      >
+                        📤 Share
+                      </button>
+                    )}
+                  </div>
+                  {shareError && <p className="text-xs text-red-600" role="alert">{shareError}</p>}
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-lg bg-slate-50 p-4 border border-slate-200">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-600 mb-1">Account Holder</p>
+                    <p className="text-sm font-semibold text-slate-900">ALAMELU V</p>
+                    <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-600 mb-1">Account Number</p>
+                    <p className="text-sm font-mono font-semibold text-slate-900">007701028012</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-600 mb-1">IFSC Code</p>
+                    <p className="text-sm font-mono font-semibold text-slate-900">ICIC0000077</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Complete Payment */}
+          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="h-5 w-1 rounded bg-gradient-to-b from-orange-600 to-orange-700"></div>
+              <h2 className="text-lg font-bold text-slate-900">Complete Payment</h2>
+            </div>
+            {/* Payment Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handlePaymentCompleted();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label htmlFor="transaction-ref" className="text-xs font-semibold uppercase text-slate-600">
+                  Transaction ID / UPI ID
+                </label>
+                <input
+                  id="transaction-ref"
+                  type="text"
+                  value={transactionReference}
+                  onChange={(e) => {
+                    setTransactionReference(e.target.value);
+                    if (transactionReferenceError) setTransactionReferenceError(null);
+                  }}
+                  placeholder="Enter reference or UPI ID"
+                  aria-required="true"
+                  aria-invalid={!!transactionReferenceError}
+                  aria-describedby={transactionReferenceError ? "transaction-ref-error" : undefined}
+                  className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                />
+                {transactionReferenceError && (
+                  <p id="transaction-ref-error" role="alert" className="mt-1 text-xs text-red-600">
+                    {transactionReferenceError}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="amount-paid" className="text-xs font-semibold uppercase text-slate-600">
+                  Amount Paid
+                </label>
+                <input
+                  id="amount-paid"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={amountPaid}
+                  onChange={(e) => {
+                    setAmountPaid(e.target.value);
+                    if (amountPaidError) setAmountPaidError(null);
+                  }}
+                  placeholder={`₹ ${formatCurrency(netPaymentAmount)}`}
+                  aria-required="true"
+                  aria-invalid={!!amountPaidError}
+                  aria-describedby={amountPaidError ? "amount-paid-error" : undefined}
+                  className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                {amountPaidError && (
+                  <p id="amount-paid-error" role="alert" className="mt-1 text-xs text-red-600">
+                    {amountPaidError}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="payment-date" className="text-xs font-semibold uppercase text-slate-600">
+                  Payment Date
+                </label>
+                <input
+                  id="payment-date"
+                  type="text"
+                  value={paymentDate}
+                  onChange={(e) => {
+                    setPaymentDate(e.target.value);
+                    if (paymentDateError) setPaymentDateError(null);
+                  }}
+                  placeholder="dd/mm/yyyy"
+                  pattern="\d{2}/\d{2}/\d{4}"
+                  maxLength={10}
+                  aria-required="true"
+                  aria-invalid={!!paymentDateError}
+                  aria-describedby={paymentDateError ? "payment-date-error" : undefined}
+                  className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                />
+                {paymentDateError && (
+                  <p id="payment-date-error" role="alert" className="mt-1 text-xs text-red-600">
+                    {paymentDateError}
+                  </p>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={registrationInProgress || (!paymentSnapshot && dueRecords.length === 0)}
+                className="w-full rounded-lg bg-gradient-to-r from-orange-600 to-orange-700 px-4 py-2 text-sm font-semibold text-white hover:from-orange-700 hover:to-orange-800 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {registrationInProgress ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  '✓ Payment Completed'
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

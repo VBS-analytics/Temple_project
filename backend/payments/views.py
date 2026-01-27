@@ -511,5 +511,14 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
                     entry_date__month=month_date.month
                 )
         
+        # Filter by entry type if provided
+        entry_type = self.request.query_params.get('entry_type')
+        if entry_type:
+            entry_type = entry_type.strip().lower()
+            if entry_type in {"balance", "due", "paid"}:
+                qs = qs.filter(entry_type=entry_type)
+        
+        ordering_param = self.request.query_params.get('ordering')
+        if ordering_param in ('entry_date', '-entry_date'):
+            return qs.order_by(ordering_param)
         return qs.order_by('donor', 'entry_date')
-

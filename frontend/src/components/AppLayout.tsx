@@ -69,6 +69,11 @@ const AppLayout = () => {
       label: 'Combine Payment - Donor',
       show: Boolean(user && isAdmin(user.role)),
     },
+    {
+      to: '/admin/pooja-pause-cancel',
+      label: 'Pooja - Pause/Cancel',
+      show: Boolean(user && isAdmin(user.role)),
+    },
     { to: '/admin/pooja-details', label: 'Ubhayam Report', show: Boolean(user && isAdmin(user.role)) },
     {
       to: '/reports',
