@@ -497,33 +497,34 @@ const DonorProfile = () => {
   }, [navigate]);
 
   const visibleRegistrations = useMemo(() => {
-    // Only hide registrations that are origin registrations for RECURRING plans (not one-time-extra)
     const recurringRegistrationIds = new Set<number>();
+    const recurringDueRegistrationIds = new Set<number>();
     for (const plan of recurrencePlans) {
-      // Only exclude if this is a recurring (not one-time-extra) plan
-      if (plan.recurrence_kind === 'recurring' && typeof plan.origin_registration_id === 'number') {
-        recurringRegistrationIds.add(plan.origin_registration_id);
+      if (plan.recurrence_kind === 'recurring') {
+        if (typeof plan.origin_registration_id === 'number') {
+          recurringRegistrationIds.add(plan.origin_registration_id);
+        }
+        if (plan.due_registration?.id) {
+          recurringDueRegistrationIds.add(plan.due_registration.id);
+        }
       }
     }
+
     return registrations.filter((registration) => {
-      // Filter out origin registrations that belong to recurring plans
       if (recurringRegistrationIds.has(registration.id)) return false;
-      
-      // Show one-time registrations (no recurrence_kind or recurrence_kind is for one-time)
-      // Keep only registrations that are actually one-time (not part of recurring plan)
+      if (recurringDueRegistrationIds.has(registration.id)) return false;
+
       const cartRecurrenceKind =
         registration.cart_item?.recurrenceKind ?? registration.cart_item?.recurrence_kind;
       const hasRecurrenceKind = Boolean(registration.recurrence_kind);
-      
-      // Exclude registrations that have recurring recurrence_kind set
-      // But include one-time registrations even if they have recurrence tracking
+
       if (hasRecurrenceKind && registration.recurrence_kind === 'recurring') {
         return false;
       }
       if (cartRecurrenceKind && cartRecurrenceKind === 'recurring') {
         return false;
       }
-      
+
       return true;
     });
   }, [registrations, recurrencePlans]);
