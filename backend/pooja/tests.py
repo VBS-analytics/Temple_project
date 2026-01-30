@@ -23,6 +23,7 @@ from .models import (
 )
 from .serializers import RecurringPoojaPlanSerializer
 from .services.calendar import OccurrenceResult, TempleCalendarService
+from .services.recurrence import create_registration_from_plan
 from .views import PAUSE_REASON_USE_FOR_TEMPLE
 
 
@@ -602,6 +603,46 @@ class RecurringPoojaPlanDueInfoTests(TestCase):
         self.assertEqual(due_data["paid_amount"], "150.00")
         self.assertEqual(due_data["due_amount"], "100.00")
         self.assertFalse(due_data["is_paid"])
+
+
+class CreateRegistrationFromPlanTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            phone_number="9000000026",
+            name="Recurring Plan User",
+            password="secret",
+        )
+        DonorProfile.objects.create(user=self.user)
+        self.pooja_option = PoojaOption.objects.create(code="RPC", name="Recurring Clips")
+        self.day_option = PoojaDayOption.objects.create(
+            code="RPCD",
+            description="Recurring Plan Day",
+            category=DayOptionCategory.CODE,
+        )
+
+    def _build_plan(self) -> RecurringPoojaPlan:
+        next_occurrence = timezone.localdate() + timedelta(days=7)
+        return RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=timezone.localdate(),
+            next_occurrence=next_occurrence,
+            amount=Decimal("200.00"),
+            is_active=True,
+        )
+
+    def test_idempotent_for_same_due_date(self):
+        plan = self._build_plan()
+        due_date = plan.next_occurrence
+        first_registration = create_registration_from_plan(plan, due_date=due_date)
+        second_registration = create_registration_from_plan(plan, due_date=due_date)
+
+        self.assertEqual(first_registration.id, second_registration.id)
+        registrations = PoojaRegistration.objects.filter(donor=self.user)
+        self.assertEqual(registrations.count(), 1)
 
 
 class PoojaCartSnapshotReportViewTests(TestCase):

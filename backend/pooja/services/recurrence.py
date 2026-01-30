@@ -244,6 +244,14 @@ def create_registration_from_plan(plan: RecurringPoojaPlan, due_date: Optional[d
     today = timezone.localdate()
     scheduled_date = due_date or plan.next_occurrence or plan.start_date or today
     metadata = plan.metadata or {}
+    existing_due = plan.due_registration
+    if existing_due and scheduled_date and existing_due.start_date == scheduled_date:
+        LOGGER.info(
+            "Skipping duplicate due_registration creation for plan %s on %s",
+            plan.pk,
+            scheduled_date,
+        )
+        return existing_due
     members_payload = _build_members_for_registration(metadata.get("members", []))
     quantity = metadata.get("quantity") or max(len(members_payload), 1)
     registration = PoojaRegistration.objects.create(
