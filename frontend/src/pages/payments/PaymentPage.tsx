@@ -859,69 +859,6 @@ const PaymentPage = () => {
           </div>
         </div>
         
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-white to-orange-50/30 border border-orange-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div className="bg-orange-100 p-2 rounded-xl">
-                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-orange-100 text-orange-700 border border-orange-200">
-                Current
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-slate-900 mb-1">{paymentPageCurrentDueLabel}</p>
-            <p className="text-sm text-slate-600">Current Due</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-white to-green-50/30 border border-green-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div className="bg-green-100 p-2 rounded-xl">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-green-100 text-green-700 border border-green-200">
-                Last
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-slate-900 mb-1">{paymentPageLastPaymentLabel}</p>
-            <p className="text-sm text-slate-600">Last Payment</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-white to-blue-50/30 border border-blue-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div className="bg-blue-100 p-2 rounded-xl">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-blue-100 text-blue-700 border border-blue-200">
-                Date
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-slate-900 mb-1">{paymentPageDateLabel}</p>
-            <p className="text-sm text-slate-600">Payment Date</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div className="bg-slate-100 p-2 rounded-xl">
-                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200">
-                Closing
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-slate-900 mb-1">{paymentPageClosingDueLabel}</p>
-            <p className="text-sm text-slate-600">Closing Due</p>
-          </div>
-        </div>
-        
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Payment Method */}
