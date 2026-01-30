@@ -109,7 +109,7 @@ def get_plan_due_summary(
     *,
     pause_start: Optional[date] = None,
 ) -> Optional[Dict[str, Any]]:
-    registration = find_due_registration(plan, pause_start)
+    registration = getattr(plan, "due_registration", None) or find_due_registration(plan, pause_start)
     if registration is None:
         return None
     total_amount = registration.total_amount or plan.amount or Decimal("0.00")
