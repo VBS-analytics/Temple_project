@@ -628,7 +628,11 @@ class RecurringPoojaPlanViewSet(
 
     def get_queryset(self):
         qs = RecurringPoojaPlan.objects.select_related(
-            "donor", "pooja_option", "day_option", "origin_registration"
+            "donor",
+            "pooja_option",
+            "day_option",
+            "origin_registration",
+            "due_registration",
         )
         if self.request.user.role == UserRole.ADMIN:
             # Allow admin to filter by donor if donor parameter is provided
