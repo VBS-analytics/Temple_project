@@ -1086,10 +1086,6 @@ const PoojaRegistrationPage = () => {
   const [isDatePromptOpen, setIsDatePromptOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
-  const selectedRegistrationDateDisplay = useMemo(
-    () => formatDisplayDate(selectedRegistrationDate),
-    [selectedRegistrationDate],
-  );
   const handleUseSystemDate = useCallback(() => {
     setSelectedRegistrationDate(todayIso);
   }, [todayIso]);
@@ -4019,38 +4015,6 @@ const PoojaRegistrationPage = () => {
       </div>
     </div>
   </div>
-
-      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-40 flex justify-center sm:inset-x-6 sm:bottom-5 lg:inset-x-10">
-        <div
-          className="pointer-events-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm text-slate-700 shadow-xl backdrop-blur"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-[0.55rem] uppercase tracking-[0.3em] text-slate-400">Cart summary</span>
-              <span className="font-semibold text-slate-700">
-                Added {cartTotals.count} {cartCountLabel}
-              </span>
-              <span className="font-semibold text-slate-900">Amount ₹ {formattedCartAmount}</span>
-              <span className="text-[0.65rem] text-slate-500 flex items-center gap-2">
-                <span>Recurring ₹ {formattedRecurringAmount}</span>
-                <span>One-time ₹ {formattedOneTimeAmount}</span>
-              </span>
-              <span className="text-[0.65rem] text-slate-500">
-                Created {selectedRegistrationDateDisplay || '—'}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={openDatePrompt}
-              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-            >
-              Save Pooja
-            </button>
-          </div>
-      </div>
-    </div>
 
     {isDatePromptOpen && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6">
