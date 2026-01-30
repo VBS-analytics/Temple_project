@@ -37,8 +37,6 @@
  * 
  * ============================================================================
  */
-
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
@@ -867,17 +865,32 @@ const PaymentStatementPage = () => {
   const combineLoading = useCombineAccessStore((state) => state.loading);
   const combineError = useCombineAccessStore((state) => state.error);
   const fetchCombineAccess = useCombineAccessStore((state) => state.fetchAccess);
+  const parentDonors = useCombineAccessStore((state) => state.parentDonors);
   const { balance: currentBalance, openingBalance } = useCurrentBalance();
   const cartKey = user ? String(user.id) : 'guest';
   const localCartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const [activeDonorId, setActiveDonorId] = useState<number | null>(user?.id ?? null);
+  const [parentDonorOpeningBalance, setParentDonorOpeningBalance] = useState<number | null>(null);
 
   // Auto-select current user's records on initial load (for non-admin users)
   // Admin users see all donors by default without auto-selecting
   useEffect(() => {
-    if (user?.id && selectedDonorIds.length === 0 && !isAdminUser) {
-      setSelectedDonorIds([user.id]);
+    if (typeof user?.id !== 'number') {
+      setActiveDonorId(null);
+      return;
     }
-  }, [user?.id, selectedDonorIds.length, isAdminUser]);
+    setActiveDonorId((prev) => {
+      if (prev === user.id) {
+        return prev;
+      }
+      const matchesExistingParent =
+        prev !== null && parentDonors.some((donor) => donor.id === prev);
+      if (matchesExistingParent) {
+        return prev;
+      }
+      return user.id;
+    });
+  }, [user?.id, parentDonors]);
 
   // Fetch combine access permissions for linked accounts
   useEffect(() => {
@@ -885,6 +898,60 @@ const PaymentStatementPage = () => {
       fetchCombineAccess();
     }
   }, [combineRole, combineLoading, combineError, fetchCombineAccess]);
+
+  // Fetch parent donor's opening balance when activeDonorId changes to a parent donor
+  useEffect(() => {
+    if (typeof user?.id !== 'number' || activeDonorId === null) {
+      setParentDonorOpeningBalance(null);
+      return;
+    }
+
+    // If viewing current user's records, clear parent balance
+    if (activeDonorId === user.id) {
+      setParentDonorOpeningBalance(null);
+      return;
+    }
+
+    // If viewing a parent donor's records, fetch their opening balance
+    let isMounted = true;
+    const loadParentDonorBalance = async () => {
+      try {
+        const response = await api.get(`auth/donors/${activeDonorId}/`, {
+          params: { minimal: 'false' },
+        });
+        if (!isMounted) {
+          return;
+        }
+        
+        const donorData = response.data;
+        const profile = donorData?.profile || donorData?.user?.profile;
+        let balance = 0;
+        
+        if (profile && profile.opening_balance !== null && profile.opening_balance !== undefined) {
+          const numValue = typeof profile.opening_balance === 'string' 
+            ? parseFloat(profile.opening_balance) 
+            : profile.opening_balance;
+          balance = Number.isFinite(numValue) ? numValue : 0;
+        }
+        
+        if (isMounted) {
+          // Always set a numeric value (0 if not found), not null
+          setParentDonorOpeningBalance(balance);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error(`Unable to load opening balance for parent donor ${activeDonorId}`, err);
+          // Default to 0 instead of null so that parent donor records can still be displayed
+          setParentDonorOpeningBalance(0);
+        }
+      }
+    };
+
+    loadParentDonorBalance();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeDonorId, user?.id]);
 
   // Monitor cart snapshot updates for real-time passbook refresh
   useEffect(() => {
@@ -1150,6 +1217,37 @@ const PaymentStatementPage = () => {
       .filter((label): label is string => typeof label === 'string');
   }, [selectedDonorIds, donorOptions]);
 
+  const donorViewTabs = useMemo(() => {
+    if (typeof user?.id !== 'number') {
+      return [];
+    }
+    const tabs: { key: string; donorId: number; label: string }[] = [];
+    const userLabel = (user.name ?? '').trim() || 'My payment statement';
+    tabs.push({ key: 'self', donorId: user.id, label: userLabel });
+
+    parentDonors.forEach((parent, index) => {
+      if (typeof parent.id !== 'number') {
+        return;
+      }
+      if (parent.id === user.id) {
+        return;
+      }
+      const name = (parent.name ?? '').trim();
+      const phone = (parent.phone ?? '').trim();
+      const label =
+        [name, phone].filter(Boolean).join(' — ') || `Parent donor ${index + 1}`;
+      tabs.push({
+        key: `parent-${parent.id}-${index}`,
+        donorId: parent.id,
+        label,
+      });
+    });
+
+    return tabs;
+  }, [user?.id, user?.name, parentDonors]);
+
+  const showParentDonorTabs = donorViewTabs.length > 1;
+
   const resolveStatusLabel = (record: PaymentRecordEntry) => {
     const status = (record.status ?? '').toLowerCase();
     const paidAmount = parseNumeric(record.amount);
@@ -1228,9 +1326,12 @@ const PaymentStatementPage = () => {
         const donorId = record.donor;
         return typeof donorId === 'number' && selectedSet.has(donorId);
       });
-    } else if (!isAdminUser && user?.id) {
-      // Non-admin users default to their own records
-      nextRecords = nextRecords.filter((record) => record.donor === user.id);
+    } else if (!isAdminUser) {
+      if (activeDonorId != null) {
+        nextRecords = nextRecords.filter((record) => record.donor === activeDonorId);
+      } else {
+        nextRecords = [];
+      }
     }
     // For admin users with no selection: show all records (nextRecords = mergedRecords)
 
@@ -1251,7 +1352,14 @@ const PaymentStatementPage = () => {
     }
 
     return nextRecords;
-  }, [mergedRecords, selectedDonorIds, selectedMonthKey, paymentStatusFilter, isAdminUser, user?.id]);
+  }, [
+    mergedRecords,
+    selectedDonorIds,
+    selectedMonthKey,
+    paymentStatusFilter,
+    isAdminUser,
+    activeDonorId,
+  ]);
 
   const selectedMonthLabel = useMemo(
     () =>
@@ -1631,7 +1739,13 @@ const PaymentStatementPage = () => {
     }
 
     // Get all records (not just filtered ones) to calculate cumulative balance
-    const allRecords = mergedRecords;
+    // But filter by activeDonorId to show correct balance for that donor
+    let allRecords = mergedRecords;
+    
+    // Filter by activeDonorId if not admin user
+    if (!isAdminUser && typeof activeDonorId === 'number') {
+      allRecords = allRecords.filter((record) => record.donor === activeDonorId);
+    }
     
     // Separate records into "before selected month" and "selected month"
     const beforeSelectedMonth: PaymentRecordEntry[] = [];
@@ -1659,15 +1773,47 @@ const PaymentStatementPage = () => {
       });
 
     return calculatedBalance;
-  }, [selectedMonthKey, mergedRecords]);
+  }, [selectedMonthKey, mergedRecords, activeDonorId, isAdminUser]);
 
   const passbookEntries = useMemo(() => {
-    const hasBalanceEntry = currentBalance !== null && currentBalance !== undefined && !isAdminUser;
+    // Determine if we should show an opening balance entry
+    // For current user: show if they have a current balance
+    // For parent donor: always show (parentDonorOpeningBalance defaults to 0)
+    let hasBalanceEntry = false;
+    if (!isAdminUser) {
+      if (typeof user?.id === 'number' && activeDonorId === user.id) {
+        // Viewing own records - use current balance
+        hasBalanceEntry = currentBalance !== null && currentBalance !== undefined;
+      } else {
+        // Viewing parent donor records - show if we have an opening balance value
+        hasBalanceEntry = parentDonorOpeningBalance !== null && parentDonorOpeningBalance !== undefined;
+      }
+    }
+    
     const cachedOpeningBalance = cachedOpeningBalanceRef.current;
-    const initialBalance =
-      monthOpeningBalance !== null ? monthOpeningBalance : cachedOpeningBalance ?? openingBalance ?? 0;
+    const isViewingParentDonor = typeof user?.id === 'number' && activeDonorId !== null && activeDonorId !== user.id;
+    
+    // Determine the effective opening balance
+    // For parent donors: use their opening balance, not the current user's
+    let effectiveOpeningBalance = openingBalance ?? 0;
+    if (isViewingParentDonor && parentDonorOpeningBalance !== null) {
+      effectiveOpeningBalance = parentDonorOpeningBalance;
+    }
+    
+    // Calculate initial balance based on selected month or current state
+    let initialBalance = 0;
+    if (monthOpeningBalance !== null) {
+      initialBalance = monthOpeningBalance;
+    } else if (isViewingParentDonor) {
+      // For parent donors: always use their opening balance, never the cached main donor balance
+      initialBalance = effectiveOpeningBalance;
+    } else {
+      // For main donor: use cached or current opening balance
+      initialBalance = cachedOpeningBalance ?? effectiveOpeningBalance ?? 0;
+    }
+    
     return buildPassbookEntriesFromRecords(filteredRecords, initialBalance, hasBalanceEntry);
-  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser]);
+  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser, activeDonorId, user?.id, parentDonorOpeningBalance]);
 
   // ============================================================================
   // GET ENTRY DATE LABEL - Display Date Resolution
@@ -1869,6 +2015,30 @@ const PaymentStatementPage = () => {
         </div>
       </div>
 
+      {showParentDonorTabs && (
+        <div className="rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm">
+          <div className="flex flex-wrap gap-2">
+            {donorViewTabs.map((tab) => {
+              const isActive = tab.donorId === activeDonorId;
+              return (
+                <button
+                  type="button"
+                  key={tab.key}
+                  onClick={() => setActiveDonorId(tab.donorId)}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    isActive
+                      ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90'
+                      : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm">
         <div className="flex flex-wrap gap-6">
           {showDonorFilter && (
@@ -1906,7 +2076,7 @@ const PaymentStatementPage = () => {
             </div>
           )}
 
-          <div className="flex-1 min-w-[220px] space-y-2">
+          <div className="flex-1 min-w-[220px] max-w-[280px] space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Filter by month
             </p>
@@ -1927,30 +2097,32 @@ const PaymentStatementPage = () => {
             </div>
           </div>
 
-          <div className="flex-1 min-w-[220px] space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Filter by payment status
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {PAYMENT_STATUS_FILTERS.map((option) => {
-                const isActive = paymentStatusFilter === option.id;
-                return (
-                  <button
-                    type="button"
-                    key={option.id}
-                    onClick={() => setPaymentStatusFilter(option.id)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                      isActive
-                        ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90'
-                        : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
+          {isAdminUser && (
+            <div className="flex-1 min-w-[220px] space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Filter by payment status
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_STATUS_FILTERS.map((option) => {
+                  const isActive = paymentStatusFilter === option.id;
+                  return (
+                    <button
+                      type="button"
+                      key={option.id}
+                      onClick={() => setPaymentStatusFilter(option.id)}
+                      className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                        isActive
+                          ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

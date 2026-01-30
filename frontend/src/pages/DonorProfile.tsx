@@ -504,6 +504,7 @@ const DonorProfile = () => {
         if (typeof plan.origin_registration_id === 'number') {
           recurringRegistrationIds.add(plan.origin_registration_id);
         }
+        // Hide the due registration (auto-created for next payment cycle) from one-time list
         if (plan.due_registration?.id) {
           recurringDueRegistrationIds.add(plan.due_registration.id);
         }

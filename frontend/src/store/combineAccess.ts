@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios';
 import api from '../lib/api';
 import type { CartItem } from './cart';
 
-interface CombineAccessParent {
+export interface CombineAccessParent {
   id: number | null;
   name?: string | null;
   phone?: string | null;
@@ -28,6 +28,7 @@ interface CombinedToInfo {
 interface CombineAccessState {
   loading: boolean;
   canCombine: boolean | null;
+  mainDonorItems: CartItem[];
   parentDonors: CombineAccessParent[];
   role: CombineRole;
   combinedTo: CombinedToInfo | null;
@@ -39,6 +40,7 @@ interface CombineAccessState {
 export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
   loading: false,
   canCombine: null,
+  mainDonorItems: [],
   parentDonors: [],
   role: null,
   combinedTo: null,
@@ -75,9 +77,11 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
             active: typeof donor?.active === 'boolean' ? donor.active : null,
           }))
         : [];
+      const mainDonorItems = Array.isArray(response.data?.main_donor?.items) ? response.data.main_donor.items : [];
       set({
         loading: false,
         canCombine,
+        mainDonorItems,
         parentDonors,
         role,
         combinedTo,
@@ -103,6 +107,7 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
     set({
       loading: false,
       canCombine: null,
+      mainDonorItems: [],
       parentDonors: [],
       role: null,
       combinedTo: null,

@@ -211,6 +211,14 @@ class RecurringPoojaPlan(models.Model):
         blank=True,
         related_name="originating_recurring_plans",
     )
+    due_registration = models.ForeignKey(
+        PoojaRegistration,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="due_recurring_plans",
+        help_text="Auto-created registration for the next scheduled occurrence of this plan",
+    )
     metadata = models.JSONField(default=dict, blank=True)
     cart_payload = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

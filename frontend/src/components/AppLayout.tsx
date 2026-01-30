@@ -91,7 +91,7 @@ const AppLayout = () => {
     { to: '/dashboard', label: 'Dashboard', show: true, end: true },
     { to: '/profile', label: 'Donor Profile', show: Boolean(user && !isAdmin(user.role)) },
     { to: '/pooja/register', label: 'Pooja Registration', show: !isAdminUser },
-    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser },
+    { to: '/payments/general', label: 'Payment Page', show: !isAdminUser && canCombine !== true },
     {
       to: '/payments/combine',
       label: 'Combine Payment',

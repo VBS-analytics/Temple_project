@@ -433,14 +433,62 @@ class CombinePaymentAccessView(APIView):
 
         active_parent_mappings = [m for m in parent_mappings if m.is_active_on(current_month)]
         parent_ids = [mapping.parent_donor_id for mapping in active_parent_mappings if mapping.parent_donor_id]
+        
+        # Get cart snapshots and registrations for parent donors AND main donor
+        snapshot_ids = parent_ids + [user.id]
         snapshots = {
             snapshot.donor_id: snapshot
-            for snapshot in PoojaCartSnapshot.objects.filter(donor_id__in=parent_ids)
+            for snapshot in PoojaCartSnapshot.objects.filter(donor_id__in=snapshot_ids)
         }
+        
+        # Import PoojaRegistration here to avoid circular imports
+        from pooja.models import PoojaRegistration
+        
+        # Fetch registrations for main donor
+        main_donor_registrations = list(
+            PoojaRegistration.objects.filter(
+                donor_id=user.id,
+                status__in=['pending', 'confirmed']
+            ).select_related('pooja_option').values('id', 'pooja_option__id', 'pooja_option__name', 
+                                                     'pooja_option__code', 'start_date', 'total_amount', 'additional_notes')
+        )
+        
+        registrations_by_donor = {}
+        for parent_id in parent_ids:
+            registrations_by_donor[parent_id] = list(
+                PoojaRegistration.objects.filter(
+                    donor_id=parent_id,
+                    status__in=['pending', 'confirmed']
+                ).select_related('pooja_option').values('id', 'pooja_option__id', 'pooja_option__name', 
+                                                         'pooja_option__code', 'start_date', 'total_amount', 'additional_notes')
+            )
 
         parent_donors = []
         for mapping in active_parent_mappings:
             snapshot = snapshots.get(mapping.parent_donor_id)
+            snapshot_items = snapshot.items if snapshot else []
+            
+            # Convert registrations to CartItem format
+            registrations = registrations_by_donor.get(mapping.parent_donor_id, [])
+            registration_items = [
+                {
+                    "cartId": f"reg-{reg['id']}",
+                    "poojaId": reg['pooja_option__id'],
+                    "poojaName": reg['pooja_option__name'],
+                    "poojaCode": reg['pooja_option__code'] or "",
+                    "amount": float(reg['total_amount']) if reg['total_amount'] else 0,
+                    "bookingDate": reg['start_date'].isoformat() if reg['start_date'] else None,
+                    "customDayDate": None,
+                    "customDayNote": reg['additional_notes'] or "",
+                    "members": [],
+                    "quantity": 1
+                }
+                for reg in registrations
+            ]
+            
+            # Combine snapshot items and registration items
+            combined_items = snapshot_items + registration_items
+            
             parent_donors.append(
                 {
                     "id": mapping.parent_donor.id,
@@ -449,10 +497,34 @@ class CombinePaymentAccessView(APIView):
                     "effective_from": mapping.effective_from.isoformat() if mapping.effective_from else None,
                     "effective_to": mapping.effective_to.isoformat() if mapping.effective_to else None,
                     "active": mapping.is_active_on(current_month),
-                    "items": snapshot.items if snapshot else [],
+                    "items": combined_items,
                     "updated_at": snapshot.updated_at.isoformat() if snapshot else None,
                 }
             )
+
+        # Convert main donor registrations to CartItem format
+        main_registration_items = [
+            {
+                "cartId": f"reg-{reg['id']}",
+                "poojaId": reg['pooja_option__id'],
+                "poojaName": reg['pooja_option__name'],
+                "poojaCode": reg['pooja_option__code'] or "",
+                "amount": float(reg['total_amount']) if reg['total_amount'] else 0,
+                "bookingDate": reg['start_date'].isoformat() if reg['start_date'] else None,
+                "customDayDate": None,
+                "customDayNote": reg['additional_notes'] or "",
+                "members": [],
+                "quantity": 1
+            }
+            for reg in main_donor_registrations
+        ]
+        
+        # Get main donor's cart snapshot
+        main_snapshot = snapshots.get(user.id)
+        main_snapshot_items = main_snapshot.items if main_snapshot else []
+        
+        # Combine main donor's snapshot items and registration items
+        main_combined_items = main_snapshot_items + main_registration_items
 
         return Response(
             {
@@ -462,6 +534,7 @@ class CombinePaymentAccessView(APIView):
                     "id": user.id,
                     "name": user.name,
                     "phone": user.phone_number,
+                    "items": main_combined_items,
                 },
                 "parent_donors": parent_donors,
             }

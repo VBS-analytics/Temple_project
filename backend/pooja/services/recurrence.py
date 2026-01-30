@@ -271,6 +271,10 @@ def create_registration_from_plan(plan: RecurringPoojaPlan, due_date: Optional[d
             date_of_birth=date_of_birth,
         )
 
+    # Link this registration to the plan so the frontend can track it
+    plan.due_registration = registration
+    plan.save(update_fields=['due_registration'])
+
     return registration
 
 
