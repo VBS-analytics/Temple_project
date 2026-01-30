@@ -44,7 +44,6 @@ from .services.recurrence import (
     calculate_next_recurring_occurrence,
     find_due_registration,
     prepare_recurring_registration,
-    process_recurring_plans,
     sum_successful_payments,
 )
 from .serializers import (
@@ -328,10 +327,6 @@ class DonorMessageTemplateViewSet(viewsets.ModelViewSet):
 class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     serializer_class = PoojaRegistrationSerializer
     permission_classes = (permissions.IsAuthenticated,)
-
-    def list(self, request, *args, **kwargs):
-        process_recurring_plans()
-        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         base_qs = PoojaRegistration.objects.select_related("pooja_option", "day_option", "donor")

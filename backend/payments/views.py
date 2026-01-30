@@ -13,8 +13,6 @@ from rest_framework.views import APIView
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot
-from pooja.services.recurrence import process_recurring_plans
-
 from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord, PassbookEntry
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer, PassbookEntrySerializer
 
@@ -41,10 +39,6 @@ def _parse_month_key(value):
 class PaymentRecordViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentRecordSerializer
     permission_classes = (permissions.IsAuthenticated,)
-
-    def list(self, request, *args, **kwargs):
-        process_recurring_plans()
-        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = (
