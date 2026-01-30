@@ -3484,28 +3484,7 @@ const PoojaRegistrationPage = () => {
                     <span>One-time ₹ {formattedOneTimeAmount}</span>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1 text-xs text-slate-500">
-                  <label className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                    Registration date
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      lang="en-GB"
-                      className="w-[170px] rounded-2xl border border-gray-300 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                      value={selectedRegistrationDate}
-                      onChange={(event) => setSelectedRegistrationDate(event.target.value)}
-                      placeholder="dd/mm/yyyy"
-                      required
-                      aria-label="Registration created date"
-                    />
-                  </div>
-                  <p className="text-[0.65rem] text-slate-400">
-                    {selectedRegistrationDateDisplay
-                      ? `Selected: ${selectedRegistrationDateDisplay}`
-                      : 'Select date dd/mm/yyyy'}
-                  </p>
-                </div>
+
                 <button
                   type="button"
                   onClick={openDatePrompt}

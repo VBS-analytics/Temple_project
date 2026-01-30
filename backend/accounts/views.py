@@ -9,7 +9,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from payments.models import PaymentRecord, PaymentStatus
+from payments.models import CombinePaymentMapping, PaymentRecord, PaymentStatus
 
 from .models import DonorProfile, FamilyMember, GothraOption, User, UserRole
 from .serializers import (
@@ -289,6 +289,36 @@ class DonorDetailView(APIView):
             return User.objects.select_related("profile").get(pk=pk, role=UserRole.DONOR)
         except User.DoesNotExist as exc:  # pragma: no cover - user mis-id
             raise NotFound("Donor not found") from exc
+
+    def get(self, request, pk: int):
+        """Get donor details. Users can fetch their own details or parent donor details if linked."""
+        donor = self.get_object(pk)
+        
+        # Allow access if:
+        # 1. User is requesting their own details
+        # 2. User is an admin
+        # 3. User has a parent-child relationship with the donor
+        if request.user.id != donor.id and request.user.role != UserRole.ADMIN:
+            # Check if requesting user has this donor as a parent
+            from django.utils import timezone
+            
+            current_month = timezone.localdate().replace(day=1)
+            mapping = CombinePaymentMapping.objects.filter(
+                main_donor=request.user,
+                parent_donor_id=pk,
+            ).first()
+            
+            if not mapping or not mapping.is_active_on(current_month):
+                return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        
+        profile, _ = DonorProfile.objects.get_or_create(user=donor)
+        return Response(
+            {
+                "user": UserSerializer(donor).data,
+                "profile": DonorProfileSerializer(profile).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def put(self, request, pk: int):
         if request.user.role != UserRole.ADMIN:

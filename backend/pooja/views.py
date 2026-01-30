@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 
 from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole, ReadOnlyOrAdmin
+from payments.models import CombinePaymentMapping
 
 from .models import (
     DailyMessage,
@@ -369,7 +370,17 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         if self.request.user.role == UserRole.ADMIN:
             queryset = base_qs
         else:
-            queryset = base_qs.filter(donor=self.request.user)
+            # For non-admin users: Include own registrations + active parent donor registrations
+            current_month = timezone.localdate().replace(day=1)
+            active_parent_ids = {
+                mapping.parent_donor_id
+                for mapping in CombinePaymentMapping.objects.filter(main_donor=self.request.user)
+                if mapping.is_active_on(current_month) and mapping.parent_donor_id is not None
+            }
+            if active_parent_ids:
+                queryset = base_qs.filter(Q(donor=self.request.user) | Q(donor_id__in=active_parent_ids))
+            else:
+                queryset = base_qs.filter(donor=self.request.user)
 
         if has_filters:
             queryset = queryset.filter(filters)

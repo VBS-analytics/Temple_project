@@ -85,6 +85,17 @@ const toMonthInputValue = (value?: string | null) => {
   return match ? match[1] : '';
 };
 
+const toDateInputValue = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+  const normalized = value.trim();
+  const match = normalized.match(/^(\d{4}-\d{2})/);
+  return match ? `${match[1]}-01` : '';
+};
+
+const monthFromDateValue = (value: string) => (value ? value.slice(0, 7) : '');
+
 const CombinePaymentDonorPage = () => {
   const [mappingForms, setMappingForms] = useState<MappingForm[]>(() => [createMappingForm()]);
   const [history, setHistory] = useState<StoredMappingEntry[]>([]);
@@ -411,7 +422,6 @@ const CombinePaymentDonorPage = () => {
     <div className="space-y-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Admin-only tool</p>
           <h1 className="text-3xl font-semibold text-slate-900">Combine Payment - Donor</h1>
           <p className="text-sm text-slate-600">
             Map parent donors to a main donor so only the main donor needs to interact with the combine payment flow.
@@ -600,25 +610,33 @@ const CombinePaymentDonorPage = () => {
                       <label className="block text-sm font-medium text-slate-700">
                         Effective from
                         <input
-                          type="month"
-                          value={form.effectiveMonth}
+                          type="date"
+                          value={toDateInputValue(form.effectiveMonth)}
                           onChange={(event) =>
-                            handleEffectiveMonthChange(form.id, event.target.value)
+                            handleEffectiveMonthChange(
+                              form.id,
+                              monthFromDateValue(event.target.value),
+                            )
                           }
                           className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                          placeholder="Select month"
+                          placeholder="Select date"
+                          min="2000-01-01"
                         />
                       </label>
                       <label className="block text-sm font-medium text-slate-700">
                         Uncombine from
                         <input
-                          type="month"
-                          value={form.uncombineMonth}
+                          type="date"
+                          value={toDateInputValue(form.uncombineMonth)}
                           onChange={(event) =>
-                            handleUncombineMonthChange(form.id, event.target.value)
+                            handleUncombineMonthChange(
+                              form.id,
+                              monthFromDateValue(event.target.value),
+                            )
                           }
                           className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                          placeholder="Select month"
+                          placeholder="Select date"
+                          min="2000-01-01"
                         />
                       </label>
                     </div>
