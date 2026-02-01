@@ -1277,9 +1277,16 @@ const PaymentStatementPage = () => {
         paidRegistrationIds.add(record.registration);
       }
     });
-    const remainingRegistrations = registrations.filter(
-      (registration) => !paidRegistrationIds.has(registration.id),
-    );
+    const remainingRegistrations = registrations.filter((registration) => {
+      if (paidRegistrationIds.has(registration.id)) {
+        return false;
+      }
+      // Exclude CHRT registrations (one-time or recurring); dues appear via payment records
+      const dayCode =
+        (registration as any).day_option_code?.toUpperCase?.() ||
+        (registration.day_option_description || '').toUpperCase();
+      return dayCode !== 'CHRT';
+    });
     const registrationRecords: PaymentRecordEntry[] = remainingRegistrations.map(
         (registration) => ({
           id: `registration-${registration.id}`,

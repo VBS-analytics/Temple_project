@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from accounts.models import DonorProfile, User
 from accounts.serializers import _compute_monthly_summary_for_user, _current_month_bounds
@@ -88,18 +88,41 @@ class Command(BaseCommand):
             start, end = _current_month_bounds(month_date)
             
             # Calculate due: sum of all pooja registrations in this month
-            from pooja.models import PoojaRegistration
+            from pooja.models import PoojaRegistration, RecurringPoojaPlan, RecurrenceKind
             current_month_due = Decimal("0.00")
-            due_totals = (
+
+            # Identify CHRT-linked registrations (legacy rows may have day_option null)
+            chrt_registration_ids = RecurringPoojaPlan.objects.filter(
+                donor=donor,
+                recurrence_kind=RecurrenceKind.RECURRING,
+            ).filter(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False)).values_list(
+                "origin_registration_id", flat=True
+            )
+
+            # Non-CHRT poojas: continue using start_date to decide the month
+            non_chrt_totals = (
                 PoojaRegistration.objects.filter(
                     donor=donor,
                     start_date__gte=start,
                     start_date__lt=end,
                 )
+                .exclude(day_option__code="CHRT")
+                .exclude(id__in=chrt_registration_ids)
                 .values_list("total_amount", flat=True)
             )
-            for total_amount in due_totals:
+            for total_amount in non_chrt_totals:
                 current_month_due += Decimal(str(total_amount or 0))
+
+            # CHRT poojas: use the preferred date stored in RecurringPoojaPlan.one_time_date
+            chrt_plans = RecurringPoojaPlan.objects.filter(
+                donor=donor,
+                is_active=True,
+                one_time_date__gte=start,
+                one_time_date__lt=end,
+            ).filter(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
+
+            for plan in chrt_plans:
+                current_month_due += plan.amount or Decimal("0.00")
             
             # Calculate payments: sum of all successful payments in this month
             current_month_payments = Decimal("0.00")

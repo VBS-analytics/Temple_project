@@ -12,9 +12,11 @@ from rest_framework.views import APIView
 
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
-from pooja.models import PoojaCartSnapshot
+from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord, PassbookEntry
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer, PassbookEntrySerializer
+from .services import regenerate_donor_passbook
+from pooja.services.recurrence import _clean_stale_chrt_dues
 
 
 def _parse_month_key(value):
@@ -41,10 +43,45 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
+        # Ensure stale CHRT dues are cleaned before returning any records
+        _clean_stale_chrt_dues()
+
         qs = (
             PaymentRecord.objects.select_related("donor", "registration", "registration__pooja_option")
             .prefetch_related("registration__payments")
         )
+
+        # Safety net: correct current-month combined dues to exclude CHRT amounts
+        current_month = timezone.localdate().replace(day=1)
+        try:
+            pending_dues = qs.filter(
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+                payment_month=current_month,
+            )
+            for due in pending_dues:
+                non_chrt_total = (
+                    RecurringPoojaPlan.objects.filter(
+                        donor_id=due.donor_id,
+                        is_active=True,
+                        recurrence_kind=RecurrenceKind.RECURRING,
+                    )
+                    .exclude(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
+                    .aggregate(total=Sum("amount"))
+                    .get("total")
+                    or Decimal("0.00")
+                )
+                if non_chrt_total <= 0:
+                    due.delete()
+                    continue
+                if due.amount != non_chrt_total:
+                    due.amount = non_chrt_total
+                    due.notes = "Monthly recurring pooja contribution due (auto-corrected to exclude CHRT)"
+                    due.save(update_fields=["amount", "notes", "updated_at"])
+        except Exception:
+            # Best-effort fix; don't block API
+            pass
+
         donor_id_param = self.request.query_params.get("donor_id")
         donor_phone_param = self.request.query_params.get("donor_phone")
         donor_search = self.request.query_params.get("donor")
@@ -546,6 +583,16 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Get passbook entries for current user or all donors if admin."""
         user = self.request.user
+
+        # Ensure CHRT dues are cleaned and passbook is fresh before returning data.
+        _clean_stale_chrt_dues()
+        if user.role == UserRole.ADMIN:
+            # If admin filters for a specific donor, refresh just that donor to avoid heavy work
+            donor_id_param = self.request.query_params.get('donor_id')
+            if donor_id_param and donor_id_param.isdigit():
+                regenerate_donor_passbook(int(donor_id_param))
+        else:
+            regenerate_donor_passbook(user.id)
         
         if user.role == UserRole.ADMIN:
             # Admins can see all passbook entries
