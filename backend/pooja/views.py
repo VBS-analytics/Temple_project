@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 
 from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole, ReadOnlyOrAdmin
-from payments.models import CombinePaymentMapping
+from payments.models import CombinePaymentMapping, PaymentRecord, PaymentStatus
 
 from .models import (
     DailyMessage,
@@ -323,6 +323,21 @@ class DonorMessageTemplateViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(donor=self.request.user)
 
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        registration = self.get_object()
+        payments = PaymentRecord.objects.filter(registration=registration)
+        if payments.filter(status=PaymentStatus.SUCCESS).exists():
+            return Response(
+                {
+                    "detail": "From your side it is not possible to delete, please contact the Temple Admin."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payments.delete()
+        registration.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     serializer_class = PoojaRegistrationSerializer
@@ -612,6 +627,7 @@ class RecurringPoojaPlanViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
     serializer_class = RecurringPoojaPlanSerializer
@@ -695,6 +711,24 @@ class RecurringPoojaPlanViewSet(
             plan.next_occurrence = next_occurrence
         plan.save(update_fields=["pause_from", "pause_until", "is_active", "metadata", "next_occurrence"])
         return True
+
+    def _deduct_plan_amount_from_due_records(self, plan: RecurringPoojaPlan) -> None:
+        amount = plan.amount or Decimal("0.00")
+        if amount <= Decimal("0.00") or plan.donor is None:
+            return
+        due_records = PaymentRecord.objects.filter(
+            donor=plan.donor,
+            registration__isnull=True,
+            status=PaymentStatus.PENDING,
+        )
+        for record in due_records:
+            existing_amount = record.amount or Decimal("0.00")
+            new_amount = existing_amount - amount
+            if new_amount <= Decimal("0.00"):
+                record.delete()
+            else:
+                record.amount = new_amount
+                record.save(update_fields=["amount"])
 
     @action(detail=True, methods=["post"], url_path="pause")
     def pause(self, request, pk=None):
@@ -801,6 +835,30 @@ class RecurringPoojaPlanViewSet(
         plan.save()
         serializer = self.get_serializer(plan)
         return Response(serializer.data)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        plan = self.get_object()
+        registration_ids = []
+        if plan.due_registration_id:
+            registration_ids.append(plan.due_registration_id)
+        if plan.origin_registration_id and plan.origin_registration_id not in registration_ids:
+            registration_ids.append(plan.origin_registration_id)
+
+        if registration_ids:
+            payments = PaymentRecord.objects.filter(registration_id__in=registration_ids)
+            if payments.filter(status=PaymentStatus.SUCCESS).exists():
+                return Response(
+                    {"detail": "From your side it is not possible to delete, please contact the Temple Admin."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            payments.delete()
+
+        self._deduct_plan_amount_from_due_records(plan)
+        if registration_ids:
+            PoojaRegistration.objects.filter(pk__in=registration_ids).delete()
+        plan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PoojaCartSnapshotView(APIView):

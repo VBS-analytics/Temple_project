@@ -177,6 +177,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
     pooja_option_name = serializers.SerializerMethodField()
     pooja_option_code = serializers.SerializerMethodField()
     day_option_description = serializers.SerializerMethodField()
+    day_option_code = serializers.SerializerMethodField()
     day_option_category = serializers.SerializerMethodField()
     pooja_reg_id = serializers.SerializerMethodField()
     created_at_override = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
@@ -194,6 +195,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "pooja_option_code",
             "day_option",
             "day_option_description",
+            "day_option_code",
             "day_option_category",
             "start_date",
             "quantity",
@@ -219,6 +221,7 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
             "pooja_option_name",
             "pooja_option_code",
             "day_option_description",
+            "day_option_code",
             "day_option_category",
             "pooja_reg_id",
             "created_at",
@@ -286,6 +289,9 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
 
     def get_day_option_description(self, obj):  # pragma: no cover
         return getattr(obj.day_option, "description", None)
+
+    def get_day_option_code(self, obj):  # pragma: no cover
+        return getattr(obj.day_option, "code", None)
 
     def get_day_option_category(self, obj):  # pragma: no cover
         return getattr(obj.day_option, "category", None)

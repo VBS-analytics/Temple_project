@@ -2916,8 +2916,18 @@ const PoojaRegistrationPage = () => {
         return;
       }
 
-      const buildRecurrenceForDetails = (detailsDate: string | undefined) =>
-        buildRecurrenceFields(recurrenceSelection, detailsDate);
+      // CHRT poojas (requiresChartDetails === true) need the donor's preferred date
+      // passed as recurrenceOneTimeDate even though they use the recurring kind.
+      // Without this, the backend falls back to the registration start_date and
+      // generates the due in the registration month (January) instead of the
+      // preferred month (e.g., February 2026).
+      const buildRecurrenceForDetails = (detailsDate: string | undefined) => {
+        const base = buildRecurrenceFields(recurrenceSelection, detailsDate);
+        if (recurrenceSelection?.kind === 'recurring' && detailsDate) {
+          return { ...base, recurrenceOneTimeDate: detailsDate };
+        }
+        return base;
+      };
 
       groups.forEach((group) => {
         const groupMemberKeys = Array.from(new Set(group.memberKeys));

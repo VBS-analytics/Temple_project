@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import api, { extractResults } from '../lib/api';
-import type { RecurrenceKind } from '../types/recurrence';
+import type { RecurrenceFrequency, RecurrenceKind } from '../types/recurrence';
 import { rasiOptions, tamilStarOptions } from '../data/familyAttributes';
 import { useMasterDataStore } from '../store/masterData';
 
@@ -136,6 +136,16 @@ interface RecurringPlan {
   cart_payload?: Record<string, unknown> | null;
 }
 
+interface RegistrationEditFormState {
+  start_date: string;
+  amount: string;
+}
+
+interface PlanEditFormState {
+  recurrence_frequency: RecurrenceFrequency;
+  amount: string;
+}
+
 
 // --- CONSTANTS ---
 const FAMILY_OPTIONS = [
@@ -150,6 +160,25 @@ const FAMILY_OPTIONS = [
   'Pattamani Iyr Fmly',
   'Other',
 ];
+
+const RECURRENCE_FREQUENCY_OPTIONS: { value: RecurrenceFrequency; label: string }[] = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annually', label: 'Annually' },
+];
+
+const createInitialPlanEditState = (): PlanEditFormState => ({
+  recurrence_frequency: 'monthly',
+  amount: '',
+});
+
+const ensureRecurrenceFrequency = (value?: string | null): RecurrenceFrequency => {
+  if (!value) return 'monthly';
+  if (RECURRENCE_FREQUENCY_OPTIONS.some((option) => option.value === value)) {
+    return value as RecurrenceFrequency;
+  }
+  return 'monthly';
+};
 
 // --- UTILITIES ---
 const formatDate = (value?: string | null) => {
@@ -250,6 +279,13 @@ const formatPlanAmount = (value?: string | number | null) => {
   return String(value);
 };
 
+const formatDateForInput = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().split('T')[0];
+};
+
 const parseDecimalValue = (value?: string | number | null) => {
   if (value === null || value === undefined || value === '') return 0;
   const numeric = typeof value === 'number' ? value : Number(value);
@@ -345,58 +381,21 @@ const DonorProfile = () => {
   const [recurrencePlans, setRecurrencePlans] = useState<RecurringPlan[]>([]);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
-  
-  // Navigation
-  const location = useLocation();
-  const navigate = useNavigate();
-  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-
-  useEffect(() => {
-    const tabParam = queryParams.get('tab');
-    if (!tabParam) return;
-    const normalizedTab = tabParam.toLowerCase();
-    if (DONOR_PROFILE_TABS.includes(normalizedTab as DonorProfileTab)) {
-      setActiveTab(normalizedTab as DonorProfileTab);
-    }
-  }, [queryParams]);
-
-  const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
-  const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
-
-  useEffect(() => {
-    loadGothraOptions();
-  }, [loadGothraOptions]);
-
-  // --- ACTIONS ---
-
-  const reloadRecurrencePlans = useCallback(
-    async (options?: { activeCheck?: () => boolean }) => {
-      const isActive = options?.activeCheck ?? (() => true);
-      if (!isActive()) return;
-
-      setRecurrenceLoading(true);
-      setRecurrenceError(null);
-      try {
-        const response = await api.get('pooja/recurrence/plans/', { params: { page_size: 200 } });
-        if (!isActive()) return;
-        setRecurrencePlans(extractResults<RecurringPlan>(response.data));
-      } catch (err) {
-        if (!isActive()) return;
-        setRecurrencePlans([]);
-        setRecurrenceError(extractErrorMessage(err));
-      } finally {
-        if (isActive()) {
-          setRecurrenceLoading(false);
-        }
-      }
-    },
-    [],
-  );
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
+  const [planEditValues, setPlanEditValues] = useState<PlanEditFormState>(createInitialPlanEditState);
+  const [planEditSubmitting, setPlanEditSubmitting] = useState(false);
+  const [deletingPlanId, setDeletingPlanId] = useState<number | null>(null);
+  const [editingRegistrationId, setEditingRegistrationId] = useState<number | null>(null);
+  const [registrationEditValues, setRegistrationEditValues] = useState<RegistrationEditFormState>({
+    start_date: '',
+    amount: '',
+  });
+  const [registrationEditSubmitting, setRegistrationEditSubmitting] = useState(false);
+  const [deletingRegistrationId, setDeletingRegistrationId] = useState<number | null>(null);
+  const [registrationActionError, setRegistrationActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
-
-  // --- DATA LOADING ---
 
   const createInitialFormState = (profileData?: ApiDonorProfile): FamilyMemberFormState => ({
     name: '',
@@ -419,6 +418,27 @@ const DonorProfile = () => {
   const [formData, setFormData] = useState<FamilyMemberFormState>(() => createInitialFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Navigation
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+
+  useEffect(() => {
+    const tabParam = queryParams.get('tab');
+    if (!tabParam) return;
+    const normalizedTab = tabParam.toLowerCase();
+    if (DONOR_PROFILE_TABS.includes(normalizedTab as DonorProfileTab)) {
+      setActiveTab(normalizedTab as DonorProfileTab);
+    }
+  }, [queryParams]);
+
+  const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
+  const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
+
+  useEffect(() => {
+    loadGothraOptions();
+  }, [loadGothraOptions]);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -454,6 +474,30 @@ const DonorProfile = () => {
     }
   }, []);
 
+  const reloadRecurrencePlans = useCallback(
+    async (options?: { activeCheck?: () => boolean }) => {
+      const isActive = options?.activeCheck ?? (() => true);
+      if (!isActive()) return;
+
+      setRecurrenceLoading(true);
+      setRecurrenceError(null);
+      try {
+        const response = await api.get('pooja/recurrence/plans/', { params: { page_size: 200 } });
+        if (!isActive()) return;
+        setRecurrencePlans(extractResults<RecurringPlan>(response.data));
+      } catch (err) {
+        if (!isActive()) return;
+        setRecurrencePlans([]);
+        setRecurrenceError(extractErrorMessage(err));
+      } finally {
+        if (isActive()) {
+          setRecurrenceLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     isMountedRef.current = true;
     loadProfile();
@@ -488,6 +532,142 @@ const DonorProfile = () => {
     };
   }, [fetchRegistrations]);
 
+  // --- ACTIONS ---
+
+  const resetPlanEditState = useCallback(() => {
+    setEditingPlanId(null);
+    setPlanEditValues(createInitialPlanEditState());
+  }, []);
+  const startPlanEdit = useCallback((plan: RecurringPlan) => {
+    setEditingPlanId(plan.id);
+    setPlanEditValues({
+      recurrence_frequency: ensureRecurrenceFrequency(plan.recurrence_frequency),
+      amount: plan.amount != null ? String(plan.amount) : '',
+    });
+    setRecurrenceError(null);
+  }, []);
+  const resetRegistrationEditState = useCallback(() => {
+    setEditingRegistrationId(null);
+    setRegistrationEditValues({ start_date: '', amount: '' });
+  }, []);
+  const startRegistrationEdit = useCallback((registration: PoojaRegistration) => {
+    setEditingRegistrationId(registration.id);
+    setRegistrationEditValues({
+      start_date: formatDateForInput(registration.start_date),
+      amount: registration.total_amount != null ? String(registration.total_amount) : '',
+    });
+    setRegistrationActionError(null);
+  }, []);
+  const handlePlanEditChange = useCallback(
+    (field: keyof PlanEditFormState, value: string) => {
+      setPlanEditValues((prev) => ({
+        ...prev,
+        [field]: field === 'recurrence_frequency' ? (value as RecurrenceFrequency) : value,
+      }));
+    },
+    [],
+  );
+  const handleRegistrationEditChange = useCallback(
+    (field: keyof RegistrationEditFormState, value: string) => {
+      setRegistrationEditValues((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    },
+    [],
+  );
+  const handlePlanEditSave = useCallback(async () => {
+    if (editingPlanId === null) return;
+    const payload: Record<string, string> = {
+      recurrence_frequency: planEditValues.recurrence_frequency,
+    };
+    const amountValue = planEditValues.amount.trim();
+    if (amountValue) {
+      payload.amount = amountValue;
+    }
+    setPlanEditSubmitting(true);
+    setRecurrenceError(null);
+    try {
+      await api.patch(`pooja/recurrence/plans/${editingPlanId}/`, payload);
+      await reloadRecurrencePlans();
+      resetPlanEditState();
+    } catch (error) {
+      setRecurrenceError(extractErrorMessage(error));
+    } finally {
+      setPlanEditSubmitting(false);
+    }
+  }, [editingPlanId, planEditValues, reloadRecurrencePlans, resetPlanEditState]);
+  const handleRegistrationEditSave = useCallback(async () => {
+    if (editingRegistrationId === null) return;
+    const payload: Record<string, string> = {};
+    if (registrationEditValues.start_date.trim()) {
+      payload.start_date = registrationEditValues.start_date.trim();
+    }
+    if (registrationEditValues.amount.trim()) {
+      payload.total_amount = registrationEditValues.amount.trim();
+    }
+    if (Object.keys(payload).length === 0) {
+      setRegistrationActionError('Update at least one field.');
+      return;
+    }
+    setRegistrationEditSubmitting(true);
+    setRegistrationActionError(null);
+    try {
+      await api.patch(`pooja/registrations/${editingRegistrationId}/`, payload);
+      await fetchRegistrations();
+      resetRegistrationEditState();
+    } catch (error) {
+      setRegistrationActionError(extractErrorMessage(error));
+    } finally {
+      setRegistrationEditSubmitting(false);
+    }
+  }, [
+    editingRegistrationId,
+    fetchRegistrations,
+    registrationEditValues.amount,
+    registrationEditValues.start_date,
+    resetRegistrationEditState,
+  ]);
+  const handleDeletePlan = useCallback(
+    async (plan: RecurringPlan) => {
+      const confirmed = window.confirm(
+        'Delete this recurring pooja plan? This will remove the upcoming pooja and update your due payments.',
+      );
+      if (!confirmed) return;
+      setDeletingPlanId(plan.id);
+      setRecurrenceError(null);
+      try {
+        await api.delete(`pooja/recurrence/plans/${plan.id}/`);
+        await reloadRecurrencePlans();
+      } catch (error) {
+        setRecurrenceError(extractErrorMessage(error));
+      } finally {
+        setDeletingPlanId(null);
+      }
+    },
+    [reloadRecurrencePlans],
+  );
+  const handleDeleteRegistration = useCallback(
+    async (registration: PoojaRegistration) => {
+      if (!window.confirm('Delete this registration? Any pending dues for this pooja will be adjusted.')) {
+        return;
+      }
+      setDeletingRegistrationId(registration.id);
+      setRegistrationActionError(null);
+      try {
+        await api.delete(`pooja/registrations/${registration.id}/`);
+        await fetchRegistrations();
+        if (editingRegistrationId === registration.id) {
+          resetRegistrationEditState();
+        }
+      } catch (error) {
+        setRegistrationActionError(extractErrorMessage(error));
+      } finally {
+        setDeletingRegistrationId(null);
+      }
+    },
+    [editingRegistrationId, fetchRegistrations, resetRegistrationEditState],
+  );
   const handleManualPaymentRedirect = useCallback(() => {
     navigate('/payments/general?tab=summary');
   }, [navigate]);
@@ -525,6 +705,9 @@ const DonorProfile = () => {
       if (cartRecurrenceKind && cartRecurrenceKind === 'recurring') {
         return false;
       }
+      if (isCHRTRegistration(registration)) {
+        return false;
+      }
 
       return true;
     });
@@ -538,9 +721,21 @@ const DonorProfile = () => {
     () => recurrencePlans.filter((plan) => isCHRTPlan(plan)),
     [recurrencePlans],
   );
-  const chrtRegistrations = useMemo(() => visibleRegistrations.filter((registration) => isCHRTRegistration(registration)), [
-    visibleRegistrations,
-  ]);
+  const chrtRegistrations = useMemo(() => {
+    const chrtPlanRegistrationIds = new Set<number>();
+    chrtPlansToShow.forEach((plan) => {
+      if (typeof plan.origin_registration_id === 'number') {
+        chrtPlanRegistrationIds.add(plan.origin_registration_id);
+      }
+      if (plan.due_registration?.id) {
+        chrtPlanRegistrationIds.add(plan.due_registration.id);
+      }
+    });
+    return registrations.filter(
+      (registration) =>
+        isCHRTRegistration(registration) && !chrtPlanRegistrationIds.has(registration.id),
+    );
+  }, [chrtPlansToShow, registrations]);
   const chrtPoojaCount = chrtPlansToShow.length + chrtRegistrations.length;
   const registrationTotals = useMemo(() => {
     const count = visibleRegistrations.length;
@@ -1160,6 +1355,9 @@ const DonorProfile = () => {
                 {registrationsError && (
                   <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{registrationsError}</div>
                 )}
+                {registrationActionError && (
+                  <div className="m-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{registrationActionError}</div>
+                )}
                 
                 {/* Registered Poojas Grid */}
                 {registrationsLoading ? (
@@ -1172,6 +1370,9 @@ const DonorProfile = () => {
                     {visibleRegistrations.map((registration) => {
                       const memberNames = formatMemberNames(registration.members);
                       const registeredOn = formatDate(registration.created_at);
+                      const isEditingThisRegistration = editingRegistrationId === registration.id;
+                      const startDateInputId = `registration-start-${registration.id}`;
+                      const amountInputId = `registration-amount-${registration.id}`;
                       return (
                         <div key={registration.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-violet-300 transition-all">
                           <div className="flex items-start justify-between mb-4">
@@ -1182,11 +1383,88 @@ const DonorProfile = () => {
                               </div>
                               <h3 className="text-lg font-bold text-slate-900">{registration.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
                             </div>
-                            <div className="flex flex-col items-end gap-1 text-right">
-                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">One-time</span>
-                              <span className="text-lg font-bold text-slate-800">₹ {formatCurrency(registration.total_amount)}</span>
+                              <div className="flex flex-col items-end gap-1 text-right">
+                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">One-time</span>
+                                <span className="text-lg font-bold text-slate-800">₹ {formatCurrency(registration.total_amount)}</span>
+                              </div>
                             </div>
-                          </div>
+
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => startRegistrationEdit(registration)}
+                                  disabled={
+                                    isEditingThisRegistration ||
+                                    registrationEditSubmitting ||
+                                    deletingRegistrationId === registration.id
+                                  }
+                                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                  {isEditingThisRegistration ? 'Editing' : 'Edit'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRegistration(registration)}
+                                  disabled={registrationEditSubmitting || deletingRegistrationId === registration.id || isEditingThisRegistration}
+                                  className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                                >
+                                  {deletingRegistrationId === registration.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </div>
+                              <span className="text-xs font-semibold text-slate-500">
+                                Start date {formatDate(registration.start_date)}
+                              </span>
+                            </div>
+
+                            {isEditingThisRegistration && (
+                              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <label htmlFor={startDateInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                    Preferred date
+                                  </label>
+                                  <input
+                                    id={startDateInputId}
+                                    type="date"
+                                    value={registrationEditValues.start_date}
+                                    onChange={(event) => handleRegistrationEditChange('start_date', event.target.value)}
+                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                  />
+                                  <label htmlFor={amountInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                    Amount
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-600">₹</span>
+                                    <input
+                                      id={amountInputId}
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={registrationEditValues.amount}
+                                      onChange={(event) => handleRegistrationEditChange('amount', event.target.value)}
+                                      placeholder="e.g., 200"
+                                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={resetRegistrationEditState}
+                                    className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleRegistrationEditSave}
+                                    disabled={registrationEditSubmitting}
+                                    className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-70"
+                                  >
+                                    {registrationEditSubmitting ? 'Saving...' : 'Save changes'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
 
                           <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
                             <div className="flex justify-between">
@@ -1284,6 +1562,12 @@ const DonorProfile = () => {
                       const registeredOn = plan.origin_registration_created_at
                         ? formatDate(plan.origin_registration_created_at)
                         : '—';
+                      const isEditingThisPlan = editingPlanId === plan.id;
+                      const nextDueAmount = plan.due_registration?.due_amount ?? plan.due_registration?.total_amount;
+                      const nextDueLabel = plan.due_registration ? formatPlanAmount(nextDueAmount) : null;
+                      const nextDueStatus = plan.due_registration?.is_paid ? 'Paid' : 'Pending';
+                      const frequencyInputId = `recurrence-frequency-${plan.id}`;
+                      const amountInputId = `recurrence-amount-${plan.id}`;
 
                       return (
                         <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-emerald-300 transition-all">
@@ -1305,12 +1589,94 @@ const DonorProfile = () => {
                                 ₹ {formatPlanAmount(plan.amount)}
                               </span>
                             </div>
-                          </div>
+                        </div>
 
-                          {(plan.pause_from || plan.pause_until) && (
-                            <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
-                              <p className="text-xs font-semibold text-orange-800">
-                                {plan.pause_from && plan.pause_until
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startPlanEdit(plan)}
+                              disabled={isEditingThisPlan || deletingPlanId === plan.id || planEditSubmitting}
+                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              {isEditingThisPlan ? 'Editing' : 'Edit'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePlan(plan)}
+                              disabled={planEditSubmitting || deletingPlanId === plan.id || isEditingThisPlan}
+                              className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                            >
+                              {deletingPlanId === plan.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
+                          {plan.due_registration && nextDueLabel && (
+                            <span className="text-xs font-semibold text-slate-500">
+                              Next due ₹ {nextDueLabel} — {nextDueStatus}
+                            </span>
+                          )}
+                        </div>
+
+                        {isEditingThisPlan && (
+                          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <label htmlFor={frequencyInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                Frequency
+                              </label>
+                              <select
+                                id={frequencyInputId}
+                                value={planEditValues.recurrence_frequency}
+                                onChange={(event) =>
+                                  handlePlanEditChange('recurrence_frequency', event.target.value)
+                                }
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              >
+                                {RECURRENCE_FREQUENCY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <label htmlFor={amountInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                Amount
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-600">₹</span>
+                                <input
+                                  id={amountInputId}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={planEditValues.amount}
+                                  onChange={(event) => handlePlanEditChange('amount', event.target.value)}
+                                  placeholder="e.g., 100"
+                                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-3 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={resetPlanEditState}
+                                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handlePlanEditSave}
+                                disabled={planEditSubmitting}
+                                className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-70"
+                              >
+                                {planEditSubmitting ? 'Saving...' : 'Save changes'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {(plan.pause_from || plan.pause_until) && (
+                          <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
+                            <p className="text-xs font-semibold text-orange-800">
+                              {plan.pause_from && plan.pause_until
                                   ? `Paused from ${formatDate(plan.pause_from)} until ${formatDate(plan.pause_until)}.`
                                   : plan.pause_until
                                     ? `Paused until ${formatDate(plan.pause_until)}.`
@@ -1404,6 +1770,13 @@ const DonorProfile = () => {
                           const registeredOn = plan.origin_registration_created_at
                             ? formatDate(plan.origin_registration_created_at)
                             : '—';
+                          const preferredDate = plan.one_time_date || plan.start_date;
+                          const isEditingThisPlan = editingPlanId === plan.id;
+                          const nextDueAmount = plan.due_registration?.due_amount ?? plan.due_registration?.total_amount;
+                          const nextDueLabel = plan.due_registration ? formatPlanAmount(nextDueAmount) : null;
+                          const nextDueStatus = plan.due_registration?.is_paid ? 'Paid' : 'Pending';
+                          const frequencyInputId = `chrt-frequency-${plan.id}`;
+                          const amountInputId = `chrt-amount-${plan.id}`;
 
                           return (
                             <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
@@ -1421,7 +1794,7 @@ const DonorProfile = () => {
                                   </div>
                                   <h3 className="text-lg font-bold text-slate-900">{plan.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
                                 </div>
-                                <div className="flex flex-col items-end gap-1 text-right">
+                               <div className="flex flex-col items-end gap-1 text-right">
                                   <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">
                                     {scheduleLabel}
                                   </span>
@@ -1430,6 +1803,88 @@ const DonorProfile = () => {
                                   </span>
                                 </div>
                               </div>
+
+                              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => startPlanEdit(plan)}
+                                    disabled={isEditingThisPlan || deletingPlanId === plan.id || planEditSubmitting}
+                                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                                  >
+                                    {isEditingThisPlan ? 'Editing' : 'Edit'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePlan(plan)}
+                                    disabled={planEditSubmitting || deletingPlanId === plan.id || isEditingThisPlan}
+                                    className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                                  >
+                                    {deletingPlanId === plan.id ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                </div>
+                                {plan.due_registration && nextDueLabel && (
+                                  <span className="text-xs font-semibold text-slate-500">
+                                    Next due ₹ {nextDueLabel} — {nextDueStatus}
+                                  </span>
+                                )}
+                              </div>
+
+                              {isEditingThisPlan && (
+                                <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <label htmlFor={frequencyInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                      Frequency
+                                    </label>
+                                    <select
+                                      id={frequencyInputId}
+                                      value={planEditValues.recurrence_frequency}
+                                      onChange={(event) =>
+                                        handlePlanEditChange('recurrence_frequency', event.target.value)
+                                      }
+                                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    >
+                                      {RECURRENCE_FREQUENCY_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <label htmlFor={amountInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                      Amount
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-600">₹</span>
+                                      <input
+                                        id={amountInputId}
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={planEditValues.amount}
+                                        onChange={(event) => handlePlanEditChange('amount', event.target.value)}
+                                        placeholder="e.g., 100"
+                                        className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={resetPlanEditState}
+                                      className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handlePlanEditSave}
+                                      disabled={planEditSubmitting}
+                                      className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-70"
+                                    >
+                                      {planEditSubmitting ? 'Saving...' : 'Save changes'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
 
                               {(plan.pause_from || plan.pause_until) && (
                                 <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
@@ -1447,7 +1902,7 @@ const DonorProfile = () => {
                               <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Preferred Date</span>
-                                  <span className="font-bold text-purple-700 text-right">{formatDate(plan.one_time_date)}</span>
+                                  <span className="font-bold text-purple-700 text-right">{formatDate(preferredDate)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Registered On</span>
@@ -1469,53 +1924,135 @@ const DonorProfile = () => {
                     )}
                     {chrtRegistrations.length > 0 && (
                       <div className={`grid gap-4 lg:grid-cols-2 ${chrtPlansToShow.length > 0 ? 'mt-6' : ''}`}>
-                        {chrtRegistrations.map((registration) => (
-                          <div key={`chrt-registration-${registration.id}`} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="inline-block rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">CHRT</span>
-                                  <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-purple-50 text-purple-600">Registration</span>
+                        {chrtRegistrations.map((registration) => {
+                          const isEditingThisRegistration = editingRegistrationId === registration.id;
+                          const startDateInputId = `chrt-registration-start-${registration.id}`;
+                          const amountInputId = `chrt-registration-amount-${registration.id}`;
+                          return (
+                            <div key={`chrt-registration-${registration.id}`} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="inline-block rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">CHRT</span>
+                                    <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-purple-50 text-purple-600">Registration</span>
+                                  </div>
+                                  <h3 className="text-lg font-bold text-slate-900">{registration.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
+                                  <p className="text-sm text-slate-500">{registration.day_option_description?.trim() || '—'}</p>
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-900">{registration.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
-                                <p className="text-sm text-slate-500">{registration.day_option_description?.trim() || '—'}</p>
+                                <div className="flex flex-col items-end gap-1 text-right">
+                                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">
+                                    One-time
+                                  </span>
+                                  <span className="text-lg font-bold text-slate-800">
+                                    ₹ {formatPlanAmount(registration.total_amount)}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="flex flex-col items-end gap-1 text-right">
-                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider text-purple-600 bg-purple-50">
-                                  One-time
-                                </span>
-                                <span className="text-lg font-bold text-slate-800">
-                                  ₹ {formatPlanAmount(registration.total_amount)}
-                                </span>
-                              </div>
-                            </div>
 
-                            <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Preferred Date</span>
-                                <span className="font-bold text-purple-700 text-right">{formatDate(registration.start_date)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Registered On</span>
-                                <span className="font-medium text-slate-900">{formatDate(registration.created_at)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Members</span>
-                                <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{formatMemberNames(registration.members)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Prasadam</span>
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                    registration.post_prasadam ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
-                                  }`}
-                                >
-                                  {registration.post_prasadam ? 'Yes' : 'No'}
+                              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => startRegistrationEdit(registration)}
+                                    disabled={
+                                      isEditingThisRegistration ||
+                                      registrationEditSubmitting ||
+                                      deletingRegistrationId === registration.id
+                                    }
+                                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                                  >
+                                    {isEditingThisRegistration ? 'Editing' : 'Edit'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRegistration(registration)}
+                                    disabled={registrationEditSubmitting || deletingRegistrationId === registration.id || isEditingThisRegistration}
+                                    className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                                  >
+                                    {deletingRegistrationId === registration.id ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-500">
+                                  Preferred date {formatDate(registration.start_date)}
                                 </span>
                               </div>
+
+                              {isEditingThisRegistration && (
+                                <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <label htmlFor={startDateInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                      Preferred date
+                                    </label>
+                                    <input
+                                      id={startDateInputId}
+                                      type="date"
+                                      value={registrationEditValues.start_date}
+                                      onChange={(event) => handleRegistrationEditChange('start_date', event.target.value)}
+                                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    />
+                                    <label htmlFor={amountInputId} className="text-xs font-semibold uppercase text-slate-500">
+                                      Amount
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-600">₹</span>
+                                      <input
+                                        id={amountInputId}
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={registrationEditValues.amount}
+                                        onChange={(event) => handleRegistrationEditChange('amount', event.target.value)}
+                                        placeholder="e.g., 100"
+                                        className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={resetRegistrationEditState}
+                                      className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleRegistrationEditSave}
+                                      disabled={registrationEditSubmitting}
+                                      className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-70"
+                                    >
+                                      {registrationEditSubmitting ? 'Saving...' : 'Save changes'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="space-y-2 text-sm mb-4 pb-4 border-b border-slate-100">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Preferred Date</span>
+                                  <span className="font-bold text-purple-700 text-right">{formatDate(registration.start_date)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Registered On</span>
+                                  <span className="font-medium text-slate-900">{formatDate(registration.created_at)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Members</span>
+                                  <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{formatMemberNames(registration.members)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Prasadam</span>
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                      registration.post_prasadam ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {registration.post_prasadam ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </>

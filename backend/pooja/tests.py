@@ -696,3 +696,107 @@ class PoojaCartSnapshotReportViewTests(TestCase):
         self.assertEqual(second_response.status_code, 200)
         self.assertEqual(second_response.json()[0]["items"], original_items)
         self.assertEqual(PoojaCartSnapshotExportBatch.objects.count(), 1)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class CHRTPoojaDueFutureMonthTests(TestCase):
+    """Test for bug: CHRT Poojas with future preferred dates should not generate dues in current month."""
+    
+    def setUp(self):
+        """Set up test environment with recurring and CHRT poojas."""
+        self.donor = User.objects.create_user(phone_number="9000000031", name="CHRT Donor", password="secret")
+        DonorProfile.objects.create(user=self.donor)
+        
+        # Create recurring pooja option
+        self.recurring_pooja = PoojaOption.objects.create(code="RPOOJA", name="Recurring Pooja")
+        # Create CHRT day option
+        self.chrt_day_option = PoojaDayOption.objects.create(
+            code="CHRT",
+            description="Choose Your Preferred Date",
+            category=DayOptionCategory.CODE,
+        )
+        # Create regular day option for recurring poojas
+        self.regular_day_option = PoojaDayOption.objects.create(
+            code="REGULAR",
+            description="Regular Day",
+            category=DayOptionCategory.CODE,
+        )
+
+    def test_chrt_pooja_future_month_should_not_appear_in_current_month_due(self):
+        """
+        Scenario:
+        - Donor registers 4 recurring poojas in January 2026 (₹400 total)
+        - Donor registers 1 CHRT pooja with preferred date Feb 6, 2026 (₹500)
+        
+        Expected:
+        - January 2026 payment statement should show: ₹400 due (only recurring)
+        - February 2026 payment statement should show: ₹900 due (₹400 recurring + ₹500 CHRT)
+        """
+        # Set the current date to January 31, 2026
+        current_date = date(2026, 1, 31)
+        
+        # Create 4 recurring poojas for the donor (monthly, ₹100 each)
+        for i in range(4):
+            RecurringPoojaPlan.objects.create(
+                donor=self.donor,
+                pooja_option=self.recurring_pooja,
+                day_option=self.regular_day_option,
+                recurrence_kind=RecurrenceKind.RECURRING,
+                recurrence_frequency=RecurrenceFrequency.MONTHLY,
+                start_date=date(2026, 1, 1),
+                next_occurrence=date(2026, 1, 15),
+                amount=Decimal("100.00"),
+                is_active=True,
+            )
+        
+        # Create CHRT pooja with preferred date in February (future month)
+        chrt_plan = RecurringPoojaPlan.objects.create(
+            donor=self.donor,
+            pooja_option=self.recurring_pooja,
+            day_option=self.chrt_day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.ANNUALLY,
+            start_date=date(2026, 2, 6),  # Future date in February
+            one_time_date=date(2026, 2, 6),  # CHRT poojas set this
+            next_occurrence=date(2026, 2, 6),
+            amount=Decimal("500.00"),
+            is_active=True,
+        )
+        
+        # Simulate running process_recurring_plans for January 31, 2026
+        from .services.recurrence import process_recurring_plans
+        result = process_recurring_plans(today=current_date)
+        
+        # Check January payment records (current month)
+        january_payments = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 1, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,  # Due payments (not linked to registrations)
+        )
+        
+        # January should only have ₹400 due (recurring poojas), NOT ₹900
+        self.assertEqual(january_payments.count(), 1, "Should have exactly 1 payment record for January")
+        january_due = january_payments.first()
+        self.assertEqual(
+            january_due.amount,
+            Decimal("400.00"),
+            f"January due should be ₹400 (recurring only), but got ₹{january_due.amount}"
+        )
+        
+        # Check February payment records
+        february_payments = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 2, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+        
+        # February should have both recurring (₹400) and CHRT (₹500) = ₹900
+        # This should be split into 2 records or combined depending on implementation
+        february_total = sum(p.amount for p in february_payments)
+        self.assertEqual(
+            february_total,
+            Decimal("900.00"),
+            f"February due should be ₹900 (₹400 recurring + ₹500 CHRT), but got ₹{february_total}"
+        )

@@ -6,12 +6,12 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
-from django.db.models import Max, Subquery, Sum
+from django.db.models import Max, Subquery, Sum, Q
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from pooja.models import PoojaRegistration
+from pooja.models import PoojaRegistration, PoojaDayOption, RecurrenceKind
 from payments.models import PaymentRecord, PaymentStatus
 
 from .models import DonorProfile, FamilyMember, GothraOption, OtpPurpose, OtpToken, User
@@ -36,16 +36,41 @@ def _decimal_to_string(value: Decimal) -> str:
 def _compute_monthly_summary_for_user(user: User) -> dict[str, Decimal]:
     start, end = _current_month_bounds()
     due_total = Decimal("0.00")
-    totals = (
+    
+    # Identify CHRT-linked registrations (legacy rows may have day_option null)
+    from pooja.models import RecurringPoojaPlan
+    chrt_registration_ids = RecurringPoojaPlan.objects.filter(
+        donor=user,
+    ).filter(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False)).values_list(
+        "origin_registration_id", flat=True
+    )
+
+    # For non-CHRT poojas, use start_date as before
+    non_chrt_totals = (
         PoojaRegistration.objects.filter(
             donor=user,
             start_date__gte=start,
             start_date__lt=end,
         )
+        .exclude(day_option__code="CHRT")  # Exclude CHRT poojas from current-month dues
+        .exclude(id__in=chrt_registration_ids)
         .values_list("total_amount", flat=True)
     )
-    for total_amount in totals:
+    for total_amount in non_chrt_totals:
         due_total += Decimal(total_amount or 0)
+
+    # For CHRT poojas, use preferred date from RecurringPoojaPlan.one_time_date
+    chrt_plans = RecurringPoojaPlan.objects.filter(
+        donor=user,
+        is_active=True,
+        one_time_date__gte=start,
+        one_time_date__lt=end,
+    ).filter(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
+    for plan in chrt_plans:
+        due_total += plan.amount or Decimal("0.00")
+    
+    # Exclude CHRT (Choose Your Preferred Date) payment records from current month due calculation
+    # CHRT dues are created with notes__icontains='CHRT' and should only appear in their preferred month
     due_records_total = (
         PaymentRecord.objects.filter(
             donor=user,
@@ -53,6 +78,7 @@ def _compute_monthly_summary_for_user(user: User) -> dict[str, Decimal]:
             payment_month__gte=start,
             payment_month__lt=end,
         )
+        .exclude(notes__icontains='CHRT')  # Exclude CHRT payment records
         .aggregate(total=Sum("amount"))
         .get("total")
     )
