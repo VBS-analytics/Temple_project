@@ -2,7 +2,9 @@
 
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
+from django.http import FileResponse
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
@@ -15,8 +17,9 @@ from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord, PassbookEntry
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer, PassbookEntrySerializer
-from .services import regenerate_donor_passbook
+from .services import regenerate_all_passbooks, regenerate_donor_passbook
 from pooja.services.recurrence import _clean_stale_chrt_dues
+from openpyxl import Workbook
 
 
 def _parse_month_key(value):
@@ -569,6 +572,194 @@ class CombinePaymentAccessView(APIView):
                 },
                 "parent_donors": parent_donors,
             }
+        )
+
+
+class PaymentDetailsExportView(APIView):
+    """
+    Export payment data to a single Excel workbook with three sheets:
+    1) Payment Records
+    2) Passbook Entries
+    3) Donor Statements (donor-wise ordered passbook entries)
+    """
+
+    permission_classes = (IsAdminRole,)
+
+    @staticmethod
+    def _format_datetime(value):
+        if not value:
+            return ""
+        try:
+            return timezone.localtime(value).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return str(value)
+
+    @staticmethod
+    def _format_date(value):
+        if not value:
+            return ""
+        try:
+            return value.strftime("%Y-%m-%d")
+        except Exception:
+            return str(value)
+
+    def get(self, request):
+        # Refresh passbooks so donor-wise statements are up to date
+        regenerate_all_passbooks()
+
+        workbook = Workbook()
+        # Remove the default auto-created sheet for a clean slate
+        default_sheet = workbook.active
+        workbook.remove(default_sheet)
+
+        # Sheet 1: Payment Records
+        payment_sheet = workbook.create_sheet(title="Payment Records")
+        payment_headers = [
+            "ID",
+            "Donor ID",
+            "Donor Name",
+            "Donor Phone",
+            "Amount",
+            "Currency",
+            "Mode",
+            "Status",
+            "Transaction Reference",
+            "Payment Month",
+            "Notes",
+            "Registration ID",
+            "Registration Pooja",
+            "Created At",
+            "Updated At",
+        ]
+        payment_sheet.append(payment_headers)
+
+        payment_qs = (
+            PaymentRecord.objects.select_related("donor", "registration", "registration__pooja_option")
+            .exclude(donor__role=UserRole.ADMIN)
+            .order_by("-created_at")
+        )
+        for record in payment_qs:
+            payment_sheet.append(
+                [
+                    record.id,
+                    record.donor_id,
+                    getattr(record.donor, "name", ""),
+                    getattr(record.donor, "phone_number", ""),
+                    float(record.amount or 0),
+                    record.currency,
+                    record.mode,
+                    record.status,
+                    record.transaction_reference,
+                    self._format_date(record.payment_month),
+                    record.notes,
+                    record.registration_id,
+                    getattr(record.registration.pooja_option, "name", "") if record.registration else "",
+                    self._format_datetime(record.created_at),
+                    self._format_datetime(record.updated_at),
+                ]
+            )
+
+        # Sheet 2: Passbook Entries
+        passbook_sheet = workbook.create_sheet(title="Passbook Entries")
+        passbook_headers = [
+            "ID",
+            "Donor ID",
+            "Donor Name",
+            "Donor Phone",
+            "Entry Date",
+            "Entry Type",
+            "Transaction Details",
+            "Payment Record ID",
+            "Registration ID",
+            "Opening Balance",
+            "Due Amount",
+            "Paid Amount",
+            "Closing Due",
+            "Created At",
+            "Updated At",
+        ]
+        passbook_sheet.append(passbook_headers)
+
+        passbook_qs = (
+            PassbookEntry.objects.select_related("donor", "payment_record", "registration")
+            .exclude(donor__role=UserRole.ADMIN)
+            .order_by("donor_id", "entry_date")
+        )
+        for entry in passbook_qs:
+            passbook_sheet.append(
+                [
+                    entry.id,
+                    entry.donor_id,
+                    getattr(entry.donor, "name", ""),
+                    getattr(entry.donor, "phone_number", ""),
+                    self._format_date(entry.entry_date),
+                    entry.entry_type,
+                    entry.transaction_details,
+                    entry.payment_record_id,
+                    entry.registration_id,
+                    float(entry.opening_balance or 0),
+                    float(entry.due_amount or 0),
+                    float(entry.paid_amount or 0),
+                    float(entry.closing_due or 0),
+                    self._format_datetime(entry.created_at),
+                    self._format_datetime(entry.updated_at),
+                ]
+            )
+
+        # Sheet 3: Donor Statements (ordered passbook entries per donor)
+        statement_sheet = workbook.create_sheet(title="Donor Statements")
+        statement_headers = [
+            "Donor ID",
+            "Donor Name",
+            "Donor Phone",
+            "Entry #",
+            "Entry Date",
+            "Entry Type",
+            "Transaction Details",
+            "Opening Balance",
+            "Due Amount",
+            "Paid Amount",
+            "Closing Due",
+            "Payment Record ID",
+            "Registration ID",
+        ]
+        statement_sheet.append(statement_headers)
+
+        current_donor = None
+        entry_counter = 0
+        for entry in passbook_qs:
+            if entry.donor_id != current_donor:
+                current_donor = entry.donor_id
+                entry_counter = 0
+            entry_counter += 1
+            statement_sheet.append(
+                [
+                    entry.donor_id,
+                    getattr(entry.donor, "name", ""),
+                    getattr(entry.donor, "phone_number", ""),
+                    entry_counter,
+                    self._format_date(entry.entry_date),
+                    entry.entry_type,
+                    entry.transaction_details,
+                    float(entry.opening_balance or 0),
+                    float(entry.due_amount or 0),
+                    float(entry.paid_amount or 0),
+                    float(entry.closing_due or 0),
+                    entry.payment_record_id,
+                    entry.registration_id,
+                ]
+            )
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        filename = f"payment-details-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
 

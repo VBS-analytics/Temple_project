@@ -7,6 +7,7 @@ from .views import (
     CombinePaymentAccessView,
     CombinePaymentMappingView,
     ExpenseRecordViewSet,
+    PaymentDetailsExportView,
     PaymentRecordViewSet,
     PassbookEntryViewSet,
 )
@@ -20,5 +21,5 @@ urlpatterns = router.urls
 urlpatterns += [
     path('combine-mappings/', CombinePaymentMappingView.as_view(), name='combine-payment-mappings'),
     path('combine-access/', CombinePaymentAccessView.as_view(), name='combine-payment-access'),
+    path('payment-details-export/', PaymentDetailsExportView.as_view(), name='payment-details-export'),
 ]
-
