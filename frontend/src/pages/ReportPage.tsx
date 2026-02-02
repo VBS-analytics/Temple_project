@@ -63,25 +63,6 @@ interface CartSnapshotRecord {
   updated_at?: string | null;
 }
 
-interface PaymentRecordExportEntry {
-  id?: number | string | null;
-  donor?: number | null;
-  donor_name?: string | null;
-  pooja_option?: string | null;
-  registration?: number | null;
-  registration_start_date?: string | null;
-  amount?: string | number | null;
-  pooja_due_amount?: string | number | null;
-  status?: string | null;
-  transaction_reference?: string | null;
-  mode?: string | null;
-  payment_month?: string | null;
-  created_at?: string | null;
-  registration_status?: string | null;
-  registration_donor_name?: string | null;
-  registration_is_group_registration?: boolean | null;
-}
-
 interface PoojaRegistrationRecord {
   id?: number | null;
   donor?: number | null;
@@ -98,14 +79,43 @@ interface PoojaRegistrationRecord {
   registration_number?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
-  members?: Array<{
-    name?: string | null;
-    phone_number?: string | null;
-    relationship?: string | null;
-    date_of_birth?: string | null;
-    family_name?: string | null;
-    tamil_star?: string | null;
-  }> | null;
+}
+
+interface RecurringPlanDueRegistration {
+  id?: number | null;
+  pooja_reg_id?: string | null;
+  start_date?: string | null;
+  total_amount?: string | number | null;
+  paid_amount?: string | number | null;
+  due_amount?: string | number | null;
+  is_paid?: boolean | null;
+  status?: string | null;
+}
+
+interface RecurringPoojaPlanRecord {
+  id?: number | null;
+  donor_name?: string | null;
+  donor_phone?: string | null;
+  donor_email?: string | null;
+  pooja_option_name?: string | null;
+  pooja_option_code?: string | null;
+  day_option_description?: string | null;
+  day_option_code?: string | null;
+  recurrence_kind?: string | null;
+  recurrence_frequency?: string | null;
+  start_date?: string | null;
+  next_occurrence?: string | null;
+  last_occurrence?: string | null;
+  one_time_date?: string | null;
+  amount?: string | number | null;
+  is_active?: boolean | null;
+  pause_from?: string | null;
+  pause_until?: string | null;
+  origin_registration_created_at?: string | null;
+  origin_registration_updated_at?: string | null;
+  origin_registration_id?: number | null;
+  metadata?: Record<string, unknown> | null;
+  due_registration?: RecurringPlanDueRegistration | null;
 }
 
 const formatFilenameDate = (value: Date) =>
@@ -455,6 +465,11 @@ const DATABASE_BUTTON_INFO = [
       'Provides a compact list of temple donor IDs, names, and phone numbers for quick reference.',
   },
   {
+    label: 'Payment Details',
+    description:
+      'Exports payment records, passbook entries, and donor-wise statements into a single Excel workbook for audits.',
+  },
+  {
     label: 'Opening Balance',
     description:
       'Exports each donor\'s opening balance to help review outstanding pledges or credits.',
@@ -513,25 +528,23 @@ const CART_SNAPSHOT_HEADERS: string[] = [
   'Snapshot Updated At',
 ];
 
-const PAYMENT_COMPLETED_HEADERS: string[] = [
+const POOJA_REGISTRATIONS_HEADERS: string[] = [
   'S.no',
-  'Payment ID',
+  'Registration ID',
   'Donor ID',
   'Donor Name',
-  'Registration ID',
   'Pooja Option',
+  'Day Option',
   'Start Date',
-  'Amount Paid',
-  'Due Amount',
-  'Payment Mode',
-  'Payment Status',
-  'Transaction Reference',
-  'Payment Month',
-  'Registration Status',
-  'Registered By',
-  'Group Registration',
-  'Recorded At',
-];
+  'Quantity',
+  'Is Group Registration',
+  'Post Prasadam',
+  'Additional Notes',
+  'Total Amount',
+  'Status',
+  'Created At',
+  'Updated At',
+] as const;
 
 const buildCartSnapshotRows = (snapshots: CartSnapshotRecord[]) => {
   const output: Record<string, string | number | null>[] = [];
@@ -566,84 +579,140 @@ const buildCartSnapshotRows = (snapshots: CartSnapshotRecord[]) => {
   return output;
 };
 
-const POOJA_REGISTRATIONS_HEADERS: string[] = [
+const POOJA_PLAN_HEADERS: string[] = [
   'S.no',
-  'Registration ID',
-  'Donor ID',
   'Donor Name',
+  'Donor Phone',
+  'Donor Email',
   'Pooja Option',
+  'Pooja Code',
   'Day Option',
+  'Recurrence Kind',
+  'Recurrence Frequency',
+  'Amount',
   'Start Date',
-  'Quantity',
-  'Is Group Registration',
-  'Post Prasadam',
-  'Additional Notes',
+  'Next Occurrence',
+  'Last Occurrence',
+  'Preferred / One-time Date',
+  'Is Active',
+  'Pause From',
+  'Pause Until',
+  'Origin Registration ID',
+  'Origin Registration Created At',
+  'Origin Registration Updated At',
+  'Due Registration ID',
+  'Due Registration Status',
+  'Due Amount',
+  'Paid Amount',
   'Total Amount',
-  'Status',
-  'Created At',
-  'Updated At',
 ] as const;
 
-const buildPoojaRegistrationRows = (registrations: PoojaRegistrationRecord[]) => {
-  const output: Record<string, string | number | null>[] = [];
-  registrations.forEach((registration, index) => {
-    output.push({
-      'S.no': index + 1,
-      'Registration ID': displayValue(registration.registration_number),
-      'Donor ID': registration.donor ?? '—',
-      'Donor Name': displayValue(registration.donor_name),
-      'Pooja Option': displayValue(registration.pooja_option),
-      'Day Option': displayValue(registration.day_option),
-      'Start Date': formatDateValue(registration.start_date),
-      'Quantity': registration.quantity ?? 1,
-      'Is Group Registration': formatBooleanValue(registration.is_group_registration),
-      'Post Prasadam': formatBooleanValue(registration.post_prasadam),
-      'Additional Notes': displayValue(registration.additional_notes),
-      'Total Amount': asNumericValue(registration.total_amount),
-      'Status': displayValue(registration.status),
-      'Created At': formatDateValue(registration.created_at),
-      'Updated At': formatDateValue(registration.updated_at),
-    });
-  });
-  return output;
-};
-
-const buildPaymentCompletedRows = (records: PaymentRecordExportEntry[]) =>
-  records.map((record, index) => ({
+const buildPoojaPlanRows = (plans: RecurringPoojaPlanRecord[]) =>
+  plans.map((plan, index) => ({
     'S.no': index + 1,
-    'Payment ID': record.id ?? '—',
-    'Donor ID': record.donor ?? '—',
-    'Donor Name': displayValue(record.donor_name),
-    'Registration ID': record.registration ?? '—',
-    'Pooja Option': displayValue(record.pooja_option),
-    'Start Date': formatDateValue(record.registration_start_date),
-    'Amount Paid': asNumericValue(record.amount),
-    'Due Amount': asNumericValue(record.pooja_due_amount),
-    'Payment Mode': displayValue(record.mode),
-    'Payment Status': displayValue(record.status),
-    'Transaction Reference': displayValue(record.transaction_reference),
-    'Payment Month': formatDateValue(record.payment_month),
-    'Registration Status': displayValue(record.registration_status),
-    'Registered By': displayValue(record.registration_donor_name),
-    'Group Registration': formatBooleanValue(record.registration_is_group_registration),
-    'Recorded At': formatDateValue(record.created_at),
+    'Donor Name': displayValue(plan.donor_name),
+    'Donor Phone': displayValue(plan.donor_phone),
+    'Donor Email': displayValue(plan.donor_email),
+    'Pooja Option': displayValue(plan.pooja_option_name),
+    'Pooja Code': displayValue(plan.pooja_option_code),
+    'Day Option': displayValue(plan.day_option_description ?? plan.day_option_code),
+    'Recurrence Kind': displayValue(plan.recurrence_kind),
+    'Recurrence Frequency': displayValue(plan.recurrence_frequency),
+    Amount: asNumericValue(plan.amount),
+    'Start Date': formatDateValue(plan.start_date),
+    'Next Occurrence': formatDateValue(plan.next_occurrence),
+    'Last Occurrence': formatDateValue(plan.last_occurrence),
+    'Preferred / One-time Date': formatDateValue(plan.one_time_date),
+    'Is Active': formatBooleanValue(plan.is_active),
+    'Pause From': formatDateValue(plan.pause_from),
+    'Pause Until': formatDateValue(plan.pause_until),
+    'Origin Registration ID': plan.origin_registration_id ?? '—',
+    'Origin Registration Created At': formatDateValue(plan.origin_registration_created_at),
+    'Origin Registration Updated At': formatDateValue(plan.origin_registration_updated_at),
+    'Due Registration ID': plan.due_registration?.id ?? '—',
+    'Due Registration Status': displayValue(plan.due_registration?.status),
+    'Due Amount': asNumericValue(plan.due_registration?.due_amount),
+    'Paid Amount': asNumericValue(plan.due_registration?.paid_amount),
+    'Total Amount': asNumericValue(plan.due_registration?.total_amount),
   }));
 
-const fetchAllPayments = async (params: Record<string, string | number> = {}) => {
+const buildPoojaRegistrationRows = (registrations: PoojaRegistrationRecord[]) =>
+  registrations.map((registration, index) => ({
+    'S.no': index + 1,
+    'Registration ID': displayValue(registration.registration_number ?? registration.id),
+    'Donor ID': registration.donor ?? '—',
+    'Donor Name': displayValue(registration.donor_name),
+    'Pooja Option': displayValue(registration.pooja_option),
+    'Day Option': displayValue(registration.day_option),
+    'Start Date': formatDateValue(registration.start_date),
+    Quantity: registration.quantity ?? 1,
+    'Is Group Registration': formatBooleanValue(registration.is_group_registration),
+    'Post Prasadam': formatBooleanValue(registration.post_prasadam),
+    'Additional Notes': displayValue(registration.additional_notes),
+    'Total Amount': asNumericValue(registration.total_amount),
+    Status: displayValue(registration.status),
+    'Created At': formatDateValue(registration.created_at),
+    'Updated At': formatDateValue(registration.updated_at),
+  }));
+
+const isCHRTPlan = (plan: RecurringPoojaPlanRecord) => {
+  const recurrenceKind = (plan.recurrence_kind ?? '').toLowerCase();
+  const dayCode = (plan.day_option_code ?? '').trim().toUpperCase();
+  return recurrenceKind === 'recurring' && (dayCode === 'CHRT' || Boolean(plan.one_time_date));
+};
+
+const partitionPlanRows = (plans: RecurringPoojaPlanRecord[]) => {
+  const recurring: RecurringPoojaPlanRecord[] = [];
+  const oneTime: RecurringPoojaPlanRecord[] = [];
+  const chrt: RecurringPoojaPlanRecord[] = [];
+
+  plans.forEach((plan) => {
+    const donorName = (plan.donor_name ?? '').trim().toLowerCase();
+    // Temple Admin should not appear as a donor in exports
+    if (donorName === 'temple admin') {
+      return;
+    }
+    const recurrenceKind = (plan.recurrence_kind ?? '').toLowerCase();
+    if (isCHRTPlan(plan)) {
+      chrt.push(plan);
+      return;
+    }
+    if (recurrenceKind === 'one_time_extra') {
+      oneTime.push(plan);
+      return;
+    }
+    if (recurrenceKind === 'recurring') {
+      recurring.push(plan);
+    }
+  });
+
+  return { recurring, oneTime, chrt };
+};
+
+const createSheetWithHeaders = (
+  headers: readonly string[],
+  rows: Record<string, string | number | null>[] = [],
+) => {
+  if (rows.length > 0) {
+    return XLSX.utils.json_to_sheet(rows, { header: headers as string[] });
+  }
+  return XLSX.utils.aoa_to_sheet([[...headers]]);
+};
+
+const fetchAllRecurringPlans = async (): Promise<RecurringPoojaPlanRecord[]> => {
   const pageSize = 250;
   let page = 1;
-  const records: PaymentRecordExportEntry[] = [];
+  const records: RecurringPoojaPlanRecord[] = [];
 
   while (true) {
-    const { data } = await api.get('payments/records/', {
+    const { data } = await api.get('pooja/recurrence/plans/', {
       params: {
-        ...params,
         page,
         page_size: pageSize,
       },
     });
 
-    const pageResults = extractResults<PaymentRecordExportEntry>(data);
+    const pageResults = extractResults<RecurringPoojaPlanRecord>(data);
     if (!pageResults.length) {
       break;
     }
@@ -651,7 +720,37 @@ const fetchAllPayments = async (params: Record<string, string | number> = {}) =>
     records.push(...pageResults);
 
     const hasNext = Boolean(data?.next);
-    if (!hasNext || pageResults.length < pageSize) {
+    if (!hasNext) {
+      break;
+    }
+    page += 1;
+  }
+
+  return records;
+};
+
+const fetchAllRegistrations = async (): Promise<PoojaRegistrationRecord[]> => {
+  const pageSize = 250;
+  let page = 1;
+  const records: PoojaRegistrationRecord[] = [];
+
+  while (true) {
+    const { data } = await api.get('pooja/registrations/', {
+      params: {
+        page,
+        page_size: pageSize,
+      },
+    });
+
+    const pageResults = extractResults<PoojaRegistrationRecord>(data);
+    if (!pageResults.length) {
+      break;
+    }
+
+    records.push(...pageResults);
+
+    const hasNext = Boolean(data?.next);
+    if (!hasNext) {
       break;
     }
     page += 1;
@@ -866,6 +965,7 @@ const ReportPage = () => {
   const [exportingPoojaRegistrationDatabase, setExportingPoojaRegistrationDatabase] = useState(false);
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
   const [exportingExcessDonation, setExportingExcessDonation] = useState(false);
+  const [exportingPaymentDetails, setExportingPaymentDetails] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
@@ -1062,54 +1162,60 @@ const ReportPage = () => {
     setExportingPoojaRegistrationDatabase(true);
 
     try {
-      // Fetch all pooja registrations, cart snapshots, and payment records in parallel
-      const [registrationsResponse, cartResponse, completedPayments] = await Promise.all([
-        api.get<PoojaRegistrationRecord[]>('pooja/registrations/'),
+      const [recurringPlans, registrations, cartResponse] = await Promise.all([
+        fetchAllRecurringPlans(),
+        fetchAllRegistrations(),
         api.get<CartSnapshotRecord[]>('pooja/cart-snapshots/report/'),
-        fetchAllPayments({ status: 'success' }),
       ]);
 
-      const registrations: PoojaRegistrationRecord[] = Array.isArray(registrationsResponse.data)
-        ? registrationsResponse.data
-        : [];
       const snapshots: CartSnapshotRecord[] = Array.isArray(cartResponse.data)
         ? cartResponse.data
         : [];
 
-      const registrationRows = buildPoojaRegistrationRows(registrations);
-      const cartRows = buildCartSnapshotRows(snapshots);
-      const paymentRows = buildPaymentCompletedRows(completedPayments);
+      const { recurring, oneTime, chrt } = partitionPlanRows(recurringPlans);
 
-      if (!registrationRows.length && !cartRows.length && !paymentRows.length) {
-        setExportError('No pooja registrations, cart snapshots, or completed payments are available at the moment.');
-        return;
-      }
+      const filteredRegistrations = registrations.filter((registration) => {
+        const donorName = (registration.donor_name ?? '').trim().toLowerCase();
+        return donorName !== 'temple admin';
+      });
+      const allRegistrationRows = buildPoojaRegistrationRows(filteredRegistrations);
+      const originRegistrationIds = new Set(
+        recurringPlans
+          .map((plan) => plan.origin_registration_id)
+          .filter((value): value is number => typeof value === 'number'),
+      );
 
+      const oneTimeRegistrations = filteredRegistrations.filter(
+        (registration) => !originRegistrationIds.has(registration.id ?? -1),
+      );
+      const registrationRows = buildPoojaRegistrationRows(oneTimeRegistrations);
       const timestamp = formatFilenameDate(new Date());
 
-      // Create a single comprehensive workbook with all data
-      const workbook = XLSX.utils.book_new();
+      const registrationWorkbook = XLSX.utils.book_new();
 
-      // Add Registrations sheet
-      if (registrationRows.length > 0) {
-        const registrationSheet = XLSX.utils.json_to_sheet(registrationRows, { header: POOJA_REGISTRATIONS_HEADERS });
-        XLSX.utils.book_append_sheet(workbook, registrationSheet, 'Registrations');
-      }
+      const recurringSheet = createSheetWithHeaders(POOJA_PLAN_HEADERS, buildPoojaPlanRows(recurring));
+      XLSX.utils.book_append_sheet(registrationWorkbook, recurringSheet, 'Recurring Pooja');
 
-      // Add Cart Snapshots sheet
-      if (cartRows.length > 0) {
-        const cartSheet = XLSX.utils.json_to_sheet(cartRows, { header: CART_SNAPSHOT_HEADERS });
-        XLSX.utils.book_append_sheet(workbook, cartSheet, 'Cart Snapshots');
-      }
+      const allRegistrationsSheet = createSheetWithHeaders(POOJA_REGISTRATIONS_HEADERS, allRegistrationRows);
+      XLSX.utils.book_append_sheet(registrationWorkbook, allRegistrationsSheet, 'Pooja Registration');
 
-      // Add Payment Records sheet
-      if (paymentRows.length > 0) {
-        const paymentSheet = XLSX.utils.json_to_sheet(paymentRows, { header: PAYMENT_COMPLETED_HEADERS });
-        XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment Records');
-      }
+      const oneTimeSheet = createSheetWithHeaders(
+        POOJA_REGISTRATIONS_HEADERS,
+        registrationRows,
+      );
+      XLSX.utils.book_append_sheet(registrationWorkbook, oneTimeSheet, 'One-time Registered Pooja');
 
-      // Download the consolidated workbook
-      downloadWorkbook(workbook, `pooja-registration-database-${timestamp}.xlsx`);
+      const chrtSheet = createSheetWithHeaders(POOJA_PLAN_HEADERS, buildPoojaPlanRows(chrt));
+      XLSX.utils.book_append_sheet(registrationWorkbook, chrtSheet, 'CHRT Pooja');
+
+      downloadWorkbook(registrationWorkbook, `pooja-registration-${timestamp}.xlsx`);
+
+      const cartRows = buildCartSnapshotRows(snapshots);
+      const cartWorkbook = XLSX.utils.book_new();
+      const cartSheet = createSheetWithHeaders(CART_SNAPSHOT_HEADERS, cartRows);
+      XLSX.utils.book_append_sheet(cartWorkbook, cartSheet, 'Cart Snapshots');
+
+      downloadWorkbook(cartWorkbook, `pooja-cart-snapshots-${timestamp}.xlsx`);
     } catch (error) {
       const detail =
         (error as AxiosError<{ detail?: string | null }>)?.response?.data?.detail ?? null;
@@ -1117,7 +1223,7 @@ const ReportPage = () => {
       if (typeof detail === 'string' && detail.length > 0) {
         setExportError(detail);
       } else {
-        setExportError('Unable to download the pooja registration database right now.');
+        setExportError('Unable to download the pooja registration database or cart snapshots right now.');
       }
     } finally {
       setExportingPoojaRegistrationDatabase(false);
@@ -1164,6 +1270,44 @@ const ReportPage = () => {
       setExportingDonorDetails(false);
     }
   }, [exportingDonorDetails, fetchDonors]);
+
+  const handlePaymentDetailsDownload = useCallback(async () => {
+    if (exportingPaymentDetails) return;
+
+    setExportError(null);
+    setExportingPaymentDetails(true);
+
+    try {
+      const response = await api.get<Blob>('payments/payment-details-export/', {
+        responseType: 'blob',
+      });
+
+      const blobData = response.data;
+      if (!(blobData instanceof Blob)) {
+        throw new Error('Received an invalid payment details file.');
+      }
+
+      const contentDispositionHeader =
+        response.headers['content-disposition'] ?? response.headers['Content-Disposition'] ?? null;
+      const headerFilename = extractFilenameFromContentDisposition(contentDispositionHeader);
+      const fallbackFilename = `payment-details-${formatFilenameDate(new Date())}.xlsx`;
+      const rawFilename = headerFilename ?? fallbackFilename;
+      const downloadFilename = sanitizeFilename(rawFilename) || fallbackFilename;
+
+      triggerBlobDownload(blobData, downloadFilename);
+    } catch (error) {
+      console.error('Failed to download payment details report', error);
+      const detail =
+        (error as AxiosError<{ detail?: string | null }>).response?.data?.detail ?? null;
+      if (typeof detail === 'string' && detail.length > 0) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the payment details report right now.');
+      }
+    } finally {
+      setExportingPaymentDetails(false);
+    }
+  }, [exportingPaymentDetails]);
 
   const handleOpeningBalanceDownload = useCallback(async () => {
     if (exportingOpeningBalance) return;
@@ -1321,6 +1465,11 @@ const ReportPage = () => {
   const detailsButtonLabel = useMemo(
     () => (exportingDonorDetails ? 'Preparing download…' : 'Donor Details'),
     [exportingDonorDetails],
+  );
+
+  const paymentDetailsLabel = useMemo(
+    () => (exportingPaymentDetails ? 'Preparing download…' : 'Payment Details'),
+    [exportingPaymentDetails],
   );
 
   const registrationDatabaseLabel = useMemo(
@@ -1484,6 +1633,15 @@ const ReportPage = () => {
                 className={OUTLINE_BUTTON_CLASSES}
               >
                 {detailsButtonLabel}
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePaymentDetailsDownload}
+                disabled={exportingPaymentDetails}
+                className={OUTLINE_BUTTON_CLASSES}
+              >
+                {paymentDetailsLabel}
               </button>
 
               <button
