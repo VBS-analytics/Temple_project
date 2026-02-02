@@ -742,6 +742,17 @@ const DonorProfile = () => {
     );
   }, [chrtPlansToShow, registrations]);
   const chrtPoojaCount = chrtPlansToShow.length + chrtRegistrations.length;
+  const chrtTotalAmount = useMemo(() => {
+    const planTotal = chrtPlansToShow.reduce(
+      (sum, plan) => sum + parseDecimalValue(plan.amount),
+      0,
+    );
+    const registrationTotal = chrtRegistrations.reduce(
+      (sum, registration) => sum + parseDecimalValue(registration.total_amount),
+      0,
+    );
+    return planTotal + registrationTotal;
+  }, [chrtPlansToShow, chrtRegistrations]);
   const registrationTotals = useMemo(() => {
     const count = visibleRegistrations.length;
     const amount = visibleRegistrations.reduce((total, registration) => {
@@ -1741,15 +1752,22 @@ const DonorProfile = () => {
 
                 {/* Summary Banner */}
                 <div className="mb-6 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 p-6 ring-1 ring-purple-200">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-xs font-bold uppercase text-purple-600">Total CHRT Poojas</p>
                       <p className="mt-2 text-4xl font-bold text-slate-900">{chrtPoojaCount}</p>
                       <p className="mt-1 text-sm text-slate-600">CHRT Pooja{chrtPoojaCount !== 1 ? 's' : ''} registered</p>
                     </div>
-                    <div className="hidden sm:block">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 ring-4 ring-white">
-                        <span className="text-3xl">🙏</span>
+                    <div className="flex items-center gap-4">
+                      <div className="rounded-lg bg-white/70 px-4 py-3 shadow-sm ring-1 ring-purple-200">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-purple-600">Total Pooja Amount</p>
+                        <p className="mt-1 text-2xl font-bold text-slate-900">₹ {formatCurrency(chrtTotalAmount)}</p>
+                        <p className="text-xs text-slate-500">Across all CHRT poojas</p>
+                      </div>
+                      <div className="hidden sm:block">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 ring-4 ring-white">
+                          <span className="text-3xl">🙏</span>
+                        </div>
                       </div>
                     </div>
                   </div>

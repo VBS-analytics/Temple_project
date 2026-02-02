@@ -739,7 +739,7 @@ class RecurringPoojaPlanViewSet(
                 day_option__code="CHRT",
             )
             .exclude(
-                recurringpoojaplan_origin_registration__recurrence_kind=RecurrenceKind.RECURRING,
+                originating_recurring_plans__recurrence_kind=RecurrenceKind.RECURRING,
             )
             .select_related("day_option", "pooja_option", "donor")
         )
