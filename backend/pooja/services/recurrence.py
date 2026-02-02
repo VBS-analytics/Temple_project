@@ -152,14 +152,20 @@ def _find_existing_plan(
     recurrence_kind: RecurrenceKind,
     one_time_date: Optional[date],
 ) -> Optional[RecurringPoojaPlan]:
+    is_chrt = registration.day_option and registration.day_option.code == "CHRT"
     filters = {
         "donor": registration.donor,
         "pooja_option": registration.pooja_option,
         "day_option": registration.day_option,
         "recurrence_kind": recurrence_kind,
     }
+    # For CHRT recurring plans, treat each preferred date as a separate plan.
+    # Without this, multiple CHRT entries with different preferred dates get collapsed
+    # into a single plan, causing only one plan to be retained (the last one saved).
     qs = RecurringPoojaPlan.objects.filter(**filters)
     if recurrence_kind == RecurrenceKind.ONE_TIME_EXTRA:
+        qs = qs.filter(one_time_date=one_time_date)
+    elif recurrence_kind == RecurrenceKind.RECURRING and is_chrt and one_time_date:
         qs = qs.filter(one_time_date=one_time_date)
     return qs.first()
 

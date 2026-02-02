@@ -101,6 +101,7 @@ interface PoojaRegistration {
   pooja_reg_id?: string | null;
   pooja_option_name?: string | null;
   start_date?: string | null;
+  day_option_code?: string | null;
   day_option_description?: string | null;
   post_prasadam?: boolean | null;
   total_amount?: number | string | null;
@@ -336,6 +337,10 @@ const isCHRTPlan = (plan: RecurringPlan) => {
 
 const isCHRTRegistration = (registration: PoojaRegistration) => {
   const code = getPayloadDayOptionCode(registration.cart_item ?? undefined);
+  const dayOptionCode = normalizeCode(registration.day_option_code);
+  if (dayOptionCode === 'CHRT') {
+    return true;
+  }
   if (code === 'CHRT') {
     return true;
   }
