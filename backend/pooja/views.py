@@ -39,6 +39,7 @@ from .models import (
     RecurrenceKind,
     RecurringPoojaPlan,
 )
+from .services.recurrence import create_plan_from_registration
 from .services.calendar import TempleCalendarService, get_calendar_service
 from .services.recurrence import (
     calculate_next_recurring_occurrence,
@@ -635,6 +636,7 @@ class RecurringPoojaPlanViewSet(
 
     def list(self, request, *args, **kwargs):
         self._auto_resume_expired_pauses()
+        self._backfill_missing_chrt_plans()
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
@@ -711,6 +713,47 @@ class RecurringPoojaPlanViewSet(
             plan.next_occurrence = next_occurrence
         plan.save(update_fields=["pause_from", "pause_until", "is_active", "metadata", "next_occurrence"])
         return True
+
+    def _backfill_missing_chrt_plans(self) -> None:
+        """
+        Automatically create CHRT recurring plans for CHRT registrations that were saved
+        without a corresponding RecurringPoojaPlan (legacy gap that collapses counts).
+        Runs only for the current donor (non-admin) or filtered donor (admin).
+        """
+        # Determine which donors to process
+        if self.request.user.role == UserRole.ADMIN:
+            donor_id_param = self.request.query_params.get("donor")
+            if not donor_id_param:
+                return
+            try:
+                donor_ids = [int(donor_id_param)]
+            except (TypeError, ValueError):
+                return
+        else:
+            donor_ids = [self.request.user.id]
+
+        # Find CHRT registrations for these donors without a recurring plan
+        missing_regs = (
+            PoojaRegistration.objects.filter(
+                donor_id__in=donor_ids,
+                day_option__code="CHRT",
+            )
+            .exclude(
+                originating_recurring_plans__recurrence_kind=RecurrenceKind.RECURRING,
+            )
+            .select_related("day_option", "pooja_option", "donor")
+        )
+
+        for registration in missing_regs:
+            try:
+                create_plan_from_registration(
+                    registration,
+                    recurrence_kind=RecurrenceKind.RECURRING,
+                    recurrence_one_time_date=registration.start_date,
+                )
+            except Exception:
+                # Fail quietly; do not block the endpoint
+                continue
 
     def _deduct_plan_amount_from_due_records(self, plan: RecurringPoojaPlan) -> None:
         amount = plan.amount or Decimal("0.00")
