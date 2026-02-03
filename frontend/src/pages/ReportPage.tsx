@@ -411,17 +411,17 @@ const REPORT_TABS: { key: ReportTabKey; label: string; description: string }[] =
   {
     key: 'general',
     label: 'General Pooja Report',
-    description: 'General pooja exports covering till oil, neivedhyam, and gau samrakshana seva',
+    description: 'General pooja exports covering till oil, neivedhyam, and gau samrakshana seva.',
   },
   {
     key: 'other',
     label: 'Other Pooja Report',
-    description: 'Other recurring pooja exports such as Navagraha and Pradosha',
+    description: 'Other recurring pooja exports such as Navagraha and Pradosha.',
   },
   {
     key: 'expenses',
     label: 'Expenses',
-    description: 'Track temple expenses and view recorded payouts',
+    description: 'Track temple expenses and view recorded payouts.',
   },
 ];
 
