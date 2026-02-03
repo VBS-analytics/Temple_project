@@ -329,7 +329,13 @@ const includesCHRTKeyword = (value?: string | null) => {
 const isCHRTPlan = (plan: RecurringPlan) => {
   const code =
     normalizeCode(plan.day_option_code) || getPayloadDayOptionCode(plan.cart_payload ?? undefined);
+  const hasPreferredDate = Boolean(plan.one_time_date);
+
   if (code === 'CHRT') {
+    return true;
+  }
+  // Legacy CHRT plans were saved with null day_option but one_time_date set.
+  if (plan.recurrence_kind === 'recurring' && hasPreferredDate) {
     return true;
   }
   return includesCHRTKeyword(plan.day_option_description);
