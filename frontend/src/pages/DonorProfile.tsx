@@ -91,6 +91,8 @@ interface RegistrationCartItem {
   day_option_code?: string | null;
   dayOptionDescription?: string | null;
   day_option_description?: string | null;
+  selectedTamilStarId?: string | null;
+  selectedTamilStarLabel?: string | null;
 }
 
 interface PoojaRegistration {
@@ -321,6 +323,19 @@ const getPayloadDayOptionCode = (payload?: unknown) => {
   return '';
 };
 
+const getPayloadDayOptionDescription = (payload?: unknown) => {
+  if (!payload || typeof payload !== 'object') return '';
+  const record = payload as Record<string, unknown>;
+  const keys = ['dayOptionDescription', 'day_option_description'] as const;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
+};
+
 const includesCHRTKeyword = (value?: string | null) => {
   const normalized = (value ?? '').toLowerCase();
   return normalized.includes('preferred date') || normalized.includes('chrt');
@@ -356,6 +371,57 @@ const isCHRTRegistration = (registration: PoojaRegistration) => {
   const cartDescription =
     registration.cart_item?.dayOptionDescription ?? registration.cart_item?.day_option_description ?? '';
   return includesCHRTKeyword(cartDescription);
+};
+
+const isTamilStarDayOption = (
+  dayOptionCode?: string | null,
+  payload?: unknown,
+  description?: string | null,
+) => {
+  const code = normalizeCode(dayOptionCode) || getPayloadDayOptionCode(payload);
+  if (code === 'CS') {
+    return true;
+  }
+  const normalizedDescription = (description ?? '').toLowerCase();
+  if (normalizedDescription.includes('tamil star')) {
+    return true;
+  }
+  const payloadDescription = getPayloadDayOptionDescription(payload).toLowerCase();
+  return payloadDescription.includes('tamil star');
+};
+
+const getTamilStarLabelFromPayload = (payload?: unknown) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  const labelKeys = ['selectedTamilStarLabel', 'selected_tamil_star_label'] as const;
+  for (const key of labelKeys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  const idKeys = ['selectedTamilStarId', 'selected_tamil_star_id'] as const;
+  for (const key of idKeys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === 'number') {
+      return String(value);
+    }
+  }
+  return null;
+};
+
+const resolveTamilStarSelection = (
+  dayOptionCode?: string | null,
+  payload?: unknown,
+  description?: string | null,
+) => {
+  if (!isTamilStarDayOption(dayOptionCode, payload, description)) {
+    return null;
+  }
+  return getTamilStarLabelFromPayload(payload) ?? '—';
 };
 
 const resolvePoojaId = (registration: PoojaRegistration) => {
@@ -1395,6 +1461,11 @@ const DonorProfile = () => {
                       const isEditingThisRegistration = editingRegistrationId === registration.id;
                       const startDateInputId = `registration-start-${registration.id}`;
                       const amountInputId = `registration-amount-${registration.id}`;
+                      const tamilStarLabel = resolveTamilStarSelection(
+                        registration.day_option_code,
+                        registration.cart_item ?? undefined,
+                        registration.day_option_description,
+                      );
                       return (
                         <div key={registration.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-violet-300 transition-all">
                           <div className="flex items-start justify-between mb-4">
@@ -1499,6 +1570,14 @@ const DonorProfile = () => {
                                 {registration.day_option_description?.trim() || '—'}
                               </span>
                             </div>
+                            {tamilStarLabel !== null && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Tamil Star</span>
+                                <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">
+                                  {tamilStarLabel}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex justify-between">
                               <span className="text-slate-500">Members</span>
                               <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames}</span>
@@ -1590,6 +1669,11 @@ const DonorProfile = () => {
                       const nextDueStatus = plan.due_registration?.is_paid ? 'Paid' : 'Pending';
                       const frequencyInputId = `recurrence-frequency-${plan.id}`;
                       const amountInputId = `recurrence-amount-${plan.id}`;
+                      const tamilStarLabel = resolveTamilStarSelection(
+                        plan.day_option_code,
+                        plan.cart_payload ?? undefined,
+                        plan.day_option_description,
+                      );
 
                       return (
                         <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:shadow-lg hover:ring-emerald-300 transition-all">
@@ -1717,6 +1801,14 @@ const DonorProfile = () => {
                               <span className="text-slate-500">Pooja Day Option</span>
                               <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{plan.day_option_description?.trim() || '—'}</span>
                             </div>
+                            {tamilStarLabel !== null && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Tamil Star</span>
+                                <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">
+                                  {tamilStarLabel}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex justify-between">
                               <span className="text-slate-500">Members</span>
                               <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames.length > 0 ? memberNames.join(', ') : '—'}</span>
@@ -1806,6 +1898,11 @@ const DonorProfile = () => {
                           const nextDueStatus = plan.due_registration?.is_paid ? 'Paid' : 'Pending';
                           const frequencyInputId = `chrt-frequency-${plan.id}`;
                           const amountInputId = `chrt-amount-${plan.id}`;
+                          const tamilStarLabel = resolveTamilStarSelection(
+                            plan.day_option_code,
+                            plan.cart_payload ?? undefined,
+                            plan.day_option_description,
+                          );
 
                           return (
                             <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
@@ -1941,6 +2038,14 @@ const DonorProfile = () => {
                                   <span className="text-slate-500">Pooja Day Option</span>
                                   <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{plan.day_option_description?.trim() || '—'}</span>
                                 </div>
+                                {tamilStarLabel !== null && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Tamil Star</span>
+                                    <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">
+                                      {tamilStarLabel}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Members</span>
                                   <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames.length > 0 ? memberNames.join(', ') : '—'}</span>
@@ -1957,6 +2062,11 @@ const DonorProfile = () => {
                           const isEditingThisRegistration = editingRegistrationId === registration.id;
                           const startDateInputId = `chrt-registration-start-${registration.id}`;
                           const amountInputId = `chrt-registration-amount-${registration.id}`;
+                          const tamilStarLabel = resolveTamilStarSelection(
+                            registration.day_option_code,
+                            registration.cart_item ?? undefined,
+                            registration.day_option_description,
+                          );
                           return (
                             <div key={`chrt-registration-${registration.id}`} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
                               <div className="flex items-start justify-between mb-4">
@@ -2064,6 +2174,14 @@ const DonorProfile = () => {
                                   <span className="text-slate-500">Registered On</span>
                                   <span className="font-medium text-slate-900">{formatDate(registration.created_at)}</span>
                                 </div>
+                                {tamilStarLabel !== null && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Tamil Star</span>
+                                    <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">
+                                      {tamilStarLabel}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Members</span>
                                   <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{formatMemberNames(registration.members)}</span>
