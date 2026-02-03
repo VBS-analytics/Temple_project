@@ -746,10 +746,13 @@ class RecurringPoojaPlanViewSet(
 
         for registration in missing_regs:
             try:
+                preferred_date = registration.start_date or (
+                    registration.created_at.date() if hasattr(registration, "created_at") and registration.created_at else None
+                )
                 create_plan_from_registration(
                     registration,
                     recurrence_kind=RecurrenceKind.RECURRING,
-                    recurrence_one_time_date=registration.start_date,
+                    recurrence_one_time_date=preferred_date,
                 )
             except Exception:
                 # Fail quietly; do not block the endpoint

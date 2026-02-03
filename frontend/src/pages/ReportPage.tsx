@@ -421,7 +421,7 @@ const REPORT_TABS: { key: ReportTabKey; label: string; description: string }[] =
   {
     key: 'expenses',
     label: 'Expenses',
-    description: 'Track temple expenses and view recorded payouts.',
+    description: 'Track temple expenses and view recorded payouts',
   },
 ];
 
