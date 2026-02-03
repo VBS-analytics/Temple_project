@@ -14,6 +14,7 @@ from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from rest_framework import mixins, permissions, status, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -62,6 +63,11 @@ from .serializers import (
     PublicTodayPoojaRegistrationSerializer,
     SpecialAnnouncementSerializer,
 )
+
+class LargePagePagination(PageNumberPagination):
+    page_size = 200
+    page_size_query_param = "page_size"
+    max_page_size = 1000
 
 PAUSE_REASON_NO_POJA_NO_PAYMENT = "No Pooja and No Payment"
 PAUSE_REASON_USE_FOR_TEMPLE = "No Pooja and use the money for temple purpose"
@@ -343,6 +349,7 @@ class DonorMessageTemplateViewSet(viewsets.ModelViewSet):
 class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     serializer_class = PoojaRegistrationSerializer
     permission_classes = (permissions.IsAuthenticated,)
+    pagination_class = LargePagePagination
 
     def get_queryset(self):
         base_qs = PoojaRegistration.objects.select_related("pooja_option", "day_option", "donor")
@@ -633,6 +640,7 @@ class RecurringPoojaPlanViewSet(
 ):
     serializer_class = RecurringPoojaPlanSerializer
     permission_classes = (permissions.IsAuthenticated,)
+    pagination_class = LargePagePagination
 
     def list(self, request, *args, **kwargs):
         self._auto_resume_expired_pauses()
