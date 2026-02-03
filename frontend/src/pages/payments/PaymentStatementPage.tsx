@@ -858,6 +858,17 @@ const PaymentStatementPage = () => {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
+  const [apiPassbookEntries, setApiPassbookEntries] = useState<
+    {
+      entry_date: string;
+      entry_type: 'balance' | 'due' | 'paid';
+      due_amount: number;
+      paid_amount: number;
+      closing_due: number;
+      transaction_details?: string | null;
+    }[]
+  >([]);
+  const [apiPassbookLoading, setApiPassbookLoading] = useState(false);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const combineRole = useCombineAccessStore((state) => state.role);
@@ -999,6 +1010,38 @@ const PaymentStatementPage = () => {
       }
     };
     loadRecords();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Fetch passbook entries directly (authoritative combined view)
+  useEffect(() => {
+    let isMounted = true;
+    const loadPassbookEntries = async () => {
+      setApiPassbookLoading(true);
+      try {
+        const response = await api.get('payments/passbook-entries/', {
+          params: { ordering: 'entry_date', page_size: 500 },
+        });
+        if (!isMounted) return;
+        const payload = extractResults<{
+          entry_date: string;
+          entry_type: 'balance' | 'due' | 'paid';
+          due_amount: number;
+          paid_amount: number;
+          closing_due: number;
+          transaction_details?: string | null;
+        }>(response.data);
+        setApiPassbookEntries(payload);
+      } catch (err) {
+        console.error('Unable to fetch passbook entries', err);
+      }
+      if (isMounted) {
+        setApiPassbookLoading(false);
+      }
+    };
+    loadPassbookEntries();
     return () => {
       isMounted = false;
     };
@@ -1468,11 +1511,17 @@ const PaymentStatementPage = () => {
     let runningBalance = initialBalance;
 
     const dueRecords = sorted.filter((record) => {
+      const isPending = resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+      if (!isPending) return false;
+
       const hasRegistration = record.registration && record.registration > 0;
       const isCartOrPending =
         record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
-      const isPending = resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED;
-      return isPending && (hasRegistration || isCartOrPending);
+
+      // Include monthly dues (PaymentRecords with no registration and no cart total)
+      const isMonthlyDue = record.registration === null && !isCartOrPending;
+
+      return hasRegistration || isCartOrPending || isMonthlyDue;
     });
 
     const paidRecords = sorted.filter((record) => {
@@ -1483,22 +1532,24 @@ const PaymentStatementPage = () => {
     });
 
     if (dueRecords.length > 0) {
-      const totalDueAmount = dueRecords.reduce(
-        (sum, record) => sum + getDisplayedDueAmountValue(record),
-        0,
-      );
-      if (totalDueAmount > 0) {
-        const dueEntry: PassbookEntry = {
-          record: dueRecords[0],
-          dueAmount: totalDueAmount,
-          paidAmount: 0,
-          openingBalance: runningBalance,
-          closingDue: runningBalance + totalDueAmount,
-          entryType: 'due',
-        };
-        entries.push(dueEntry);
-        runningBalance = dueEntry.closingDue;
-      }
+      dueRecords
+        .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+        .forEach((record) => {
+          const dueAmount = getDisplayedDueAmountValue(record);
+          if (dueAmount <= 0) {
+            return;
+          }
+          const dueEntry: PassbookEntry = {
+            record,
+            dueAmount,
+            paidAmount: 0,
+            openingBalance: runningBalance,
+            closingDue: runningBalance + dueAmount,
+            entryType: 'due',
+          };
+          entries.push(dueEntry);
+          runningBalance = dueEntry.closingDue;
+        });
     }
 
     const groupedPaidRecords = new Map<string, PaymentRecordEntry[]>();
@@ -1783,6 +1834,60 @@ const PaymentStatementPage = () => {
   }, [selectedMonthKey, mergedRecords, activeDonorId, isAdminUser]);
 
   const passbookEntries = useMemo(() => {
+    // For non-admin users, rely solely on backend passbook entries to avoid client-side duplication.
+    if (!isAdminUser) {
+      if (apiPassbookLoading) {
+        return [];
+      }
+      return apiPassbookEntries.map((entry) => ({
+        record: {
+          id: `passbook-${entry.entry_date}-${entry.entry_type}`,
+          donor: user?.id ?? null,
+          donor_name: user?.name ?? null,
+          created_at: entry.entry_date,
+          payment_month: entry.entry_date,
+          transaction_reference: entry.transaction_details ?? undefined,
+          registration: null,
+          registration_start_date: entry.entry_date,
+          registration_total_amount: entry.due_amount,
+          amount: entry.paid_amount,
+          status: entry.entry_type === 'paid' ? 'success' : 'pending',
+        } as PaymentRecordEntry,
+        dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
+        paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
+        openingBalance: 0,
+        closingDue: entry.closing_due,
+        displayDate: formatDisplayDate(entry.entry_date),
+        entryType: entry.entry_type === 'paid' ? 'paid' : entry.entry_type === 'balance' ? undefined : 'due',
+      })) as PassbookEntry[];
+    }
+
+    // If a combined monthly due record exists for a month (registration == null, pending),
+    // drop individual registration pending dues for that same month to avoid duplicates.
+    const monthlyDueMonths = new Set(
+      filteredRecords
+        .filter(
+          (record) =>
+            record.registration === null &&
+            resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED &&
+            getRecordMonthKey(record),
+        )
+        .map((record) => getRecordMonthKey(record) as string),
+    );
+
+    const cleanedRecords =
+      monthlyDueMonths.size === 0
+        ? filteredRecords
+        : filteredRecords.filter((record) => {
+            if (record.registration && resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+              const monthKey = getRecordMonthKey(record);
+              if (monthKey && monthlyDueMonths.has(monthKey)) {
+                return false;
+              }
+            }
+            return true;
+          });
+
     // Determine if we should show an opening balance entry
     // For current user: show if they have a current balance
     // For parent donor: always show (parentDonorOpeningBalance defaults to 0)
@@ -1819,8 +1924,19 @@ const PaymentStatementPage = () => {
       initialBalance = cachedOpeningBalance ?? effectiveOpeningBalance ?? 0;
     }
     
-    return buildPassbookEntriesFromRecords(filteredRecords, initialBalance, hasBalanceEntry);
-  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser, activeDonorId, user?.id, parentDonorOpeningBalance]);
+    return buildPassbookEntriesFromRecords(cleanedRecords, initialBalance, hasBalanceEntry);
+  }, [
+    filteredRecords,
+    currentBalance,
+    openingBalance,
+    monthOpeningBalance,
+    isAdminUser,
+    activeDonorId,
+    user?.id,
+    parentDonorOpeningBalance,
+    apiPassbookEntries,
+    user?.name,
+  ]);
 
   // ============================================================================
   // GET ENTRY DATE LABEL - Display Date Resolution

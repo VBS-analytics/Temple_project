@@ -30,6 +30,15 @@ FREQUENCY_MONTHS: Dict[RecurrenceFrequency, int] = {
 }
 
 
+def _month_range(start_month: date, end_month: date) -> Iterable[date]:
+    """Yield first-of-month dates from start_month through end_month (inclusive)."""
+    current = start_month.replace(day=1)
+    end = end_month.replace(day=1)
+    while current <= end:
+        yield current
+        current = _add_months(current, 1)
+
+
 def _add_months(value: date, months: int) -> date:
     month = value.month - 1 + months
     year = value.year + month // 12
@@ -343,18 +352,33 @@ def _create_due_payment_record(
         return None
     
     # Use get_or_create to atomically create or return existing due
-    payment_record, created = PaymentRecord.objects.get_or_create(
-        donor_id=donor_id,
-        registration=None,
-        payment_month=payment_month,
-        defaults={
-            'amount': total_amount,
-            'currency': 'INR',
-            'mode': 'pending',
-            'status': PaymentStatus.PENDING,
-            'notes': 'Monthly recurring pooja contribution due',
-        }
-    )
+    try:
+        payment_record, created = PaymentRecord.objects.get_or_create(
+            donor_id=donor_id,
+            registration=None,
+            payment_month=payment_month,
+            defaults={
+                'amount': total_amount,
+                'currency': 'INR',
+                'mode': 'pending',
+                'status': PaymentStatus.PENDING,
+                'notes': 'Monthly recurring pooja contribution due',
+            }
+        )
+    except PaymentRecord.MultipleObjectsReturned:
+        # Consolidate any duplicate pending dues for the same month into the earliest record
+        existing = (
+            PaymentRecord.objects
+            .filter(donor_id=donor_id, registration=None, payment_month=payment_month, status=PaymentStatus.PENDING)
+            .order_by("created_at")
+            .first()
+        )
+        if existing:
+            existing.amount = total_amount
+            if not existing.notes:
+                existing.notes = 'Monthly recurring pooja contribution due'
+            existing.save(update_fields=["amount", "notes", "updated_at"])
+        return None
     
     return payment_record if created else None
 
@@ -363,7 +387,7 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
     """Generate due payment records for the 1st of each month for all active recurring plans.
     
     Creates ONE combined due per donor per month for all their active recurring plans.
-    Dues are generated starting from the month AFTER the last successful payment's payment_month.
+    Dues are generated for every month from the first unpaid month through the current month.
     
     NOTE: Excludes CHRT (Choose Your Preferred Date) poojas which are handled separately.
     """
@@ -385,7 +409,7 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
     active_plans = active_plans.exclude(paused_now)
     
     # Group plans by donor to create ONE due per donor per month
-    donors_to_process = {}  # donor_id -> (plans, should_create_due)
+    donors_to_process = {}  # donor_id -> plans only (amount will be computed per-month)
     
     for plan in active_plans:
         donor_id = plan.donor_id
@@ -393,20 +417,18 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
         if donor_id not in donors_to_process:
             donors_to_process[donor_id] = {
                 'plans': [],
-                'total_amount': Decimal('0.00'),
-                'should_create_due': False
             }
         
         donors_to_process[donor_id]['plans'].append(plan)
-        donors_to_process[donor_id]['total_amount'] += plan.amount or Decimal('0.00')
     
     created_count = 0
+    # Track which (donor, month) adjustments have been logged to avoid noisy repeats
+    chrt_adjustment_logged = set()
     
     # Process each donor's combined due
     for donor_id, donor_data in donors_to_process.items():
         plans = donor_data['plans']
-        total_amount = donor_data['total_amount']
-        
+
         # Find the last successful payment for this donor
         last_payment = (
             PaymentRecord.objects
@@ -414,44 +436,56 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
             .order_by('-payment_month', '-created_at')
             .first()
         )
-        
-        # Determine if we should create a due for this month
-        should_create_due = False
-        
+
+        # Determine the first month that still needs a due
+        first_due_month: Optional[date] = None
         if last_payment and last_payment.payment_month:
-            # Use the month after the last successful payment
-            last_payment_month = last_payment.payment_month.replace(day=1)
-            # Calculate next month after last payment
-            next_month_after_payment = _add_months(last_payment_month, 1)
-            
-            # Create due if current month is at or after the next month after last payment
-            if current_month >= next_month_after_payment:
-                should_create_due = True
+            first_due_month = _add_months(last_payment.payment_month.replace(day=1), 1)
         else:
-            # No previous payment found, check plan start dates
-            earliest_plan_date = None
+            plan_months: List[date] = []
             for plan in plans:
                 plan_date = plan.start_date or (plan.created_at.date() if plan.created_at else None)
+                # If the registration was created earlier than the selected start date,
+                # use the registration's created_at as the anchor so dues begin from registration month.
+                if hasattr(plan, "origin_registration") and plan.origin_registration:
+                    reg_created = plan.origin_registration.created_at
+                    if reg_created:
+                        reg_created_date = reg_created.date()
+                        if plan_date is None or reg_created_date < plan_date:
+                            plan_date = reg_created_date
                 if plan_date:
-                    if earliest_plan_date is None or plan_date < earliest_plan_date:
-                        earliest_plan_date = plan_date
-            
-            if earliest_plan_date:
-                plan_start_month = earliest_plan_date.replace(day=1)
-                # Generate dues from the plan creation month onwards (not just second month)
-                if current_month >= plan_start_month:
-                    should_create_due = True
-        
-        # Create a single combined due for this donor
-        if should_create_due:
-            # CRITICAL: Before creating the due, check if this donor has CHRT poojas
-            # and if so, ensure we're not including their amounts
-            has_chrt = RecurringPoojaPlan.objects.filter(
-                donor_id=donor_id,
-                is_active=True,
-                recurrence_kind=RecurrenceKind.RECURRING,
-            ).filter(_chrt_plan_filter()).exists()
-            
+                    plan_months.append(plan_date.replace(day=1))
+            if plan_months:
+                first_due_month = min(plan_months)
+
+        if first_due_month is None or first_due_month > current_month:
+            continue
+
+        # CRITICAL: Before creating the due, check if this donor has CHRT poojas
+        # and if so, ensure we're not including their amounts
+        has_chrt = RecurringPoojaPlan.objects.filter(
+            donor_id=donor_id,
+            is_active=True,
+            recurrence_kind=RecurrenceKind.RECURRING,
+        ).filter(_chrt_plan_filter()).exists()
+
+        for month_start in _month_range(first_due_month, current_month):
+            # Calculate applicable total for this month based on plan start/created dates
+            month_total = Decimal('0.00')
+            for plan in plans:
+                plan_date = plan.start_date or (plan.created_at.date() if plan.created_at else None)
+                if hasattr(plan, "origin_registration") and plan.origin_registration:
+                    reg_created = plan.origin_registration.created_at
+                    if reg_created:
+                        reg_created_date = reg_created.date()
+                        if plan_date is None or reg_created_date < plan_date:
+                            plan_date = reg_created_date
+                if plan_date and plan_date.replace(day=1) <= month_start:
+                    month_total += plan.amount or Decimal('0.00')
+
+            if month_total <= 0:
+                continue
+
             if has_chrt:
                 # Calculate only non-CHRT recurring total
                 non_chrt_total = RecurringPoojaPlan.objects.filter(
@@ -459,25 +493,60 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
                     is_active=True,
                     recurrence_kind=RecurrenceKind.RECURRING,
                 ).exclude(_chrt_plan_filter()).aggregate(total=Sum("amount")).get("total") or Decimal("0.00")
-                
-                # Use only non-CHRT amount for this month's due
-                if non_chrt_total != total_amount:
-                    LOGGER.warning(
-                        "Donor %s has CHRT poojas - adjusted due from ₹%.2f to ₹%.2f (non-CHRT only)",
+
+                if non_chrt_total != month_total:
+                    key = (donor_id, month_start)
+                    if key not in chrt_adjustment_logged:
+                        LOGGER.info(
+                            "Donor %s has CHRT poojas - adjusted due for %s from ₹%.2f to ₹%.2f (non-CHRT only)",
+                            donor_id,
+                            month_start.isoformat(),
+                            float(month_total),
+                            float(non_chrt_total),
+                        )
+                        chrt_adjustment_logged.add(key)
+                    month_total = non_chrt_total
+
+            # Skip if a payment (success) already exists for this month
+            if PaymentRecord.objects.filter(
+                donor_id=donor_id,
+                payment_month=month_start,
+                status=PaymentStatus.SUCCESS,
+            ).exists():
+                continue
+
+            # If a pending due already exists, update the amount to the latest total
+            existing_pending = PaymentRecord.objects.filter(
+                donor_id=donor_id,
+                registration__isnull=True,
+                payment_month=month_start,
+                status=PaymentStatus.PENDING,
+            ).first()
+            if existing_pending:
+                # IMPORTANT: never rewrite past-month dues when new plans are added later.
+                # Only adjust the pending due for the current run month.
+                if month_start == current_month and existing_pending.amount != month_total:
+                    existing_pending.amount = month_total
+                    if not existing_pending.notes:
+                        existing_pending.notes = "Monthly recurring pooja contribution due"
+                    existing_pending.save(update_fields=["amount", "notes", "updated_at"])
+                    LOGGER.info(
+                        "Updated existing current-month due for donor %s month %s to ₹%.2f",
                         donor_id,
-                        float(total_amount),
-                        float(non_chrt_total),
+                        month_start.isoformat(),
+                        float(month_total),
                     )
-                    total_amount = non_chrt_total
-            
+                    created_count += 1
+                continue
+
             try:
-                due_record = _create_due_payment_record(donor_id, total_amount, current_month)
+                due_record = _create_due_payment_record(donor_id, month_total, month_start)
                 if due_record:
                     LOGGER.info(
                         "Created combined due payment record for donor %s (total ₹%.2f) for month %s",
                         donor_id,
-                        float(total_amount),
-                        current_month.isoformat(),
+                        float(month_total),
+                        month_start.isoformat(),
                     )
                     created_count += 1
             except Exception as exc:  # pragma: no cover
@@ -775,18 +844,34 @@ def _generate_due_payments_for_chrt_poojas(today: Optional[date] = None) -> int:
             ).first()
             
             if existing_due:
-                # Add CHRT amount to existing due (combine them)
-                existing_due.amount = (existing_due.amount or Decimal('0.00')) + total_amount
-                existing_due.notes = f"{existing_due.notes} + CHRT (Preferred Date) poojas"
-                existing_due.save()
-                LOGGER.info(
-                    "Added CHRT pooja amount (₹%.2f) to existing due for donor %s for month %s (new total: ₹%.2f)",
-                    float(total_amount),
-                    donor_id,
-                    payment_month.isoformat(),
-                    float(existing_due.amount),
+                # Idempotent combine: set amount = non-CHRT recurring for the month + CHRT total
+                non_chrt_total = (
+                    RecurringPoojaPlan.objects.filter(
+                        donor_id=donor_id,
+                        is_active=True,
+                        recurrence_kind=RecurrenceKind.RECURRING,
+                    )
+                    .exclude(_chrt_plan_filter())
+                    .aggregate(total=Sum("amount"))
+                    .get("total")
+                    or Decimal("0.00")
                 )
-                created_count += 1
+                new_amount = non_chrt_total + total_amount
+                if existing_due.amount != new_amount or "CHRT" not in (existing_due.notes or ""):
+                    existing_due.amount = new_amount
+                    notes = existing_due.notes or "Monthly recurring pooja contribution due"
+                    if "CHRT" not in notes:
+                        notes = f"{notes} + CHRT (Preferred Date) poojas"
+                    existing_due.notes = notes
+                    existing_due.save(update_fields=["amount", "notes", "updated_at"])
+                    LOGGER.info(
+                        "Combined CHRT pooja amount (₹%.2f) with existing due for donor %s for month %s (new total: ₹%.2f)",
+                        float(total_amount),
+                        donor_id,
+                        payment_month.isoformat(),
+                        float(existing_due.amount),
+                    )
+                    created_count += 1
             else:
                 # Create a new separate CHRT due
                 due_record, created = PaymentRecord.objects.get_or_create(

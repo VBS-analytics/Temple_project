@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import DonorProfile, User, UserRole
 from payments.models import PaymentMode, PaymentRecord, PaymentStatus
+from payments.services import regenerate_donor_passbook
 from .models import (
     DayOptionCategory,
     PoojaCartSnapshot,
@@ -23,7 +24,7 @@ from .models import (
 )
 from .serializers import RecurringPoojaPlanSerializer
 from .services.calendar import OccurrenceResult, TempleCalendarService
-from .services.recurrence import create_registration_from_plan
+from .services.recurrence import create_registration_from_plan, process_recurring_plans
 from .views import PAUSE_REASON_USE_FOR_TEMPLE
 
 
@@ -800,3 +801,66 @@ class CHRTPoojaDueFutureMonthTests(TestCase):
             Decimal("900.00"),
             f"February due should be ₹900 (₹400 recurring + ₹500 CHRT), but got ₹{february_total}"
         )
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class RecurringMonthlyDueBackfillTests(TestCase):
+    """Ensure monthly recurring dues generate from registration month through current month."""
+
+    def setUp(self):
+        self.donor = User.objects.create_user(phone_number="9000000040", name="Monthly Donor", password="secret")
+        DonorProfile.objects.create(user=self.donor)
+        self.pooja_option = PoojaOption.objects.create(code="RPOOJA", name="Recurring Pooja")
+        self.day_option = PoojaDayOption.objects.create(
+            code="REGULAR",
+            description="Regular Day",
+            category=DayOptionCategory.CODE,
+        )
+
+    def test_backfills_monthly_dues_up_to_current_month(self):
+        """
+        If a donor registers on Jan 1, 2026 and today is Feb 3, 2026,
+        the system should show dues for Jan 2026 and Feb 2026.
+        """
+        current_date = date(2026, 2, 3)
+
+        RecurringPoojaPlan.objects.create(
+            donor=self.donor,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 1, 1),
+            amount=Decimal("200.00"),
+            is_active=True,
+        )
+
+        process_recurring_plans(today=current_date)
+
+        january_due = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 1, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+        february_due = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 2, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+
+        self.assertEqual(january_due.count(), 1, "January due should be generated")
+        self.assertEqual(february_due.count(), 1, "February due should be generated")
+
+        # Passbook should display both dues (plus opening balance)
+        with patch("payments.services.timezone.localdate", return_value=current_date):
+            regenerate_donor_passbook(self.donor.id)
+
+        entries = list(self.donor.passbook_entries.order_by("entry_date"))
+        self.assertEqual(len(entries), 3)
+        self.assertEqual([e.entry_date for e in entries], [date(2025, 12, 31), date(2026, 1, 1), date(2026, 2, 1)])
+        self.assertEqual(entries[1].due_amount, Decimal("200.00"))
+        self.assertEqual(entries[2].due_amount, Decimal("200.00"))
+        self.assertEqual(entries[-1].closing_due, Decimal("400.00"))

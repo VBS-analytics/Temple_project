@@ -8,6 +8,8 @@ from django.http import FileResponse
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
+from django.db.models import Window, F
+from django.db.models.functions import RowNumber
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -822,6 +824,18 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
             entry_type = entry_type.strip().lower()
             if entry_type in {"balance", "due", "paid"}:
                 qs = qs.filter(entry_type=entry_type)
+
+        # Deduplicate: keep earliest record per (donor, entry_date, entry_type)
+        qs = (
+            qs.annotate(
+                rn=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("donor_id"), F("entry_date"), F("entry_type")],
+                    order_by=F("created_at").asc(),
+                )
+            )
+            .filter(rn=1)
+        )
         
         ordering_param = self.request.query_params.get('ordering')
         if ordering_param in ('entry_date', '-entry_date'):
