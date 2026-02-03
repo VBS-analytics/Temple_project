@@ -229,8 +229,13 @@ class RecurringPoojaPlan(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["donor", "pooja_option", "day_option", "recurrence_kind"],
-                condition=models.Q(recurrence_kind=RecurrenceKind.RECURRING),
-                name="pooja_recurring_unique",
+                condition=models.Q(recurrence_kind=RecurrenceKind.RECURRING, one_time_date__isnull=True),
+                name="pooja_recurring_unique_null_one_time_date",
+            ),
+            models.UniqueConstraint(
+                fields=["donor", "pooja_option", "day_option", "recurrence_kind", "one_time_date"],
+                condition=models.Q(recurrence_kind=RecurrenceKind.RECURRING, one_time_date__isnull=False),
+                name="pooja_recurring_unique_with_one_time_date",
             ),
             models.UniqueConstraint(
                 fields=["donor", "pooja_option", "day_option", "recurrence_kind", "one_time_date"],

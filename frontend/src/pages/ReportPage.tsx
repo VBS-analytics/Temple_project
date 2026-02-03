@@ -411,7 +411,7 @@ const REPORT_TABS: { key: ReportTabKey; label: string; description: string }[] =
   {
     key: 'general',
     label: 'General Pooja Report',
-    description: 'General pooja exports covering till oil, neivedhyam, and gau samrakshana seva.',
+    description: 'General pooja exports covering till oil, neivedhyam, and gau samrakshana seva',
   },
   {
     key: 'other',
