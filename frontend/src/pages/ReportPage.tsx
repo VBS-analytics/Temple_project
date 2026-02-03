@@ -416,7 +416,7 @@ const REPORT_TABS: { key: ReportTabKey; label: string; description: string }[] =
   {
     key: 'other',
     label: 'Other Pooja Report',
-    description: 'Other recurring pooja exports such as Navagraha and Pradosha.',
+    description: 'Other recurring pooja exports such as Navagraha and Pradosha',
   },
   {
     key: 'expenses',
