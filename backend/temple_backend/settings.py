@@ -3,6 +3,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+import hashlib
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,6 +17,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
     "insecure-temple-backend-key",
+)
+
+# Derive a strong signing key for JWTs even if the provided secret is short.
+# simplejwt warns when the HMAC key is <32 bytes, so hash the configured key
+# to a 64-char hex string (32 bytes) by default. To override, set JWT_SECRET_KEY
+# or JWT_SIGNING_KEY in the environment.
+_raw_jwt_key = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+JWT_SIGNING_KEY = os.environ.get(
+    "JWT_SIGNING_KEY",
+    hashlib.sha256(_raw_jwt_key.encode()).hexdigest(),
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -155,6 +166,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'SIGNING_KEY': JWT_SIGNING_KEY,
 }
 
 from corsheaders.defaults import default_headers
