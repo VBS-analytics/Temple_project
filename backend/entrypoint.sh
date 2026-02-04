@@ -28,6 +28,6 @@ fi
 # Generate passbook entries for all donors
 python manage.py regenerate_passbooks
 
-APP_PORT=${PORT:-8000}
-
+APP_PORT=${PORT:-10000}
+echo "Starting gunicorn on ${APP_PORT}"
 gunicorn temple_backend.wsgi:application --bind 0.0.0.0:${APP_PORT} --workers 3 --timeout 300
