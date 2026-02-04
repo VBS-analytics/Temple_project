@@ -1,33 +1,78 @@
 #!/bin/sh
 set -e
 
+echo "=== Django startup: begin ==="
+
+# ---- DB + static (fast, required) ----
+echo "[1/6] Running migrations..."
 python manage.py migrate --noinput
+
+echo "[2/6] Collecting static files..."
 python manage.py collectstatic --noinput
 
-# Seed default admin if not present
+# ---- Seed default admin (fast) ----
+echo "[3/6] Seeding default admin (if missing)..."
 python manage.py shell <<'PYCODE'
 from django.contrib.auth import get_user_model
 User = get_user_model()
 if not User.objects.filter(phone_number='9999999999').exists():
-    User.objects.create_superuser(phone_number='9999999999', name='Temple Admin', password='adminpass')
+    User.objects.create_superuser(
+        phone_number='9999999999',
+        name='Temple Admin',
+        password='adminpass'
+    )
 PYCODE
 
-# Automatically seed opening balances on each container start when the workbook is available.
-OPENING_BALANCE_WORKBOOK="${OPENING_BALANCE_WORKBOOK:-/app/opening-balance-december.xlsx}"
-if [ -f "$OPENING_BALANCE_WORKBOOK" ]; then
-  echo "Importing donor opening balances from $OPENING_BALANCE_WORKBOOK..."
-  if python manage.py import_opening_balances "$OPENING_BALANCE_WORKBOOK"; then
-    echo "Opening balances imported."
+# ---- Long/optional startup jobs: run in background so Render sees the open port ----
+startup_jobs() {
+  set +e  # don't kill the container if these jobs fail
+
+  echo "[BG] Startup jobs: begin"
+
+  # Import opening balances if workbook exists
+  OPENING_BALANCE_WORKBOOK="${OPENING_BALANCE_WORKBOOK:-/app/opening-balance-december.xlsx}"
+  if [ -f "$OPENING_BALANCE_WORKBOOK" ]; then
+    echo "[BG] Importing donor opening balances from $OPENING_BALANCE_WORKBOOK..."
+    python manage.py import_opening_balances "$OPENING_BALANCE_WORKBOOK"
+    rc=$?
+    if [ $rc -eq 0 ]; then
+      echo "[BG] Opening balances imported."
+    else
+      echo "[BG] Opening balance import failed (exit=$rc); continuing."
+    fi
   else
-    echo "Opening balance import failed; continuing."
+    echo "[BG] Opening balance workbook not found at $OPENING_BALANCE_WORKBOOK, skipping import."
   fi
+
+  # Regenerate passbooks (potentially slow)
+  echo "[BG] Regenerating passbooks..."
+  python manage.py regenerate_passbooks
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    echo "[BG] Passbooks regeneration completed."
+  else
+    echo "[BG] Passbooks regeneration failed (exit=$rc)."
+  fi
+
+  echo "[BG] Startup jobs: end"
+}
+
+# Control whether background jobs run (default: run them)
+RUN_STARTUP_JOBS="${RUN_STARTUP_JOBS:-1}"
+if [ "$RUN_STARTUP_JOBS" = "1" ]; then
+  echo "[4/6] Launching startup jobs in background..."
+  startup_jobs &
 else
-  echo "Opening balance workbook not found at $OPENING_BALANCE_WORKBOOK, skipping import."
+  echo "[4/6] Skipping startup jobs (RUN_STARTUP_JOBS=$RUN_STARTUP_JOBS)"
 fi
 
-# Generate passbook entries for all donors
-python manage.py regenerate_passbooks
+# ---- Start web server (must happen quickly for Render) ----
+APP_PORT="${PORT:-10000}"
+echo "[5/6] Starting gunicorn on 0.0.0.0:${APP_PORT} ..."
+echo "=== Django startup: web server starting ==="
 
-APP_PORT=${PORT:-10000}
-echo "Starting gunicorn on ${APP_PORT}"
-gunicorn temple_backend.wsgi:application --bind 0.0.0.0:${APP_PORT} --workers 3 --timeout 300
+# IMPORTANT: exec so gunicorn becomes PID 1
+exec gunicorn temple_backend.wsgi:application \
+  --bind "0.0.0.0:${APP_PORT}" \
+  --workers 3 \
+  --timeout 300
