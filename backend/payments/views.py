@@ -786,13 +786,26 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Ensure CHRT dues are cleaned and passbook is fresh before returning data.
         _clean_stale_chrt_dues()
+
+        # Avoid expensive regeneration on every request; only refresh when missing
+        # data or when the caller explicitly asks for it.
+        should_refresh = self.request.query_params.get('refresh', 'false').lower() == 'true'
+
         if user.role == UserRole.ADMIN:
-            # If admin filters for a specific donor, refresh just that donor to avoid heavy work
             donor_id_param = self.request.query_params.get('donor_id')
             if donor_id_param and donor_id_param.isdigit():
-                regenerate_donor_passbook(int(donor_id_param))
+                # For admin filtered view, refresh just that donor if requested or empty.
+                qs_probe = PassbookEntry.objects.filter(donor_id=int(donor_id_param))
+                if should_refresh or not qs_probe.exists():
+                    regenerate_donor_passbook(int(donor_id_param))
+            else:
+                # Admin without donor filter: regenerate only if explicitly requested.
+                if should_refresh:
+                    regenerate_all_passbooks()
         else:
-            regenerate_donor_passbook(user.id)
+            qs_probe = PassbookEntry.objects.filter(donor=user)
+            if should_refresh or not qs_probe.exists():
+                regenerate_donor_passbook(user.id)
         
         if user.role == UserRole.ADMIN:
             # Admins can see all passbook entries
