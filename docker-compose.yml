@@ -27,6 +27,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      PORT: 8000
       POSTGRES_HOST: db
     depends_on:
       db:
