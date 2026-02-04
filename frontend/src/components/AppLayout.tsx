@@ -74,16 +74,21 @@ const AppLayout = () => {
       label: 'Pooja - Pause/Cancel',
       show: Boolean(user && isAdmin(user.role)),
     },
-    { to: '/admin/pooja-details', label: 'Ubhayam Report', show: Boolean(user && isAdmin(user.role)) },
-    {
-      to: '/reports',
-      label: 'Pooja & Expenses Reports',
-      show: Boolean(user && isAdmin(user.role)),
-    },
     {
       to: '/payments/statement',
       label: 'Payment Statement',
       show: Boolean(user),
+    },
+    { to: '/admin/pooja-details', label: 'Ubhayam Report', show: Boolean(user && isAdmin(user.role)) },
+    {
+      to: '/reports',
+      label: 'Pooja Reports',
+      show: Boolean(user && isAdmin(user.role)),
+    },
+    {
+      to: '/admin/expenses',
+      label: 'Expense Tracker',
+      show: Boolean(user && isAdmin(user.role)),
     },
   ];
 

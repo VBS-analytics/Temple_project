@@ -8,6 +8,8 @@ from django.http import FileResponse
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
+from django.db.models import Window, F
+from django.db.models.functions import RowNumber
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +17,13 @@ from rest_framework.views import APIView
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
-from .models import CombinePaymentMapping, ExpenseRecord, PaymentRecord, PassbookEntry
+from .models import (
+    CombinePaymentMapping,
+    ExpenseRecord,
+    PaymentRecord,
+    PassbookEntry,
+    PaymentStatus,
+)
 from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer, PassbookEntrySerializer
 from .services import regenerate_all_passbooks, regenerate_donor_passbook
 from pooja.services.recurrence import _clean_stale_chrt_dues
@@ -636,6 +644,7 @@ class PaymentDetailsExportView(APIView):
         payment_qs = (
             PaymentRecord.objects.select_related("donor", "registration", "registration__pooja_option")
             .exclude(donor__role=UserRole.ADMIN)
+            .filter(status=PaymentStatus.SUCCESS)
             .order_by("-created_at")
         )
         for record in payment_qs:
@@ -787,7 +796,8 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
         
         if user.role == UserRole.ADMIN:
             # Admins can see all passbook entries
-            qs = PassbookEntry.objects.all()
+            # Exclude platform/admin users so they never appear in Payment Statement
+            qs = PassbookEntry.objects.exclude(donor__role=UserRole.ADMIN)
         else:
             # Non-admin users see only their own entries
             qs = PassbookEntry.objects.filter(donor=user)
@@ -822,6 +832,18 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
             entry_type = entry_type.strip().lower()
             if entry_type in {"balance", "due", "paid"}:
                 qs = qs.filter(entry_type=entry_type)
+
+        # Deduplicate: keep earliest record per (donor, entry_date, entry_type)
+        qs = (
+            qs.annotate(
+                rn=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("donor_id"), F("entry_date"), F("entry_type")],
+                    order_by=F("created_at").asc(),
+                )
+            )
+            .filter(rn=1)
+        )
         
         ordering_param = self.request.query_params.get('ordering')
         if ordering_param in ('entry_date', '-entry_date'):

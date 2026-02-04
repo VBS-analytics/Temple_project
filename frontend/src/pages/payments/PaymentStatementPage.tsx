@@ -367,8 +367,8 @@ type PaymentStatusFilter = 'all' | 'due' | 'paid';
 
 const PAYMENT_STATUS_FILTERS: { id: PaymentStatusFilter; label: string }[] = [
   { id: 'all', label: 'All payments' },
-  { id: 'due', label: 'Due for current month (Not paid)' },
-  { id: 'paid', label: 'Amount received (Paid)' },
+  { id: 'due', label: 'Not Paid' },
+  { id: 'paid', label: 'Paid' },
 ];
 
 
@@ -858,6 +858,20 @@ const PaymentStatementPage = () => {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
+  const [apiPassbookEntries, setApiPassbookEntries] = useState<
+    {
+      id: number;
+      donor: number;
+      donor_name: string;
+      entry_date: string;
+      entry_type: 'balance' | 'due' | 'paid';
+      due_amount: number;
+      paid_amount: number;
+      closing_due: number;
+      transaction_details?: string | null;
+    }[]
+  >([]);
+  const [apiPassbookLoading, setApiPassbookLoading] = useState(false);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const combineRole = useCombineAccessStore((state) => state.role);
@@ -999,6 +1013,55 @@ const PaymentStatementPage = () => {
       }
     };
     loadRecords();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Fetch passbook entries directly (authoritative combined view)
+  useEffect(() => {
+    let isMounted = true;
+    const loadPassbookEntries = async () => {
+      setApiPassbookLoading(true);
+      try {
+        const allResults: {
+          id: number;
+          donor: number;
+          donor_name: string;
+          entry_date: string;
+          entry_type: 'balance' | 'due' | 'paid';
+          due_amount: number;
+          paid_amount: number;
+          closing_due: number;
+          transaction_details?: string | null;
+        }[] = [];
+
+        let nextUrl: string | null = 'payments/passbook-entries/?ordering=entry_date';
+
+        // Backend pagination is fixed at 20; loop through all pages to avoid truncation for admin view.
+        while (nextUrl) {
+          const response = await api.get(nextUrl);
+          if (!isMounted) return;
+          const payload = extractResults<typeof allResults[number]>(response.data);
+          allResults.push(...payload);
+          nextUrl = response.data?.next ?? null;
+          // Safety cap to avoid accidental infinite loops
+          if (allResults.length > 2000) {
+            console.warn('[PaymentStatement] passbook pagination aborted after 2000 records');
+            break;
+          }
+        }
+
+        setApiPassbookEntries(allResults);
+        console.log('[PaymentStatement] passbook entries fetched', allResults.length);
+      } catch (err) {
+        console.error('Unable to fetch passbook entries', err);
+      }
+      if (isMounted) {
+        setApiPassbookLoading(false);
+      }
+    };
+    loadPassbookEntries();
     return () => {
       isMounted = false;
     };
@@ -1284,7 +1347,7 @@ const PaymentStatementPage = () => {
       // Exclude CHRT registrations (one-time or recurring); dues appear via payment records
       const dayCode =
         (registration as any).day_option_code?.toUpperCase?.() ||
-        (registration.day_option_description || '').toUpperCase();
+        ((registration as any).day_option_description || '').toUpperCase();
       return dayCode !== 'CHRT';
     });
     const registrationRecords: PaymentRecordEntry[] = remainingRegistrations.map(
@@ -1468,11 +1531,17 @@ const PaymentStatementPage = () => {
     let runningBalance = initialBalance;
 
     const dueRecords = sorted.filter((record) => {
+      const isPending = resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED;
+      if (!isPending) return false;
+
       const hasRegistration = record.registration && record.registration > 0;
       const isCartOrPending =
         record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
-      const isPending = resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED;
-      return isPending && (hasRegistration || isCartOrPending);
+
+      // Include monthly dues (PaymentRecords with no registration and no cart total)
+      const isMonthlyDue = record.registration === null && !isCartOrPending;
+
+      return hasRegistration || isCartOrPending || isMonthlyDue;
     });
 
     const paidRecords = sorted.filter((record) => {
@@ -1483,22 +1552,24 @@ const PaymentStatementPage = () => {
     });
 
     if (dueRecords.length > 0) {
-      const totalDueAmount = dueRecords.reduce(
-        (sum, record) => sum + getDisplayedDueAmountValue(record),
-        0,
-      );
-      if (totalDueAmount > 0) {
-        const dueEntry: PassbookEntry = {
-          record: dueRecords[0],
-          dueAmount: totalDueAmount,
-          paidAmount: 0,
-          openingBalance: runningBalance,
-          closingDue: runningBalance + totalDueAmount,
-          entryType: 'due',
-        };
-        entries.push(dueEntry);
-        runningBalance = dueEntry.closingDue;
-      }
+      dueRecords
+        .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+        .forEach((record) => {
+          const dueAmount = getDisplayedDueAmountValue(record);
+          if (dueAmount <= 0) {
+            return;
+          }
+          const dueEntry: PassbookEntry = {
+            record,
+            dueAmount,
+            paidAmount: 0,
+            openingBalance: runningBalance,
+            closingDue: runningBalance + dueAmount,
+            entryType: 'due',
+          };
+          entries.push(dueEntry);
+          runningBalance = dueEntry.closingDue;
+        });
     }
 
     const groupedPaidRecords = new Map<string, PaymentRecordEntry[]>();
@@ -1591,6 +1662,11 @@ const PaymentStatementPage = () => {
     }));
 
   const handleDownloadPdf = async () => {
+    if (!isAdminUser) {
+      console.warn('PDF download is restricted to admin users');
+      return;
+    }
+
     // Ensure this only runs in a browser
     if (typeof window === 'undefined' || typeof globalThis === 'undefined') {
       console.error('PDF download is only available in the browser');
@@ -1706,6 +1782,11 @@ const PaymentStatementPage = () => {
   };
 
   const handleDownloadExcel = () => {
+    if (!isAdminUser) {
+      console.warn('Excel download is restricted to admin users');
+      return;
+    }
+
     const rows = buildDownloadRows(filteredRecords);
     const headerKeys =
       rows.length > 0
@@ -1783,6 +1864,60 @@ const PaymentStatementPage = () => {
   }, [selectedMonthKey, mergedRecords, activeDonorId, isAdminUser]);
 
   const passbookEntries = useMemo(() => {
+    // For non-admin users, rely solely on backend passbook entries to avoid client-side duplication.
+    if (!isAdminUser) {
+      if (apiPassbookLoading) {
+        return [];
+      }
+      return apiPassbookEntries.map((entry) => ({
+        record: {
+          id: `passbook-${entry.entry_date}-${entry.entry_type}`,
+          donor: user?.id ?? null,
+          donor_name: user?.name ?? null,
+          created_at: entry.entry_date,
+          payment_month: entry.entry_date,
+          transaction_reference: entry.transaction_details ?? undefined,
+          registration: null,
+          registration_start_date: entry.entry_date,
+          registration_total_amount: entry.due_amount,
+          amount: entry.paid_amount,
+          status: entry.entry_type === 'paid' ? 'success' : 'pending',
+        } as PaymentRecordEntry,
+        dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
+        paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
+        openingBalance: 0,
+        closingDue: entry.closing_due,
+        displayDate: formatDisplayDate(entry.entry_date),
+        entryType: entry.entry_type === 'paid' ? 'paid' : entry.entry_type === 'balance' ? undefined : 'due',
+      })) as PassbookEntry[];
+    }
+
+    // If a combined monthly due record exists for a month (registration == null, pending),
+    // drop individual registration pending dues for that same month to avoid duplicates.
+    const monthlyDueMonths = new Set(
+      filteredRecords
+        .filter(
+          (record) =>
+            record.registration === null &&
+            resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED &&
+            getRecordMonthKey(record),
+        )
+        .map((record) => getRecordMonthKey(record) as string),
+    );
+
+    const cleanedRecords =
+      monthlyDueMonths.size === 0
+        ? filteredRecords
+        : filteredRecords.filter((record) => {
+            if (record.registration && resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED) {
+              const monthKey = getRecordMonthKey(record);
+              if (monthKey && monthlyDueMonths.has(monthKey)) {
+                return false;
+              }
+            }
+            return true;
+          });
+
     // Determine if we should show an opening balance entry
     // For current user: show if they have a current balance
     // For parent donor: always show (parentDonorOpeningBalance defaults to 0)
@@ -1819,8 +1954,19 @@ const PaymentStatementPage = () => {
       initialBalance = cachedOpeningBalance ?? effectiveOpeningBalance ?? 0;
     }
     
-    return buildPassbookEntriesFromRecords(filteredRecords, initialBalance, hasBalanceEntry);
-  }, [filteredRecords, currentBalance, openingBalance, monthOpeningBalance, isAdminUser, activeDonorId, user?.id, parentDonorOpeningBalance]);
+    return buildPassbookEntriesFromRecords(cleanedRecords, initialBalance, hasBalanceEntry);
+  }, [
+    filteredRecords,
+    currentBalance,
+    openingBalance,
+    monthOpeningBalance,
+    isAdminUser,
+    activeDonorId,
+    user?.id,
+    parentDonorOpeningBalance,
+    apiPassbookEntries,
+    user?.name,
+  ]);
 
   // ============================================================================
   // GET ENTRY DATE LABEL - Display Date Resolution
@@ -1890,49 +2036,102 @@ const PaymentStatementPage = () => {
     entry.isCurrentBalanceEntry ? '-' : formatCurrency(amount);
 
   const adminPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
-    if (!isAdminUser || filteredRecords.length === 0) {
+    if (!isAdminUser || apiPassbookLoading || apiPassbookEntries.length === 0) {
       return [];
     }
-    const groupsByKey = new Map<
-      string,
-      { id: string; donorId: number | null; label: string; records: PaymentRecordEntry[] }
-    >();
-    // Use filteredRecords to apply donor name, month, and payment status filters
-    filteredRecords.forEach((record) => {
-      const donorId = typeof record.donor === 'number' ? record.donor : null;
-      const phoneNumber = donorId !== null ? (donorPhones[donorId] ?? null) : null;
-      const donorLabel = resolveDonorDisplayLabel(record, donorId, phoneNumber);
-      const groupKey = donorId !== null ? `donor-${donorId}` : `label-${donorLabel}`;
-      if (!groupsByKey.has(groupKey)) {
-        groupsByKey.set(groupKey, {
-          id: groupKey,
+
+    const matchesFilters = (entry: typeof apiPassbookEntries[number]) => {
+      if (selectedDonorIds.length > 0 && !selectedDonorIds.includes(entry.donor)) {
+        return false;
+      }
+      if (selectedMonthKey) {
+        const monthKey = entry.entry_date.slice(0, 7);
+        if (monthKey !== selectedMonthKey) {
+          return false;
+        }
+      }
+      if (paymentStatusFilter === 'due' && entry.entry_type !== 'due') {
+        return false;
+      }
+      if (paymentStatusFilter === 'paid' && entry.entry_type !== 'paid') {
+        return false;
+      }
+      return true;
+    };
+
+    const groupsByDonor = new Map<number, AdminDonorPassbookGroup>();
+    let matchedCount = 0;
+
+    apiPassbookEntries.forEach((entry) => {
+      if (!matchesFilters(entry)) {
+        return;
+      }
+      matchedCount += 1;
+      const donorId = entry.donor;
+      const donorPhone = donorPhones[donorId] ?? '';
+      const donorLabel =
+        entry.donor_name ||
+        donorOptions.find((d) => d.id === donorId)?.label ||
+        `Donor #${donorId}`;
+      if (!groupsByDonor.has(donorId)) {
+        groupsByDonor.set(donorId, {
+          id: `donor-${donorId}`,
           donorId,
-          label: donorLabel,
-          records: [],
+          label: `${donorLabel} - ${donorPhone || 'phone N/A'}`,
+          entries: [],
         });
       }
-      groupsByKey.get(groupKey)!.records.push(record);
+
+      const passbookEntry: PassbookEntry = {
+        record: {
+          id: entry.id,
+          donor: donorId,
+          donor_name: entry.donor_name,
+          created_at: entry.entry_date,
+          payment_month: entry.entry_date,
+          transaction_reference: entry.transaction_details ?? undefined,
+          registration: null,
+          registration_start_date: entry.entry_date,
+          registration_total_amount: entry.due_amount,
+          amount: entry.paid_amount,
+          status: entry.entry_type === 'paid' ? 'success' : 'pending',
+        } as PaymentRecordEntry,
+        dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
+        paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
+        openingBalance: 0,
+        closingDue: entry.closing_due,
+        displayDate: formatDisplayDate(entry.entry_date),
+        entryType: entry.entry_type === 'paid' ? 'paid' : entry.entry_type === 'due' ? 'due' : undefined,
+        isCurrentBalanceEntry: entry.entry_type === 'balance',
+      };
+
+      groupsByDonor.get(donorId)!.entries.push(passbookEntry);
     });
-    const groups = Array.from(groupsByKey.values())
-      .map((group) => {
-        const sortedRecords = [...group.records].sort(
-          (a, b) => getRecordTimestamp(a) - getRecordTimestamp(b),
-        );
-        
-        // Use the specific donor's opening balance from the API
-        // This ensures admin sees the exact same values as each individual donor
-        let donorBalance = openingBalance ?? 0;
-        if (group.donorId !== null && donorOpeningBalances[group.donorId] !== undefined) {
-          donorBalance = donorOpeningBalances[group.donorId];
-        }
-        
-        const entries = buildPassbookEntriesFromRecords(sortedRecords, donorBalance, true);
-        
-        return { id: group.id, donorId: group.donorId, label: group.label, entries };
-      })
-      .sort((a, b) => a.label.localeCompare(b.label));
-    return groups;
-  }, [filteredRecords, isAdminUser, resolveDonorDisplayLabel, donorOpeningBalances, donorPhones, openingBalance]);
+
+    const groups = Array.from(groupsByDonor.values()).map((group) => ({
+      ...group,
+      entries: [...group.entries].sort(
+        (a, b) => getRecordTimestamp(a.record) - getRecordTimestamp(b.record),
+      ),
+    }));
+
+    if (matchedCount === 0) {
+      console.warn('[PaymentStatement] No passbook entries matched filters for admin view');
+    } else {
+      console.log('[PaymentStatement] Admin passbook groups', groups.length, 'entries', matchedCount);
+    }
+
+    return groups.sort((a, b) => a.label.localeCompare(b.label));
+  }, [
+    apiPassbookEntries,
+    apiPassbookLoading,
+    donorOptions,
+    donorPhones,
+    isAdminUser,
+    paymentStatusFilter,
+    selectedDonorIds,
+    selectedMonthKey,
+  ]);
 
   const adminPassbookRecordCount = adminPassbookGroups.reduce(
     (sum, group) => sum + group.entries.length,
@@ -1994,65 +2193,30 @@ const PaymentStatementPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-1 min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-800">Payment Statement</h1>
-          <p className="text-sm text-slate-500">
-            {summaryLabel} • {filteredRecords.length} record
-            {filteredRecords.length === 1 ? '' : 's'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={loading || filteredRecords.length === 0}
-            className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            Download PDF
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadExcel}
-            disabled={loading || filteredRecords.length === 0}
-            className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:text-slate-300"
-          >
-            Download Excel
-          </button>
-        </div>
-      </div>
-
-      {showParentDonorTabs && (
-        <div className="rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm">
-          <div className="flex flex-wrap gap-2">
-            {donorViewTabs.map((tab) => {
-              const isActive = tab.donorId === activeDonorId;
-              return (
+      <div className="p-1">
+        <div className="flex flex-wrap items-end gap-6">
+          <div className="space-y-1 min-w-[220px] basis-[260px]">
+            <h1 className="text-2xl font-semibold text-slate-800">Payment Statement</h1>
+            <p className="text-sm text-slate-500">
+              {summaryLabel} • {filteredRecords.length} record
+              {filteredRecords.length === 1 ? '' : 's'}
+            </p>
+          </div>
+          {showDonorFilter && (
+            <div className="space-y-2 min-w-[200px] basis-[260px] max-w-[320px] grow-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-0">
+                  Filter by donor name
+                </p>
                 <button
                   type="button"
-                  key={tab.key}
-                  onClick={() => setActiveDonorId(tab.donorId)}
-                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                    isActive
-                      ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90'
-                      : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
-                  }`}
+                  onClick={() => setSelectedDonorIds([])}
+                  disabled={selectedDonorIds.length === 0}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:border-orange-200 hover:text-orange-600 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
-                  {tab.label}
+                  Clear
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm">
-        <div className="flex flex-wrap gap-6">
-          {showDonorFilter && (
-            <div className="flex-1 min-w-[260px] space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Filter by donor name
-              </p>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <DonorNameMultiSelect
                   options={donorOptions}
@@ -2064,14 +2228,6 @@ const PaymentStatementPage = () => {
                   }
                   disabled={donorOptions.length === 0}
                 />
-                <button
-                  type="button"
-                  onClick={() => setSelectedDonorIds([])}
-                  disabled={selectedDonorIds.length === 0}
-                  className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:border-orange-200 hover:text-orange-600 disabled:cursor-not-allowed disabled:text-slate-300"
-                >
-                  Clear
-                </button>
               </div>
               {selectedDonorIds.length > 0 && (
                 <p className="text-xs text-slate-500">
@@ -2083,16 +2239,11 @@ const PaymentStatementPage = () => {
             </div>
           )}
 
-          <div className="flex-1 min-w-[220px] max-w-[280px] space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Filter by month
-            </p>
-            <div className="flex items-center gap-2">
-              <MonthRangeSelect
-                value={selectedMonthKey}
-                onChange={(value) => setSelectedMonthKey(value)}
-                onClear={() => setSelectedMonthKey('')}
-              />
+          <div className="space-y-2 min-w-[180px] basis-[200px] max-w-[240px] grow-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-0">
+                Filter by month
+              </p>
               <button
                 type="button"
                 onClick={() => setSelectedMonthKey('')}
@@ -2101,6 +2252,13 @@ const PaymentStatementPage = () => {
               >
                 Clear
               </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <MonthRangeSelect
+                value={selectedMonthKey}
+                onChange={(value) => setSelectedMonthKey(value)}
+                onClear={() => setSelectedMonthKey('')}
+              />
             </div>
           </div>
 
@@ -2130,8 +2288,53 @@ const PaymentStatementPage = () => {
               </div>
             </div>
           )}
+
+          {isAdminUser && (
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={loading || filteredRecords.length === 0}
+                className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Download PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadExcel}
+                disabled={loading || filteredRecords.length === 0}
+                className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                Download Excel
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {showParentDonorTabs && (
+        <div className="rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm">
+          <div className="flex flex-wrap gap-2">
+            {donorViewTabs.map((tab) => {
+              const isActive = tab.donorId === activeDonorId;
+              return (
+                <button
+                  type="button"
+                  key={tab.key}
+                  onClick={() => setActiveDonorId(tab.donorId)}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    isActive
+                      ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90'
+                      : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-4 md:flex-row md:items-start md:justify-between">

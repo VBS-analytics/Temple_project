@@ -14,6 +14,13 @@ type NavLinkItem = {
 
 const navLinks: NavLinkItem[] = [
   { label: 'Home', href: '#top', type: 'anchor' },
+  { label: 'History of Kakkalani', href: '/history', type: 'route' },
+  {
+    label: 'Why we should visit our village',
+    href: '/why-visit-native-village',
+    type: 'route'
+  },
+  { label: 'About Kakkalani Village', href: '/about-kakkalani-village', type: 'route' },
   {
     label: 'About',
     href: '/about',
@@ -23,14 +30,7 @@ const navLinks: NavLinkItem[] = [
       { label: 'Committee Members', href: '/about#committee-members', type: 'route' },
       { label: 'Family Tree', href: '/about#family-tree', type: 'route' }
     ]
-  },
-  { label: 'About Kakkalani Village', href: '/about-kakkalani-village', type: 'route' },
-  {
-    label: 'Why we should visit our village',
-    href: '/why-visit-native-village',
-    type: 'route'
-  },
-  { label: 'History of Kakkalani', href: '/history', type: 'route' }
+  }
 ];
 
 const resolveAnchorTo = (hash: string): To => ({

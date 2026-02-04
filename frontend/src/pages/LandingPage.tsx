@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-
 import PublicSiteHeader from "../components/PublicSiteHeader";
 import api, { extractResults } from "../lib/api";
 import { resolveMediaUrl } from "../lib/media";
@@ -132,6 +131,7 @@ const galleryImages = [
 
 const kakkalaniMapEmbedUrl =
   "https://www.google.com/maps?q=Kakkalani,%20Tamil%20Nadu%20611101&ll=10.7329213,79.7090455&z=17&t=k&layer=c&cbll=10.7329213,79.7090455&cbp=11,0,0,0,0&output=embed";
+
 const kakkalaniMapFullViewUrl =
   "https://www.google.com/maps/place/Kakkalani,+Tamil+Nadu+611101/@10.7330371,79.7096892,2103m/data=!3m1!1e3!4m15!1m8!3m7!1s0x3a5541848b6c5ca3:0x19261ee607ced357!2sKakkalani,+Tamil+Nadu+611101!3b1!8m2!3d10.7329213!4d79.7090455!16s%2Fg%2F12hx21bjn";
 
@@ -270,7 +270,6 @@ const dailyPooja = [
   },
 ] as const;
 
-
 const LandingPage = () => {
   // Selected card content (title + description) for Architecture section
   const [selected, setSelected] = useState<null | {
@@ -293,11 +292,14 @@ const LandingPage = () => {
   /* ---------- HOOKS (inside LandingPage component, above return) ---------- */
   const [poojaIdx, setPoojaIdx] = useState(0);
   const [poojaPaused, setPoojaPaused] = useState(false);
+
   const [featuredPoojas, setFeaturedPoojas] = useState<FeaturedPoojaCard[]>([]);
   const [featuredError, setFeaturedError] = useState('');
+
   const [todayPoojas, setTodayPoojas] = useState<TodayPoojaLandingRecord[]>([]);
   const [todayPoojasError, setTodayPoojasError] = useState('');
   const [poojaScheduleLoading, setPoojaScheduleLoading] = useState(true);
+
   const todayReadableLabel = new Date().toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "long",
@@ -313,13 +315,16 @@ const LandingPage = () => {
 
   useEffect(() => {
     let isMounted = true;
+
     const fetchFeatured = async () => {
       try {
         const { data } = await api.get('/pooja/featured-poojas/');
         if (!isMounted) return;
+
         const cards = extractResults<FeaturedPoojaCard>(data)
           .filter((item) => Boolean(item.image))
           .slice(0, 4);
+
         setFeaturedPoojas(cards);
       } catch (error) {
         if (isMounted) {
@@ -327,7 +332,9 @@ const LandingPage = () => {
         }
       }
     };
+
     fetchFeatured();
+
     return () => {
       isMounted = false;
     };
@@ -335,21 +342,27 @@ const LandingPage = () => {
 
   useEffect(() => {
     let isMounted = true;
+
     const fetchTodayPoojas = async () => {
       setPoojaScheduleLoading(true);
       setTodayPoojasError('');
+
       try {
         const { data } = await api.get('/pooja/registrations/today-public/');
         if (!isMounted) {
           return;
         }
+
         const records = extractResults<TodayPoojaLandingRecord>(data)
           .filter((record): record is TodayPoojaLandingRecord => typeof record?.id === 'number');
+
         const sorted = [...records].sort((a, b) => {
           const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NaN;
           const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NaN;
+
           const aHasTime = !Number.isNaN(aTime);
           const bHasTime = !Number.isNaN(bTime);
+
           if (aHasTime && bHasTime) {
             return bTime - aTime;
           }
@@ -359,8 +372,10 @@ const LandingPage = () => {
           if (bHasTime) {
             return 1;
           }
+
           return resolvePoojaId(a).localeCompare(resolvePoojaId(b));
         });
+
         setTodayPoojas(sorted);
       } catch (error) {
         if (isMounted) {
@@ -375,11 +390,11 @@ const LandingPage = () => {
     };
 
     fetchTodayPoojas();
+
     return () => {
       isMounted = false;
     };
   }, []);
-
 
   return (
     <div id="top" className="bg-slate-50 text-slate-800">
@@ -391,14 +406,11 @@ const LandingPage = () => {
           id="hero-map"
           className="relative pt-24 sm:pt-28 md:pt-32 text-white min-h-screen"
         >
-          <div className="absolute inset-0 z-0">
-            <iframe
-              title="Kakkalani Village 3D view"
-              src={kakkalaniMapEmbedUrl}
-              className="h-full w-full border-0 object-cover"
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
+          <div className="absolute inset-0 z-0 bg-slate-900">
+            <img
+              src="/images/landing-page-image.jpg"
+              alt="Kakkalani Village Landscape Plan"
+              className="h-full w-full object-contain"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
           </div>
@@ -523,7 +535,7 @@ const LandingPage = () => {
               
               {/* LEFT: Visit Information */}
               <div className="space-y-4 sm:space-y-6">
-                <div className="rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_25px_45px_-22pxrgba(12,16,43,0.18)]">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_25px_45px_-22px_rgba(12,16,43,0.18)]">
                   <div className="space-y-3 sm:space-y-4">
                     <div>
                       <h3 className="text-xl sm:text-2xl font-bold text-slate-900">
@@ -535,6 +547,7 @@ const LandingPage = () => {
                         areas.
                       </p>
                     </div>
+
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
                         Open Today
@@ -587,7 +600,7 @@ const LandingPage = () => {
               {/* RIGHT: Daily Pooja */}
               <div className="space-y-4 sm:space-y-6">
                 <div
-                  className="rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_25px_45px_-22pxrgba(12,16,43,0.18)]"
+                  className="rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_25px_45px_-22px_rgba(12,16,43,0.18)]"
                   onMouseEnter={() => setPoojaPaused(true)}
                   onMouseLeave={() => setPoojaPaused(false)}
                 >
@@ -601,6 +614,7 @@ const LandingPage = () => {
                       LIVE
                     </span>
                   </div>
+
                   <div className="relative h-56 sm:h-64 overflow-hidden rounded-2xl bg-slate-50/40 ring-1 ring-slate-200/60">
                     <div
                       className="transition-transform duration-700 ease-out"
@@ -618,6 +632,7 @@ const LandingPage = () => {
                       ))}
                     </div>
                   </div>
+
                   <div className="mt-3 sm:mt-4 flex items-center justify-center gap-1 sm:gap-1.5">
                     {dailyPooja.map((_, i) => (
                       <button
@@ -638,86 +653,6 @@ const LandingPage = () => {
           </div>
         </section>
 
-        {/* DARSHAN & POOJA */}
-        <section id="darshan" className="py-12 sm:py-16">
-          <div className="responsive-layout md:px-10">
-            <div className="space-y-3 sm:space-y-4 text-center md:text-left">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">Pooja Schedule</h2>
-              <p className="text-slate-600 text-sm sm:text-base md:text-lg">
-                List of Donor Pooja Schedules and Timings.
-              </p>
-            </div>
-
-            <div className="mt-3 sm:mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              {poojaScheduleLoading ? (
-                <p className="px-4 sm:px-6 py-8 sm:py-10 text-center text-sm text-slate-500">Loading today&apos;s pooja details...</p>
-              ) : todayPoojasError ? (
-                <p className="px-4 sm:px-6 py-8 sm:py-10 text-center text-sm text-red-600">{todayPoojasError}</p>
-              ) : todayPoojas.length === 0 ? (
-                <p className="px-4 sm:px-6 py-8 sm:py-10 text-center text-sm text-slate-500">
-                  No pooja registrations are scheduled for today.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <div className="min-w-full block">
-                    <table className="min-w-full divide-y divide-slate-200 text-left">
-                      <thead className="bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
-                        <tr>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Pooja ID
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Pooja Date
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Pooja Name
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Day Option
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Devotee
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Post Prasadam
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Pooja Register by
-                          </th>
-                          <th scope="col" className="px-3 sm:px-6 py-2 sm:py-3">
-                            Registration Date
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 text-sm">
-                        {todayPoojas.map((pooja) => (
-                          <tr key={pooja.id} className="bg-white transition hover:bg-slate-50">
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-slate-900">{resolvePoojaId(pooja)}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{formatDateDisplay(pooja.start_date)}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{pooja.pooja_option_name?.trim() || "N/A"}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{pooja.day_option_description?.trim() || "N/A"}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{joinDevoteeNames(pooja.members)}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{formatBooleanLabel(pooja.post_prasadam)}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{resolveDonorName(pooja.donor_name)}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-slate-700">{formatDateTimeDisplay(pooja.created_at)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-            <p className="mt-4 sm:mt-6 text-center text-slate-600 text-sm sm:text-base md:text-base">
-              Login to{" "}
-              <Link to="/login" className="font-semibold text-rose-600 hover:text-rose-700">
-                register
-              </Link>{" "}
-              for the pooja schedules.
-            </p>
-          </div>
-        </section>
-
         {/* NEWS */}
         <section id="news" className="py-12 sm:py-16">
           <div className="responsive-layout space-y-6 sm:space-y-8 md:px-10">
@@ -727,6 +662,7 @@ const LandingPage = () => {
                 Stay informed about festivals, restoration projects, and community initiatives happening every month.
               </p>
             </div>
+
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {newsUpdates.map((item) => (
                 <article key={item.title} className="flex h-full flex-col gap-3 sm:gap-4 rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/70">
@@ -770,12 +706,14 @@ const LandingPage = () => {
             <p className="text-sm text-slate-400">Phone: +91 9999900000</p>
             <p className="text-sm text-slate-400">Email: crgrpkakkalany@gmail.com</p>
           </div>
+
           <div className="space-y-2 sm:space-y-3 text-sm">
             <p className="font-semibold text-white">Temple Hours</p>
             <p>Morning Darshan: 5:00 AM – 12:30 PM</p>
             <p>Evening Darshan: 4:00 PM – 10:00 PM</p>
             <p>Friday Special Abhishekam: 7:00 PM</p>
           </div>
+
           <div className="space-y-2 sm:space-y-3 text-sm">
             <p className="font-semibold text-white">Quick Links</p>
             <a href="#visit" className="block text-slate-400 transition hover:text-white">Plan Your Visit</a>
@@ -783,6 +721,7 @@ const LandingPage = () => {
             <a href="#darshan" className="block text-slate-400 transition hover:text-white">Pooja Schedule</a>
             <a href="#news" className="block text-slate-400 transition hover:text-white">Blog</a>
           </div>
+
           <div className="space-y-2 sm:space-y-3 text-sm">
             <p className="font-semibold text-white">Stay Connected</p>
             <p>Follow us on Facebook, Instagram, and YouTube for live updates and festival highlights.</p>
