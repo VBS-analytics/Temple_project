@@ -290,7 +290,7 @@ const LoginPage = () => {
                   Reconnect with Your <span className="text-amber-300">Sacred Journey</span>
                 </h1>
                 <p className="text-base sm:text-lg md:text-xl text-amber-100 leading-relaxed max-w-2xl mx-auto sm:mx-0">
-                  Sign in to access personalized darshan slots, ritual schedules, and community seva opportunities.
+                  Sign in to access personalized darshan slots, ritual schedules, and community seva opportunities
                 </p>
               </div>
               
