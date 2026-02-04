@@ -45,10 +45,11 @@ const normalizeDayOptionLabel = (option: DayOptionCalendarEntry) => {
   return description || DAY_OPTION_FALLBACK_LABEL;
 };
 
-const buildMonthTabs = () => {
-  const today = new Date();
-  const tabs = Array.from({ length: 12 }, (_, index) => {
-    const targetDate = new Date(today.getFullYear(), today.getMonth() + index, 1);
+const buildMonthTabs = (options?: { startOffset?: number; totalMonths?: number }) => {
+  const { startOffset = -1, totalMonths = 13 } = options ?? {};
+  const reference = new Date();
+  const tabs = Array.from({ length: totalMonths }, (_, index) => {
+    const targetDate = new Date(reference.getFullYear(), reference.getMonth() + startOffset + index, 1);
     return {
       key: `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`,
       label: targetDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
@@ -147,7 +148,13 @@ const PoojaDetailsPage = () => {
   }, []);
   
   const monthTabs = useMemo(() => buildMonthTabs(), []);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState(() => {
+    const today = new Date();
+    const currentMonthIndex = monthTabs.findIndex(
+      (tab) => tab.year === today.getFullYear() && tab.monthIndex === today.getMonth(),
+    );
+    return currentMonthIndex >= 0 ? currentMonthIndex : 0;
+  });
   const selectedMonth = monthTabs[selectedMonthIndex] ?? monthTabs[0];
   const selectedMonthDates = useMemo(() => {
     if (!selectedMonth) {

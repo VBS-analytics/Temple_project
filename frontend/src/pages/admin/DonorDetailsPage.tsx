@@ -1929,7 +1929,6 @@ const DonorDetailsPage = () => {
                               <thead>
                                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                                   <th className="whitespace-nowrap px-4 py-3">Registration ID</th>
-                                  <th className="whitespace-nowrap px-4 py-3">Pooja Date</th>
                                   <th className="whitespace-nowrap px-4 py-3">Pooja Name</th>
                                   <th className="whitespace-nowrap px-4 py-3">Pooja Day</th>
                                   <th className="whitespace-nowrap px-4 py-3">Members</th>

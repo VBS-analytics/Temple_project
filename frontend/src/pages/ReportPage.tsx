@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AxiosError } from 'axios';
 import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import * as XLSX from 'xlsx';
-
 import api, { extractResults } from '../lib/api';
 import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../lib/pdfMakeLoader';
 import type { CartItem } from '../store/cart';
-import ExpensesPage from './admin/ExpensesPage';
 
 interface DonorRecord {
   user: {
@@ -15,26 +13,26 @@ interface DonorRecord {
     phone_number?: string | null;
     email?: string | null;
   };
-    profile?: {
-      donor_id?: string | null;
-      family_name?: string | null;
-      gothra?: string | null;
-      rasi?: string | null;
-      tamil_star?: string | null;
-      monthly_donation_amount?: number | string | null;
-      address_line1?: string | null;
-      address_line2?: string | null;
-      address_line3?: string | null;
-      city?: string | null;
-      state?: string | null;
-      postal_code?: string | null;
-      notes?: string | null;
-      custom_number?: number | null;
-      gender?: string | null;
-      date_of_birth?: string | null;
-      tamil_name?: string | null;
-      last_payment_date?: string | null;
-    };
+  profile?: {
+    donor_id?: string | null;
+    family_name?: string | null;
+    gothra?: string | null;
+    rasi?: string | null;
+    tamil_star?: string | null;
+    monthly_donation_amount?: number | string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_line3?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    notes?: string | null;
+    custom_number?: number | null;
+    gender?: string | null;
+    date_of_birth?: string | null;
+    tamil_name?: string | null;
+    last_payment_date?: string | null;
+  };
   members?: {
     id?: number;
     name?: string | null;
@@ -174,7 +172,6 @@ const formatProfileAddress = (profile?: DonorRecord['profile']) => {
   ]
     .map((part) => (part ?? '').trim())
     .filter((part) => part.length > 0);
-
   return parts.length > 0 ? parts.join(', ') : '—';
 };
 
@@ -212,6 +209,7 @@ const createDonorSheetRows = (donor: DonorRecord): (string | number)[][] => {
 
   rows.push([]);
   rows.push(['Family Members']);
+
   const memberHeader = [
     'Member ID',
     'Member Name',
@@ -260,7 +258,6 @@ const createUniqueSheetName = (donor: DonorRecord, usedNames: Set<string>) => {
   if (!sanitized) {
     sanitized = `Donor-${donor.user.id}`;
   }
-
   let candidate = sanitized;
   let counter = 1;
   while (usedNames.has(candidate)) {
@@ -270,7 +267,6 @@ const createUniqueSheetName = (donor: DonorRecord, usedNames: Set<string>) => {
     candidate = `${truncated}${suffix}`;
     counter += 1;
   }
-
   usedNames.add(candidate);
   return candidate;
 };
@@ -397,31 +393,26 @@ const initialPoojaExportState: Record<PoojaReportKey, boolean> = POOJA_REPORT_KE
   {} as Record<PoojaReportKey, boolean>,
 );
 
-const GENERAL_POOJA_REPORT_KEYS: PoojaReportKey[] = ['tillOil', 'nityaNeivedhyam', 'gauSamrakshana'];
-const OTHER_POOJA_REPORT_KEYS: PoojaReportKey[] = ['saturdayNavagraha', 'pradosha'];
+const GENERAL_POOJA_REPORT_KEYS: PoojaReportKey[] = [
+  'tillOil',
+  'nityaNeivedhyam',
+  'gauSamrakshana',
+  'saturdayNavagraha',
+  'pradosha',
+];
 
-type ReportTabKey = 'database' | 'general' | 'other' | 'expenses';
+type ReportTabKey = 'database' | 'general';
 
 const REPORT_TABS: { key: ReportTabKey; label: string; description: string }[] = [
   {
     key: 'database',
     label: 'Database',
-    description: 'Raw donor and registration datasets that power the portal',
+    description: '',
   },
   {
     key: 'general',
     label: 'General Pooja Report',
-    description: 'General pooja exports covering till oil, neivedhyam, and gau samrakshana seva',
-  },
-  {
-    key: 'other',
-    label: 'Other Pooja Report',
-    description: 'Other recurring pooja exports such as Navagraha and Pradosha',
-  },
-  {
-    key: 'expenses',
-    label: 'Expenses',
-    description: 'Track temple expenses and view recorded payouts',
+    description: '',
   },
 ];
 
@@ -493,9 +484,6 @@ const POOJA_REPORT_HINTS: Record<PoojaReportKey, string> = {
   pradosha:
     'Retrieve Pradosha Pooja registrations; the dialog lets you download the format that suits your workflow.',
 };
-
-const OUTLINE_BUTTON_CLASSES =
-  'rounded-full border border-orange-600 px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold text-orange-600 transition hover:border-orange-700 hover:text-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:opacity-60 disabled:hover:border-orange-600';
 
 const buildPoojaReportRows = (registrations: PoojaReportEntry[]): PoojaReportRow[] =>
   registrations.map((registration, index) => ({
@@ -665,10 +653,8 @@ const partitionPlanRows = (plans: RecurringPoojaPlanRecord[]) => {
   const recurring: RecurringPoojaPlanRecord[] = [];
   const oneTime: RecurringPoojaPlanRecord[] = [];
   const chrt: RecurringPoojaPlanRecord[] = [];
-
   plans.forEach((plan) => {
     const donorName = (plan.donor_name ?? '').trim().toLowerCase();
-    // Temple Admin should not appear as a donor in exports
     if (donorName === 'temple admin') {
       return;
     }
@@ -685,7 +671,6 @@ const partitionPlanRows = (plans: RecurringPoojaPlanRecord[]) => {
       recurring.push(plan);
     }
   });
-
   return { recurring, oneTime, chrt };
 };
 
@@ -703,7 +688,6 @@ const fetchAllRecurringPlans = async (): Promise<RecurringPoojaPlanRecord[]> => 
   const pageSize = 250;
   let page = 1;
   const records: RecurringPoojaPlanRecord[] = [];
-
   while (true) {
     const { data } = await api.get('pooja/recurrence/plans/', {
       params: {
@@ -711,21 +695,17 @@ const fetchAllRecurringPlans = async (): Promise<RecurringPoojaPlanRecord[]> => 
         page_size: pageSize,
       },
     });
-
     const pageResults = extractResults<RecurringPoojaPlanRecord>(data);
     if (!pageResults.length) {
       break;
     }
-
     records.push(...pageResults);
-
     const hasNext = Boolean(data?.next);
     if (!hasNext) {
       break;
     }
     page += 1;
   }
-
   return records;
 };
 
@@ -733,7 +713,6 @@ const fetchAllRegistrations = async (): Promise<PoojaRegistrationRecord[]> => {
   const pageSize = 250;
   let page = 1;
   const records: PoojaRegistrationRecord[] = [];
-
   while (true) {
     const { data } = await api.get('pooja/registrations/', {
       params: {
@@ -741,21 +720,17 @@ const fetchAllRegistrations = async (): Promise<PoojaRegistrationRecord[]> => {
         page_size: pageSize,
       },
     });
-
     const pageResults = extractResults<PoojaRegistrationRecord>(data);
     if (!pageResults.length) {
       break;
     }
-
     records.push(...pageResults);
-
     const hasNext = Boolean(data?.next);
     if (!hasNext) {
       break;
     }
     page += 1;
   }
-
   return records;
 };
 
@@ -799,11 +774,9 @@ const buildPendingCartRows = (snapshots: CartSnapshotRecord[], key: PoojaReportK
   if (!targetName) {
     return [];
   }
-
   const normalizedTarget = normalizeText(targetName);
   let sequence = 0;
   const rows: PoojaReportRow[] = [];
-
   snapshots.forEach((snapshot) => {
     const items = Array.isArray(snapshot.items) ? snapshot.items : [];
     items.forEach((item) => {
@@ -814,7 +787,6 @@ const buildPendingCartRows = (snapshots: CartSnapshotRecord[], key: PoojaReportK
       if (itemName !== normalizedTarget && !itemName.includes(normalizedTarget)) {
         return;
       }
-
       sequence += 1;
       rows.push({
         'S.no': sequence,
@@ -825,7 +797,6 @@ const buildPendingCartRows = (snapshots: CartSnapshotRecord[], key: PoojaReportK
       });
     });
   });
-
   return rows;
 };
 
@@ -838,9 +809,7 @@ const downloadPoojaReportPdf = async (
     console.error('PDF download is only available in the browser');
     return;
   }
-
   const pdfMakeInstance = await loadPdfMake();
-
   const ok = verifyTamilFont();
   if (!ok) {
     throw new Error('Tamil font not registered properly. Check base64 and TTF format.');
@@ -952,11 +921,42 @@ const downloadPoojaReportPdf = async (
   };
 
   const pdfDoc: any = pdfMakeInstance.createPdf(docDefinition);
-
   pdfDoc.getBlob((blob: Blob) => {
     triggerBlobDownload(blob, `${filenameBase}.pdf`);
   });
 };
+
+// Icons Components
+const DatabaseIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const DocumentIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const PoojaIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+  </svg>
+);
+
+const LoadingSpinner = () => (
+  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
 
 const ReportPage = () => {
   const [exportingDonorDatabase, setExportingDonorDatabase] = useState(false);
@@ -970,7 +970,6 @@ const ReportPage = () => {
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTabKey>('database');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     loadPdfMake().catch((err) => console.error('pdfMake preload failed', err));
@@ -984,10 +983,8 @@ const ReportPage = () => {
 
   const handleDonorDatabaseDownload = useCallback(async () => {
     if (exportingDonorDatabase) return;
-
     setExportError(null);
     setExportingDonorDatabase(true);
-
     try {
       const donors = await fetchDonors();
       if (!donors.length) {
@@ -1101,15 +1098,12 @@ const ReportPage = () => {
 
   const handleDatabaseBackupDownload = useCallback(async () => {
     if (exportingDatabaseBackup) return;
-
     setExportError(null);
     setExportingDatabaseBackup(true);
-
     try {
       const response = await api.get<Blob>('reports/database-download/', {
         responseType: 'blob',
       });
-
       const blobData = response.data;
       if (!(blobData instanceof Blob)) {
         throw new Error('Received an invalid database backup file.');
@@ -1128,7 +1122,6 @@ const ReportPage = () => {
       let detail: string | null = null;
       const axiosError = error as AxiosError<{ detail?: string | null }>;
       const responseData = axiosError?.response?.data;
-
       if (responseData instanceof Blob) {
         try {
           const text = await responseData.text();
@@ -1144,7 +1137,6 @@ const ReportPage = () => {
       } else if (responseData && typeof responseData === 'object') {
         detail = (responseData as { detail?: string | null }).detail ?? null;
       }
-
       if (detail) {
         setExportError(detail);
       } else {
@@ -1157,10 +1149,8 @@ const ReportPage = () => {
 
   const handlePoojaRegistrationDatabaseDownload = useCallback(async () => {
     if (exportingPoojaRegistrationDatabase) return;
-
     setExportError(null);
     setExportingPoojaRegistrationDatabase(true);
-
     try {
       const [recurringPlans, registrations, cartResponse] = await Promise.all([
         fetchAllRecurringPlans(),
@@ -1178,7 +1168,9 @@ const ReportPage = () => {
         const donorName = (registration.donor_name ?? '').trim().toLowerCase();
         return donorName !== 'temple admin';
       });
+
       const allRegistrationRows = buildPoojaRegistrationRows(filteredRegistrations);
+
       const originRegistrationIds = new Set(
         recurringPlans
           .map((plan) => plan.origin_registration_id)
@@ -1188,7 +1180,9 @@ const ReportPage = () => {
       const oneTimeRegistrations = filteredRegistrations.filter(
         (registration) => !originRegistrationIds.has(registration.id ?? -1),
       );
+
       const registrationRows = buildPoojaRegistrationRows(oneTimeRegistrations);
+
       const timestamp = formatFilenameDate(new Date());
 
       const registrationWorkbook = XLSX.utils.book_new();
@@ -1214,7 +1208,6 @@ const ReportPage = () => {
       const cartWorkbook = XLSX.utils.book_new();
       const cartSheet = createSheetWithHeaders(CART_SNAPSHOT_HEADERS, cartRows);
       XLSX.utils.book_append_sheet(cartWorkbook, cartSheet, 'Cart Snapshots');
-
       downloadWorkbook(cartWorkbook, `pooja-cart-snapshots-${timestamp}.xlsx`);
     } catch (error) {
       const detail =
@@ -1232,10 +1225,8 @@ const ReportPage = () => {
 
   const handleDonorDetailsDownload = useCallback(async () => {
     if (exportingDonorDetails) return;
-
     setExportError(null);
     setExportingDonorDetails(true);
-
     try {
       const donors = await fetchDonors();
       if (!donors.length) {
@@ -1254,7 +1245,6 @@ const ReportPage = () => {
       const workbook = XLSX.utils.book_new();
       const sheet = XLSX.utils.json_to_sheet(donorDetailsRows, { header: headerKeys });
       XLSX.utils.book_append_sheet(workbook, sheet, 'Donor Details');
-
       const filename = `donor-details-${formatFilenameDate(new Date())}.xlsx`;
       XLSX.writeFile(workbook, filename);
     } catch (error) {
@@ -1273,15 +1263,12 @@ const ReportPage = () => {
 
   const handlePaymentDetailsDownload = useCallback(async () => {
     if (exportingPaymentDetails) return;
-
     setExportError(null);
     setExportingPaymentDetails(true);
-
     try {
       const response = await api.get<Blob>('payments/payment-details-export/', {
         responseType: 'blob',
       });
-
       const blobData = response.data;
       if (!(blobData instanceof Blob)) {
         throw new Error('Received an invalid payment details file.');
@@ -1311,10 +1298,8 @@ const ReportPage = () => {
 
   const handleOpeningBalanceDownload = useCallback(async () => {
     if (exportingOpeningBalance) return;
-
     setExportError(null);
     setExportingOpeningBalance(true);
-
     try {
       const donors = await fetchDonors();
       if (!donors.length) {
@@ -1333,7 +1318,6 @@ const ReportPage = () => {
       const workbook = XLSX.utils.book_new();
       const sheet = XLSX.utils.json_to_sheet(rows, { header: OPENING_BALANCE_HEADERS });
       XLSX.utils.book_append_sheet(workbook, sheet, 'Opening Balance');
-
       downloadWorkbook(workbook, `opening-balance-${formatFilenameDate(new Date())}.xlsx`);
     } catch (error) {
       const detail =
@@ -1351,10 +1335,8 @@ const ReportPage = () => {
 
   const handleExcessDonationDownload = useCallback(async () => {
     if (exportingExcessDonation) return;
-
     setExportError(null);
     setExportingExcessDonation(true);
-
     try {
       const donors = await fetchDonors();
       const filteredDonors = donors.filter((donor) => {
@@ -1399,15 +1381,12 @@ const ReportPage = () => {
   const downloadPoojaReport = useCallback(
     async (key: PoojaReportKey, format: PoojaReportFormat) => {
       if (exportingReports[key]) return;
-
       const report = POOJA_REPORTS[key];
       setExportError(null);
       setExportingReports((prev) => ({ ...prev, [key]: true }));
-
       try {
         const { data } = await api.get(report.endpoint);
         const registrations = extractResults<PoojaReportEntry>(data);
-
         let rows = buildPoojaReportRows(registrations);
 
         if (!rows.length) {
@@ -1452,37 +1431,6 @@ const ReportPage = () => {
     [exportingReports],
   );
 
-  const downloadDatabaseLabel = useMemo(
-    () => (exportingDatabaseBackup ? 'Preparing download…' : 'Download Database'),
-    [exportingDatabaseBackup],
-  );
-
-  const buttonLabel = useMemo(
-    () => (exportingDonorDatabase ? 'Preparing download…' : 'Donor Database'),
-    [exportingDonorDatabase],
-  );
-
-  const detailsButtonLabel = useMemo(
-    () => (exportingDonorDetails ? 'Preparing download…' : 'Donor Details'),
-    [exportingDonorDetails],
-  );
-
-  const paymentDetailsLabel = useMemo(
-    () => (exportingPaymentDetails ? 'Preparing download…' : 'Payment Details'),
-    [exportingPaymentDetails],
-  );
-
-  const registrationDatabaseLabel = useMemo(
-    () =>
-      exportingPoojaRegistrationDatabase ? 'Preparing download…' : 'Pooja Registration Database',
-    [exportingPoojaRegistrationDatabase],
-  );
-
-  const openingBalanceLabel = useMemo(
-    () => (exportingOpeningBalance ? 'Preparing download…' : 'Opening Balance'),
-    [exportingOpeningBalance],
-  );
-
   const openReportFormatDialog = useCallback(
     (key: PoojaReportKey) => {
       if (exportingReports[key]) return;
@@ -1517,279 +1465,264 @@ const ReportPage = () => {
   );
 
   const pendingReportMeta = pendingReportKey ? POOJA_REPORTS[pendingReportKey] : null;
-  const activeTabMeta =
-    REPORT_TABS.find((tab) => tab.key === activeTab) ?? REPORT_TABS[0];
-
-  const getTabButtonClass = (tabKey: ReportTabKey) =>
-    `px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 ${
-      activeTab === tabKey
-        ? 'bg-orange-600 text-white shadow-sm'
-        : 'border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-700'
-    } ${mobileMenuOpen ? 'block w-full text-left' : 'rounded-full'}`;
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
-      {/* Header Section - Always at the top */}
-      <section className="rounded-2xl bg-white p-4 sm:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-slate-800">Report</h1>
-            <p className="mt-1 text-xs sm:text-sm text-slate-500">
-              Consolidated insights about donations and pooja activity across the portal.
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/30 to-slate-50 p-4 md:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden">
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
+                <DocumentIcon />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Reports</h1>
+            </div>
+            <p className="text-orange-50 text-sm md:text-base max-w-2xl">
+              Consolidated insights about donations and pooja activity across the portal
             </p>
           </div>
-        </div>
 
-        {/* Tab Navigation - Below the header */}
-        <div className="mt-4 sm:mt-6">
-          {/* Mobile menu toggle */}
-          <div className="sm:hidden flex justify-end mb-2">
-            <button
-              type="button"
-              className="text-slate-600 hover:text-slate-800 focus:outline-none p-1"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle menu"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-          </div>
-
-          {/* Tab navigation - responsive layout */}
-          <div className={`${mobileMenuOpen ? 'block' : 'hidden sm:block'}`}>
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3">
+          {/* Tab Navigation */}
+          <div className="border-b border-slate-200/60 bg-slate-50/50">
+            <div className="flex flex-wrap gap-2 p-4 md:p-6">
               {REPORT_TABS.map((tab) => (
                 <button
-                  type="button"
                   key={tab.key}
-                  className={getTabButtonClass(tab.key)}
-                  onClick={() => {
-                    setActiveTab(tab.key);
-                    setMobileMenuOpen(false);
-                  }}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 md:px-6 py-2.5 rounded-xl font-semibold text-sm md:text-base transition-all duration-200 ${
+                    activeTab === tab.key
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30 scale-105'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60 hover:border-slate-300'
+                  }`}
                 >
                   {tab.label}
                 </button>
               ))}
             </div>
           </div>
-          
-          <p className="mt-2 sm:mt-3 text-xs sm:text-sm text-slate-500">{activeTabMeta.description}</p>
+
+          {/* Content Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8">
+            {activeTab === 'database' && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <DatabaseIcon />
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">Database Reports</h2>
+                </div>
+
+                {/* Info Cards */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                  {DATABASE_BUTTON_INFO.map((info, index) => (
+                    <div
+                      key={index}
+                      className="p-4 bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl border border-slate-200/60"
+                    >
+                      <h3 className="font-semibold text-slate-800 mb-1.5 text-sm md:text-base">{info.label}</h3>
+                      <p className="text-xs md:text-sm text-slate-600 leading-relaxed">{info.description}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                  <button
+                    onClick={handleDatabaseBackupDownload}
+                    disabled={exportingDatabaseBackup}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingDatabaseBackup ? <LoadingSpinner /> : <DatabaseIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingDatabaseBackup ? 'Preparing…' : 'Download Database'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleDonorDatabaseDownload}
+                    disabled={exportingDonorDatabase}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingDonorDatabase ? <LoadingSpinner /> : <DocumentIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingDonorDatabase ? 'Preparing…' : 'Donor Database'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handlePoojaRegistrationDatabaseDownload}
+                    disabled={exportingPoojaRegistrationDatabase}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingPoojaRegistrationDatabase ? <LoadingSpinner /> : <PoojaIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingPoojaRegistrationDatabase ? 'Preparing…' : 'Pooja Registration Database'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleDonorDetailsDownload}
+                    disabled={exportingDonorDetails}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingDonorDetails ? <LoadingSpinner /> : <DocumentIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingDonorDetails ? 'Preparing…' : 'Donor Details'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handlePaymentDetailsDownload}
+                    disabled={exportingPaymentDetails}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingPaymentDetails ? <LoadingSpinner /> : <DownloadIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingPaymentDetails ? 'Preparing…' : 'Payment Details'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleOpeningBalanceDownload}
+                    disabled={exportingOpeningBalance}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingOpeningBalance ? <LoadingSpinner /> : <DocumentIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingOpeningBalance ? 'Preparing…' : 'Opening Balance'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleExcessDonationDownload}
+                    disabled={exportingExcessDonation}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingExcessDonation ? <LoadingSpinner /> : <DownloadIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingExcessDonation ? 'Preparing…' : 'Excess Donation'}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'general' && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <PoojaIcon />
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">Pooja Reports</h2>
+                </div>
+
+                {/* Info Cards */}
+                <div className="space-y-3 mb-6">
+                  {GENERAL_POOJA_REPORT_KEYS.map((key) => (
+                    <div
+                      key={key}
+                      className="p-4 bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl border border-slate-200/60"
+                    >
+                      <h3 className="font-semibold text-slate-800 mb-1.5 text-sm md:text-base">
+                        {POOJA_REPORTS[key].label}
+                      </h3>
+                      <p className="text-xs md:text-sm text-slate-600 leading-relaxed">{POOJA_REPORT_HINTS[key]}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                  {GENERAL_POOJA_REPORT_KEYS.map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => openReportFormatDialog(key)}
+                      disabled={isExportingPoojaReport(key)}
+                      className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        {isExportingPoojaReport(key) ? <LoadingSpinner /> : <PoojaIcon />}
+                      </div>
+                      <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                        {getPoojaReportLabel(key)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {exportError && (
+              <div className="mt-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-red-800 mb-1">Error</h3>
+                    <p className="text-sm text-red-700">{exportError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </section>
+      </div>
 
-      {/* Content Section - Below the header with tabs */}
-      <section className="rounded-2xl bg-white p-4 sm:p-6 shadow-sm">
-        {activeTab === 'database' && (
-          <div className="space-y-4">
-            
-            <h2 className="text-base sm:text-lg font-semibold text-slate-800">Database Reports</h2>
-            <div className="mt-4 space-y-2 text-xs sm:text-sm text-slate-500">
-              {DATABASE_BUTTON_INFO.map((info) => (
-                <p key={info.label} className="leading-relaxed">
-                  <span className="font-semibold text-slate-800">{info.label}</span>{' '}
-                  {info.description}
-                </p>
-              ))}
-            </div>
-            <div></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <button
-                type="button"
-                onClick={handleDatabaseBackupDownload}
-                disabled={exportingDatabaseBackup}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                {downloadDatabaseLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDonorDatabaseDownload}
-                disabled={exportingDonorDatabase}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                {buttonLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={handlePoojaRegistrationDatabaseDownload}
-                disabled={exportingPoojaRegistrationDatabase}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                {registrationDatabaseLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDonorDetailsDownload}
-                disabled={exportingDonorDetails}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                {detailsButtonLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={handlePaymentDetailsDownload}
-                disabled={exportingPaymentDetails}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                {paymentDetailsLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpeningBalanceDownload}
-                disabled={exportingOpeningBalance}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                {openingBalanceLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExcessDonationDownload}
-                disabled={exportingExcessDonation}
-                className={OUTLINE_BUTTON_CLASSES}
-              >
-                Excess Donation
-              </button>
-            </div>
-            
-
-          </div>
-        )}
-
-        {activeTab === 'general' && (
-          <div className="space-y-4">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-800">General Pooja Reports</h2>
-            
-            <div className="mt-4 space-y-2 text-xs sm:text-sm text-slate-500">
-              {GENERAL_POOJA_REPORT_KEYS.map((key) => (
-                <p key={key} className="leading-relaxed">
-                  <span className="font-semibold text-slate-800">{POOJA_REPORTS[key].label}</span>{' '}
-                  {POOJA_REPORT_HINTS[key]}
-                </p>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {GENERAL_POOJA_REPORT_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => openReportFormatDialog(key)}
-                  disabled={isExportingPoojaReport(key)}
-                  className={OUTLINE_BUTTON_CLASSES}
-                >
-                  {getPoojaReportLabel(key)}
-                </button>
-              ))}
-            </div>
-            
-
-          </div>
-        )}
-
-        {activeTab === 'other' && (
-          <div className="space-y-4">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-800">Other Pooja Reports</h2>
-            
-            <div className="mt-4 space-y-2 text-xs sm:text-sm text-slate-500">
-              {OTHER_POOJA_REPORT_KEYS.map((key) => (
-                <p key={key} className="leading-relaxed">
-                  <span className="font-semibold text-slate-800">{POOJA_REPORTS[key].label}</span>{' '}
-                  {POOJA_REPORT_HINTS[key]}
-                </p>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {OTHER_POOJA_REPORT_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => openReportFormatDialog(key)}
-                  disabled={isExportingPoojaReport(key)}
-                  className={OUTLINE_BUTTON_CLASSES}
-                >
-                  {getPoojaReportLabel(key)}
-                </button>
-              ))}
-            </div>
-            
-          </div>
-        )}
-
-        {activeTab === 'expenses' && (
-          <div className="space-y-4">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-800">Expense Management</h2>
-            <ExpensesPage />
-          </div>
-        )}
-
-        {exportError && (
-          <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg">
-            <p className="text-xs sm:text-sm font-medium text-rose-600">{exportError}</p>
-          </div>
-        )}
-      </section>
-
-      {/* Responsive modal/dialog */}
+      {/* Format Selection Modal */}
       {pendingReportMeta && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-8"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
           onClick={closeReportFormatDialog}
         >
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pooja-report-format-title"
-            className="w-full max-w-sm rounded-2xl bg-white p-4 sm:p-6 shadow-xl mx-4"
-            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
-            <h3
-              id="pooja-report-format-title"
-              className="text-base sm:text-lg font-semibold text-slate-800"
-            >
-              Download format
-            </h3>
-            <p className="mt-2 text-xs sm:text-sm text-slate-600">
-              Choose the format for the {pendingReportMeta.label} report.
-            </p>
-            <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center gap-2">
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6">
+              <h3 className="text-xl font-bold text-white">Choose Download Format</h3>
+              <p className="text-orange-50 text-sm mt-1">Select the format for {pendingReportMeta.label}</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => handleFormatSelection('pdf')}
+                  className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/40"
+                >
+                  PDF Format
+                </button>
+                <button
+                  onClick={() => handleFormatSelection('excel')}
+                  className="flex-1 bg-white border-2 border-orange-500 hover:bg-orange-50 text-orange-600 font-semibold py-3 px-6 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20"
+                >
+                  Excel Format
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
+                PDF provides a print-ready layout while Excel downloads raw data for further analysis
+              </p>
+
               <button
-                type="button"
-                onClick={() => handleFormatSelection('pdf')}
-                className="w-full sm:flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                onClick={closeReportFormatDialog}
+                className="w-full border-2 border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 font-semibold py-3 px-6 rounded-xl transition-all duration-200"
               >
-                PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFormatSelection('excel')}
-                className="w-full sm:flex-1 rounded-full border border-slate-900 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-900 transition hover:border-slate-700 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-              >
-                Excel
+                Cancel
               </button>
             </div>
-            <p className="mt-2 sm:mt-3 text-xs text-slate-500">
-              PDF gives you a print-ready layout while Excel downloads the raw rows; use Cancel to exit without downloading.
-            </p>
-            <button
-              type="button"
-              onClick={closeReportFormatDialog}
-              className="mt-3 sm:mt-4 w-full rounded-full border border-slate-200 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-            >
-              Cancel
-            </button>
           </div>
         </div>
       )}
