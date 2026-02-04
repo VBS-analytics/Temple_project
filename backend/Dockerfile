@@ -45,6 +45,6 @@ RUN chown -R appuser:${APP_GID} /app && chmod +x /app/entrypoint.sh
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE 10000
 
 ENTRYPOINT ["./entrypoint.sh"]
