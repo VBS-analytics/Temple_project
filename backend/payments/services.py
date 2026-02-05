@@ -49,8 +49,8 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             from pooja.services.recurrence import process_recurring_plans
 
             today = timezone.localdate()
-            # Idempotent: will only create missing dues and clean stale ones
-            process_recurring_plans(today=today)
+            # Only generate dues/cleanups during passbook regen; skip auto registration creation
+            process_recurring_plans(today=today, create_registrations=False)
 
         try:
             with transaction.atomic():
@@ -77,7 +77,8 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             opening_balance = Decimal(str(source_balance or 0))
 
         # Create opening balance entry (31/12/2025)
-        balance_entry_date = date(2025, 12, 31)
+        anchor_date = date(2025, 12, 31)
+        balance_entry_date = anchor_date
         PassbookEntry.objects.create(
             donor=donor,
             entry_date=balance_entry_date,
@@ -122,13 +123,19 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         # Only successful payments are treated as received amounts
         for pr in payment_records.filter(status=PaymentStatus.SUCCESS):
             date_val = pr.payment_month or pr.created_at.date()
-            # Skip future-dated payments (by month) so passbook shows up to the current month only
-            if date_val and date_val.replace(day=1) > current_month:
+            # Skip records before anchor or future-dated (by month)
+            if not date_val:
+                continue
+            if date_val < anchor_date:
+                continue
+            if date_val.replace(day=1) > current_month:
                 continue
             all_records.append(("payment", pr, date_val))
 
         # Add consolidated monthly dues as due entries
         for month_start, data in monthly_dues_by_month.items():
+            if month_start < anchor_date:
+                continue
             all_records.append(("monthly_due", data["record"], data["date"], data["amount"]))
 
         # Build a quick lookup of registration_id -> preferred_date for CHRT plans (handles day_option null)
@@ -155,9 +162,13 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             else:
                 date_val = rr.start_date or rr.created_at.date()
 
-            # Skip future-dated dues (by month); they should appear only when their preferred month arrives
-            month_start = date_val.replace(day=1) if date_val else None
-            if month_start and month_start > current_month:
+            if not date_val:
+                continue
+            # Skip records before anchor and future-dated (by month)
+            if date_val < anchor_date:
+                continue
+            month_start = date_val.replace(day=1)
+            if month_start > current_month:
                 continue
 
             # Avoid double-counting registrations for months that already have monthly dues
@@ -235,7 +246,8 @@ def regenerate_all_passbooks() -> None:
     # Run once for all donors to ensure dues are up to date before bulk regeneration
     from pooja.services.recurrence import process_recurring_plans
 
-    process_recurring_plans(today=timezone.localdate())
+    # Only generate dues/cleanups; avoid creating registrations in this bulk run
+    process_recurring_plans(today=timezone.localdate(), create_registrations=False)
 
     donors = User.objects.filter(role="donor")
     for donor in donors:

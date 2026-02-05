@@ -1036,18 +1036,36 @@ const PaymentStatementPage = () => {
           transaction_details?: string | null;
         }[] = [];
 
-        let nextUrl: string | null = 'payments/passbook-entries/?ordering=entry_date';
+        const basePath = 'payments/passbook-entries/';
+        const params = new URLSearchParams();
+        params.set('ordering', 'entry_date');
+        // Non-admin: only need own entries, one page; backend already filters by user
+        const paginate = isAdminUser || selectedDonorIds.length > 0;
+        // If admin selected specific donors, include donor_id filter (backend supports single id)
+        if (isAdminUser && selectedDonorIds.length === 1) {
+          params.set('donor_id', String(selectedDonorIds[0]));
+        }
+        // If user filtered by month, pass month filter
+        if (selectedMonthKey) {
+          params.set('month', selectedMonthKey);
+        }
 
-        // Backend pagination is fixed at 20; loop through all pages to avoid truncation for admin view.
+        let nextUrl: string | null = `${basePath}?${params.toString()}`;
+        let pageCount = 0;
+
         while (nextUrl) {
           const response = await api.get(nextUrl);
           if (!isMounted) return;
           const payload = extractResults<typeof allResults[number]>(response.data);
           allResults.push(...payload);
-          nextUrl = response.data?.next ?? null;
+          pageCount += 1;
+          nextUrl = paginate ? response.data?.next ?? null : null;
           // Safety cap to avoid accidental infinite loops
-          if (allResults.length > 2000) {
-            console.warn('[PaymentStatement] passbook pagination aborted after 2000 records');
+          if (allResults.length > 2000 || pageCount > 200) {
+            console.warn('[PaymentStatement] passbook pagination aborted after limit', {
+              total: allResults.length,
+              pages: pageCount,
+            });
             break;
           }
         }
@@ -1065,7 +1083,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAdminUser, selectedDonorIds, selectedMonthKey]);
 
   useEffect(() => {
     let isMounted = true;

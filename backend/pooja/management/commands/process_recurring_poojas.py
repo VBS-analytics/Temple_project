@@ -7,7 +7,8 @@ class Command(BaseCommand):
     help = "Process recurring pooja plans that are due for this month."
 
     def handle(self, *args, **options):
-        result = process_recurring_plans()
+        # Only generate dues/cleanup; avoid creating registrations in manual runs
+        result = process_recurring_plans(create_registrations=False)
         processed = result.get("processed", 0)
         failures = result.get("failures", [])
         self.stdout.write(self.style.SUCCESS(f"Processed {processed} recurring plans."))

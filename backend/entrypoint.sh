@@ -24,6 +24,8 @@ if not User.objects.filter(phone_number='9999999999').exists():
 PYCODE
 
 # ---- Long/optional startup jobs: run in background so Render sees the open port ----
+# Default: DISABLE heavy jobs in production to avoid auto-creating registrations.
+# Set RUN_STARTUP_JOBS=1 to re-enable.
 startup_jobs() {
   set +e  # don't kill the container if these jobs fail
 
@@ -44,8 +46,8 @@ startup_jobs() {
     echo "[BG] Opening balance workbook not found at $OPENING_BALANCE_WORKBOOK, skipping import."
   fi
 
-  # Regenerate passbooks (potentially slow)
-  echo "[BG] Regenerating passbooks..."
+  # Regenerate passbooks (potentially slow). Uses create_registrations=False inside service layer.
+  echo "[BG] Regenerating passbooks (registrations skipped)..."
   python manage.py regenerate_passbooks
   rc=$?
   if [ $rc -eq 0 ]; then
@@ -57,7 +59,8 @@ startup_jobs() {
   echo "[BG] Startup jobs: end"
 }
 
-# Control whether background jobs run (default: run them)
+# Control whether background jobs run (default: enabled for Render deploys)
+# Safe because regenerate_passbooks now skips creating registrations.
 RUN_STARTUP_JOBS="${RUN_STARTUP_JOBS:-1}"
 if [ "$RUN_STARTUP_JOBS" = "1" ]; then
   echo "[4/6] Launching startup jobs in background..."
