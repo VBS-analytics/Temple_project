@@ -8,7 +8,8 @@ class Command(BaseCommand):
     help = "Generate (or backfill) monthly pooja dues and refresh donor passbooks"
 
     def handle(self, *args, **options):
-        result = process_recurring_plans()
+        # Only generate dues/cleanup; avoid creating registrations in monthly job
+        result = process_recurring_plans(create_registrations=False)
         self.stdout.write(self.style.SUCCESS(
             f"Processed recurring plans: {result.get('processed', 0)}; "
             f"created recurring dues: {result.get('due_payments_created', 0)}; "

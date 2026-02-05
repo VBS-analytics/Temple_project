@@ -902,7 +902,11 @@ def _generate_due_payments_for_chrt_poojas(today: Optional[date] = None) -> int:
     return created_count
 
 
-def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:
+def process_recurring_plans(
+    today: Optional[date] = None,
+    *,
+    create_registrations: bool = True,
+) -> Dict[str, Any]:
     now = today or timezone.localdate()
     
     # Clean up any stale CHRT dues from previous months
@@ -930,19 +934,20 @@ def process_recurring_plans(today: Optional[date] = None) -> Dict[str, Any]:
     processed = 0
     failures: List[str] = []
 
-    for plan in pending:
-        try:
-            registration = create_registration_from_plan(plan, plan.next_occurrence)
-            _advance_plan(plan, plan.next_occurrence or now)
-            LOGGER.info(
-                "Created recurring registration %s from plan %s",
-                registration.pk,
-                plan.pk,
-            )
-            processed += 1
-        except Exception as exc:  # pragma: no cover - best effort job
-            LOGGER.exception("Unable to process recurring plan %s", plan.pk)
-            failures.append(str(exc))
+    if create_registrations:
+        for plan in pending:
+            try:
+                registration = create_registration_from_plan(plan, plan.next_occurrence)
+                _advance_plan(plan, plan.next_occurrence or now)
+                LOGGER.info(
+                    "Created recurring registration %s from plan %s",
+                    registration.pk,
+                    plan.pk,
+                )
+                processed += 1
+            except Exception as exc:  # pragma: no cover - best effort job
+                LOGGER.exception("Unable to process recurring plan %s", plan.pk)
+                failures.append(str(exc))
 
     return {
         "processed": processed,
