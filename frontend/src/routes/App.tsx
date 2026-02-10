@@ -1,35 +1,38 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
-import AppLayout from '../components/AppLayout';
-import AuthLayout from '../components/AuthLayout';
-import ProtectedRoute from '../components/ProtectedRoute';
-import CalendarPage from '../pages/CalendarPage';
-import DashboardPage from '../pages/DashboardPage';
-import ForgotPasswordPage from '../pages/ForgotPasswordPage';
-import LoginPage from '../pages/LoginPage';
-import PoojaRegistrationPage from '../pages/PoojaRegistrationPage';
-import PaymentPage from '../pages/payments/PaymentPage';
-import PaymentStatementPage from '../pages/payments/PaymentStatementPage';
-import RegisterPage from '../pages/RegisterPage';
-import CombinePaymentDonorPage from '../pages/admin/CombinePaymentDonorPage';
-import AdminMasterPage from '../pages/admin/AdminMasterPage';
-import BulkDonorUploadPage from '../pages/admin/BulkDonorUploadPage';
-import DonorDetailsPage from '../pages/admin/DonorDetailsPage';
-import ExpensesPage from '../pages/admin/ExpensesPage';
-import PoojaDetailsPage from '../pages/admin/PoojaDetailsPage';
-import PoojaPauseCancelPage from '../pages/admin/PoojaPauseCancelPage';
-import LandingPage from '../pages/LandingPage';
-import About from '../pages/About';
-import AboutKakkalaniVillage from '../pages/AboutKakkalaniVillage';
-import DonorProfile from '../pages/DonorProfile';
-import CombinePaymentPage from '../pages/payments/CombinePaymentPage';
-import ReportPage from '../pages/ReportPage';
-import WhyVisitNativeVillage from '../pages/WhyVisitNativeVillage';
-import History from '../pages/History';
-import { useAuthStore } from '../store/auth';
+import { Navigate, Route, Routes } from "react-router-dom";
+import AppLayout from "../components/AppLayout";
+import AuthLayout from "../components/AuthLayout";
+import ProtectedRoute from "../components/ProtectedRoute";
+import CalendarPage from "../pages/CalendarPage";
+import ForgotPasswordPage from "../pages/ForgotPasswordPage";
+import LoginPage from "../pages/LoginPage";
+import PoojaRegistrationPage from "../pages/PoojaRegistrationPage";
+import PaymentPage from "../pages/payments/PaymentPage";
+import PaymentStatementPage from "../pages/payments/PaymentStatementPage";
+import RegisterPage from "../pages/RegisterPage";
+import CombinePaymentDonorPage from "../pages/admin/CombinePaymentDonorPage";
+import AdminMasterPage from "../pages/admin/AdminMasterPage";
+import BulkDonorUploadPage from "../pages/admin/BulkDonorUploadPage";
+import DonorDetailsPage from "../pages/admin/DonorDetailsPage";
+import ExpensesPage from "../pages/admin/ExpensesPage";
+import PoojaDetailsPage from "../pages/admin/PoojaDetailsPage";
+import PoojaPauseCancelPage from "../pages/admin/PoojaPauseCancelPage";
+import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
+import LandingPage from "../pages/LandingPage";
+import About from "../pages/About";
+import AboutKakkalaniVillage from "../pages/AboutKakkalaniVillage";
+import DonorProfile from "../pages/DonorProfile";
+import FamilyTreePage from "../pages/FamilyTreePage";
+import KovilDetailsPage from "../pages/KovilDetailsPage";
+import CombinePaymentPage from "../pages/payments/CombinePaymentPage";
+import ReportPage from "../pages/ReportPage";
+import WhyVisitNativeVillage from "../pages/WhyVisitNativeVillage";
+import History from "../pages/History";
+import { isAdmin, useAuthStore } from "../store/auth";
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    const destination = isAdmin(user.role) ? "/admin/dashboard" : "/profile";
+    return <Navigate to={destination} replace />;
   }
   return <LandingPage />;
 };
@@ -62,31 +65,49 @@ const App = () => (
     />
     <Route element={<ProtectedRoute />}>
       <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/profile" element={<DonorProfile />} />
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
         <Route path="/payments/general" element={<PaymentPage />} />
         <Route path="/payments/combine" element={<CombinePaymentPage />} />
         <Route path="/payments/statement" element={<PaymentStatementPage />} />
+        <Route path="/profile/about" element={<About embedded />} />
+        <Route path="/profile/family-tree" element={<FamilyTreePage />} />
+        <Route path="/profile/kovi-details" element={<KovilDetailsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>
     <Route element={<ProtectedRoute requireAdmin />}>
       <Route element={<AppLayout />}>
+        <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/master" element={<AdminMasterPage />} />
         <Route path="/admin/bulk-upload" element={<BulkDonorUploadPage />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
-        <Route path="/admin/combine-payment-donor" element={<CombinePaymentDonorPage />} />
-        <Route path="/admin/pooja-pause-cancel" element={<PoojaPauseCancelPage />} />
+        <Route
+          path="/admin/combine-payment-donor"
+          element={<CombinePaymentDonorPage />}
+        />
+        <Route
+          path="/admin/pooja-pause-cancel"
+          element={<PoojaPauseCancelPage />}
+        />
         <Route path="/reports" element={<ReportPage />} />
         <Route path="/admin/expenses" element={<ExpensesPage />} />
-        <Route path="/admin/donor-pooja-registrations" element={<Navigate to="/admin/donors" replace />} />
+        <Route
+          path="/admin/donor-pooja-registrations"
+          element={<Navigate to="/admin/donors" replace />}
+        />
       </Route>
     </Route>
     <Route path="/about" element={<About />} />
-    <Route path="/about-kakkalani-village" element={<AboutKakkalaniVillage />} />
-    <Route path="/why-visit-native-village" element={<WhyVisitNativeVillage />} />
+    <Route
+      path="/about-kakkalani-village"
+      element={<AboutKakkalaniVillage />}
+    />
+    <Route
+      path="/why-visit-native-village"
+      element={<WhyVisitNativeVillage />}
+    />
     <Route path="/history" element={<History />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

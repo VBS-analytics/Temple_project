@@ -13,8 +13,8 @@ interface MappingForm {
   id: number;
   mainPhone: string;
   parentPhones: string[];
+  parentUncombineMonths: string[];
   effectiveMonth: string;
-  uncombineMonth: string;
   statusMessage: { type: 'error' | 'success'; text: string } | null;
 }
 
@@ -37,8 +37,8 @@ const createMappingForm = (): MappingForm => ({
   id: Date.now() + Math.random(),
   mainPhone: '',
   parentPhones: [''],
+  parentUncombineMonths: [''],
   effectiveMonth: '',
-  uncombineMonth: '',
   statusMessage: null,
 });
 
@@ -200,8 +200,8 @@ const CombinePaymentDonorPage = () => {
         id: Date.now(),
         mainPhone: entry.mainDonor.phone,
         parentPhones: entry.parentDonors.map((parent) => parent.phone || ''),
+        parentUncombineMonths: entry.parentDonors.map((parent) => toMonthInputValue(parent.effectiveTo)),
         effectiveMonth: toMonthInputValue(firstParent?.effectiveFrom),
-        uncombineMonth: toMonthInputValue(firstParent?.effectiveTo),
         statusMessage: null,
       },
     ]);
@@ -275,6 +275,7 @@ const CombinePaymentDonorPage = () => {
     mutateForm(formId, (form) => ({
       ...form,
       parentPhones: [...form.parentPhones, ''],
+      parentUncombineMonths: [...form.parentUncombineMonths, ''],
       statusMessage: null,
     }));
   };
@@ -282,9 +283,11 @@ const CombinePaymentDonorPage = () => {
   const handleRemoveParent = (formId: number, index: number) => {
     mutateForm(formId, (form) => {
       const next = form.parentPhones.filter((_, key) => key !== index);
+      const nextMonths = form.parentUncombineMonths.filter((_, key) => key !== index);
       return {
         ...form,
         parentPhones: next.length > 0 ? next : [''],
+        parentUncombineMonths: nextMonths.length > 0 ? nextMonths : [''],
         statusMessage: null,
       };
     });
@@ -298,10 +301,12 @@ const CombinePaymentDonorPage = () => {
     }));
   };
 
-  const handleUncombineMonthChange = (formId: number, value: string) => {
+  const handleUncombineMonthChange = (formId: number, index: number, value: string) => {
     mutateForm(formId, (form) => ({
       ...form,
-      uncombineMonth: value,
+      parentUncombineMonths: form.parentUncombineMonths.map((month, key) =>
+        key === index ? value : month,
+      ),
       statusMessage: null,
     }));
   };
@@ -319,7 +324,27 @@ const CombinePaymentDonorPage = () => {
       }));
       return;
     }
-    const trimmedParents = form.parentPhones.map((value) => value.trim()).filter((value) => value.length > 0);
+    const parentRows = form.parentPhones
+      .map((value, index) => ({
+        phone: value.trim(),
+        uncombineMonth: (form.parentUncombineMonths[index] ?? '').trim(),
+      }))
+      .filter((row) => row.phone.length > 0);
+    const dedupedParents = Array.from(
+      parentRows.reduce((acc, row) => {
+        if (!acc.has(row.phone)) {
+          acc.set(row.phone, row);
+          return acc;
+        }
+        const existing = acc.get(row.phone)!;
+        if (!existing.uncombineMonth && row.uncombineMonth) {
+          acc.set(row.phone, row);
+        }
+        return acc;
+      }, new Map<string, { phone: string; uncombineMonth: string }>())
+        .values(),
+    );
+    const trimmedParents = dedupedParents.map((row) => row.phone);
     if (trimmedParents.length === 0) {
       mutateForm(formId, (current) => ({
         ...current,
@@ -340,17 +365,28 @@ const CombinePaymentDonorPage = () => {
       if (effectiveMonthValue) {
         payload.effective_month = effectiveMonthValue;
       }
-      const uncombineMonthValue = form.uncombineMonth.trim();
-      if (uncombineMonthValue) {
-        payload.uncombine_month = uncombineMonthValue;
-      }
       await api.post('payments/combine-mappings/', payload);
+
+      const uncombineRows = dedupedParents.filter((row) => row.uncombineMonth);
+      for (const row of uncombineRows) {
+        await api.delete('payments/combine-mappings/', {
+          data: {
+            main_phone: trimmedMain,
+            parent_phones: [row.phone],
+            uncombine_month: row.uncombineMonth,
+          },
+        });
+      }
+
       mutateForm(formId, () => ({
         ...createMappingForm(),
         id: formId,
         statusMessage: {
           type: 'success',
-          text: 'Mapping stored in the database.',
+          text:
+            uncombineRows.length > 0
+              ? 'Mapping stored and uncombine month updated for selected parent donors.'
+              : 'Mapping stored in the database.',
         },
       }));
       setEditingEntryId(null);
@@ -464,8 +500,11 @@ const CombinePaymentDonorPage = () => {
       <div className="space-y-6">
         {mappingForms.map((form, index) => {
           const trimmedParents = form.parentPhones
-            .map((value) => value.trim())
-            .filter((value) => value.length > 0);
+            .map((value, idx) => ({
+              phone: value.trim(),
+              uncombineMonth: (form.parentUncombineMonths[idx] ?? '').trim(),
+            }))
+            .filter((row) => row.phone.length > 0);
 
           return (
             <section key={form.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -533,7 +572,7 @@ const CombinePaymentDonorPage = () => {
                   <div className="mt-4 space-y-3">
                     {form.parentPhones.map((value, idx) => (
                       <div key={`parent-${form.id}-${idx}`} className="flex items-center gap-3">
-                        <div className="flex-1 space-y-1">
+                        <div className="flex-1 space-y-2">
                           <label className="block text-sm font-medium text-slate-700">
                             <span className="sr-only">Parent donor phone number {idx + 1}</span>
                             <input
@@ -551,6 +590,23 @@ const CombinePaymentDonorPage = () => {
                               <p className="text-xs font-medium text-slate-500">Donor: {parentName}</p>
                             ) : null;
                           })()}
+                          <label className="block text-xs font-medium text-slate-600">
+                            Uncombine from (optional)
+                            <input
+                              type="date"
+                              value={toDateInputValue(form.parentUncombineMonths[idx])}
+                              onChange={(event) =>
+                                handleUncombineMonthChange(
+                                  form.id,
+                                  idx,
+                                  monthFromDateValue(event.target.value),
+                                )
+                              }
+                              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              placeholder="Select date"
+                              min="2000-01-01"
+                            />
+                          </label>
                         </div>
                         {form.parentPhones.length > 1 && (
                           <button
@@ -596,17 +652,20 @@ const CombinePaymentDonorPage = () => {
                       </p>
                       <p className="text-xs">Parent donors ready to map:</p>
                       <div className="flex flex-wrap gap-2">
-                        {trimmedParents.map((phone, previewIndex) => (
+                        {trimmedParents.map((row, previewIndex) => (
                           <span
-                            key={`preview-${form.id}-${previewIndex}-${phone}`}
+                            key={`preview-${form.id}-${previewIndex}-${row.phone}`}
                             className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
                           >
-                            {phone}
+                            {row.phone}
+                            {row.uncombineMonth
+                              ? ` (Uncombine: ${formatMonthLabel(row.uncombineMonth)})`
+                              : ''}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-4 sm:grid-cols-1">
                       <label className="block text-sm font-medium text-slate-700">
                         Effective from
                         <input
@@ -614,22 +673,6 @@ const CombinePaymentDonorPage = () => {
                           value={toDateInputValue(form.effectiveMonth)}
                           onChange={(event) =>
                             handleEffectiveMonthChange(
-                              form.id,
-                              monthFromDateValue(event.target.value),
-                            )
-                          }
-                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                          placeholder="Select date"
-                          min="2000-01-01"
-                        />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        Uncombine from
-                        <input
-                          type="date"
-                          value={toDateInputValue(form.uncombineMonth)}
-                          onChange={(event) =>
-                            handleUncombineMonthChange(
                               form.id,
                               monthFromDateValue(event.target.value),
                             )

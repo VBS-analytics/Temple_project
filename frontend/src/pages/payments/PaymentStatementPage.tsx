@@ -50,6 +50,10 @@ import { isAdmin, useAuthStore } from '../../store/auth';
 import { useCombineAccessStore } from '../../store/combineAccess';
 import * as XLSX from 'xlsx';
 import { POOJA_CART_SNAPSHOT_UPDATED_EVENT } from '../../constants/events';
+import {
+  normalizePassbookAmountEntries,
+  parsePassbookAmount,
+} from './passbookAmountUtils';
 
 interface PaymentRecordEntry {
   id: number | string;
@@ -375,6 +379,8 @@ const PAYMENT_STATUS_FILTERS: { id: PaymentStatusFilter; label: string }[] = [
 const CURRENT_BALANCE_ENTRY_ID = 'current-balance-entry';
 const CURRENT_BALANCE_ENTRY_DATE = '2025-12-31';
 const CURRENT_BALANCE_ENTRY_DISPLAY_DATE = '31/12/2025';
+const PARENT_AGGREGATE_DONOR_ID = -9999;
+const ALL_PARENT_DONORS_LABEL = 'All Parent Donors';
 
 type PassbookEntry = {
   record: PaymentRecordEntry;
@@ -385,6 +391,32 @@ type PassbookEntry = {
   displayDate?: string;
   isCurrentBalanceEntry?: boolean;
   entryType?: 'due' | 'paid';
+};
+
+type ApiPassbookEntryRaw = {
+  id: number;
+  donor: number;
+  donor_name: string;
+  entry_date: string;
+  entry_type: 'balance' | 'due' | 'paid';
+  opening_balance?: number | string | null;
+  due_amount: number | string | null;
+  paid_amount: number | string | null;
+  closing_due: number | string | null;
+  transaction_details?: string | null;
+};
+
+type ApiPassbookEntry = {
+  id: number;
+  donor: number;
+  donor_name: string;
+  entry_date: string;
+  entry_type: 'balance' | 'due' | 'paid';
+  opening_balance?: number | string | null;
+  due_amount: number;
+  paid_amount: number;
+  closing_due: number;
+  transaction_details?: string | null;
 };
 
 type AdminDonorPassbookGroup = {
@@ -532,11 +564,7 @@ const renderUpcomingOccurrenceList = (occurrences?: PaymentRecordEntry['upcoming
 };
 
 const parseNumeric = (value?: string | number | null) => {
-  if (value === null || value === undefined || value === '') {
-    return 0;
-  }
-  const numeric = typeof value === 'number' ? value : Number(value);
-  return Number.isNaN(numeric) ? 0 : numeric;
+  return parsePassbookAmount(value);
 };
 
 const normalizeStatusLabel = (value?: string | null) => {
@@ -858,19 +886,7 @@ const PaymentStatementPage = () => {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
-  const [apiPassbookEntries, setApiPassbookEntries] = useState<
-    {
-      id: number;
-      donor: number;
-      donor_name: string;
-      entry_date: string;
-      entry_type: 'balance' | 'due' | 'paid';
-      due_amount: number;
-      paid_amount: number;
-      closing_due: number;
-      transaction_details?: string | null;
-    }[]
-  >([]);
+  const [apiPassbookEntries, setApiPassbookEntries] = useState<ApiPassbookEntry[]>([]);
   const [apiPassbookLoading, setApiPassbookLoading] = useState(false);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
@@ -885,6 +901,18 @@ const PaymentStatementPage = () => {
   const localCartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const [activeDonorId, setActiveDonorId] = useState<number | null>(user?.id ?? null);
   const [parentDonorOpeningBalance, setParentDonorOpeningBalance] = useState<number | null>(null);
+  const parentDonorIds = useMemo(
+    () =>
+      parentDonors
+        .map((donor) => (typeof donor.id === 'number' ? donor.id : null))
+        .filter((id): id is number => id !== null),
+    [parentDonors],
+  );
+  const parentDonorNames = useMemo(() => {
+    return parentDonors
+      .map((donor) => (donor.name ?? '').trim().toLowerCase())
+      .filter((name) => name.length > 0);
+  }, [parentDonors]);
 
   // Auto-select current user's records on initial load (for non-admin users)
   // Admin users see all donors by default without auto-selecting
@@ -897,14 +925,13 @@ const PaymentStatementPage = () => {
       if (prev === user.id) {
         return prev;
       }
-      const matchesExistingParent =
-        prev !== null && parentDonors.some((donor) => donor.id === prev);
+      const matchesExistingParent = prev !== null && parentDonorIds.includes(prev);
       if (matchesExistingParent) {
         return prev;
       }
       return user.id;
     });
-  }, [user?.id, parentDonors]);
+  }, [user?.id, parentDonorIds]);
 
   // Fetch combine access permissions for linked accounts
   useEffect(() => {
@@ -915,13 +942,22 @@ const PaymentStatementPage = () => {
 
   // Fetch parent donor's opening balance when activeDonorId changes to a parent donor
   useEffect(() => {
-    if (typeof user?.id !== 'number' || activeDonorId === null) {
+    if (
+      typeof user?.id !== 'number' ||
+      activeDonorId === null ||
+      activeDonorId === PARENT_AGGREGATE_DONOR_ID
+    ) {
       setParentDonorOpeningBalance(null);
       return;
     }
 
     // If viewing current user's records, clear parent balance
     if (activeDonorId === user.id) {
+      setParentDonorOpeningBalance(null);
+      return;
+    }
+
+    if (!parentDonorIds.includes(activeDonorId)) {
       setParentDonorOpeningBalance(null);
       return;
     }
@@ -965,7 +1001,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [activeDonorId, user?.id]);
+  }, [activeDonorId, user?.id, parentDonorIds]);
 
   // Monitor cart snapshot updates for real-time passbook refresh
   useEffect(() => {
@@ -1024,23 +1060,13 @@ const PaymentStatementPage = () => {
     const loadPassbookEntries = async () => {
       setApiPassbookLoading(true);
       try {
-        const allResults: {
-          id: number;
-          donor: number;
-          donor_name: string;
-          entry_date: string;
-          entry_type: 'balance' | 'due' | 'paid';
-          due_amount: number;
-          paid_amount: number;
-          closing_due: number;
-          transaction_details?: string | null;
-        }[] = [];
+        const allResults: ApiPassbookEntry[] = [];
 
         const basePath = 'payments/passbook-entries/';
         const params = new URLSearchParams();
         params.set('ordering', 'entry_date');
-        // Non-admin: only need own entries, one page; backend already filters by user
-        const paginate = isAdminUser || selectedDonorIds.length > 0;
+        // Always paginate because non-admin combined views can span multiple pages.
+        const paginate = true;
         // If admin selected specific donors, include donor_id filter (backend supports single id)
         if (isAdminUser && selectedDonorIds.length === 1) {
           params.set('donor_id', String(selectedDonorIds[0]));
@@ -1056,7 +1082,9 @@ const PaymentStatementPage = () => {
         while (nextUrl) {
           const response = await api.get(nextUrl);
           if (!isMounted) return;
-          const payload = extractResults<typeof allResults[number]>(response.data);
+          const payload = normalizePassbookAmountEntries(
+            extractResults<ApiPassbookEntryRaw>(response.data),
+          );
           allResults.push(...payload);
           pageCount += 1;
           nextUrl = paginate ? response.data?.next ?? null : null;
@@ -1306,26 +1334,8 @@ const PaymentStatementPage = () => {
     const userLabel = (user.name ?? '').trim() || 'My payment statement';
     tabs.push({ key: 'self', donorId: user.id, label: userLabel });
 
-    parentDonors.forEach((parent, index) => {
-      if (typeof parent.id !== 'number') {
-        return;
-      }
-      if (parent.id === user.id) {
-        return;
-      }
-      const name = (parent.name ?? '').trim();
-      const phone = (parent.phone ?? '').trim();
-      const label =
-        [name, phone].filter(Boolean).join(' — ') || `Parent donor ${index + 1}`;
-      tabs.push({
-        key: `parent-${parent.id}-${index}`,
-        donorId: parent.id,
-        label,
-      });
-    });
-
     return tabs;
-  }, [user?.id, user?.name, parentDonors]);
+  }, [user?.id, user?.name, parentDonorIds]);
 
   const showParentDonorTabs = donorViewTabs.length > 1;
 
@@ -1415,7 +1425,17 @@ const PaymentStatementPage = () => {
         return typeof donorId === 'number' && selectedSet.has(donorId);
       });
     } else if (!isAdminUser) {
-      if (activeDonorId != null) {
+      if (activeDonorId === PARENT_AGGREGATE_DONOR_ID) {
+        const parentSet = new Set(parentDonorIds);
+        nextRecords = nextRecords.filter((record) => {
+          const donorId = record.donor;
+          const donorMatch = typeof donorId === 'number' && parentSet.has(donorId);
+          const registrationName = (record.registration_donor_name ?? '').trim().toLowerCase();
+          const registrationMatch =
+            registrationName.length > 0 && parentDonorNames.includes(registrationName);
+          return donorMatch || registrationMatch;
+        });
+      } else if (activeDonorId != null) {
         nextRecords = nextRecords.filter((record) => record.donor === activeDonorId);
       } else {
         nextRecords = [];
@@ -1447,6 +1467,8 @@ const PaymentStatementPage = () => {
     paymentStatusFilter,
     isAdminUser,
     activeDonorId,
+    parentDonorIds,
+    parentDonorNames,
   ]);
 
   const selectedMonthLabel = useMemo(
@@ -1529,11 +1551,32 @@ const PaymentStatementPage = () => {
 
     const entries: PassbookEntry[] = [];
     if (includeBalanceEntry) {
+      let openingDonorId: number | null = null;
+      let openingDonorName: string | null = null;
+
+      if (!isAdminUser) {
+        if (activeDonorId === PARENT_AGGREGATE_DONOR_ID) {
+          openingDonorId = PARENT_AGGREGATE_DONOR_ID;
+          openingDonorName = ALL_PARENT_DONORS_LABEL;
+        } else if (typeof activeDonorId === 'number') {
+          openingDonorId = activeDonorId;
+          if (typeof user?.id === 'number' && activeDonorId === user.id) {
+            openingDonorName = (user.name ?? '').trim() || null;
+          } else {
+            const parentDonor = parentDonors.find((donor) => donor.id === activeDonorId);
+            openingDonorName = (parentDonor?.name ?? '').trim() || null;
+          }
+        } else if (typeof user?.id === 'number') {
+          openingDonorId = user.id;
+          openingDonorName = (user.name ?? '').trim() || null;
+        }
+      }
+
       entries.push({
         record: {
           id: CURRENT_BALANCE_ENTRY_ID,
-          donor: null,
-          donor_name: null,
+          donor: openingDonorId,
+          donor_name: openingDonorName,
           created_at: CURRENT_BALANCE_ENTRY_DATE,
           registration_start_date: CURRENT_BALANCE_ENTRY_DATE,
         },
@@ -1849,7 +1892,12 @@ const PaymentStatementPage = () => {
     let allRecords = mergedRecords;
     
     // Filter by activeDonorId if not admin user
-    if (!isAdminUser && typeof activeDonorId === 'number') {
+    if (!isAdminUser && activeDonorId === PARENT_AGGREGATE_DONOR_ID) {
+      const parentSet = new Set(parentDonorIds);
+      allRecords = allRecords.filter(
+        (record) => typeof record.donor === 'number' && parentSet.has(record.donor),
+      );
+    } else if (!isAdminUser && typeof activeDonorId === 'number') {
       allRecords = allRecords.filter((record) => record.donor === activeDonorId);
     }
     
@@ -1879,19 +1927,345 @@ const PaymentStatementPage = () => {
       });
 
     return calculatedBalance;
-  }, [selectedMonthKey, mergedRecords, activeDonorId, isAdminUser]);
+  }, [selectedMonthKey, mergedRecords, activeDonorId, isAdminUser, parentDonorIds]);
+
+  const buildAggregateParentPassbookEntries = (
+    parentEntries: typeof apiPassbookEntries,
+  ): PassbookEntry[] => {
+    if (!parentEntries.length) {
+      return [];
+    }
+
+    // Group all parent entries by month so only one record shows per month
+    const monthGroups = new Map<
+      string,
+      { monthDate: string; dueTotal: number; paidTotal: number }
+    >();
+
+    parentEntries.forEach((entry) => {
+      const monthKey = entry.entry_date.slice(0, 7); // YYYY-MM
+      const existing = monthGroups.get(monthKey) ?? {
+        monthDate: entry.entry_date,
+        dueTotal: 0,
+        paidTotal: 0,
+      };
+
+      // Track the earliest date within the month for display
+      if (new Date(entry.entry_date).getTime() < new Date(existing.monthDate).getTime()) {
+        existing.monthDate = entry.entry_date;
+      }
+
+      if (entry.entry_type === 'due') {
+        existing.dueTotal += entry.due_amount;
+      } else if (entry.entry_type === 'paid') {
+        existing.paidTotal += entry.paid_amount;
+      }
+
+      monthGroups.set(monthKey, existing);
+    });
+
+    const combined: PassbookEntry[] = [];
+    let runningBalance = 0;
+
+    // Opening balance row once (label it clearly for aggregate view)
+    combined.push({
+      record: {
+        id: `${CURRENT_BALANCE_ENTRY_ID}-aggregate-parent`,
+        donor: PARENT_AGGREGATE_DONOR_ID,
+        donor_name: ALL_PARENT_DONORS_LABEL,
+        created_at: CURRENT_BALANCE_ENTRY_DATE,
+        payment_month: CURRENT_BALANCE_ENTRY_DATE,
+      },
+      dueAmount: 0,
+      paidAmount: 0,
+      openingBalance: runningBalance,
+      closingDue: runningBalance,
+      displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+      isCurrentBalanceEntry: true,
+    });
+
+    const sortedMonths = Array.from(monthGroups.values()).sort(
+      (a, b) => new Date(a.monthDate).getTime() - new Date(b.monthDate).getTime(),
+    );
+
+    sortedMonths.forEach((group) => {
+      // Skip empty months to avoid duplicate 31/12 rows with zero values
+      if (group.dueTotal === 0 && group.paidTotal === 0) {
+        return;
+      }
+
+      const openingBalance = runningBalance;
+      runningBalance = openingBalance + group.dueTotal - group.paidTotal;
+
+      const hasDue = group.dueTotal > 0;
+      const hasPaid = group.paidTotal > 0;
+
+      combined.push({
+        record: {
+          id: `aggregate-parent-${group.monthDate}`,
+          donor: PARENT_AGGREGATE_DONOR_ID,
+          donor_name: ALL_PARENT_DONORS_LABEL,
+          created_at: group.monthDate,
+          payment_month: group.monthDate,
+        },
+        dueAmount: group.dueTotal,
+        paidAmount: group.paidTotal,
+        openingBalance,
+        closingDue: runningBalance,
+        displayDate: formatDisplayDate(group.monthDate),
+        entryType: hasDue && !hasPaid ? 'due' : hasPaid && !hasDue ? 'paid' : undefined,
+      });
+    });
+
+    return combined;
+  };
+
+  const buildAggregateParentPassbookFromRecords = (
+    parentRecords: PaymentRecordEntry[],
+  ): PassbookEntry[] => {
+    if (!parentRecords.length) {
+      return [
+        {
+          record: {
+            id: `${CURRENT_BALANCE_ENTRY_ID}-aggregate-parent-empty`,
+            donor: PARENT_AGGREGATE_DONOR_ID,
+            donor_name: ALL_PARENT_DONORS_LABEL,
+            created_at: CURRENT_BALANCE_ENTRY_DATE,
+            payment_month: CURRENT_BALANCE_ENTRY_DATE,
+          },
+          dueAmount: 0,
+          paidAmount: 0,
+          openingBalance: 0,
+          closingDue: 0,
+          displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+          isCurrentBalanceEntry: true,
+        },
+      ];
+    }
+
+    const monthTotals = new Map<
+      string,
+      { monthKey: string; monthDate: string; dueTotal: number; paidTotal: number }
+    >();
+
+    parentRecords.forEach((record) => {
+      const monthKey = getRecordMonthKey(record);
+      if (!monthKey) return;
+
+      // For aggregate view, treat entries as due unless explicitly marked paid (status === 'success').
+      const rawStatus = (record.status ?? '').toLowerCase();
+      const isPaid = rawStatus === 'success';
+      const dueValue = getDisplayedDueAmountValue(record);
+      const paidValue = getDisplayedPaidAmountValue(record);
+
+      const existing = monthTotals.get(monthKey) ?? {
+        monthKey,
+        monthDate: `${monthKey}-01`,
+        dueTotal: 0,
+        paidTotal: 0,
+      };
+
+      if (!isPaid) {
+        existing.dueTotal += dueValue;
+      } else {
+        existing.paidTotal += paidValue;
+      }
+
+      // Keep earliest date in the month for display consistency
+      const currentTs = new Date(existing.monthDate).getTime();
+      const nextTs = new Date(record.created_at ?? existing.monthDate).getTime();
+      if (!Number.isNaN(nextTs) && nextTs < currentTs) {
+        existing.monthDate = record.created_at ?? existing.monthDate;
+      }
+
+      monthTotals.set(monthKey, existing);
+    });
+
+    const combined: PassbookEntry[] = [];
+    let runningBalance = 0;
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Opening balance row
+    combined.push({
+      record: {
+        id: `${CURRENT_BALANCE_ENTRY_ID}-aggregate-parent`,
+        donor: PARENT_AGGREGATE_DONOR_ID,
+        donor_name: ALL_PARENT_DONORS_LABEL,
+        created_at: CURRENT_BALANCE_ENTRY_DATE,
+        payment_month: CURRENT_BALANCE_ENTRY_DATE,
+      },
+      dueAmount: 0,
+      paidAmount: 0,
+      openingBalance: runningBalance,
+      closingDue: runningBalance,
+      displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+      isCurrentBalanceEntry: true,
+    });
+
+    const sortedMonths = Array.from(monthTotals.values())
+      // drop future months (only show up to current calendar month)
+      .filter((group) => group.monthKey <= currentMonthKey)
+      .sort((a, b) => new Date(a.monthDate).getTime() - new Date(b.monthDate).getTime());
+
+    sortedMonths.forEach((group) => {
+      const hasActivity = group.dueTotal !== 0 || group.paidTotal !== 0;
+      if (!hasActivity) {
+        return;
+      }
+
+      const openingBalance = runningBalance;
+      runningBalance = openingBalance + group.dueTotal - group.paidTotal;
+
+      combined.push({
+        record: {
+          id: `aggregate-parent-${group.monthDate}`,
+          donor: PARENT_AGGREGATE_DONOR_ID,
+          donor_name: ALL_PARENT_DONORS_LABEL,
+          created_at: group.monthDate,
+          payment_month: group.monthDate,
+        },
+        dueAmount: group.dueTotal,
+        paidAmount: group.paidTotal,
+        openingBalance,
+        closingDue: runningBalance,
+        displayDate: formatDisplayDate(group.monthDate),
+        entryType: group.dueTotal > 0 && group.paidTotal === 0 ? 'due' : undefined,
+      });
+    });
+
+    return combined;
+  };
 
   const passbookEntries = useMemo(() => {
-    // For non-admin users, rely solely on backend passbook entries to avoid client-side duplication.
-    if (!isAdminUser) {
+    const isCombinedMainDonor = !isAdminUser && combineRole === 'main' && parentDonorIds.length > 0;
+
+    // Special handling for combined main donors: build a unified timeline from API passbook entries
+    if (isCombinedMainDonor) {
       if (apiPassbookLoading) {
         return [];
       }
-      return apiPassbookEntries.map((entry) => ({
+
+      const mainDonorId = typeof user?.id === 'number' ? user.id : null;
+
+      const applyFilters = (entries: typeof apiPassbookEntries) => {
+        let next = entries;
+        if (selectedMonthKey) {
+          next = next.filter((entry) => entry.entry_date.slice(0, 7) === selectedMonthKey);
+        }
+        if (paymentStatusFilter === 'due') {
+          next = next.filter((entry) => entry.entry_type === 'due');
+        } else if (paymentStatusFilter === 'paid') {
+          next = next.filter((entry) => entry.entry_type === 'paid');
+        }
+        return next;
+      };
+
+      const mainEntries = applyFilters(
+        apiPassbookEntries.filter(
+          (entry) =>
+            entry.donor === mainDonorId &&
+            (entry.entry_type === 'due' || entry.entry_type === 'paid'),
+        ),
+      );
+      const mainBalanceEntry = apiPassbookEntries
+        .filter((entry) => entry.donor === mainDonorId && entry.entry_type === 'balance')
+        .sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime())[0];
+
+      const parentEntries = applyFilters(
+        apiPassbookEntries.filter(
+          (entry) =>
+            parentDonorIds.includes(entry.donor) &&
+            (entry.entry_type === 'due' || entry.entry_type === 'paid'),
+        ),
+      );
+
+      // Aggregate parent dues and paid amounts by month
+      const parentMonthTotals = new Map<
+        string,
+        { monthDate: string; dueTotal: number; paidTotal: number }
+      >();
+
+      parentEntries.forEach((entry) => {
+        const monthKey = entry.entry_date.slice(0, 7);
+        const existing = parentMonthTotals.get(monthKey) ?? {
+          monthDate: entry.entry_date,
+          dueTotal: 0,
+          paidTotal: 0,
+        };
+        if (entry.entry_type === 'due') {
+          existing.dueTotal += entry.due_amount;
+        } else if (entry.entry_type === 'paid') {
+          existing.paidTotal += entry.paid_amount;
+        }
+        if (new Date(entry.entry_date).getTime() < new Date(existing.monthDate).getTime()) {
+          existing.monthDate = entry.entry_date;
+        }
+        parentMonthTotals.set(monthKey, existing);
+      });
+
+      const parentAggregateEntries: PassbookEntry[] = [
+        {
+          record: {
+            id: `${CURRENT_BALANCE_ENTRY_ID}-aggregate-parent`,
+            donor: PARENT_AGGREGATE_DONOR_ID,
+            donor_name: ALL_PARENT_DONORS_LABEL,
+            created_at: CURRENT_BALANCE_ENTRY_DATE,
+            payment_month: CURRENT_BALANCE_ENTRY_DATE,
+          },
+          dueAmount: 0,
+          paidAmount: 0,
+          openingBalance: 0,
+          closingDue: 0,
+          displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+          isCurrentBalanceEntry: true,
+        },
+      ];
+
+      const mainOpeningEntry: PassbookEntry = {
+        record: {
+          id: `${CURRENT_BALANCE_ENTRY_ID}-main-donor`,
+          donor: mainDonorId,
+          donor_name: mainBalanceEntry?.donor_name ?? user?.name ?? null,
+          created_at: CURRENT_BALANCE_ENTRY_DATE,
+          payment_month: CURRENT_BALANCE_ENTRY_DATE,
+        },
+        dueAmount: 0,
+        paidAmount: 0,
+        openingBalance: 0,
+        closingDue: 0,
+        displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
+        isCurrentBalanceEntry: true,
+      };
+
+      Array.from(parentMonthTotals.values())
+        .sort((a, b) => new Date(a.monthDate).getTime() - new Date(b.monthDate).getTime())
+        .forEach((group) => {
+          if (group.dueTotal === 0 && group.paidTotal === 0) {
+            return;
+          }
+          parentAggregateEntries.push({
+            record: {
+              id: `aggregate-parent-${group.monthDate}`,
+              donor: PARENT_AGGREGATE_DONOR_ID,
+              donor_name: ALL_PARENT_DONORS_LABEL,
+              created_at: group.monthDate,
+              payment_month: group.monthDate,
+            },
+            dueAmount: group.dueTotal,
+            paidAmount: group.paidTotal,
+            openingBalance: 0,
+            closingDue: 0,
+            displayDate: formatDisplayDate(group.monthDate),
+            entryType: group.paidTotal > 0 && group.dueTotal === 0 ? 'paid' : 'due',
+          });
+        });
+
+      const mainPassbookEntries: PassbookEntry[] = mainEntries.map((entry) => ({
         record: {
           id: `passbook-${entry.entry_date}-${entry.entry_type}`,
-          donor: user?.id ?? null,
-          donor_name: user?.name ?? null,
+          donor: entry.donor,
+          donor_name: entry.donor_name,
           created_at: entry.entry_date,
           payment_month: entry.entry_date,
           transaction_reference: entry.transaction_details ?? undefined,
@@ -1904,14 +2278,92 @@ const PaymentStatementPage = () => {
         dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
         paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
         openingBalance: 0,
-        closingDue: entry.closing_due,
+        closingDue: 0,
         displayDate: formatDisplayDate(entry.entry_date),
-        entryType: entry.entry_type === 'paid' ? 'paid' : entry.entry_type === 'balance' ? undefined : 'due',
-      })) as PassbookEntry[];
+        entryType: entry.entry_type === 'paid' ? 'paid' : 'due',
+      }));
+
+      // Merge and recompute running balance across main + parent aggregate streams
+      const combinedEntries = [mainOpeningEntry, ...parentAggregateEntries, ...mainPassbookEntries].sort((a, b) => {
+        const dateA =
+          a.record.payment_month ?? a.record.created_at ?? CURRENT_BALANCE_ENTRY_DATE;
+        const dateB =
+          b.record.payment_month ?? b.record.created_at ?? CURRENT_BALANCE_ENTRY_DATE;
+        const diff = new Date(dateA).getTime() - new Date(dateB).getTime();
+        if (diff !== 0) return diff;
+        const aIsParent = a.record.donor === PARENT_AGGREGATE_DONOR_ID;
+        const bIsParent = b.record.donor === PARENT_AGGREGATE_DONOR_ID;
+        if (aIsParent !== bIsParent) {
+          return aIsParent ? 1 : -1; // main first on same date
+        }
+        return 0;
+      });
+
+      let runningBalance = 0;
+      const recomputed = combinedEntries.map((entry) => {
+        const openingBalance = runningBalance;
+        const closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
+        runningBalance = closingDue;
+        return { ...entry, openingBalance, closingDue };
+      });
+
+      return recomputed;
     }
 
-    // If a combined monthly due record exists for a month (registration == null, pending),
-    // drop individual registration pending dues for that same month to avoid duplicates.
+    // Non-combined donor view should rely on backend passbook entries
+    // so monthly dues remain consolidated (e.g., Jan ₹600 instead of split rows).
+    if (!isAdminUser) {
+      if (apiPassbookLoading) {
+        return [];
+      }
+
+      let entries = apiPassbookEntries;
+      if (typeof activeDonorId === 'number') {
+        entries = entries.filter((entry) => entry.donor === activeDonorId);
+      }
+      if (selectedMonthKey) {
+        entries = entries.filter((entry) => entry.entry_date.slice(0, 7) === selectedMonthKey);
+      }
+      if (paymentStatusFilter === 'due') {
+        entries = entries.filter((entry) => entry.entry_type === 'due');
+      } else if (paymentStatusFilter === 'paid') {
+        entries = entries.filter((entry) => entry.entry_type === 'paid');
+      }
+
+      return entries
+        .map(
+          (entry): PassbookEntry => ({
+            record: {
+              id: entry.id,
+              donor: entry.donor,
+              donor_name: entry.donor_name,
+              created_at: entry.entry_date,
+              payment_month: entry.entry_date,
+              transaction_reference: entry.transaction_details ?? undefined,
+              registration: null,
+              registration_start_date: entry.entry_date,
+              registration_total_amount: entry.due_amount,
+              amount: entry.paid_amount,
+              status: entry.entry_type === 'paid' ? 'success' : 'pending',
+            } as PaymentRecordEntry,
+            dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
+            paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
+            openingBalance: parseNumeric(entry.opening_balance),
+            closingDue: entry.closing_due,
+            displayDate: formatDisplayDate(entry.entry_date),
+            entryType:
+              entry.entry_type === 'paid'
+                ? 'paid'
+                : entry.entry_type === 'due'
+                ? 'due'
+                : undefined,
+            isCurrentBalanceEntry: entry.entry_type === 'balance',
+          }),
+        )
+        .sort((a, b) => getRecordTimestamp(a.record) - getRecordTimestamp(b.record));
+    }
+
+    // Default path (admin or non-combined user): keep existing behavior
     const monthlyDueMonths = new Set(
       filteredRecords
         .filter(
@@ -1936,54 +2388,19 @@ const PaymentStatementPage = () => {
             return true;
           });
 
-    // Determine if we should show an opening balance entry
-    // For current user: show if they have a current balance
-    // For parent donor: always show (parentDonorOpeningBalance defaults to 0)
-    let hasBalanceEntry = false;
-    if (!isAdminUser) {
-      if (typeof user?.id === 'number' && activeDonorId === user.id) {
-        // Viewing own records - use current balance
-        hasBalanceEntry = currentBalance !== null && currentBalance !== undefined;
-      } else {
-        // Viewing parent donor records - show if we have an opening balance value
-        hasBalanceEntry = parentDonorOpeningBalance !== null && parentDonorOpeningBalance !== undefined;
-      }
-    }
-    
-    const cachedOpeningBalance = cachedOpeningBalanceRef.current;
-    const isViewingParentDonor = typeof user?.id === 'number' && activeDonorId !== null && activeDonorId !== user.id;
-    
-    // Determine the effective opening balance
-    // For parent donors: use their opening balance, not the current user's
-    let effectiveOpeningBalance = openingBalance ?? 0;
-    if (isViewingParentDonor && parentDonorOpeningBalance !== null) {
-      effectiveOpeningBalance = parentDonorOpeningBalance;
-    }
-    
-    // Calculate initial balance based on selected month or current state
-    let initialBalance = 0;
-    if (monthOpeningBalance !== null) {
-      initialBalance = monthOpeningBalance;
-    } else if (isViewingParentDonor) {
-      // For parent donors: always use their opening balance, never the cached main donor balance
-      initialBalance = effectiveOpeningBalance;
-    } else {
-      // For main donor: use cached or current opening balance
-      initialBalance = cachedOpeningBalance ?? effectiveOpeningBalance ?? 0;
-    }
-    
-    return buildPassbookEntriesFromRecords(cleanedRecords, initialBalance, hasBalanceEntry);
+    return buildPassbookEntriesFromRecords(cleanedRecords, openingBalance ?? 0, true);
   }, [
-    filteredRecords,
-    currentBalance,
-    openingBalance,
-    monthOpeningBalance,
     isAdminUser,
+    combineRole,
+    parentDonorIds,
     activeDonorId,
-    user?.id,
-    parentDonorOpeningBalance,
     apiPassbookEntries,
-    user?.name,
+    apiPassbookLoading,
+    selectedMonthKey,
+    paymentStatusFilter,
+    user?.id,
+    filteredRecords,
+    openingBalance,
   ]);
 
   // ============================================================================
@@ -2016,23 +2433,20 @@ const PaymentStatementPage = () => {
   };
 
   const getEntryDonorNameLabel = (entry: PassbookEntry) => {
-    if (entry.isCurrentBalanceEntry) {
-      return '-';
-    }
     return resolveDonorDisplayLabel(entry.record, entry.record.donor ?? null);
   };
 
-  const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: PaymentRecordEntry[]) => {
-    if (entry.isCurrentBalanceEntry) {
-      return '-';
-    }
-    
-    if (entry.entryType === 'due') {
-      return '--- Pooja DUE ---';
-    }
-    
-    const reference = entry.record.transaction_reference?.trim();
-    if (reference) {
+const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: PaymentRecordEntry[]) => {
+  if (entry.isCurrentBalanceEntry) {
+    return '-';
+  }
+
+  if (entry.entryType === 'due') {
+    return '--- Pooja DUE ---';
+  }
+
+  const reference = entry.record.transaction_reference?.trim();
+  if (reference) {
       return reference;
     }
     return 'Payment recorded';

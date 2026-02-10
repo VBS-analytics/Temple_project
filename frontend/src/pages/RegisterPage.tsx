@@ -246,10 +246,11 @@ const RegisterPage = () => {
     navigate('/');
   };
 
-  const redirectToDashboard = () => {
-    navigate('/dashboard', { replace: true });
+  const redirectToDashboard = (role?: string) => {
+    const target = role && role.toLowerCase().includes('admin') ? '/admin/dashboard' : '/profile';
+    navigate(target, { replace: true });
     if (typeof window !== 'undefined') {
-      window.location.replace('/dashboard');
+      window.location.replace(target);
     }
   };
 
@@ -278,7 +279,7 @@ const RegisterPage = () => {
     try {
       const { data } = await api.post('/auth/register/', payload);
       setAuth({ user: data.user, tokens: data.tokens });
-      redirectToDashboard();
+      redirectToDashboard(data.user?.role);
     } catch (error: any) {
       const responseData = error?.response?.data;
 

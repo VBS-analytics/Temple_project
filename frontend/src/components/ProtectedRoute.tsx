@@ -14,7 +14,7 @@ const ProtectedRoute = ({ requireAdmin = false }: ProtectedRouteProps) => {
   }
 
   if (requireAdmin && !isAdmin(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/profile" replace />;
   }
 
   return <Outlet />;
