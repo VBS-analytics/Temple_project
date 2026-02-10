@@ -1,10 +1,10 @@
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { SVGProps } from 'react';
-import api, { extractResults } from '../lib/api';
-import { isAdmin, useAuthStore } from '../store/auth';
-import { DONATION_AMOUNT } from '../config/globalConstants';
+
+import { DONATION_AMOUNT } from '../../config/globalConstants';
+import api, { extractResults } from '../../lib/api';
+import { useAuthStore } from '../../store/auth';
 
 const TEMPLE_COUNT = 4;
 
@@ -22,13 +22,6 @@ interface RegistrationMember {
   family_name?: string | null;
   tamil_star?: string | null;
   gothra?: string | null;
-}
-
-interface ProfilePayload {
-  profile?: {
-    monthly_donation_amount?: number | string | null;
-  };
-  members?: RegistrationMember[];
 }
 
 interface TodayPoojaRecord {
@@ -262,14 +255,6 @@ const WalletIcon = (props: SVGProps<SVGSVGElement>) => (
   </IconBase>
 );
 
-const CashIcon = (props: SVGProps<SVGSVGElement>) => (
-  <IconBase {...props}>
-    <rect x="4" y="7" width="16" height="10" rx="2" />
-    <path d="M4 11h16" />
-    <circle cx="12" cy="12" r="2" />
-  </IconBase>
-);
-
 const PrasadamIcon = (props: SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <rect x="4" y="10" width="16" height="8" rx="2" />
@@ -298,11 +283,9 @@ const extractArray = (payload: unknown): unknown[] => {
   return [];
 };
 
-const DashboardPage = () => {
+const AdminDashboardPage = () => {
   const user = useAuthStore((state) => state.user);
-  const isAdminUser = isAdmin(user?.role);
-  const displayName = (user?.name ?? '').trim() || (isAdminUser ? 'Temple Admin' : 'Devotee');
-  const navigate = useNavigate();
+  const displayName = (user?.name ?? '').trim() || 'Temple Admin';
 
   const [donorCount, setDonorCount] = useState<number | null>(null);
   const [familyMemberCount, setFamilyMemberCount] = useState<number | null>(null);
@@ -310,7 +293,6 @@ const DashboardPage = () => {
   const [familyLoading, setFamilyLoading] = useState(true);
   const [donationAmount, setDonationAmount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [prasadamRequestCount, setPrasadamRequestCount] = useState<number | null>(null);
   const [todayPoojas, setTodayPoojas] = useState<TodayPoojaRecord[]>([]);
   const [todayPoojaLoading, setTodayPoojaLoading] = useState(true);
   const [todayPoojaError, setTodayPoojaError] = useState<string | null>(null);
@@ -441,57 +423,6 @@ const DashboardPage = () => {
     }
   };
 
-  const loadDonorMetrics = async () => {
-    setTodayPoojaLoading(true);
-    setTodayPoojaError(null);
-    try {
-      setDonorLoading(true);
-      setFamilyLoading(true);
-      setError(null);
-      setDonationAmount(null);
-      setPrasadamRequestCount(null);
-
-      const [profileResponse, registrationsResponse] = await Promise.all([
-        api.get('auth/profile/'),
-        api.get('pooja/registrations/', { params: { page_size: 200 } }),
-      ]);
-
-      const profilePayload = (profileResponse.data ?? {}) as ProfilePayload;
-      const profileMembers = Array.isArray(profilePayload.members) ? profilePayload.members : [];
-      setFamilyMemberCount(profileMembers.length);
-      const profileDonationValue = Number(profilePayload.profile?.monthly_donation_amount ?? 0);
-      const sanitizedDonationValue = Number.isFinite(profileDonationValue) ? profileDonationValue : 0;
-      setDonationAmount(sanitizedDonationValue);
-
-      const registrations = extractResults<TodayPoojaRecord>(registrationsResponse.data);
-      setDonorCount(registrations.length);
-      setTodayPoojas(selectTodayRegistrations(registrations));
-
-      let prasadamTotal = 0;
-
-      registrations.forEach((registration) => {
-        if (registration.post_prasadam) {
-          prasadamTotal += 1;
-        }
-      });
-
-      setPrasadamRequestCount(prasadamTotal);
-    } catch (err) {
-      console.error('Failed to load donor dashboard metrics', err);
-      setError('Unable to load your dashboard metrics right now.');
-      setDonorCount(null);
-      setFamilyMemberCount(null);
-      setDonationAmount(null);
-      setPrasadamRequestCount(null);
-      setTodayPoojas([]);
-      setTodayPoojaError("Unable to load today's pooja details right now.");
-    } finally {
-      setDonorLoading(false);
-      setFamilyLoading(false);
-      setTodayPoojaLoading(false);
-    }
-  };
-
   const handleRefresh = async () => {
     if (refreshing) return;
 
@@ -499,12 +430,8 @@ const DashboardPage = () => {
     setError(null);
 
     try {
-      if (isAdminUser) {
-        await loadAdminMetrics();
-        await loadTodayPoojas();
-      } else {
-        await loadDonorMetrics();
-      }
+      await loadAdminMetrics();
+      await loadTodayPoojas();
     } catch (err) {
       console.error('Failed to refresh dashboard', err);
       setError('Unable to refresh dashboard data right now.');
@@ -515,19 +442,9 @@ const DashboardPage = () => {
 
   useEffect(() => {
     if (!user) return;
-
-    if (isAdminUser) {
-      loadAdminMetrics();
-    } else {
-      loadDonorMetrics();
-    }
-  }, [isAdminUser, user?.id]);
-
-  useEffect(() => {
-    if (!isAdminUser) return;
-
+    loadAdminMetrics();
     loadTodayPoojas();
-  }, [isAdminUser]);
+  }, [user?.id]);
 
   const displayValue = (value: number | null, isLoading: boolean) => {
     if (isLoading && value === null) {
@@ -588,48 +505,6 @@ const DashboardPage = () => {
     },
   ];
 
-  const donorMetrics: {
-    id: string;
-    label: string;
-    value: string;
-    description: string;
-    icon: (props: SVGProps<SVGSVGElement>) => JSX.Element;
-    accent: string;
-  }[] = [
-    {
-      id: 'pooja-total',
-      label: 'Poojas Booked',
-      value: displayValue(donorCount, donorLoading),
-      description: 'Total pooja registrations completed with your account.',
-      icon: TempleIcon,
-      accent: 'bg-orange-100 text-orange-700',
-    },
-    {
-      id: 'family-members',
-      label: 'Family Members',
-      value: displayValue(familyMemberCount, familyLoading),
-      description: 'Family members saved for quick pooja registrations.',
-      icon: FamilyIcon,
-      accent: 'bg-orange-100 text-orange-700',
-    },
-    {
-      id: 'prasadam-requests',
-      label: 'Post Prasadam Requests',
-      value: displayValue(prasadamRequestCount, donorLoading),
-      description: 'Registrations where prasadam delivery was requested.',
-      icon: PrasadamIcon,
-      accent: 'bg-orange-100 text-orange-700',
-    },
-    {
-      id: 'total-donation',
-      label: 'Total Donation',
-      value: donationDisplayValue,
-      description: 'Donations recorded through your account.',
-      icon: CashIcon,
-      accent: 'bg-orange-100 text-orange-700',
-    },
-  ];
-
   const todayReadableLabel = new Date().toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'long',
@@ -644,42 +519,18 @@ const DashboardPage = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-                Welcome back,{' '}
+                Welcome,{' '}
                 <span className="text-orange-700">{displayName}</span>
               </h1>
               <p className="mt-2 text-slate-600 text-sm sm:text-base max-w-2xl">
-                {isAdminUser
-                  ? 'Here is a quick overview of the key metrics across the donor portal.'
-                  : 'Here is a quick snapshot of your pooja bookings and saved devotees.'}
+                Here is a quick overview of the key metrics across the donor portal.
               </p>
             </div>
             <div className="mt-4 md:mt-0 flex items-center space-x-3">
               <div className="inline-flex items-center px-3 sm:px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200">
                 <div className="h-3 w-3 rounded-full bg-orange-500 mr-2"></div>
-                <span className="text-sm font-medium text-slate-700">Dashboard</span>
+                <span className="text-sm font-medium text-slate-700">Admin Dashboard</span>
               </div>
-              {!isAdminUser && (
-                <button
-                  onClick={() => navigate('/profile')}
-                  className="inline-flex items-center px-3 sm:px-4 py-2 bg-orange-600 text-white rounded-lg shadow-sm border border-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200"
-                >
-                  <svg
-                    className="-ml-1 mr-2 h-4 w-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                  Profile
-                </button>
-              )}
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
@@ -741,55 +592,45 @@ const DashboardPage = () => {
         {/* Metrics Cards */}
         <div className="mb-8 sm:mb-12">
           <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {(isAdminUser ? adminMetrics : donorMetrics).map(
-              ({ id, label, value, description, icon: Icon, accent }) => (
-                <div
-                  key={id}
-                  className="group relative rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 md:p-8 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 h-24 w-24 -mr-6 -mt-6 rounded-full bg-rose-50 opacity-50 group-hover:bg-rose-100 transition-colors duration-300"></div>
+            {adminMetrics.map(({ id, label, value, description, icon: Icon, accent }) => (
+              <div
+                key={id}
+                className="group relative rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 md:p-8 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 h-24 w-24 -mr-6 -mt-6 rounded-full bg-rose-50 opacity-50 group-hover:bg-rose-100 transition-colors duration-300"></div>
 
-                  <div className="relative z-10">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-500">{label}</p>
-                        <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">
-                          {value}
-                        </p>
-                      </div>
-                      <div
-                        className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-xl ${accent} shadow-sm flex-shrink-0`}
-                      >
-                        <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
-                      </div>
+                <div className="relative z-10">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-500">{label}</p>
+                      <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">{value}</p>
                     </div>
-                    <p className="mt-3 sm:mt-4 text-sm text-slate-500">{description}</p>
+                    <div
+                      className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-xl ${accent} shadow-sm flex-shrink-0`}
+                    >
+                      <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
+                    </div>
                   </div>
+                  <p className="mt-3 sm:mt-4 text-sm text-slate-500">{description}</p>
                 </div>
-              )
-            )}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Today's Pooja Section - shown only to admins */}
-        {isAdminUser && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Today's Pooja Section */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200 bg-slate-50">
             <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
               <div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                  Today's Pooja Details
-                </h2>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900">Today's Pooja Details</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  {isAdminUser
-                    ? `Pooja registrations scheduled for ${todayReadableLabel}.`
-                    : `Your pooja registrations scheduled for ${todayReadableLabel}.`}
+                  {`Pooja registrations scheduled for ${todayReadableLabel}.`}
                 </p>
               </div>
               <div className="mt-2 sm:mt-0 flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                  {todayPoojas.length}{' '}
-                  {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
+                  {todayPoojas.length} {todayPoojas.length === 1 ? 'Pooja ' : 'Poojas '} Today
                 </span>
               </div>
             </div>
@@ -817,9 +658,7 @@ const DashboardPage = () => {
                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                   />
                 </svg>
-                <h3 className="mt-4 text-lg font-medium text-slate-900">
-                  Unable to load pooja details
-                </h3>
+                <h3 className="mt-4 text-lg font-medium text-slate-900">Unable to load pooja details</h3>
                 <p className="mt-2 text-sm text-slate-500">{todayPoojaError}</p>
               </div>
             ) : todayPoojas.length === 0 ? (
@@ -838,12 +677,8 @@ const DashboardPage = () => {
                     d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <h3 className="mt-4 text-lg font-medium text-slate-900">
-                  No poojas scheduled today
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  There are no pooja registrations scheduled for today.
-                </p>
+                <h3 className="mt-4 text-lg font-medium text-slate-900">No poojas scheduled today</h3>
+                <p className="mt-2 text-sm text-slate-500">There are no pooja registrations scheduled for today.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -894,9 +729,7 @@ const DashboardPage = () => {
                         {todayPoojas.map((pooja, index) => (
                           <tr
                             key={pooja.id}
-                            className={`${
-                              index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
-                            } hover:bg-orange-50 transition-colors duration-150`}
+                            className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-orange-50 transition-colors duration-150`}
                           >
                             <td
                               className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-slate-700 max-w-xs truncate"
@@ -919,9 +752,7 @@ const DashboardPage = () => {
                             <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm text-slate-700">
                               <span
                                 className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  pooja.post_prasadam
-                                    ? 'bg-orange-100 text-orange-800'
-                                    : 'bg-slate-100 text-slate-800'
+                                  pooja.post_prasadam ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-800'
                                 }`}
                               >
                                 {formatBooleanLabel(pooja.post_prasadam)}
@@ -942,11 +773,10 @@ const DashboardPage = () => {
               </div>
             )}
           </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 };
 
-export default DashboardPage;
+export default AdminDashboardPage;

@@ -664,6 +664,74 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
                         preferred_month.isoformat(),
                     )
     
+    # ------------------------------------------------------------------
+    # If a donor no longer has any active CHRT plans, ensure pending dues
+    # no longer carry stale CHRT contributions in any month.
+    # ------------------------------------------------------------------
+    donor_ids_with_pending = set(
+        PaymentRecord.objects.filter(
+            registration__isnull=True,
+            status=PaymentStatus.PENDING,
+        ).values_list("donor_id", flat=True)
+    )
+
+    for donor_id in donor_ids_with_pending:
+        has_active_chrt = RecurringPoojaPlan.objects.filter(
+            donor_id=donor_id,
+            is_active=True,
+            recurrence_kind=RecurrenceKind.RECURRING,
+        ).filter(_chrt_plan_filter()).exists()
+        if has_active_chrt:
+            continue
+
+        non_chrt_total = (
+            RecurringPoojaPlan.objects.filter(
+                donor_id=donor_id,
+                is_active=True,
+                recurrence_kind=RecurrenceKind.RECURRING,
+            )
+            .exclude(_chrt_plan_filter())
+            .aggregate(total=Sum("amount"))
+            .get("total")
+            or Decimal("0.00")
+        )
+
+        stale_dues = (
+            PaymentRecord.objects.filter(
+                donor_id=donor_id,
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+            )
+            .order_by("payment_month", "created_at", "id")
+        )
+
+        # Normalize per month and collapse duplicates to a single pending due row.
+        dues_by_month: dict[date | None, list[PaymentRecord]] = {}
+        for due in stale_dues:
+            dues_by_month.setdefault(due.payment_month, []).append(due)
+
+        for month_key, dues in dues_by_month.items():
+            if not dues:
+                continue
+
+            keeper = dues[0]
+            duplicates = dues[1:]
+
+            if non_chrt_total <= 0:
+                removed, _ = PaymentRecord.objects.filter(pk__in=[d.pk for d in dues]).delete()
+                deleted_count += removed
+                continue
+
+            if keeper.amount != non_chrt_total or "CHRT" in (keeper.notes or ""):
+                keeper.amount = non_chrt_total
+                keeper.notes = "Monthly recurring pooja contribution due (normalized after CHRT removal)"
+                keeper.save(update_fields=["amount", "notes", "updated_at"])
+                adjusted_count += 1
+
+            if duplicates:
+                removed, _ = PaymentRecord.objects.filter(pk__in=[d.pk for d in duplicates]).delete()
+                deleted_count += removed
+
     return deleted_count + adjusted_count
 
 

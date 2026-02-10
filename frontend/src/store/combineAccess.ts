@@ -9,6 +9,7 @@ export interface CombineAccessParent {
   name?: string | null;
   phone?: string | null;
   items: CartItem[];
+  dueMonths?: string[];
   updatedAt?: string | null;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
@@ -70,7 +71,22 @@ export const useCombineAccessStore = create<CombineAccessState>((set, get) => ({
             id: donor?.id ?? null,
             name: donor?.name ?? null,
             phone: donor?.phone ?? null,
-            items: Array.isArray(donor?.items) ? donor.items : [],
+            // Always keep the parent donor's pending items so the Combine Payment page can
+            // display pooja counts and dues. Previously we filtered to cart-prefixed IDs,
+            // which stripped out registration items returned by the API and resulted in
+            // zero due/pooja counts for linked donors.
+            items: Array.isArray(donor?.items)
+              ? donor.items
+                  .filter((item: any) => item && typeof item === 'object')
+                  .map((item: any, index: number) => ({
+                    ...item,
+                    // Ensure every item has a cartId so UI keys stay stable
+                    cartId:
+                      item.cartId ?? `parent-${donor?.id ?? donor?.phone ?? 'unknown'}-${index}`,
+                    members: Array.isArray(item?.members) ? item.members : [],
+                  }))
+              : [],
+            dueMonths: Array.isArray(donor?.due_months) ? donor.due_months : [],
             updatedAt: donor?.updated_at ?? null,
             effectiveFrom: donor?.effective_from ?? null,
             effectiveTo: donor?.effective_to ?? null,

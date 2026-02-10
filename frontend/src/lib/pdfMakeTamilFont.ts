@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+ 
 
 export const TAMIL_FONT_NAME = 'NotoSansTamil';
 export const TAMIL_FONT_FILE = 'NotoSansTamil.ttf';

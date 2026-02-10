@@ -82,6 +82,16 @@ const parseAmount = (value?: number | string | null) => {
   return Number.isNaN(numeric) ? 0 : numeric;
 };
 
+const sumBy = <T,>(items: T[], fn: (item: T) => number) =>
+  items.reduce((sum, item) => sum + fn(item), 0);
+
+const monthKeyFromDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const formatDateTime = (value?: string | null) => {
   if (!value) {
     return '—';
@@ -177,8 +187,12 @@ const CombinePaymentPage: React.FC = () => {
   const [shareError, setShareError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState('');
+  const [copiedUpi, setCopiedUpi] = useState(false);
   const [paymentDate, setPaymentDate] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [paymentScope, setPaymentScope] = useState<'main' | 'parents'>('main');
+  const [parentMonths, setParentMonths] = useState(1);
+  const [parentMonthSelection, setParentMonthSelection] = useState('');
 
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const combineHistory = usePaymentStore((state) => state.combinePaymentHistory);
@@ -207,14 +221,131 @@ const CombinePaymentPage: React.FC = () => {
     [parentDonors],
   );
 
+  // Extract due months from backend-provided list; fall back to bookingDate months
+  const parentDueMonths = useMemo(() => {
+    const months = new Set<string>();
+    parentDonors.forEach((donor) => {
+      if (donor.dueMonths && donor.dueMonths.length) {
+        donor.dueMonths.forEach((m) => months.add(m));
+        return;
+      }
+      donor.items.forEach((item) => {
+        const key = monthKeyFromDate(item?.bookingDate);
+        if (key) months.add(key);
+      });
+    });
+    return Array.from(months).sort();
+  }, [parentDonors]);
+
+  // Per-parent single-month amount: sum items in the earliest due month for that parent
+  const perParentMonthAmount = useMemo(() => {
+    return parentDonors.map((donor) => {
+      const monthKey =
+        (donor.dueMonths && donor.dueMonths.length && donor.dueMonths[0]) ||
+        donor.items
+          .map((item) => monthKeyFromDate(item?.bookingDate))
+          .filter(Boolean)
+          .sort()[0] ||
+        null;
+      let amountForMonth = 0;
+      if (monthKey) {
+        amountForMonth = donor.items
+          .filter((item) => monthKeyFromDate(item?.bookingDate) === monthKey)
+          .reduce((sum, item) => sum + parseAmount((item as any).amount), 0);
+      }
+      if (amountForMonth <= 0 && donor.dueMonths && donor.dueMonths.length > 0) {
+        const total = donor.items.reduce((sum, item) => sum + parseAmount((item as any).amount), 0);
+        amountForMonth = total / donor.dueMonths.length;
+      }
+      return amountForMonth;
+    });
+  }, [parentDonors]);
+
+  const parentDueOptions = useMemo(() => {
+    const formatKey = (key: string) => {
+      const [y, m] = key.split('-');
+      const date = new Date(Number(y), Number(m) - 1, 1);
+      return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    };
+    const singles = parentDueMonths.map((m) => ({
+      value: m,
+      count: 1,
+      label: formatKey(m),
+    }));
+    const combined =
+      parentDueMonths.length > 1
+        ? [
+            {
+              value: 'all',
+              count: parentDueMonths.length,
+              label: `All due months (${parentDueMonths.map(formatKey).join(', ')})`,
+            },
+          ]
+        : [];
+    return [...singles, ...combined];
+  }, [parentDueMonths]);
+
+  const parentMonthlyBundle = useMemo(() => {
+    if (!parentDonors.length) return 0;
+    return perParentMonthAmount.reduce((sum, amt) => sum + amt, 0);
+  }, [parentDonors.length, perParentMonthAmount]);
+
+  const effectiveParentMonthlyBundle = useMemo(() => {
+    if (parentMonthlyBundle > 0) return parentMonthlyBundle;
+    if (parentDueMonths.length > 0) {
+      return parentItemsTotal / parentDueMonths.length;
+    }
+    return 0;
+  }, [parentMonthlyBundle, parentDueMonths.length, parentItemsTotal]);
+
+  const parentMaxMonths = useMemo(() => parentDueMonths.length || (parentMonthlyBundle > 0 ? Math.floor(parentItemsTotal / parentMonthlyBundle) : 0), [parentDueMonths.length, parentItemsTotal, parentMonthlyBundle]);
+  const selectedParentMonths = useMemo(() => {
+    const selected = parentDueOptions.find((opt) => opt.value === (parentMonthSelection || parentDueOptions[0]?.value));
+    return selected?.count ?? parentMonths;
+  }, [parentDueOptions, parentMonthSelection, parentMonths]);
+
+  // Adjust parent month selection when data changes
+  useEffect(() => {
+    const max = Math.max(1, parentMaxMonths || 1);
+    const defaultOption = parentDueOptions[0];
+    setParentMonths((prev) => Math.min(Math.max(1, prev), max));
+    if (defaultOption) {
+      setParentMonthSelection((prev) => (prev ? prev : defaultOption.value));
+      setParentMonths(defaultOption.count);
+    }
+  }, [parentMaxMonths, parentDueOptions]);
+
   const parentItemsCount = useMemo(
     () => parentDonors.reduce((sum, donor) => sum + donor.items.length, 0),
     [parentDonors],
   );
 
-  const combinedTotal = yourTotalAmount + parentItemsTotal;
-  const combinedAmountDue = Math.max(0, combinedTotal - (currentBalance ?? 0));
-  const combinedPoojaCount = allOwnItems.length + parentItemsCount;
+  const selectedAmountDue =
+    paymentScope === 'main'
+      ? yourTotalAmount
+      : Math.max(effectiveParentMonthlyBundle * selectedParentMonths, 0);
+  const selectedPoojaCount = paymentScope === 'main' ? allOwnItems.length : parentItemsCount;
+  const canPayParents = yourTotalAmount <= 0;
+  const parentScopeDisabled = !canPayParents || parentItemsTotal <= 0;
+  const paymentBlocked =
+    processingPayment || selectedAmountDue <= 0 || (paymentScope === 'parents' && !canPayParents);
+
+  useEffect(() => {
+    if (parentScopeDisabled && paymentScope === 'parents') {
+      setPaymentScope('main');
+    }
+  }, [parentScopeDisabled, paymentScope]);
+
+  // Auto-suggest amount for parent scope based on selected months
+  useEffect(() => {
+    if (paymentScope !== 'parents') {
+      return;
+    }
+    if (effectiveParentMonthlyBundle > 0) {
+      const suggested = effectiveParentMonthlyBundle * parentMonths;
+      setAmountPaid(String(suggested));
+    }
+  }, [paymentScope, effectiveParentMonthlyBundle, parentMonths]);
 
   const hasOwnItems = allOwnItems.length > 0;
   const hasParentItems = parentItemsCount > 0;
@@ -298,6 +429,16 @@ const CombinePaymentPage: React.FC = () => {
     [isIos],
   );
 
+  const handleCopyUpi = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText('alamelu7@icici');
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 1200);
+    } catch (err) {
+      console.error('Unable to copy UPI ID', err);
+    }
+  }, []);
+
   const handleClearSummary = () => {
     if (celebrationTimeoutRef.current) {
       clearTimeout(celebrationTimeoutRef.current);
@@ -319,7 +460,12 @@ const CombinePaymentPage: React.FC = () => {
       setTransactionReferenceError('Transaction ID or UPI ID is required.');
       return;
     }
-    if (combinedPoojaCount === 0) {
+    if (selectedPoojaCount === 0) {
+      setSubmissionError('No payable items in the selected scope.');
+      return;
+    }
+    if (paymentScope === 'parents' && yourTotalAmount > 0) {
+      setSubmissionError('Please clear the main donor due before paying for parent donors.');
       return;
     }
 
@@ -336,16 +482,48 @@ const CombinePaymentPage: React.FC = () => {
         return;
       }
       parsedAmount = numericValue;
+    } else if (paymentScope === 'parents') {
+      parsedAmount = selectedAmountDue;
     }
 
-    const amountToRecord = parsedAmount ?? combinedAmountDue;
+    const payableAmount = selectedAmountDue;
+    const amountToRecord = parsedAmount ?? payableAmount;
 
     if (!Number.isFinite(amountToRecord) || amountToRecord <= 0) {
       setSubmissionError('Amount must be greater than zero before continuing.');
       return;
     }
 
+    // Parents: require exact amount for selected months; Main: allow partial but not overpay
+    if (paymentScope === 'parents') {
+      if (effectiveParentMonthlyBundle <= 0) {
+        setSubmissionError('Unable to determine monthly total for parent donors.');
+        return;
+      }
+      const expectedAmount = effectiveParentMonthlyBundle * selectedParentMonths;
+      if (Math.abs(amountToRecord - expectedAmount) > 0.01) {
+        setSubmissionError(`Please pay ₹ ${formatCurrency(expectedAmount)} for the selected months.`);
+        return;
+      }
+      if (selectedParentMonths > parentMaxMonths) {
+        setSubmissionError(
+          `You can pay up to ${parentMaxMonths} month${parentMaxMonths !== 1 ? 's' : ''} now (₹ ${formatCurrency(
+            parentItemsTotal,
+          )}).`,
+        );
+        return;
+      }
+    } else if (paymentScope === 'main' && amountToRecord - payableAmount > 0.01) {
+      setSubmissionError(`Amount exceeds your current due of ₹ ${formatCurrency(payableAmount)}.`);
+      return;
+    }
+
     setProcessingPayment(true);
+
+    const monthlyByDonorId = new Map<number | null, number>();
+    parentDonors.forEach((donor, idx) => {
+      monthlyByDonorId.set(donor.id ?? null, perParentMonthAmount[idx] || 0);
+    });
 
     const donorEntries = parentDonors
       .filter((donor) => donor.items.length > 0)
@@ -365,31 +543,73 @@ const CombinePaymentPage: React.FC = () => {
       .join(' • ');
 
     const notesParts: string[] = [];
-    if (parentNotes) {
-      notesParts.push(`Combined donors (${parentNotes})`);
+    if (paymentScope === 'parents' && parentNotes) {
+      notesParts.push(`Parent donors (${parentNotes})`);
     }
-    if (hasOwnItems) {
-      notesParts.push(`Your poojas: ₹ ${formatCurrency(yourTotalAmount)}`);
+    if (paymentScope === 'main' && hasOwnItems) {
+      notesParts.push(`Main donor poojas: ₹ ${formatCurrency(yourTotalAmount)}`);
     }
-
-    const paymentPayload = {
-      amount: amountToRecord,
-      currency: 'INR',
-      mode: 'upi',
-      status: 'success',
-      transaction_reference: trimmedReference,
-      payment_month: paymentDate || undefined,
-      notes: notesParts.length > 0 ? notesParts.join(' | ') : undefined,
-    };
 
     try {
-      await api.post('payments/records/', paymentPayload);
+      const payments: Array<{
+        donorId: number | null;
+        amount: number;
+        notes?: string;
+      }> = [];
+
+      if (paymentScope === 'main') {
+        if (hasOwnItems && user?.id) {
+          payments.push({
+            donorId: user.id,
+            amount: amountToRecord,
+            notes: `Main donor payment: ₹ ${formatCurrency(amountToRecord)}`,
+          });
+        }
+      } else {
+        const monthsRequested = selectedParentMonths;
+        donorEntries.forEach((entry) => {
+          if (entry.totalAmount <= 0) return;
+          const monthlyAmount =
+            monthlyByDonorId.get(entry.id ?? null) && monthlyByDonorId.get(entry.id ?? null)! > 0
+              ? monthlyByDonorId.get(entry.id ?? null)!
+              : entry.items.length > 0
+                ? parseAmount(entry.items[0]?.amount)
+                : entry.totalAmount / Math.max(1, selectedParentMonths);
+          const payableForDonor = monthlyAmount * monthsRequested;
+          const cappedAmount = Math.min(entry.totalAmount, payableForDonor);
+          if (cappedAmount > 0) {
+            payments.push({
+              donorId: entry.id,
+              amount: cappedAmount,
+              notes: `${entry.name || entry.phone || 'Parent donor'} payment (${monthsRequested} month${monthsRequested !== 1 ? 's' : ''}): ₹ ${formatCurrency(cappedAmount)}`,
+            });
+          }
+        });
+      }
+
+      const splitTotal = payments.reduce((sum, p) => sum + p.amount, 0);
+      if (Math.abs(splitTotal - amountToRecord) > 0.01) {
+        throw new Error('Split total does not match payable amount. Please reload and try again.');
+      }
+
+      for (const payment of payments) {
+        await api.post('payments/records/', {
+          donor_id: payment.donorId ?? undefined,
+          amount: payment.amount,
+          currency: 'INR',
+          mode: 'upi',
+          status: 'success',
+          transaction_reference: trimmedReference,
+          payment_month: paymentDate || undefined,
+          notes: [payment.notes, notesParts.join(' | ')].filter(Boolean).join(' | ') || undefined,
+        });
+      }
 
       addCombinePaymentHistory({
-        yourItems: allOwnItems,
-        yourTotal: yourTotalAmount,
-        donors: donorEntries,
-        combinedTotal,
+        yourItems: paymentScope === 'main' ? allOwnItems : [],
+        yourTotal: paymentScope === 'main' ? amountToRecord : 0,
+        donors: paymentScope === 'parents' ? donorEntries : [],
+        combinedTotal: amountToRecord,
       });
 
       if (typeof currentBalance === 'number') {
@@ -419,7 +639,6 @@ const CombinePaymentPage: React.FC = () => {
       }
       celebrationTimeoutRef.current = setTimeout(() => {
         setShowCelebration(false);
-        navigate('/profile');
       }, 1800);
     } catch (error) {
       console.error('Unable to record combined payment', error);
@@ -433,21 +652,23 @@ const CombinePaymentPage: React.FC = () => {
     allOwnItems,
     cartKey,
     clearCart,
-    combinedAmountDue,
-    combinedPoojaCount,
-    combinedTotal,
     currentBalance,
     hasOwnItems,
     navigate,
+    parentItemsTotal,
     parentDonors,
+    paymentScope,
     refreshBalance,
     transactionReference,
+    selectedAmountDue,
+    selectedPoojaCount,
     yourTotalAmount,
     paymentDate,
+    user,
   ]);
 
   if (canCombine === false) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/profile" replace />;
   }
 
   if (combineRole === 'subordinate') {
@@ -479,9 +700,6 @@ const CombinePaymentPage: React.FC = () => {
     );
   }
 
-  // Helper to get first name for display
-  const firstName = user?.name ? user.name.split(' ')[0] : 'Your';
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50/30 via-white to-orange-50/20 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
@@ -506,6 +724,99 @@ const CombinePaymentPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Donor Details */}
           <div className="lg:col-span-2 space-y-6">
+
+            {/* Guidance Note */}
+            <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-slate-700 shadow-sm">
+              <div className="mt-0.5 text-blue-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+                </svg>
+              </div>
+              <div className="space-y-1">
+                <p className="leading-relaxed">
+                  Please clear your own due first, then proceed to pay the parent donors’ dues. Parent payments stay locked until the main donor due is zero.
+                </p>
+                {!canPayParents && parentItemsTotal > 0 && (
+                  <p className="text-xs text-rose-600 font-semibold">
+                    Main donor due pending — pay ₹ {formatCurrency(yourTotalAmount)} to unlock parent donor payments.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Payment Scope Toggle */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col gap-3">
+              <p className="text-sm font-semibold text-slate-800">Choose whose due to pay now</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentScope('main');
+                    setSubmissionError(null);
+                  }}
+                  className={`relative flex flex-col gap-2 rounded-xl border px-4 py-3 text-left transition hover:border-blue-300 ${
+                    paymentScope === 'main'
+                      ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/60'
+                      : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-4 w-4 rounded-full border-2 ${
+                        paymentScope === 'main' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'
+                      }`}
+                    />
+                    <p className="text-sm font-semibold text-slate-900">
+                      Main Donor Due {user?.name ? `(${user.name})` : ''}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-600 flex items-center gap-1">
+                    <span className="font-semibold text-blue-700">₹ {formatCurrency(yourTotalAmount)}</span>
+                    <span className="text-slate-400">•</span>
+                    {allOwnItems.length} item{allOwnItems.length !== 1 ? 's' : ''}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (parentScopeDisabled) return;
+                    setPaymentScope('parents');
+                    setSubmissionError(null);
+                    if (parentMonthlyBundle > 0) {
+                      setAmountPaid(String(parentMonthlyBundle * parentMonths));
+                    }
+                  }}
+                  disabled={parentScopeDisabled}
+                  className={`relative flex flex-col gap-2 rounded-xl border px-4 py-3 text-left transition ${
+                    paymentScope === 'parents'
+                      ? 'border-orange-500 ring-2 ring-orange-100 bg-orange-50/60'
+                      : 'border-slate-200 bg-slate-50'
+                  } ${parentScopeDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-orange-300'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-4 w-4 rounded-full border-2 ${
+                        paymentScope === 'parents' ? 'border-orange-500 bg-orange-500' : 'border-slate-300'
+                      }`}
+                    />
+                    <p className="text-sm font-semibold text-slate-900">
+                      Parent Donor Due ({parentDonors.length} linked)
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-600 flex items-center gap-1">
+                    <span className="font-semibold text-orange-700">₹ {formatCurrency(parentItemsTotal)}</span>
+                    <span className="text-slate-400">•</span>
+                    {parentItemsCount} item{parentItemsCount !== 1 ? 's' : ''}
+                  </p>
+                  {!canPayParents && (
+                    <p className="text-[11px] text-rose-600 font-semibold">Unlock after clearing main donor due.</p>
+                  )}
+                  {parentItemsTotal <= 0 && (
+                    <p className="text-[11px] text-slate-500">No pending parent dues.</p>
+                  )}
+                </button>
+              </div>
+            </div>
             
             {/* Your Cart Items - MOVED TO TOP */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -635,9 +946,6 @@ const CombinePaymentPage: React.FC = () => {
                                   {donor.phone}
                                 </p>
                               )}
-                              {donor.updatedAt && (
-                                <p className="text-xs text-slate-500 mt-1">Saved on {formatDateTime(donor.updatedAt)}</p>
-                              )}
                             </div>
                           </div>
                           <div className="text-right">
@@ -665,37 +973,26 @@ const CombinePaymentPage: React.FC = () => {
                   </svg>
                   <h3 className="text-xl font-bold">Complete Payment</h3>
                 </div>
-                <p className="text-orange-100 text-sm">₹ {formatCurrency(combinedAmountDue)} • {combinedPoojaCount} items</p>
+                <p className="text-orange-100 text-sm">
+                  ₹ {formatCurrency(selectedAmountDue)} • {selectedPoojaCount} item{selectedPoojaCount !== 1 ? 's' : ''}
+                </p>
               </div>
               <div className="p-6 space-y-5">
                 
                 {/* PAYMENT BREAKDOWN SECTION */}
                 <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-600 font-medium">New Items Total</span>
-                    <span className="font-bold text-slate-800">₹ {formatCurrency(combinedTotal)}</span>
+                    <span className="text-slate-600 font-medium">
+                      {paymentScope === 'main' ? 'Main Donor Due' : 'Parent Donor Due'}
+                    </span>
+                    <span className="font-bold text-slate-800">₹ {formatCurrency(selectedAmountDue)}</span>
                   </div>
                   
-                  {/* Opening Balance Logic: If < 0, it is added (Debt). If > 0, it is deducted (Advance) */}
-                  {currentBalance !== null && currentBalance !== 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-600 font-medium">
-                        {currentBalance < 0 
-                          ? `${firstName}'s Outstanding Balance` 
-                          : `${firstName}'s Advance Balance`
-                        }
-                      </span>
-                      <span className={`font-bold ${currentBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {currentBalance < 0 ? '+' : '-'} ₹ {formatCurrency(Math.abs(currentBalance))}
-                      </span>
-                    </div>
-                  )}
-
                   <div className="border-t border-slate-300 my-2"></div>
 
                   <div className="flex justify-between items-center">
                     <span className="text-slate-900 font-bold text-base">Total Payable</span>
-                    <span className="text-slate-900 font-bold text-lg">₹ {formatCurrency(combinedAmountDue)}</span>
+                    <span className="text-slate-900 font-bold text-lg">₹ {formatCurrency(selectedAmountDue)}</span>
                   </div>
                 </div>
 
@@ -706,13 +1003,39 @@ const CombinePaymentPage: React.FC = () => {
                     alt="Payment QR Code"
                     className="h-48 w-48 rounded-lg border border-slate-200 bg-white p-2 object-contain shadow-sm"
                   />
-                  <p className="mt-3 text-sm font-medium text-slate-700 text-center">
-                    Scan & pay ₹ {formatCurrency(combinedAmountDue)}
-                  </p>
+                  <div className="w-full bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between shadow-sm mt-3">
+                    <div className="flex flex-col">
+                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">UPI ID</p>
+                      <p className="text-sm font-mono font-bold text-slate-900 mt-0.5">alamelu7@icici</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyUpi}
+                      title={copiedUpi ? 'Copied!' : 'Copy UPI ID'}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 transition active:scale-95"
+                    >
+                      {copiedUpi ? (
+                        <span className="text-green-600 font-bold flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          Copied
+                        </span>
+                      ) : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-2">Scan with any UPI app to pay instantly</p>
                   {isAndroid && (
                     <button
                       type="button"
-                      onClick={() => handleOpenUpiApp(combinedAmountDue)}
+                      onClick={() => handleOpenUpiApp(selectedAmountDue)}
                       className="mt-2 px-4 py-2 rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold hover:bg-orange-200 transition"
                     >
                       📲 Open UPI Apps
@@ -721,7 +1044,7 @@ const CombinePaymentPage: React.FC = () => {
                   {isIos && (
                     <button
                       type="button"
-                      onClick={() => handleSharePaymentQr(combinedAmountDue)}
+                      onClick={() => handleSharePaymentQr(selectedAmountDue)}
                       className="mt-2 px-4 py-2 rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold hover:bg-orange-200 transition"
                     >
                       📤 Share QR
@@ -730,25 +1053,69 @@ const CombinePaymentPage: React.FC = () => {
                   {shareError && <p className="mt-2 text-xs text-red-600">{shareError}</p>}
                 </div>
 
-                {/* Account Details */}
-                <RevealableAccountSection className="space-y-3 rounded-xl bg-slate-50 p-4 border border-slate-200">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-1">ALAMELU V</p>
-                    <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
+                {/* Bank Transfer */}
+                <div className="space-y-3 rounded-xl bg-slate-50 p-4 border border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                    </svg>
+                    <p className="text-sm font-bold text-slate-700">Bank Transfer</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
-                    <p className="text-sm font-mono font-semibold text-slate-900 mt-1">007701028012</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
-                    <p className="text-sm font-mono font-semibold text-slate-900 mt-1">ICIC0000077</p>
-                  </div>
-                </RevealableAccountSection>
+                  <RevealableAccountSection className="space-y-3 rounded-lg bg-white p-4 border border-slate-200">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
+                      <p className="text-sm font-semibold text-slate-900 mt-1">ALAMELU V</p>
+                      <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
+                      <p className="text-sm font-mono font-semibold text-slate-900 mt-1">007701028012</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
+                      <p className="text-sm font-mono font-semibold text-slate-900 mt-1">ICIC0000077</p>
+                    </div>
+                  </RevealableAccountSection>
+                </div>
 
                 {/* Payment Form */}
                 <div className="space-y-4 pt-2">
+                  {paymentScope === 'parents' && (effectiveParentMonthlyBundle > 0 || parentDueOptions.length > 0) && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-xs font-semibold text-slate-700 mb-2">Select due months to clear</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select
+                          value={parentMonthSelection || (parentDueOptions[0]?.value ?? '')}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            setParentMonthSelection(nextValue);
+                            const selected = parentDueOptions.find((opt) => opt.value === nextValue);
+                            setParentMonths(selected?.count ?? 1);
+                          }}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                        >
+                          {(parentDueOptions.length
+                            ? parentDueOptions
+                            : [{ value: 'default', count: 1, label: '1 month' }]
+                          ).map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="text-[11px] text-slate-600">
+                          Paying months:&nbsp;
+                          {parentDueOptions.length === 0
+                            ? 'Not available'
+                            : parentDueOptions.find((opt) => opt.value === (parentMonthSelection || parentDueOptions[0]?.value))?.label ||
+                              ''}
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          Amount auto-set for selected months: ₹ {formatCurrency(effectiveParentMonthlyBundle * parentMonths)}.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label htmlFor="transaction-ref" className="text-xs font-semibold uppercase tracking-wide text-slate-600 block mb-2">
                       Transaction ID / UPI ID
@@ -778,15 +1145,15 @@ const CombinePaymentPage: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={amountPaid}
-                      onChange={(e) => {
-                        setAmountPaid(e.target.value);
-                        if (submissionError) setSubmissionError(null);
-                      }}
-                      placeholder={`₹ ${formatCurrency(combinedAmountDue)}`}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                    />
-                  </div>
+                    value={amountPaid}
+                    onChange={(e) => {
+                      setAmountPaid(e.target.value);
+                      if (submissionError) setSubmissionError(null);
+                    }}
+                    placeholder={`₹ ${formatCurrency(selectedAmountDue)}`}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                  />
+                </div>
                   <div>
                     <label htmlFor="payment-date" className="text-xs font-semibold uppercase tracking-wide text-slate-600 block mb-2">
                       Payment Date
@@ -800,14 +1167,14 @@ const CombinePaymentPage: React.FC = () => {
                         if (submissionError) setSubmissionError(null);
                       }}
                       className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                    />
-                  </div>
-                  <button
-                    onClick={handlePaymentCompleted}
-                    disabled={processingPayment}
-                    className="w-full py-3 rounded-lg bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold shadow-lg hover:from-green-700 hover:to-green-800 transition-all hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {processingPayment ? (
+                  />
+                </div>
+                <button
+                  onClick={handlePaymentCompleted}
+                  disabled={paymentBlocked}
+                  className="w-full py-3 rounded-lg bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold shadow-lg hover:from-green-700 hover:to-green-800 transition-all hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {processingPayment ? (
                       <>
                         <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

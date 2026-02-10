@@ -741,7 +741,6 @@ const PaymentPage = () => {
       clearCartItems(cartKey);
       clearPaymentSnapshot(cartKey);
       setShowCelebration(false);
-      navigate('/profile');
     }, 1800);
   };
   

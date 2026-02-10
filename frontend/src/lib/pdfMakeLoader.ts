@@ -56,7 +56,7 @@ const ensureValidBase64 = () => {
   // Decode test: if decode fails, base64 is corrupt
   try {
     // atob available in browser
-    // eslint-disable-next-line no-undef
+     
     atob(b64.slice(0, 2000)); // decode partial for quick sanity
   } catch {
     throw new Error('Tamil font base64 is not valid base64 (decode failed).');

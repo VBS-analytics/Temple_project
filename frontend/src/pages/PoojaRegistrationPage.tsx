@@ -1113,7 +1113,7 @@ const PoojaRegistrationPage = () => {
         status: 'info',
         text: 'Poojas saved successfully. Use the Payments button on the Donor Profile to complete the contribution.',
       });
-      navigate('/profile?tab=registrations');
+      navigate('/profile?tab=overview');
       return true;
     } catch (error) {
       setTableMessage({

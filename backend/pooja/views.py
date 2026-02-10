@@ -388,17 +388,10 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         if self.request.user.role == UserRole.ADMIN:
             queryset = base_qs
         else:
-            # For non-admin users: Include own registrations + active parent donor registrations
-            current_month = timezone.localdate().replace(day=1)
-            active_parent_ids = {
-                mapping.parent_donor_id
-                for mapping in CombinePaymentMapping.objects.filter(main_donor=self.request.user)
-                if mapping.is_active_on(current_month) and mapping.parent_donor_id is not None
-            }
-            if active_parent_ids:
-                queryset = base_qs.filter(Q(donor=self.request.user) | Q(donor_id__in=active_parent_ids))
-            else:
-                queryset = base_qs.filter(donor=self.request.user)
+            # For non-admin users: show only their own registrations.
+            # Parent-donor registrations are surfaced via Combine Payment views instead of this endpoint
+            # to avoid mixing ownership in the main profile tabs.
+            queryset = base_qs.filter(donor=self.request.user)
 
         if has_filters:
             queryset = queryset.filter(filters)
