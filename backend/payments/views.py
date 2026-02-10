@@ -4,6 +4,7 @@ from datetime import date
 from calendar import monthrange
 from decimal import Decimal, ROUND_CEILING
 from io import BytesIO
+from typing import Iterable
 
 from django.http import FileResponse
 from django.db import transaction
@@ -11,6 +12,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.db.models import Window, F
 from django.db.models.functions import RowNumber
+from django.core.cache import cache
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -57,6 +59,39 @@ def _shift_month(dt: date, delta_months: int) -> date:
     month = (dt.month - 1 + delta_months) % 12 + 1
     day = min(dt.day, monthrange(year, month)[1])
     return date(year, month, day)
+
+
+def _maybe_clean_stale_chrt_dues(*, force: bool = False) -> None:
+    """Throttle expensive CHRT cleanup during normal read requests."""
+    cache_key = "payments:stale_chrt_cleanup:last_run"
+    if not force and cache.get(cache_key):
+        return
+    _clean_stale_chrt_dues()
+    cache.set(cache_key, True, timeout=300)
+
+
+def _donor_passbook_needs_refresh(donor_id: int, current_month: date) -> bool:
+    latest_entry = (
+        PassbookEntry.objects.filter(donor_id=donor_id)
+        .order_by("-entry_date", "-id")
+        .only("entry_date")
+        .first()
+    )
+    if not latest_entry:
+        return True
+    latest_month = latest_entry.entry_date.replace(day=1)
+    return latest_month < current_month
+
+
+def _refresh_passbooks_if_needed(
+    donor_ids: Iterable[int],
+    *,
+    force: bool,
+    current_month: date,
+) -> None:
+    for donor_id in donor_ids:
+        if force or _donor_passbook_needs_refresh(donor_id, current_month):
+            regenerate_donor_passbook(donor_id)
 
 
 def _closing_due_for_donor(donor_id: int):
@@ -110,8 +145,9 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
-        # Ensure stale CHRT dues are cleaned before returning any records
-        _clean_stale_chrt_dues()
+        # Ensure stale CHRT dues are cleaned before returning any records.
+        # Throttled to avoid expensive work on each list call.
+        _maybe_clean_stale_chrt_dues()
 
         qs = (
             PaymentRecord.objects.select_related("donor", "registration", "registration__pooja_option")
@@ -1124,23 +1160,20 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
         """Get passbook entries for current user or all donors if admin."""
         user = self.request.user
 
-        # Ensure CHRT dues are cleaned and passbook is fresh before returning data.
-        _clean_stale_chrt_dues()
-
         # Avoid expensive regeneration on every request; only refresh when missing
         # data or when the caller explicitly asks for it.
         should_refresh = self.request.query_params.get('refresh', 'false').lower() == 'true'
+        _maybe_clean_stale_chrt_dues(force=should_refresh)
 
         if user.role == UserRole.ADMIN:
             donor_id_param = self.request.query_params.get('donor_id')
             if donor_id_param and donor_id_param.isdigit():
                 # For admin filtered view, refresh just that donor if requested or empty.
-                qs_probe = PassbookEntry.objects.filter(donor_id=int(donor_id_param))
-                latest_entry = qs_probe.order_by("-entry_date", "-id").first()
-                latest_month = latest_entry.entry_date.replace(day=1) if latest_entry else None
+                donor_id_int = int(donor_id_param)
+                qs_probe = PassbookEntry.objects.filter(donor_id=donor_id_int)
                 current_month = timezone.localdate().replace(day=1)
-                if should_refresh or not qs_probe.exists() or (latest_month and latest_month < current_month):
-                    regenerate_donor_passbook(int(donor_id_param))
+                if should_refresh or not qs_probe.exists() or _donor_passbook_needs_refresh(donor_id_int, current_month):
+                    regenerate_donor_passbook(donor_id_int)
             else:
                 # Admin without donor filter: regenerate only if explicitly requested.
                 if should_refresh:
@@ -1155,11 +1188,13 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
             for mapping in parent_mappings:
                 if mapping.is_active_on(current_month):
                     donor_ids_to_refresh.append(mapping.parent_donor_id)
-            
-            # Refresh passbook for all relevant donors if needed
-            for donor_id in donor_ids_to_refresh:
-                # Always regenerate for donors the viewer is allowed to see.
-                regenerate_donor_passbook(donor_id)
+
+            # Refresh only when explicitly requested or stale/missing.
+            _refresh_passbooks_if_needed(
+                set(donor_ids_to_refresh),
+                force=should_refresh,
+                current_month=current_month,
+            )
         
         if user.role == UserRole.ADMIN:
             # Admins can see all passbook entries

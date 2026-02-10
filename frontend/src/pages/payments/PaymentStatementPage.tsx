@@ -1065,6 +1065,7 @@ const PaymentStatementPage = () => {
         const basePath = 'payments/passbook-entries/';
         const params = new URLSearchParams();
         params.set('ordering', 'entry_date');
+        params.set('page_size', '500');
         // Always paginate because non-admin combined views can span multiple pages.
         const paginate = true;
         // If admin selected specific donors, include donor_id filter (backend supports single id)
@@ -2565,17 +2566,65 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     selectedMonthKey,
   ]);
 
-  const adminPassbookRecordCount = adminPassbookGroups.reduce(
+  const adminFallbackPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
+    if (!isAdminUser || apiPassbookLoading || adminPassbookGroups.length > 0 || filteredRecords.length === 0) {
+      return [];
+    }
+
+    const groupedByDonor = new Map<number, PaymentRecordEntry[]>();
+    filteredRecords.forEach((record) => {
+      if (typeof record.donor !== 'number') return;
+      const donorId = record.donor;
+      const rows = groupedByDonor.get(donorId) ?? [];
+      rows.push(record);
+      groupedByDonor.set(donorId, rows);
+    });
+
+    return Array.from(groupedByDonor.entries())
+      .map(([donorId, donorRecords]) => {
+        const donorPhone = donorPhones[donorId] ?? '';
+        const donorLabel =
+          donorRecords.find((r) => (r.donor_name ?? '').trim().length > 0)?.donor_name ||
+          donorOptions.find((d) => d.id === donorId)?.label ||
+          `Donor #${donorId}`;
+        const entries = buildPassbookEntriesFromRecords(
+          donorRecords,
+          donorOpeningBalances[donorId] ?? 0,
+          true,
+        );
+        return {
+          id: `fallback-donor-${donorId}`,
+          donorId,
+          label: `${donorLabel} - ${donorPhone || 'phone N/A'}`,
+          entries,
+        };
+      })
+      .filter((group) => group.entries.length > 0)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [
+    adminPassbookGroups.length,
+    apiPassbookLoading,
+    donorOpeningBalances,
+    donorOptions,
+    donorPhones,
+    filteredRecords,
+    isAdminUser,
+  ]);
+
+  const adminGroupsToRender =
+    adminPassbookGroups.length > 0 ? adminPassbookGroups : adminFallbackPassbookGroups;
+  const adminGroupsRecordCount = adminGroupsToRender.reduce(
     (sum, group) => sum + group.entries.length,
     0,
   );
+  const isStatementLoading = loading || apiPassbookLoading;
 
   const passbookSummaryText = isAdminUser
-    ? adminPassbookGroups.length
-      ? `${adminPassbookRecordCount} record${
-          adminPassbookRecordCount === 1 ? '' : 's'
-        } • ${adminPassbookGroups.length} donor${
-          adminPassbookGroups.length === 1 ? '' : 's'
+    ? adminGroupsToRender.length
+      ? `${adminGroupsRecordCount} record${
+          adminGroupsRecordCount === 1 ? '' : 's'
+        } • ${adminGroupsToRender.length} donor${
+          adminGroupsToRender.length === 1 ? '' : 's'
         }`
       : 'No payment records'
     : `${passbookEntries.length} record${passbookEntries.length === 1 ? '' : 's'}`;
@@ -2776,14 +2825,14 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
           </div>
           <p className="text-xs text-slate-500">{passbookSummaryText}</p>
         </div>
-        {loading ? (
+        {isStatementLoading ? (
           <div className="px-4 py-5 text-sm text-slate-500">Loading payment records…</div>
         ) : error ? (
           <div className="px-4 py-5 text-sm text-rose-600">{error}</div>
         ) : isAdminUser ? (
-          adminPassbookGroups.length ? (
+          adminGroupsToRender.length ? (
             <div className="px-4 py-3 space-y-6">
-                      {adminPassbookGroups.map((group) => (
+                      {adminGroupsToRender.map((group) => (
                         <div
                           key={group.id}
                           className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
@@ -2797,7 +2846,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
                     </div>
                     <p className="text-xs text-slate-500">
                       {group.entries.length} record{group.entries.length === 1 ? '' : 's'}
-For Admin, In the Payment Statement Passbook View,                     </p>
+                    </p>
                   </div>
                   <div className="mt-3 space-y-3">
                     <div className="hidden md:block">
