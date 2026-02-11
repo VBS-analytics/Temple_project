@@ -8,7 +8,7 @@ from typing import Iterable
 
 from django.http import FileResponse
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Max, Q, Sum
 from django.utils import timezone
 from django.db.models import Window, F
 from django.db.models.functions import RowNumber
@@ -73,14 +73,35 @@ def _maybe_clean_stale_chrt_dues(*, force: bool = False) -> None:
 def _donor_passbook_needs_refresh(donor_id: int, current_month: date) -> bool:
     latest_entry = (
         PassbookEntry.objects.filter(donor_id=donor_id)
-        .order_by("-entry_date", "-id")
-        .only("entry_date")
+        .order_by("-entry_date", "-created_at", "-id")
+        .only("entry_date", "created_at")
         .first()
     )
     if not latest_entry:
         return True
     latest_month = latest_entry.entry_date.replace(day=1)
-    return latest_month < current_month
+    if latest_month < current_month:
+        return True
+
+    latest_passbook_ts = latest_entry.created_at
+    latest_payment_ts = (
+        PaymentRecord.objects.filter(donor_id=donor_id)
+        .aggregate(last_ts=Max("updated_at"))
+        .get("last_ts")
+    )
+    latest_plan_ts = (
+        RecurringPoojaPlan.objects.filter(donor_id=donor_id)
+        .aggregate(last_ts=Max("updated_at"))
+        .get("last_ts")
+    )
+
+    latest_source_ts = latest_payment_ts
+    if latest_plan_ts and (latest_source_ts is None or latest_plan_ts > latest_source_ts):
+        latest_source_ts = latest_plan_ts
+
+    if latest_source_ts and latest_passbook_ts and latest_source_ts > latest_passbook_ts:
+        return True
+    return False
 
 
 def _refresh_passbooks_if_needed(
@@ -1259,7 +1280,7 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
                 rn=Window(
                     expression=RowNumber(),
                     partition_by=[F("donor_id"), F("entry_date"), F("entry_type")],
-                    order_by=F("created_at").asc(),
+                    order_by=F("created_at").desc(),
                 )
             )
             .filter(rn=1)
