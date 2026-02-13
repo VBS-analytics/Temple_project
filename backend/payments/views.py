@@ -18,6 +18,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.access import can_view_payment_statement
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
@@ -1180,6 +1181,8 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Get passbook entries for current user or all donors if admin."""
         user = self.request.user
+        if not can_view_payment_statement(user):
+            return PassbookEntry.objects.none()
 
         # Avoid expensive regeneration on every request; only refresh when missing
         # data or when the caller explicitly asks for it.

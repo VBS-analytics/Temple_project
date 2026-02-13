@@ -27,7 +27,7 @@ import CombinePaymentPage from "../pages/payments/CombinePaymentPage";
 import ReportPage from "../pages/ReportPage";
 import WhyVisitNativeVillage from "../pages/WhyVisitNativeVillage";
 import History from "../pages/History";
-import { isAdmin, useAuthStore } from "../store/auth";
+import { canViewPaymentStatement, isAdmin, useAuthStore } from "../store/auth";
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
@@ -36,6 +36,19 @@ const HomeRoute = () => {
   }
   return <LandingPage />;
 };
+
+const PaymentStatementRoute = () => {
+  const user = useAuthStore((state) => state.user);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!canViewPaymentStatement(user)) {
+    const fallback = isAdmin(user.role) ? "/admin/dashboard" : "/profile";
+    return <Navigate to={fallback} replace />;
+  }
+  return <PaymentStatementPage />;
+};
+
 const App = () => (
   <Routes>
     <Route path="/" element={<HomeRoute />} />
@@ -69,7 +82,7 @@ const App = () => (
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
         <Route path="/payments/general" element={<PaymentPage />} />
         <Route path="/payments/combine" element={<CombinePaymentPage />} />
-        <Route path="/payments/statement" element={<PaymentStatementPage />} />
+        <Route path="/payments/statement" element={<PaymentStatementRoute />} />
         <Route path="/profile/about" element={<About embedded />} />
         <Route path="/profile/family-tree" element={<FamilyTreePage />} />
         <Route path="/profile/kovi-details" element={<KovilDetailsPage />} />

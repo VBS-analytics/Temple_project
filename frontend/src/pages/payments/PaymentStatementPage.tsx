@@ -380,7 +380,7 @@ const CURRENT_BALANCE_ENTRY_ID = 'current-balance-entry';
 const CURRENT_BALANCE_ENTRY_DATE = '2025-12-31';
 const CURRENT_BALANCE_ENTRY_DISPLAY_DATE = '31/12/2025';
 const PARENT_AGGREGATE_DONOR_ID = -9999;
-const ALL_PARENT_DONORS_LABEL = 'All Parent Donors';
+const ALL_PARENT_DONORS_LABEL = 'Sub-ordinate Donors';
 
 type PassbookEntry = {
   record: PaymentRecordEntry;

@@ -6,7 +6,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import useCartSync from "../hooks/useCartSync";
 import useSessionTimeout from "../hooks/useSessionTimeout";
 import SessionExpiryPrompt from "./SessionExpiryPrompt";
-import { isAdmin, useAuthStore } from "../store/auth";
+import { canViewPaymentStatement, isAdmin, isReadOnlyAdmin, useAuthStore } from "../store/auth";
 import { useCombineAccessStore } from "../store/combineAccess";
 
 type NavItem = {
@@ -40,6 +40,7 @@ const AppLayout = () => {
 
   const mainClassName = "responsive-layout py-6 sm:py-8";
   const isAdminUser = Boolean(user && isAdmin(user.role));
+  const readOnlyAdmin = isReadOnlyAdmin(user);
 
   const userInitials =
     user?.name
@@ -51,7 +52,9 @@ const AppLayout = () => {
 
   const userRoleLabel = user
     ? isAdminUser
-      ? "Temple Admin"
+      ? readOnlyAdmin
+        ? "Temple Admin (Read Only)"
+        : "Temple Admin"
       : "Donor"
     : "Guest";
 
@@ -106,7 +109,7 @@ const AppLayout = () => {
     {
       to: "/payments/statement",
       label: "Payment Statement",
-      show: Boolean(user),
+      show: canViewPaymentStatement(user),
     },
   ];
 
@@ -131,7 +134,7 @@ const AppLayout = () => {
     {
       to: "/payments/statement",
       label: "Payment Statement",
-      show: Boolean(user),
+      show: canViewPaymentStatement(user),
     },
     {
       to: "/profile/about",
