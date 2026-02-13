@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Callable
 
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
+from accounts.access import is_read_only_admin
 
 class SilentJWTAuthentication(JWTAuthentication):
     """
@@ -49,3 +50,26 @@ class NoCacheForAuthenticatedMiddleware:
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
+
+
+class ReadOnlyAdminWriteBlockMiddleware:
+    """Block mutating API requests for restricted read-only admin accounts."""
+
+    SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]):
+        self.get_response = get_response
+        self.jwt_auth = SilentJWTAuthentication()
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if request.path.startswith("/api/") and request.method.upper() not in self.SAFE_METHODS:
+            auth_result = self.jwt_auth.authenticate(request)
+            if auth_result is not None:
+                user, _token = auth_result
+                request.user = user
+                if is_read_only_admin(user):
+                    return JsonResponse(
+                        {"detail": "This admin account has read-only access."},
+                        status=403,
+                    )
+        return self.get_response(request)

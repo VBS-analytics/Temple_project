@@ -21,6 +21,7 @@ from .models import (
     OtpToken,
     User,
 )
+from .access import can_view_payment_statement, is_read_only_admin
 from .serializers import DonorProfileSerializer, RegisterSerializer
 
 SQLITE_DB_CONFIG = {
@@ -238,3 +239,28 @@ class ImportOpeningBalancesCommandTests(TestCase):
             self.assertIsNone(self.profile.custom_number)
         finally:
             os.unlink(workbook_path)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class AdminAccessPolicyTests(TestCase):
+    def test_read_only_admin_access_rules(self):
+        read_only_admin = User.objects.create_superuser(
+            phone_number="9999999998",
+            name="Read Only Admin",
+            password="adminpass1",
+        )
+        full_admin = User.objects.create_superuser(
+            phone_number="9999999999",
+            name="Full Admin",
+            password="adminpass",
+        )
+        hidden_statement_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Hidden Statement Admin",
+            password="adminpass2",
+        )
+
+        self.assertTrue(is_read_only_admin(read_only_admin))
+        self.assertFalse(can_view_payment_statement(hidden_statement_admin))
+        self.assertFalse(is_read_only_admin(full_admin))
+        self.assertTrue(can_view_payment_statement(full_admin))

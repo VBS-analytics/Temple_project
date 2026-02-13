@@ -82,3 +82,35 @@ export const useAuthStore = create<AuthState>()(
 );
 
 export const isAdmin = (role?: string) => role === 'admin';
+
+const READ_ONLY_ADMIN_PHONES = new Set(['9999999998', '9999999997']);
+const PAYMENT_STATEMENT_HIDDEN_ADMIN_PHONES = new Set(['9999999997']);
+
+const phoneCandidates = (phoneNumber?: string): string[] => {
+  if (!phoneNumber) {
+    return [];
+  }
+  const raw = phoneNumber.trim();
+  const digits = raw.replace(/\D/g, '');
+  const values = [raw, digits];
+  if (digits.length > 10) {
+    values.push(digits.slice(-10));
+  }
+  return Array.from(new Set(values.filter(Boolean)));
+};
+
+const isInPhoneSet = (phoneNumber: string | undefined, phoneSet: Set<string>): boolean =>
+  phoneCandidates(phoneNumber).some((candidate) => phoneSet.has(candidate));
+
+export const isReadOnlyAdmin = (user?: UserProfile): boolean =>
+  Boolean(user && isAdmin(user.role) && isInPhoneSet(user.phone_number, READ_ONLY_ADMIN_PHONES));
+
+export const canViewPaymentStatement = (user?: UserProfile): boolean => {
+  if (!user) {
+    return false;
+  }
+  if (!isAdmin(user.role)) {
+    return true;
+  }
+  return !isInPhoneSet(user.phone_number, PAYMENT_STATEMENT_HIDDEN_ADMIN_PHONES);
+};

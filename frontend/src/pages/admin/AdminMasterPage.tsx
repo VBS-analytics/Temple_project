@@ -1519,7 +1519,7 @@ const AdminMasterPage = () => {
                           </button>
                         )}
                       </div>
-                      {!editingHeader && <p className="text-xs text-slate-500">Header codes are generated automatically.</p>}
+                      {!editingHeader && <p className="text-xs text-slate-500"></p>}
                     </form>
                   </section>
 
@@ -1587,7 +1587,7 @@ const AdminMasterPage = () => {
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500">Code, header, description and at least one rate field are mandatory.</p>
+                      <p className="text-xs text-slate-500">Header, description and at least one rate field are mandatory.</p>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"

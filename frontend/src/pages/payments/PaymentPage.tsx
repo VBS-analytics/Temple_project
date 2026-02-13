@@ -99,14 +99,6 @@ interface PassbookSummaryEntry {
   closing_due?: string | number | null;
 }
 
-const parsePassbookAmount = (value?: string | number | null) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  const numeric = typeof value === 'number' ? value : Number(value);
-  return Number.isNaN(numeric) ? null : numeric;
-};
-
 const allocatePaymentAmounts = (items: CartItem[], totalAmount: number) => {
   const toPaise = (value: number) => {
     if (!Number.isFinite(value)) {
@@ -286,9 +278,10 @@ const PaymentPage = () => {
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const [copiedUpi, setCopiedUpi] = useState(false);
-  const [latestPassbookEntry, setLatestPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
-  const [latestPaidPassbookEntry, setLatestPaidPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
-  const [passbookSummaryLoading, setPassbookSummaryLoading] = useState(false);
+  const [, setLatestPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
+  const [, setLatestPaidPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
+  const [, setPassbookSummaryLoading] = useState(false);
+  const [activeMethod, setActiveMethod] = useState<'upi' | 'bank'>('upi');
   
   const {
     balance: currentBalance,
@@ -433,67 +426,11 @@ const PaymentPage = () => {
     [dueRecords],
   );
   
-  const computedDueAmount = paymentSnapshot ? cartTotalAmount : dueTotalAmount;
   const initialBalance = currentBalance ?? openingBalance;
   const runningBalance = initialBalance ?? 0;
   const effectiveCartAmount = paymentSnapshot ? cartTotalAmount : dueTotalAmount;
   const needToPayForPooja = Math.max(0, runningBalance + effectiveCartAmount);
   const netPaymentAmount = needToPayForPooja;
-  
-  const lastPaymentEntry = useMemo(
-    () => {
-      const history = generalPaymentHistory.filter((entry) => entry.userKey === cartKey);
-      return history.length > 0 ? history[0] : null;
-    },
-    [generalPaymentHistory, cartKey],
-  );
-  
-  const lastPaymentAmountLabel = lastPaymentEntry
-    ? `₹ ${formatCurrency(lastPaymentEntry.amountPaid ?? lastPaymentEntry.amount ?? lastPaymentEntry.totalAmount)}`
-    : '—';
-  const lastPaymentDateLabel = lastPaymentEntry
-    ? formatDate(
-        lastPaymentEntry.paymentDate ??
-          lastPaymentEntry.created_at ??
-          lastPaymentEntry.completedAt ??
-          lastPaymentEntry.createdAt,
-      )
-    : '—';
-  
-  const passbookDueValue = parsePassbookAmount(latestPassbookEntry?.due_amount);
-  const passbookClosingValue = parsePassbookAmount(latestPassbookEntry?.closing_due);
-  const paidPassbookEntry = latestPaidPassbookEntry ?? latestPassbookEntry;
-  const paidPassbookDueValue = parsePassbookAmount(paidPassbookEntry?.due_amount);
-  const paidPassbookPaidValue = parsePassbookAmount(paidPassbookEntry?.paid_amount);
-  const paidPassbookDateLabel = paidPassbookEntry?.entry_date
-    ? formatDate(paidPassbookEntry.entry_date)
-    : null;
-  
-  const paymentPageCurrentDueLabel = (() => {
-    if (paymentSnapshot) {
-      return `₹ ${formatCurrency(cartTotalAmount)}`;
-    }
-    const sourceValue =
-      paidPassbookDueValue != null ? paidPassbookDueValue : passbookDueValue != null ? passbookDueValue : computedDueAmount;
-    if (sourceValue != null) {
-      return `₹ ${formatCurrency(sourceValue)}`;
-    }
-    return '—';
-  })();
-  
-  const paymentPageLastPaymentLabel =
-    paidPassbookPaidValue != null ? `₹ ${formatCurrency(paidPassbookPaidValue)}` : lastPaymentAmountLabel;
-  const paymentPageDateLabel = paidPassbookDateLabel ?? lastPaymentDateLabel;
-  
-  const paymentPageClosingDueLabel = (() => {
-    if (paymentSnapshot) {
-      return `₹ ${formatCurrency(computedDueAmount)}`;
-    }
-    if (passbookClosingValue != null) {
-      return `₹ ${formatCurrency(passbookClosingValue)}`;
-    }
-    return '—';
-  })();
   
   const parentName = combinedTo?.name ?? 'Parent donor';
   const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
@@ -741,7 +678,7 @@ const PaymentPage = () => {
       clearCartItems(cartKey);
       clearPaymentSnapshot(cartKey);
       setShowCelebration(false);
-    }, 1800);
+    }, 5000);
   };
   
   // Combined Role Check
@@ -786,11 +723,8 @@ const PaymentPage = () => {
     return <Navigate to="/payments/combine" replace />;
   }
   
-  // Helper to get first name
-  const firstName = user?.name ? user.name.split(' ')[0] : 'Your';
-  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50/30 via-white to-orange-50/20 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-full bg-slate-50 p-4 sm:p-6 lg:p-8">
       {/* Celebration Animation */}
       {showCelebration && (
         <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
@@ -813,8 +747,8 @@ const PaymentPage = () => {
             ))}
           </div>
           <div className="absolute inset-x-0 top-24 flex justify-center">
-            <div className="rounded-full bg-white/90 px-6 py-3 text-base font-semibold text-orange-700 shadow-lg backdrop-blur-sm border border-orange-200">
-              ✨ Payment completed! Thank you.
+            <div className="rounded-full border border-violet-200 bg-white/90 px-6 py-3 text-base font-semibold text-violet-700 shadow-lg backdrop-blur-sm">
+              🙏 Temple seva received successfully. Thank you.
             </div>
           </div>
         </div>
@@ -842,248 +776,221 @@ const PaymentPage = () => {
         </div>
       )}
       
-      <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-gradient-to-br from-orange-100 to-orange-200 p-3 rounded-2xl shadow-sm">
-              <svg className="w-8 h-8 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      <div className="mx-auto w-full max-w-7xl">
+        <header className="mb-6 px-1">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-slate-100 p-2">
+              <svg className="h-5 w-5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">Payment Page</h1>
-              <p className="text-sm text-slate-600 mt-1">Manage your pooja payments securely and efficiently</p>
-            </div>
+            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Payment Page</h1>
           </div>
-        </div>
-        
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Payment Method */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="bg-gradient-to-r from-orange-50 to-orange-100 px-6 py-4 border-b border-orange-200">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-xl shadow-sm">
-                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">Payment Methods</h2>
-                    <p className="text-xs text-slate-600">Choose UPI or Bank Transfer</p>
+        </header>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+            <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-slate-900">
+              <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
+              Payment Method
+            </h2>
+
+            <div className="mb-5 flex rounded-lg border border-slate-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setActiveMethod('upi')}
+                className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
+                  activeMethod === 'upi'
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                UPI
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMethod('bank')}
+                className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
+                  activeMethod === 'bank'
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Bank Transfer
+              </button>
+            </div>
+
+            {activeMethod === 'upi' ? (
+              <div className="space-y-5">
+                <div className="mx-auto w-full max-w-[320px] rounded-xl border border-slate-200 bg-white p-4">
+                  <img
+                    src={PAYMENT_QR_IMAGE_URL}
+                    alt="Payment QR Code"
+                    className="mx-auto h-44 w-44 object-contain sm:h-52 sm:w-52"
+                  />
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">UPI ID</p>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <p className="truncate text-base font-bold text-slate-900 sm:text-lg">alamelu7@icici</p>
+                    <button
+                      type="button"
+                      onClick={handleCopyUpi}
+                      title={copiedUpi ? 'Copied!' : 'Copy UPI ID'}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      aria-label="Copy UPI ID"
+                    >
+                      {copiedUpi ? 'Copied' : 'Copy'}
+                    </button>
                   </div>
                 </div>
-              </div>
-              
-              <div className="p-6">
-                {/* UPI Section */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    UPI Payment
-                  </h3>
-                  <div className="flex flex-col items-center gap-4 bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <img
-                      src={PAYMENT_QR_IMAGE_URL}
-                      alt="Payment QR Code"
-                      className="h-48 w-48 rounded-lg border border-slate-200 bg-white p-2 object-contain shadow-sm"
-                    />
-                    
-                    {/* UPI ID Section */}
-                    <div className="w-full bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between shadow-sm hover:border-orange-300 transition">
-                      <div className="flex flex-col">
-                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">UPI ID</p>
-                        <p className="text-sm font-mono font-bold text-slate-900 mt-0.5">alamelu7@icici</p>
-                      </div>
+
+                <p className="text-center text-sm text-slate-500">Scan with any UPI app to pay instantly</p>
+
+                {(isAndroid || isIos) && (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {isAndroid && (
                       <button
-                        onClick={handleCopyUpi}
-                        title={copiedUpi ? "Copied!" : "Copy UPI ID"}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 transition active:scale-95"
-                        aria-label="Copy UPI ID"
+                        type="button"
+                        onClick={() => handleOpenUpiApp(netPaymentAmount)}
+                        className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
-                        {copiedUpi ? (
-                          <span className="text-green-600 font-bold flex items-center gap-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                            Copied
-                          </span>
-                        ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                            Copy
-                          </>
-                        )}
+                        Open UPI
                       </button>
-                    </div>
-                    
-                    <p className="text-center text-sm text-slate-600">Scan with any UPI app to pay instantly</p>
-                    <div className="flex w-full gap-2">
-                      {isAndroid && (
-                        <button
-                          onClick={() => handleOpenUpiApp(netPaymentAmount)}
-                          className="flex-1 rounded-lg border-2 border-orange-600 bg-white px-3 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-50 transition"
-                        >
-                          📲 Open UPI
-                        </button>
-                      )}
-                      {isIos && (
-                        <button
-                          onClick={() => handleSharePaymentQr(netPaymentAmount)}
-                          className="flex-1 rounded-lg border-2 border-orange-600 bg-white px-3 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-50 transition"
-                        >
-                          📤 Share
-                        </button>
-                      )}
-                    </div>
-                    {shareError && <p className="text-xs text-red-600" role="alert">{shareError}</p>}
+                    )}
+                    {isIos && (
+                      <button
+                        type="button"
+                        onClick={() => handleSharePaymentQr(netPaymentAmount)}
+                        className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Share QR
+                      </button>
+                    )}
                   </div>
-                </div>
-                
-                {/* Bank Transfer Section */}
+                )}
+
+                {shareError && <p className="text-xs text-red-600" role="alert">{shareError}</p>}
+              </div>
+            ) : (
+              <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
-                    </svg>
-                    Bank Transfer
-                  </h3>
-                  <div className="space-y-3 rounded-xl bg-slate-50 p-4 border border-slate-200">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                      <p className="text-sm font-semibold text-slate-900 mt-1">ALAMELU V</p>
-                      <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
-                      <p className="text-sm font-mono font-semibold text-slate-900 mt-1">007701028012</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
-                      <p className="text-sm font-mono font-semibold text-slate-900 mt-1">ICIC0000077</p>
-                    </div>
-                  </div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">ALAMELU V</p>
+                  <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
+                  <p className="mt-1 text-sm font-mono font-bold text-slate-900">007701028012</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
+                  <p className="mt-1 text-sm font-mono font-bold text-slate-900">ICIC0000077</p>
                 </div>
               </div>
-            </div>
-          </div>
-          
-          {/* Right Column - Complete Payment */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden sticky top-6">
-              <div className="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-5 text-white">
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-xl font-bold">Complete Payment</h3>
-                </div>
-                <p className="text-orange-100 text-sm">Enter payment details to confirm</p>
-              </div>
-              
-              <div className="p-6 space-y-5">              
-                {/* Payment Form */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handlePaymentCompleted();
+            )}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+            <h2 className="mb-3 flex items-center gap-2 text-xl font-bold text-slate-900">
+              <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
+              Complete Payment
+            </h2>
+            <p className="mb-5 text-sm text-slate-500">
+              Submit your payment reference after completing the transfer.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handlePaymentCompleted();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label htmlFor="transaction-ref" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Transaction ID / UPI ID
+                </label>
+                <input
+                  id="transaction-ref"
+                  type="text"
+                  value={transactionReference}
+                  onChange={(e) => {
+                    setTransactionReference(e.target.value);
+                    if (transactionReferenceError) setTransactionReferenceError(null);
                   }}
-                  className="space-y-4"
-                >
-                  <div>
-                    <label htmlFor="transaction-ref" className="text-xs font-semibold uppercase tracking-wide text-slate-600 block mb-2">
-                      Transaction ID / UPI ID
-                    </label>
-                    <input
-                      id="transaction-ref"
-                      type="text"
-                      value={transactionReference}
-                      onChange={(e) => {
-                        setTransactionReference(e.target.value);
-                        if (transactionReferenceError) setTransactionReferenceError(null);
-                      }}
-                      placeholder="Enter reference or UPI ID"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                    />
-                    {transactionReferenceError && (
-                      <p className="mt-1 text-xs text-red-600">{transactionReferenceError}</p>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="amount-paid" className="text-xs font-semibold uppercase tracking-wide text-slate-600 block mb-2">
-                      Amount Paid
-                    </label>
-                    <input
-                      id="amount-paid"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={amountPaid}
-                      onChange={(e) => {
-                        setAmountPaid(e.target.value);
-                        if (amountPaidError) setAmountPaidError(null);
-                      }}
-                      placeholder={`₹ ${formatCurrency(netPaymentAmount)}`}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                    />
-                    {amountPaidError && (
-                      <p className="mt-1 text-xs text-red-600">{amountPaidError}</p>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="payment-date" className="text-xs font-semibold uppercase tracking-wide text-slate-600 block mb-2">
-                      Payment Date
-                    </label>
-                    <input
-                      id="payment-date"
-                      type="date"
-                      value={paymentDate}
-                      onChange={(e) => {
-                        setPaymentDate(e.target.value);
-                        if (paymentDateError) setPaymentDateError(null);
-                      }}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                    />
-                    {paymentDateError && (
-                      <p className="mt-1 text-xs text-red-600">{paymentDateError}</p>
-                    )}
-                  </div>
-                  
-                  <button
-                    type="submit"
-                    disabled={registrationInProgress || (!paymentSnapshot && dueRecords.length === 0)}
-                    className="w-full py-3 rounded-lg bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold shadow-lg hover:from-green-700 hover:to-green-800 transition-all hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {registrationInProgress ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Payment Completed
-                      </>
-                    )}
-                  </button>
-                </form>
+                  placeholder="Enter reference or UPI ID"
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                />
+                {transactionReferenceError && (
+                  <p className="mt-1 text-xs text-red-600">{transactionReferenceError}</p>
+                )}
               </div>
-            </div>
-          </div>
+
+              <div>
+                <label htmlFor="amount-paid" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Amount Paid
+                </label>
+                <input
+                  id="amount-paid"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={amountPaid}
+                  onChange={(e) => {
+                    setAmountPaid(e.target.value);
+                    if (amountPaidError) setAmountPaidError(null);
+                  }}
+                  placeholder="Enter amount paid"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                />
+                {amountPaidError && (
+                  <p className="mt-1 text-xs text-red-600">{amountPaidError}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="payment-date" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Payment Date
+                </label>
+                <input
+                  id="payment-date"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => {
+                    setPaymentDate(e.target.value);
+                    if (paymentDateError) setPaymentDateError(null);
+                  }}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                />
+                {paymentDateError && (
+                  <p className="mt-1 text-xs text-red-600">{paymentDateError}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={registrationInProgress}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300 disabled:opacity-70"
+              >
+                {registrationInProgress ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    Pay
+                  </>
+                )}
+              </button>
+            </form>
+          </section>
         </div>
       </div>
     </div>

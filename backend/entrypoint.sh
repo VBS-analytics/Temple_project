@@ -15,12 +15,27 @@ echo "[3/6] Seeding default admin (if missing)..."
 python manage.py shell <<'PYCODE'
 from django.contrib.auth import get_user_model
 User = get_user_model()
-if not User.objects.filter(phone_number='9999999999').exists():
-    User.objects.create_superuser(
-        phone_number='9999999999',
-        name='Temple Admin',
-        password='adminpass'
-    )
+default_admins = [
+    {
+        "phone_number": "9999999999",
+        "name": "Temple Admin",
+        "password": "adminpass",
+    },
+    {
+        "phone_number": "9999999998",
+        "name": "Temple Admin1",
+        "password": "adminpass1",
+    },
+    {
+        "phone_number": "9999999997",
+        "name": "Temple Admin2",
+        "password": "adminpass2",
+    },
+]
+
+for admin_payload in default_admins:
+    if not User.objects.filter(phone_number=admin_payload["phone_number"]).exists():
+        User.objects.create_superuser(**admin_payload)
 PYCODE
 
 # ---- Long/optional startup jobs: run in background so Render sees the open port ----

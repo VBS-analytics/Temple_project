@@ -1049,9 +1049,19 @@ const PoojaRegistrationPage = () => {
   const addToCart = useCartStore((state) => state.addItem);
   const removeFromCart = useCartStore((state) => state.removeItem);
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
+  const setItemsForUser = useCartStore((state) => state.setItemsForUser);
   const clearCart = useCartStore((state) => state.clear);
   const clearGeneralPayment = usePaymentStore((state) => state.clearGeneralPayment);
   const baseUserId = typeof profile?.user?.id === 'number' ? profile.user.id : null;
+  const validPoojaIds = useMemo(() => {
+    const ids = new Set<number>();
+    poojaOptions.forEach((option) => {
+      if (option.is_active && !option.is_group_header) {
+        ids.add(option.id);
+      }
+    });
+    return ids;
+  }, [poojaOptions]);
   const cartTotals = useMemo(() => {
     const count = cartItems.length;
     const amount = cartItems.reduce((total, item) => {
@@ -1097,6 +1107,19 @@ const PoojaRegistrationPage = () => {
       });
       return false;
     }
+    const validItems = cartItems.filter((item) => validPoojaIds.has(item.poojaId));
+    if (validItems.length !== cartItems.length) {
+      const removedCount = cartItems.length - validItems.length;
+      setItemsForUser(cartKey, validItems);
+      setTableMessage({
+        status: 'error',
+        text:
+          removedCount === 1
+            ? 'Removed 1 outdated pooja from cart. Please review and save again.'
+            : `Removed ${removedCount} outdated poojas from cart. Please review and save again.`,
+      });
+      return false;
+    }
     const createdAtOverride = selectedRegistrationDate
       ? new Date(selectedRegistrationDate).toISOString()
       : undefined;
@@ -1124,7 +1147,7 @@ const PoojaRegistrationPage = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [cartItems, cartKey, clearCart, clearGeneralPayment, navigate, selectedRegistrationDate]);
+  }, [cartItems, cartKey, clearCart, clearGeneralPayment, navigate, selectedRegistrationDate, setItemsForUser, validPoojaIds]);
   const openDatePrompt = useCallback(() => setIsDatePromptOpen(true), []);
   const closeDatePrompt = useCallback(() => setIsDatePromptOpen(false), []);
   const handleDatePromptSubmit = useCallback(
@@ -1721,6 +1744,25 @@ const PoojaRegistrationPage = () => {
       return matchesSearch && matchesCategory && matchesDeity;
     });
   }, [masterRows, searchQuery, selectedCategoryDefinition, selectedDeityOption]);
+
+  useEffect(() => {
+    if (cartItems.length === 0 || validPoojaIds.size === 0) {
+      return;
+    }
+    const nextItems = cartItems.filter((item) => validPoojaIds.has(item.poojaId));
+    const removedCount = cartItems.length - nextItems.length;
+    if (removedCount <= 0) {
+      return;
+    }
+    setItemsForUser(cartKey, nextItems);
+    setTableMessage({
+      status: 'error',
+      text:
+        removedCount === 1
+          ? 'Removed 1 outdated pooja from cart because it no longer exists.'
+          : `Removed ${removedCount} outdated poojas from cart because they no longer exist.`,
+    });
+  }, [cartItems, cartKey, setItemsForUser, validPoojaIds]);
 
   useEffect(() => {
     if (masterRows.length === 0 || dayOptionCodeMap.size === 0) {
