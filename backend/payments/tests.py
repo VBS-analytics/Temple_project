@@ -17,6 +17,7 @@ from pooja.models import (
     RecurringPoojaPlan,
 )
 from payments.models import PassbookEntry
+from payments.models import PaymentRecord, PaymentStatus
 from payments.services import regenerate_donor_passbook
 from payments.views import _donor_passbook_needs_refresh
 
@@ -115,3 +116,121 @@ class PassbookDeduplicationTests(TestCase):
             .get()
         )
         self.assertEqual(row.due_amount, Decimal("600.00"))
+
+    def test_dedup_keeps_distinct_paid_rows_on_same_date(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000003",
+            name="Paid Dedup Donor",
+            password="secret",
+        )
+
+        first_payment = PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("500.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="TXN-A",
+            payment_month=date(2026, 2, 1),
+        )
+        second_payment = PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("600.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="TXN-B",
+            payment_month=date(2026, 2, 1),
+        )
+
+        PassbookEntry.objects.create(
+            donor=donor,
+            entry_date=date(2026, 2, 1),
+            entry_type="paid",
+            transaction_details="TXN-A",
+            payment_record=first_payment,
+            opening_balance=Decimal("1000.00"),
+            due_amount=Decimal("0.00"),
+            paid_amount=Decimal("500.00"),
+            closing_due=Decimal("500.00"),
+        )
+        PassbookEntry.objects.create(
+            donor=donor,
+            entry_date=date(2026, 2, 1),
+            entry_type="paid",
+            transaction_details="TXN-B",
+            payment_record=second_payment,
+            opening_balance=Decimal("500.00"),
+            due_amount=Decimal("0.00"),
+            paid_amount=Decimal("600.00"),
+            closing_due=Decimal("-100.00"),
+        )
+
+        rows = (
+            PassbookEntry.objects.filter(donor=donor)
+            .annotate(
+                rn=Window(
+                    expression=RowNumber(),
+                    partition_by=[
+                        F("donor_id"),
+                        F("entry_date"),
+                        F("entry_type"),
+                        F("payment_record_id"),
+                        F("registration_id"),
+                        F("transaction_details"),
+                        F("due_amount"),
+                        F("paid_amount"),
+                    ],
+                    order_by=F("created_at").desc(),
+                )
+            )
+            .filter(rn=1)
+        )
+
+        self.assertEqual(rows.count(), 2)
+
+
+class PassbookOrderingTests(TestCase):
+    def test_same_day_due_and_paid_apply_due_before_paid(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000004",
+            name="Ordering Donor",
+            password="secret",
+        )
+        pooja_option = PoojaOption.objects.create(code="R3", name="Recurring 3")
+        day_option = PoojaDayOption.objects.create(
+            code="REGULAR_ORDER_TEST",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 1, 1),
+            amount=Decimal("1000.00"),
+            is_active=True,
+        )
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("1000.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="FA19147194",
+            payment_month=date(2026, 1, 1),
+        )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 2, 11)):
+            regenerate_donor_passbook(donor.id)
+
+        jan_entries = list(
+            PassbookEntry.objects.filter(donor=donor, entry_date=date(2026, 1, 1))
+            .exclude(entry_type="balance")
+            .order_by("id")
+        )
+        self.assertEqual(len(jan_entries), 2)
+        self.assertEqual(jan_entries[0].entry_type, "due")
+        self.assertEqual(jan_entries[0].closing_due, Decimal("1000.00"))
+        self.assertEqual(jan_entries[1].entry_type, "paid")
+        self.assertEqual(jan_entries[1].closing_due, Decimal("0.00"))
