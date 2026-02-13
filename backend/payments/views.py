@@ -1277,7 +1277,7 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
             if entry_type in {"balance", "due", "paid"}:
                 qs = qs.filter(entry_type=entry_type)
 
-        # Deduplicate only true duplicates produced by regeneration/races.
+        # Deduplicate only true duplicates produced by regeneration/races
         # Keep distinct paid rows on same day when they come from different
         # payment records (or different references).
         qs = (
