@@ -282,7 +282,24 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
 
             all_records.append(("registration", rr, date_val))
 
-        all_records.sort(key=lambda x: x[2])
+        def _record_sort_key(entry):
+            # Keep deterministic ordering on the same day:
+            # 1) opening/due rows first, 2) paid rows after dues.
+            # This prevents transient negative balances when both due and
+            # payment exist for the same date.
+            entry_kind = entry[0]
+            date_val = entry[2]
+            if entry_kind == "payment":
+                record = entry[1]
+                created_at = getattr(record, "created_at", None)
+                created_ts = created_at.timestamp() if created_at else 0
+                return (date_val, 1, created_ts, getattr(record, "id", 0) or 0)
+            record = entry[1]
+            created_at = getattr(record, "created_at", None) if record is not None else None
+            created_ts = created_at.timestamp() if created_at else 0
+            return (date_val, 0, created_ts, getattr(record, "id", 0) or 0)
+
+        all_records.sort(key=_record_sort_key)
 
         # Calculate running balance and create entries
         running_balance = opening_balance

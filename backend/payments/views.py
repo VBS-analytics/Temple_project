@@ -1277,12 +1277,23 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
             if entry_type in {"balance", "due", "paid"}:
                 qs = qs.filter(entry_type=entry_type)
 
-        # Deduplicate: keep earliest record per (donor, entry_date, entry_type)
+        # Deduplicate only true duplicates produced by regeneration/races.
+        # Keep distinct paid rows on same day when they come from different
+        # payment records (or different references).
         qs = (
             qs.annotate(
                 rn=Window(
                     expression=RowNumber(),
-                    partition_by=[F("donor_id"), F("entry_date"), F("entry_type")],
+                    partition_by=[
+                        F("donor_id"),
+                        F("entry_date"),
+                        F("entry_type"),
+                        F("payment_record_id"),
+                        F("registration_id"),
+                        F("transaction_details"),
+                        F("due_amount"),
+                        F("paid_amount"),
+                    ],
                     order_by=F("created_at").desc(),
                 )
             )
