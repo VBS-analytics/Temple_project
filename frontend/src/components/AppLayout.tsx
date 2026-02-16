@@ -65,7 +65,7 @@ const AppLayout = () => {
       : "Donor hub";
 
   const adminNavItems: NavItem[] = [
-    { to: "/admin/dashboard", label: "Dashboard", show: true, end: true },
+    { to: "/admin/dashboard", label: "Dashboard", show: false, end: true },
     {
       to: "/admin/master",
       label: "Admin Master",
@@ -74,7 +74,7 @@ const AppLayout = () => {
     {
       to: "/admin/bulk-upload",
       label: "Bulk Upload",
-      show: Boolean(user && isAdmin(user.role)),
+      show: false,
     },
     {
       to: "/admin/donors",

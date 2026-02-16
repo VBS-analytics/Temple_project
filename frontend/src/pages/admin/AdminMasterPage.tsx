@@ -308,7 +308,7 @@ const AdminMasterPage = () => {
   const summaryCards = useMemo(
     () => [
       { 
-        label: 'Active Headers', 
+        label: 'Pooja Titiles', 
         value: headerCount, 
         helper: 'Grouping categories',
         icon: (
@@ -347,8 +347,28 @@ const AdminMasterPage = () => {
           </svg>
         )
       },
+      { 
+        label: 'Rasi', 
+        value: rasiOptions.length, 
+        helper: 'Zodiac references',
+        icon: (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.9 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z" />
+          </svg>
+        )
+      },
+      { 
+        label: 'Gothram', 
+        value: gothraOptions.length, 
+        helper: 'Gotra references',
+        icon: (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 10.5a4.5 4.5 0 10-9 0 4.5 4.5 0 009 0zM4.5 21a7.5 7.5 0 0115 0" />
+          </svg>
+        )
+      },
     ],
-    [headerCount, totalPoojaEntries, poojaOptions.length, englishDayOptions.length],
+    [headerCount, totalPoojaEntries, poojaOptions.length, englishDayOptions.length, gothraOptions.length],
   );
 
   const formatCategoryLabel = (value: string) => {
@@ -1282,7 +1302,7 @@ const AdminMasterPage = () => {
                 </div>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
               {summaryCards.map((card) => (
                 <div
                   key={card.label}

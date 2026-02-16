@@ -874,58 +874,6 @@ const DonorDetailsPage = () => {
           </svg>
         ),
       },
-      {
-        label: 'Pooja Registrations',
-        value: formatNumber(registrationCardValue),
-        helper: registrationsHelper,
-        icon: (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 text-rose-500"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8.25 6.75h12m-12 10.5h12M3 6.75l1.5 1.5L6 6.75m0 10.5l-1.5-1.5L3 17.25"
-            />
-          </svg>
-        ),
-      },
-      {
-        label: 'Payment',
-        value: formatNumber(totalPaidRegistrations),
-        helper: paymentsHelper,
-        icon: (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 text-sky-500"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 8c-1.657 0-3 1.343-3 3v2h6v-2c0-1.657-1.343-3-3-3z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M7 13v3a2 2 0 002 2h6a2 2 0 002-2v-3"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M5 7h14a2 2 0 012 2v1H3V9a2 2 0 012-2z"
-            />
-          </svg>
-        ),
-      },
     ],
     [
       donors.length,
@@ -933,11 +881,7 @@ const DonorDetailsPage = () => {
       totalFamilyMembers,
       totalCartRegistrations,
       totalRegistrations,
-      registrationsHelper,
-      totalPaidRegistrations,
-      paymentsHelper,
       displayedRegistrationCount,
-      registrationCardValue,
     ],
   );
 
@@ -1039,6 +983,66 @@ const DonorDetailsPage = () => {
                   </div>
                 </div>
               ))}
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Sign Up</p>
+                    <p className="text-sm text-slate-600 mt-2">Open donor registration page</p>
+                    <a
+                      href="/register"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      Go to Sign Up
+                    </a>
+                  </div>
+                  <div className="p-3 rounded-lg bg-indigo-100 text-indigo-600">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-7 w-7"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Forgot Password</p>
+                    <p className="text-sm text-slate-600 mt-2">Open password reset page</p>
+                    <a
+                      href="/forgot-password"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700"
+                    >
+                      Go to Forgot Password
+                    </a>
+                  </div>
+                  <div className="p-3 rounded-lg bg-amber-100 text-amber-600">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-7 w-7"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 9v3.75m0 3h.008v.008H12v-.008zM10.5 6.75a1.5 1.5 0 113 0v1.02a4.5 4.5 0 11-3 0V6.75z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </header>

@@ -191,12 +191,6 @@ const ForgotPasswordPage = () => {
                 <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
                   Login
                 </Link>
-                <Link
-                  to="/register"
-                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}
-                >
-                  Sign&nbsp;Up
-                </Link>
               </div>
             </div>
           </div>
