@@ -674,17 +674,19 @@ const CombinePaymentPage: React.FC = () => {
       {/* Guidance Note */}
       {parentDonors.length > 0 && (
         <div className="flex-shrink-0 px-3 pb-2 sm:px-4">
-          <div className="max-w-7xl mx-auto flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2 text-xs text-slate-700">
-            <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
-            </svg>
-            <div>
-              <p>Please clear your own due first, then proceed to the Sub-ordinate donor&apos;s due.</p>
-              {!canPayParents && parentItemsTotal > 0 && (
-                <p className="text-rose-600 font-semibold mt-0.5">
-                  Main donor due pending — pay ₹ {formatCurrency(yourTotalAmount)} to unlock parent payments.
-                </p>
-              )}
+          <div className="max-w-7xl mx-auto">
+            <div className="inline-flex max-w-full items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2 text-xs text-slate-700">
+              <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+              </svg>
+              <div>
+                <p>Please clear total due, to unlock the Sub-ordinate, if required</p>
+                {!canPayParents && parentItemsTotal > 0 && (
+                  <p className="text-rose-600 font-semibold mt-0.5">
+                    Main donor due pending — please clear it to unlock parent payments.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -706,7 +708,6 @@ const CombinePaymentPage: React.FC = () => {
                   <span className="text-sm font-bold text-slate-800">Main Donor</span>
                   <span className="bg-blue-200 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">1</span>
                 </div>
-                <span className="text-base font-bold text-blue-700">₹ {formatCurrency(yourTotalAmount)}</span>
               </div>
             </div>
 
@@ -731,9 +732,6 @@ const CombinePaymentPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-blue-600">₹ {formatCurrency(yourTotalAmount)}</p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -750,14 +748,12 @@ const CombinePaymentPage: React.FC = () => {
                       <span className="text-sm font-bold text-slate-800">Sub-ordinate Donors</span>
                       <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full">{parentDonors.length}</span>
                     </div>
-                    <span className="text-base font-bold text-orange-700">₹ {formatCurrency(totalDueAmount <= 0 ? 0 : parentItemsTotal)}</span>
                   </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
                   {parentDonors.map((donor, donorIndex) => {
                     const donorKey = `parent-${donor.id ?? donor.phone ?? donorIndex}`;
-                    const donorTotal = totalDueAmount <= 0 ? 0 : sumCartItems(donor.items);
                     const initials = donor.name
                       ? donor.name
                           .split(' ')
@@ -783,9 +779,6 @@ const CombinePaymentPage: React.FC = () => {
                                 <p className="text-xs text-slate-500">{donor.phone}</p>
                               )}
                             </div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-bold text-orange-600">₹ {formatCurrency(donorTotal)}</p>
                           </div>
                         </div>
                       </div>

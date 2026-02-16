@@ -24,12 +24,7 @@ const navLinks: NavLinkItem[] = [
   {
     label: 'About',
     href: '/about',
-    type: 'route',
-    children: [
-      { label: 'Founder Members', href: '/about#founder-members', type: 'route' },
-      { label: 'Committee Members', href: '/about#committee-members', type: 'route' },
-      { label: 'Family Tree', href: '/about#family-tree', type: 'route' }
-    ]
+    type: 'route'
   }
 ];
 
@@ -174,17 +169,6 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   >
                     Login
                   </Link>
-                  <Link
-                    to="/register"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={clsx(
-                      'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
-                      buttonBase
-                    )}
-                  >
-                    Sign Up
-                  </Link>
                 </>
               )}
             </div>
@@ -286,18 +270,6 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                     )}
                   >
                     Login
-                  </Link>
-                  <Link
-                    to="/register"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={closeMobileMenu}
-                    className={clsx(
-                      'block w-full rounded-full px-4 py-3 text-center text-sm font-semibold text-white transition',
-                      buttonBase
-                    )}
-                  >
-                    Sign Up
                   </Link>
                 </div>
               )}

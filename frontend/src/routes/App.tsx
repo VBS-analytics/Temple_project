@@ -11,12 +11,10 @@ import PaymentStatementPage from "../pages/payments/PaymentStatementPage";
 import RegisterPage from "../pages/RegisterPage";
 import CombinePaymentDonorPage from "../pages/admin/CombinePaymentDonorPage";
 import AdminMasterPage from "../pages/admin/AdminMasterPage";
-import BulkDonorUploadPage from "../pages/admin/BulkDonorUploadPage";
 import DonorDetailsPage from "../pages/admin/DonorDetailsPage";
 import ExpensesPage from "../pages/admin/ExpensesPage";
 import PoojaDetailsPage from "../pages/admin/PoojaDetailsPage";
 import PoojaPauseCancelPage from "../pages/admin/PoojaPauseCancelPage";
-import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
 import LandingPage from "../pages/LandingPage";
 import About from "../pages/About";
 import AboutKakkalaniVillage from "../pages/AboutKakkalaniVillage";
@@ -31,7 +29,7 @@ import { canViewPaymentStatement, isAdmin, useAuthStore } from "../store/auth";
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
-    const destination = isAdmin(user.role) ? "/admin/dashboard" : "/profile";
+    const destination = isAdmin(user.role) ? "/admin/donors" : "/profile";
     return <Navigate to={destination} replace />;
   }
   return <LandingPage />;
@@ -43,7 +41,7 @@ const PaymentStatementRoute = () => {
     return <Navigate to="/login" replace />;
   }
   if (!canViewPaymentStatement(user)) {
-    const fallback = isAdmin(user.role) ? "/admin/dashboard" : "/profile";
+    const fallback = isAdmin(user.role) ? "/admin/donors" : "/profile";
     return <Navigate to={fallback} replace />;
   }
   return <PaymentStatementPage />;
@@ -91,9 +89,9 @@ const App = () => (
     </Route>
     <Route element={<ProtectedRoute requireAdmin />}>
       <Route element={<AppLayout />}>
-        <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        <Route path="/admin/dashboard" element={<Navigate to="/admin/donors" replace />} />
         <Route path="/admin/master" element={<AdminMasterPage />} />
-        <Route path="/admin/bulk-upload" element={<BulkDonorUploadPage />} />
+        <Route path="/admin/bulk-upload" element={<Navigate to="/admin/donors" replace />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
         <Route

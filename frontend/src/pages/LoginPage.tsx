@@ -99,7 +99,7 @@ const LoginPage = () => {
   };
 
   const redirectToDashboard = (role?: string) => {
-    const target = role && role.toLowerCase().includes('admin') ? '/admin/dashboard' : '/profile';
+    const target = role && role.toLowerCase().includes('admin') ? '/admin/donors' : '/profile';
     navigate(target, { replace: true });
     if (typeof window !== 'undefined') {
       window.location.replace(target);
@@ -186,14 +186,6 @@ const LoginPage = () => {
                   {item.label}
                 </Link>
               ))}
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Link
-                    to="/register"
-                    className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] text-xs sm:text-sm`}
-                  >
-                    Sign&nbsp;Up
-                  </Link>
-                </div>
               </div>
 
               {/* Mobile Hamburger Button */}
@@ -264,13 +256,6 @@ const LoginPage = () => {
                   className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] w-full`}
                 >
                   Login
-                </Link>
-                <Link
-                  to="/register"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] w-full`}
-                >
-                  Sign Up
                 </Link>
               </div>
             </nav>
@@ -441,14 +426,8 @@ const LoginPage = () => {
                         </div>
                         
                         <div className="relative">
-                          <label className="flex flex-col sm:flex-row sm:items-center justify-between text-sm font-medium text-gray-700 mb-1">
+                          <label className="flex items-center text-sm font-medium text-gray-700 mb-1">
                             <span>Password <span className="text-rose-500 ml-1">*</span></span>
-                            <Link
-                              to="/forgot-password"
-                              className="text-xs text-amber-600 hover:text-amber-700 transition-colors mt-1 sm:mt-0"
-                            >
-                              Forgot?
-                            </Link>
                           </label>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -532,15 +511,6 @@ const LoginPage = () => {
                         )}
                       </button>
                       
-                      <div className="text-center text-sm text-gray-600">
-                        New devotee?{' '}
-                        <Link
-                          to="/register"
-                          className="font-medium text-amber-600 hover:text-amber-700 transition-colors"
-                        >
-                          Create your account
-                        </Link>
-                      </div>
                     </div>
                   </form>
                 </div>

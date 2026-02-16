@@ -247,7 +247,7 @@ const RegisterPage = () => {
   };
 
   const redirectToDashboard = (role?: string) => {
-    const target = role && role.toLowerCase().includes('admin') ? '/admin/dashboard' : '/profile';
+    const target = role && role.toLowerCase().includes('admin') ? '/admin/donors' : '/profile';
     navigate(target, { replace: true });
     if (typeof window !== 'undefined') {
       window.location.replace(target);
