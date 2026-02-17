@@ -953,6 +953,21 @@ const CombinePaymentPage: React.FC = () => {
                       type="date"
                       value={paymentDate}
                       onChange={(e) => setPaymentDate(e.target.value)}
+                      onFocus={(e) => {
+                        const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                        input.showPicker?.();
+                      }}
+                      onClick={(e) => {
+                        const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                        input.showPicker?.();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Tab') {
+                          e.preventDefault();
+                        }
+                      }}
+                      onPaste={(e) => e.preventDefault()}
+                      onDrop={(e) => e.preventDefault()}
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100"
                     />
                   </div>

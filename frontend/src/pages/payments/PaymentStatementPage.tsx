@@ -2172,6 +2172,15 @@ const PaymentStatementPage = () => {
       const mainBalanceEntry = apiPassbookEntries
         .filter((entry) => entry.donor === mainDonorId && entry.entry_type === 'balance')
         .sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime())[0];
+      const mainOpeningAmount = parseNumeric(mainBalanceEntry?.closing_due);
+
+      const parentOpeningAmount = apiPassbookEntries
+        .filter(
+          (entry) =>
+            parentDonorIds.includes(entry.donor) &&
+            entry.entry_type === 'balance',
+        )
+        .reduce((total, entry) => total + parseNumeric(entry.closing_due), 0);
 
       const parentEntries = applyFilters(
         apiPassbookEntries.filter(
@@ -2303,7 +2312,14 @@ const PaymentStatementPage = () => {
       let runningBalance = 0;
       const recomputed = combinedEntries.map((entry) => {
         const openingBalance = runningBalance;
-        const closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
+        let closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
+        if (entry.isCurrentBalanceEntry) {
+          if (entry.record.donor === mainDonorId) {
+            closingDue = openingBalance + mainOpeningAmount;
+          } else if (entry.record.donor === PARENT_AGGREGATE_DONOR_ID) {
+            closingDue = openingBalance + parentOpeningAmount;
+          }
+        }
         runningBalance = closingDue;
         return { ...entry, openingBalance, closingDue };
       });
@@ -3024,4 +3040,3 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
 };
 
 export default PaymentStatementPage;
-
