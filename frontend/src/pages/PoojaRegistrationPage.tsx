@@ -515,7 +515,7 @@ const toCurrencyLabel = (value?: string | null) => {
 };
 
 const CHART_DAY_OPTION_CODE = 'CHRT';
-const VARIABLE_AMOUNT_STEP = 50;
+const VARIABLE_AMOUNT_STEP = 1;
 const EXCLUSIVE_DAY_OPTION_CODES = new Set(['AST', 'PRD']);
 const ANY_DAY_OF_MONTH_CODE = 'AD';
 const ANY_DAY_OF_MONTH_DESCRIPTION = 'any day of month';

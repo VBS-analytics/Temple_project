@@ -963,6 +963,21 @@ const PaymentPage = () => {
                     setPaymentDate(e.target.value);
                     if (paymentDateError) setPaymentDateError(null);
                   }}
+                  onFocus={(e) => {
+                    const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                    input.showPicker?.();
+                  }}
+                  onClick={(e) => {
+                    const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                    input.showPicker?.();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Tab') {
+                      e.preventDefault();
+                    }
+                  }}
+                  onPaste={(e) => e.preventDefault()}
+                  onDrop={(e) => e.preventDefault()}
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
                 />
                 {paymentDateError && (
