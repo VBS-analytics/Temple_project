@@ -1304,4 +1304,3 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
         if ordering_param in ('entry_date', '-entry_date'):
             return qs.order_by(ordering_param)
         return qs.order_by('donor', 'entry_date')
-

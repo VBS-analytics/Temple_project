@@ -292,5 +292,4 @@ const AboutKakkalaniVillage: React.FC = () => {
   );
 };
 
-
 export default AboutKakkalaniVillage;
