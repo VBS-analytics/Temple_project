@@ -647,9 +647,19 @@ const PaymentPage = () => {
           registrationCreatedAt,
         );
       }
+
+      // Clear form inputs as soon as payment recording succeeds.
+      setTransactionReference('');
+      setAmountPaid('');
+      setPaymentDate('');
+
       emitPoojaDataUpdatedEvent();
-      await loadDueRecords();
-      await loadLatestPassbookEntry();
+      try {
+        await loadDueRecords();
+        await loadLatestPassbookEntry();
+      } catch (refreshError) {
+        console.error('Unable to refresh payment page after payment', refreshError);
+      }
     } catch (error) {
       setRegistrationError(buildRegistrationErrorMessage(error));
       return;
@@ -746,8 +756,8 @@ const PaymentPage = () => {
               />
             ))}
           </div>
-          <div className="absolute inset-x-0 top-24 flex justify-center">
-            <div className="rounded-full border border-violet-200 bg-white/90 px-6 py-3 text-base font-semibold text-violet-700 shadow-lg backdrop-blur-sm">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="rounded-full border border-slate-700 bg-slate-900/95 px-6 py-3 text-base font-semibold text-slate-100 shadow-xl backdrop-blur-sm">
               🙏 Temple seva received successfully. Thank you.
             </div>
           </div>

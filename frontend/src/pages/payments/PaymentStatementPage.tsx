@@ -2169,18 +2169,6 @@ const PaymentStatementPage = () => {
             (entry.entry_type === 'due' || entry.entry_type === 'paid'),
         ),
       );
-      const mainBalanceEntry = apiPassbookEntries
-        .filter((entry) => entry.donor === mainDonorId && entry.entry_type === 'balance')
-        .sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime())[0];
-      const mainOpeningAmount = parseNumeric(mainBalanceEntry?.closing_due);
-
-      const parentOpeningAmount = apiPassbookEntries
-        .filter(
-          (entry) =>
-            parentDonorIds.includes(entry.donor) &&
-            entry.entry_type === 'balance',
-        )
-        .reduce((total, entry) => total + parseNumeric(entry.closing_due), 0);
 
       const parentEntries = applyFilters(
         apiPassbookEntries.filter(
@@ -2236,7 +2224,7 @@ const PaymentStatementPage = () => {
         record: {
           id: `${CURRENT_BALANCE_ENTRY_ID}-main-donor`,
           donor: mainDonorId,
-          donor_name: mainBalanceEntry?.donor_name ?? user?.name ?? null,
+          donor_name: user?.name ?? null,
           created_at: CURRENT_BALANCE_ENTRY_DATE,
           payment_month: CURRENT_BALANCE_ENTRY_DATE,
         },
@@ -2273,7 +2261,7 @@ const PaymentStatementPage = () => {
 
       const mainPassbookEntries: PassbookEntry[] = mainEntries.map((entry) => ({
         record: {
-          id: `passbook-${entry.entry_date}-${entry.entry_type}`,
+          id: `passbook-${entry.id}`,
           donor: entry.donor,
           donor_name: entry.donor_name,
           created_at: entry.entry_date,
@@ -2306,20 +2294,13 @@ const PaymentStatementPage = () => {
         if (aIsParent !== bIsParent) {
           return aIsParent ? 1 : -1; // main first on same date
         }
-        return 0;
+        return String(a.record.id).localeCompare(String(b.record.id));
       });
 
       let runningBalance = 0;
       const recomputed = combinedEntries.map((entry) => {
         const openingBalance = runningBalance;
-        let closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
-        if (entry.isCurrentBalanceEntry) {
-          if (entry.record.donor === mainDonorId) {
-            closingDue = openingBalance + mainOpeningAmount;
-          } else if (entry.record.donor === PARENT_AGGREGATE_DONOR_ID) {
-            closingDue = openingBalance + parentOpeningAmount;
-          }
-        }
+        const closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
         runningBalance = closingDue;
         return { ...entry, openingBalance, closingDue };
       });
