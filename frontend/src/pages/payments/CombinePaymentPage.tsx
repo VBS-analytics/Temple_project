@@ -179,25 +179,19 @@ const CombinePaymentPage: React.FC = () => {
     [parentDonors],
   );
 
-  const parentItemsCount = useMemo(
-    () => parentDonors.reduce((sum, donor) => sum + donor.items.length, 0),
-    [parentDonors],
-  );
-
   const fallbackAmountDue =
     paymentScope === 'main'
       ? yourTotalAmount
       : Math.max(parentItemsTotal, 0);
 
   const selectedAmountDue = statementClosingDue ?? fallbackAmountDue;
-  const selectedPoojaCount = paymentScope === 'main' ? allOwnItems.length : parentItemsCount;
   const totalDueAmount = selectedAmountDue;
 
   const canPayParents = yourTotalAmount <= 0;
-  const parentScopeDisabled = !canPayParents || parentItemsTotal <= 0 || totalDueAmount <= 0;
+  const parentScopeDisabled = !canPayParents || parentDonors.length === 0;
 
   const paymentBlocked =
-    processingPayment || (paymentScope === 'parents' && (!canPayParents || selectedAmountDue <= 0));
+    processingPayment || (paymentScope === 'parents' && !canPayParents);
 
   useEffect(() => {
     if (parentScopeDisabled && paymentScope === 'parents') {
@@ -245,6 +239,7 @@ const CombinePaymentPage: React.FC = () => {
           entry.donor === mainDonorId &&
           (entry.entry_type === 'due' || entry.entry_type === 'paid'),
       );
+
       const parentEntries = allEntries.filter(
         (entry) =>
           parentDonorIds.includes(entry.donor) &&
@@ -270,9 +265,10 @@ const CombinePaymentPage: React.FC = () => {
         parentMonthTotals.set(monthKey, existing);
       });
 
-      const timeline: Array<{ date: string; due: number; paid: number; isParentAggregate: boolean }> = [];
+      const timeline: Array<{ id: string; date: string; due: number; paid: number; isParentAggregate: boolean }> = [];
       mainEntries.forEach((entry) => {
         timeline.push({
+          id: `main-${entry.id}`,
           date: entry.entry_date,
           due: entry.entry_type === 'due' ? parseAmount(entry.due_amount) : 0,
           paid: entry.entry_type === 'paid' ? parseAmount(entry.paid_amount) : 0,
@@ -284,6 +280,7 @@ const CombinePaymentPage: React.FC = () => {
           return;
         }
         timeline.push({
+          id: `parent-${group.monthDate}`,
           date: group.monthDate,
           due: group.dueTotal,
           paid: group.paidTotal,
@@ -297,7 +294,7 @@ const CombinePaymentPage: React.FC = () => {
         if (a.isParentAggregate !== b.isParentAggregate) {
           return a.isParentAggregate ? 1 : -1;
         }
-        return 0;
+        return a.id.localeCompare(b.id);
       });
 
       let running = 0;
@@ -424,10 +421,6 @@ const CombinePaymentPage: React.FC = () => {
       setTransactionReferenceError('Transaction ID or UPI ID is required.');
       return;
     }
-    if (paymentScope === 'parents' && selectedPoojaCount === 0) {
-      setSubmissionError('No payable items in the selected scope.');
-      return;
-    }
     if (paymentScope === 'parents' && yourTotalAmount > 0) {
       setSubmissionError('Please clear the main donor due before paying for parent donors.');
       return;
@@ -456,21 +449,9 @@ const CombinePaymentPage: React.FC = () => {
       return;
     }
 
-    // Parents: require full parent due; Main: allow partial but not overpay
-    if (paymentScope === 'parents') {
-      if (Math.abs(amountToRecord - payableAmount) > 0.01) {
-        setSubmissionError(`Please pay full parent donor due of ₹ ${formatCurrency(payableAmount)}.`);
-        return;
-      }
-    } else if (paymentScope === 'main' && amountToRecord - payableAmount > 0.01) {
-      setSubmissionError(`Amount exceeds your current due of ₹ ${formatCurrency(payableAmount)}.`);
-      return;
-    }
-
     setProcessingPayment(true);
 
     const donorEntries = parentDonors
-      .filter((donor) => donor.items.length > 0)
       .map((donor) => ({
         id: donor.id ?? null,
         name: donor.name ?? null,
@@ -512,17 +493,33 @@ const CombinePaymentPage: React.FC = () => {
           });
         }
       } else {
+        let remainingAmount = amountToRecord;
         donorEntries.forEach((entry) => {
-          if (entry.totalAmount <= 0) return;
-          const cappedAmount = Math.min(entry.totalAmount, amountToRecord);
-          if (cappedAmount > 0) {
+          if (remainingAmount <= 0) return;
+          const allocatedAmount = Math.min(entry.totalAmount, remainingAmount);
+          if (allocatedAmount > 0) {
             payments.push({
               donorId: entry.id,
-              amount: cappedAmount,
-              notes: `${entry.name || entry.phone || 'Parent donor'} full due payment: ₹ ${formatCurrency(cappedAmount)}`,
+              amount: allocatedAmount,
+              notes: `${entry.name || entry.phone || 'Parent donor'} payment allocation: ₹ ${formatCurrency(allocatedAmount)}`,
             });
+            remainingAmount -= allocatedAmount;
           }
         });
+
+        if (remainingAmount > 0) {
+          const fallbackDonor = donorEntries[0];
+          if (!fallbackDonor) {
+            setSubmissionError('No parent donor found to record this payment.');
+            setProcessingPayment(false);
+            return;
+          }
+          payments.push({
+            donorId: fallbackDonor.id,
+            amount: remainingAmount,
+            notes: `${fallbackDonor.name || fallbackDonor.phone || 'Parent donor'} excess payment allocation: ₹ ${formatCurrency(remainingAmount)}`,
+          });
+        }
       }
 
       const splitTotal = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -550,6 +547,12 @@ const CombinePaymentPage: React.FC = () => {
         combinedTotal: amountToRecord,
       });
 
+      // Clear form inputs as soon as payment recording succeeds.
+      setTransactionReference('');
+      setAmountPaid('');
+      setPaymentDate('');
+      setShareError(null);
+
       if (typeof currentBalance === 'number') {
         const updatedBalance = Math.max(0, currentBalance - amountToRecord);
         try {
@@ -564,13 +567,13 @@ const CombinePaymentPage: React.FC = () => {
       }
 
       clearCart(cartKey);
-      await fetchCombineAccess();
-      await loadStatementClosingDue();
+      try {
+        await fetchCombineAccess();
+        await loadStatementClosingDue();
+      } catch (refreshError) {
+        console.error('Unable to refresh combined payment page after payment', refreshError);
+      }
 
-      setTransactionReference('');
-      setAmountPaid('');
-      setPaymentDate('');
-      setShareError(null);
       const paidScopeLabel = paymentScope === 'parents' ? 'parent donor dues' : 'main donor due';
       setSuccessToastMessage(
         `Temple payment of ₹ ${formatCurrency(amountToRecord)} received successfully for ${paidScopeLabel}.`,
@@ -606,7 +609,6 @@ const CombinePaymentPage: React.FC = () => {
     loadStatementClosingDue,
     transactionReference,
     selectedAmountDue,
-    selectedPoojaCount,
     yourTotalAmount,
     paymentMethodTab,
     paymentDate,
@@ -681,11 +683,6 @@ const CombinePaymentPage: React.FC = () => {
               </svg>
               <div>
                 <p>Please clear total due, to unlock the Sub-ordinate, if required</p>
-                {!canPayParents && parentItemsTotal > 0 && (
-                  <p className="text-rose-600 font-semibold mt-0.5">
-                    Main donor due pending — please clear it to unlock parent payments.
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -1026,22 +1023,9 @@ const CombinePaymentPage: React.FC = () => {
               />
             ))}
           </div>
-          <div className="absolute inset-x-0 top-24 flex justify-center">
-            <div className="w-[min(92vw,34rem)] rounded-2xl bg-white/95 px-5 py-4 text-slate-800 shadow-xl backdrop-blur-sm border border-orange-200">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-orange-100 p-2 text-orange-700">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21h18M4 10h16M3 10l9-6 9 6M8 14v3m4-3v3m4-3v3" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-orange-700">Payment Received Successfully</p>
-                  <p className="mt-1 text-sm text-slate-700">
-                    {successToastMessage || 'Temple payment received successfully.'}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">Thank you for your support.</p>
-                </div>
-              </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="rounded-full border border-slate-700 bg-slate-900/95 px-6 py-3 text-base font-semibold text-slate-100 shadow-xl backdrop-blur-sm">
+              🙏 Temple seva received successfully. Thank you.
             </div>
           </div>
         </div>
