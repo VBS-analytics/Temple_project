@@ -1338,7 +1338,7 @@ const RegisterPage = () => {
                             
                             <div className="relative">
                               <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                                Tamil Name (Saravam) <span className="text-gray-400 text-xs font-normal ml-2">(Optional)</span>
+                                Tamil Name (Sarman) <span className="text-gray-400 text-xs font-normal ml-2">(Optional)</span>
                               </label>
                               <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

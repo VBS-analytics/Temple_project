@@ -1,17 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import PublicSiteHeader from "../components/PublicSiteHeader";
+import FamilyTreePage from "./FamilyTreePage";
 
 /**
- * Kakkalani Gramam – About Page (Redesigned)
- * ------------------------------------------------------
- * Modern, clean UI/UX with:
- * • Enhanced visual hierarchy and spacing
- * • Smooth transitions and micro-interactions
- * • Improved accessibility and responsiveness
- * • Contemporary card designs with subtle shadows
- * • Better typography and color contrast
- * • Fixed syntax errors from original code
+ * Kakkalani Gramam – About Page
+ * Themed to match the orange/amber design of AboutKakkalaniVillage
  */
 
 // --- Types ---------------------------------------------------------------
@@ -28,13 +22,13 @@ const AVATAR_PLACEHOLDER =
   <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
     <defs>
       <linearGradient id='g' x1='0' x2='1' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#f0f9ff'/>
-        <stop offset='100%' stop-color='#e0f2fe'/>
+        <stop offset='0%' stop-color='#fff7ed'/>
+        <stop offset='100%' stop-color='#fed7aa'/>
       </linearGradient>
     </defs>
     <rect width='64' height='64' fill='url(#g)'/>
-    <circle cx='32' cy='24' r='12' fill='#7dd3fc'/>
-    <rect x='14' y='40' width='36' height='18' rx='9' fill='#7dd3fc'/>
+    <circle cx='32' cy='24' r='12' fill='#fb923c'/>
+    <rect x='14' y='40' width='36' height='18' rx='9' fill='#fb923c'/>
   </svg>`);
 
 // --- Data ----------------------------------------------------------------
@@ -86,74 +80,62 @@ const managingCommitteeMembers: Member[] = [
   {
     name: "Shri. Radhakrishnan Sastrigal",
     detail: "President",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Radhakrishnan_Sastrigal.png",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Radhakrishnan_Sastrigal.png",
   },
   {
     name: "Shri. Sriramkumar Natarajan",
     detail: "Secretary",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Sriramkumar_Natarajan.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Sriramkumar_Natarajan.jpg",
   },
   {
     name: "R.S. Mani",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/R S Mani.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/R S Mani.jpg",
   },
   {
     name: "Smt. Lakshmi Ananad",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Lakshmi_Ananad.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Lakshmi_Ananad.jpg",
   },
   {
     name: "Shri. Radhakrishnan (Radhu anna)",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Radhakrishnan.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Radhakrishnan.jpg",
   },
   {
     name: "Smt. Latha Murali",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Latha_Murali.png",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Latha_Murali.png",
   },
   {
     name: "Shri. Ravichandran",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Ravichandran.png",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Ravichandran.png",
   },
   {
     name: "Shri. Venkatramani J",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Venkatramani J.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Venkatramani J.jpg",
   },
   {
     name: "Shri. Swaminathan",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Swaminathan.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Swaminathan.jpg",
   },
   {
     name: "Shri. Madhusudanan (Madhu)",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Madhusudanan.jpg",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Madhusudanan.jpg",
   },
   {
     name: "Shri. Rajendran",
     detail: "Member",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Rajendran.png",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Rajendran.png",
   },
   {
     name: "Shri. Manikanda Gurukkal (Sridhar)",
     detail: "Priest",
-    image:
-      "images/Kakkalany Gramam-Managing-Committee-Members-images/Sridhar.png",
+    image: "images/Kakkalany Gramam-Managing-Committee-Members-images/Sridhar.png",
   },
 ];
 
@@ -187,28 +169,21 @@ const aboutUsAcknowledgements: string[] = [
 ];
 
 // --- Reusable UI Components ----------------------------------------------
-
 function SectionHeader({
   title,
-  subtitle,
   langSubtitle,
 }: {
   title: string;
-  subtitle?: string;
   langSubtitle?: string;
 }) {
   return (
-    <div className="text-center max-w-3xl mx-auto mb-12">
-      <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-3">
+    <div className="text-center max-w-3xl mx-auto mb-10">
+      <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 mb-2">
         {title}
       </h2>
-      {subtitle && (
-        <p className="text-base sm:text-lg text-gray-600 leading-relaxed">
-          {subtitle}
-        </p>
-      )}
+      <div className="h-1 w-20 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full mx-auto mt-3 mb-3" />
       {langSubtitle && (
-        <p className="mt-2 text-sm sm:text-base text-sky-600 font-medium">
+        <p className="mt-2 text-sm sm:text-base text-orange-600 font-medium">
           {langSubtitle}
         </p>
       )}
@@ -218,7 +193,7 @@ function SectionHeader({
 
 function Avatar({ src, alt }: { src?: string; alt: string }) {
   return (
-    <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-sky-100 shadow-md flex-shrink-0 bg-gradient-to-br from-sky-50 to-blue-50 group-hover:border-sky-200 transition-all duration-300">
+    <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-orange-100 shadow-md flex-shrink-0 bg-gradient-to-br from-orange-50 to-amber-50 group-hover:border-orange-300 transition-all duration-300">
       <img
         src={src ? `/${encodeURI(src)}` : AVATAR_PLACEHOLDER}
         alt={alt}
@@ -235,25 +210,25 @@ function Avatar({ src, alt }: { src?: string; alt: string }) {
 
 function MemberRow({ member, index }: { member: Member; index: number }) {
   return (
-    <li className="group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl hover:bg-sky-50/50 transition-all duration-200">
+    <li className="group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-2xl hover:bg-orange-50/60 transition-all duration-200">
       <div className="flex items-center gap-4">
-        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-sky-700 font-bold text-sm group-hover:bg-sky-200 transition-colors">
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-700 font-bold text-sm group-hover:bg-orange-200 transition-colors flex-shrink-0">
           {index + 1}
         </span>
         <Avatar src={member.image} alt={member.name} />
         <div className="flex-1">
-          <p className="text-base sm:text-lg font-semibold text-gray-900 group-hover:text-sky-700 transition-colors">
+          <p className="text-base sm:text-lg font-semibold text-slate-900 group-hover:text-orange-700 transition-colors">
             {member.name}
           </p>
           {member.detail && (
-            <p className="sm:hidden mt-1 text-sm text-gray-600">
+            <p className="sm:hidden mt-1 text-sm text-slate-500">
               {member.detail}
             </p>
           )}
         </div>
       </div>
       {member.detail && (
-        <span className="hidden sm:block text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200 group-hover:border-sky-200 group-hover:bg-sky-50 transition-all">
+        <span className="hidden sm:block text-sm text-slate-600 bg-orange-50 px-4 py-2 rounded-full border border-orange-100 group-hover:border-orange-200 group-hover:bg-orange-100 transition-all whitespace-nowrap">
           {member.detail}
         </span>
       )}
@@ -275,10 +250,10 @@ function MemberCard({
   return (
     <section
       id={id}
-      className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 lg:p-10 backdrop-blur-sm"
+      className="bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-xl hover:border-orange-200 transition-all duration-500 p-8 lg:p-10"
     >
       <SectionHeader title={title} langSubtitle={langSubtitle} />
-      <ol className="space-y-2">
+      <ol className="space-y-2 divide-y divide-orange-50">
         {members.map((m, i) => (
           <MemberRow key={`${m.name}-${i}`} member={m} index={i} />
         ))}
@@ -289,13 +264,12 @@ function MemberCard({
 
 function StatCard({ value, label }: { value: string; label: string }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+    <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
       {/* Decorative circle */}
       <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all" />
-      
       <div className="relative">
         <p className="text-4xl font-bold text-white mb-1">{value}</p>
-        <p className="text-sm text-sky-50 font-medium">{label}</p>
+        <p className="text-sm text-orange-50 font-medium">{label}</p>
       </div>
     </div>
   );
@@ -308,18 +282,15 @@ type AboutPageProps = {
 
 export default function AboutPage({ embedded = false }: AboutPageProps) {
   const location = useLocation();
-  const [activeSection, setActiveSection] = useState<"about" | "founder" | "committee">("about");
+  const [activeSection, setActiveSection] = useState<
+    "about" | "founder" | "committee" | "family-tree"
+  >("about");
 
   useEffect(() => {
     const hash = location.hash.replace("#", "");
-    if (hash === "founder-members") {
-      setActiveSection("founder");
-      return;
-    }
-    if (hash === "committee-members") {
-      setActiveSection("committee");
-      return;
-    }
+    if (hash === "founder-members") { setActiveSection("founder"); return; }
+    if (hash === "committee-members") { setActiveSection("committee"); return; }
+    if (hash === "family-tree") { setActiveSection("family-tree"); return; }
     setActiveSection("about");
   }, [location.hash]);
 
@@ -327,120 +298,109 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
     ? "space-y-10 py-4 sm:py-6"
     : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16 pt-8 pb-16 lg:pt-12 lg:pb-20";
 
-  const wrapperClass = embedded ? "bg-transparent" : "min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50";
+  const wrapperClass = embedded
+    ? "bg-transparent"
+    : "min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50";
 
   return (
     <div className={wrapperClass}>
       {!embedded && <PublicSiteHeader />}
-      
+
       <main className="relative overflow-hidden">
-        {/* Decorative background elements */}
+        {/* Decorative background blobs */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-sky-200 to-blue-300 blur-3xl opacity-20"
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-orange-200 to-amber-300 blur-3xl opacity-20"
         />
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute right-0 top-1/3 -z-10 h-80 w-80 translate-x-1/3 rounded-full bg-gradient-to-bl from-blue-200 to-sky-300 blur-3xl opacity-15"
+          className="pointer-events-none absolute right-0 top-1/3 -z-10 h-80 w-80 translate-x-1/3 rounded-full bg-gradient-to-bl from-amber-200 to-orange-300 blur-3xl opacity-15"
         />
 
         <div className={containerClasses}>
-          {/* Hero Stats Section */}
+          {/* ── Hero Stats Section ── */}
           <section className="space-y-8">
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
-              <StatCard value="9" label="Founder Members" />
-              <StatCard value="12" label="Committee Members" />
-              <StatCard value="2021" label="Initiative Began" />
+              <StatCard value="9"    label="Founder Members"  />
+              <StatCard value="12"   label="Committee Members" />
+              <StatCard value="2021" label="Initiative Began"  />
             </div>
 
             {/* Navigation Tabs */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setActiveSection("about")}
-                className={`px-6 py-3 rounded-full font-semibold text-sm transition-all duration-300 ${
-                  activeSection === "about"
-                    ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30 scale-105"
-                    : "bg-white text-gray-700 border-2 border-gray-200 hover:border-sky-300 hover:bg-sky-50"
-                }`}
-              >
-                About Us
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSection("founder")}
-                className={`px-6 py-3 rounded-full font-semibold text-sm transition-all duration-300 ${
-                  activeSection === "founder"
-                    ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30 scale-105"
-                    : "bg-white text-gray-700 border-2 border-gray-200 hover:border-sky-300 hover:bg-sky-50"
-                }`}
-              >
-                Founder Members
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSection("committee")}
-                className={`px-6 py-3 rounded-full font-semibold text-sm transition-all duration-300 ${
-                  activeSection === "committee"
-                    ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30 scale-105"
-                    : "bg-white text-gray-700 border-2 border-gray-200 hover:border-sky-300 hover:bg-sky-50"
-                }`}
-              >
-                Committee Members
-              </button>
+              {(
+                [
+                  { key: "about",       label: "About Us"          },
+                  { key: "founder",     label: "Founder Members"    },
+                  { key: "committee",   label: "Committee Members"  },
+                  { key: "family-tree", label: "Family Tree"        },
+                ] as { key: typeof activeSection; label: string }[]
+              ).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveSection(key)}
+                  className={`px-6 py-3 rounded-full font-semibold text-sm transition-all duration-300 ${
+                    activeSection === key
+                      ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/30 scale-105"
+                      : "bg-white text-slate-700 border-2 border-slate-200 hover:border-orange-300 hover:bg-orange-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </section>
 
-          {/* Content Sections with Smooth Transitions */}
+          {/* ── Content Sections ── */}
           <div className="animate-fadeIn">
+            {/* About Us */}
             {activeSection === "about" && (
-              <section className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 lg:p-12">
-                <div className="prose prose-lg max-w-none">
-                  {/* Introduction */}
-                  <div className="space-y-6 text-gray-700 leading-relaxed">
-                    {aboutUsIntroParagraphs.map((paragraph, idx) => (
-                      <p key={idx} className="text-base sm:text-lg">
-                        {paragraph}
-                      </p>
+              <section className="bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-xl hover:border-orange-200 transition-all duration-500 p-8 lg:p-12">
+
+                {/* Introduction paragraphs */}
+                <div className="space-y-5 text-slate-600 leading-relaxed mb-10">
+                  {aboutUsIntroParagraphs.map((paragraph, idx) => (
+                    <p key={idx} className="text-base sm:text-lg">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+
+                {/* Objectives */}
+                <div className="pt-8 border-t border-orange-100">
+                  <h3 className="font-serif text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3">
+                    <span className="w-1.5 h-8 bg-gradient-to-b from-orange-500 to-amber-600 rounded-full flex-shrink-0" />
+                    Objectives of this Group
+                  </h3>
+                  <ul className="space-y-4 mt-4">
+                    {aboutUsObjectives.map((objective, idx) => (
+                      <li key={idx} className="flex items-start gap-4 text-slate-600">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold mt-0.5">
+                          ✓
+                        </span>
+                        <span className="text-base leading-relaxed">{objective}</span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
+                </div>
 
-                  {/* Objectives */}
-                  <div className="mt-12 pt-8 border-t border-gray-200">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                      <span className="w-1.5 h-8 bg-gradient-to-b from-sky-500 to-blue-600 rounded-full" />
-                      Objectives of this Group
-                    </h3>
-                    <ul className="space-y-4 mt-6">
-                      {aboutUsObjectives.map((objective, idx) => (
-                        <li key={idx} className="flex items-start gap-4 text-gray-700">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold mt-0.5">
-                            ✓
-                          </span>
-                          <span className="text-base leading-relaxed">{objective}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Acknowledgements */}
-                  <div className="mt-12 pt-8 border-t border-gray-200">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                      <span className="w-1.5 h-8 bg-gradient-to-b from-sky-500 to-blue-600 rounded-full" />
-                      Sincere Thanks
-                    </h3>
-                    <ol className="space-y-4 mt-6">
-                      {aboutUsAcknowledgements.map((acknowledgement, idx) => (
-                        <li key={idx} className="flex items-start gap-4 text-gray-700">
-                          <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                            {idx + 1}
-                          </span>
-                          <span className="text-base leading-relaxed flex-1">{acknowledgement}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
+                {/* Acknowledgements */}
+                <div className="mt-10 pt-8 border-t border-orange-100">
+                  <h3 className="font-serif text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3">
+                    <span className="w-1.5 h-8 bg-gradient-to-b from-orange-500 to-amber-600 rounded-full flex-shrink-0" />
+                    Sincere Thanks
+                  </h3>
+                  <ol className="space-y-4 mt-4">
+                    {aboutUsAcknowledgements.map((acknowledgement, idx) => (
+                      <li key={idx} className="flex items-start gap-4 text-slate-600">
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 text-white flex items-center justify-center text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="text-base leading-relaxed flex-1">{acknowledgement}</span>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
               </section>
             )}
@@ -462,11 +422,17 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
                 members={managingCommitteeMembers}
               />
             )}
+
+            {activeSection === "family-tree" && (
+              <section id="family-tree">
+                <FamilyTreePage embedded />
+              </section>
+            )}
           </div>
 
           {/* Footer */}
-          <footer className="text-center pt-8 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
+          <footer className="text-center pt-8 border-t border-orange-100">
+            <p className="text-sm text-slate-500">
               © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
               <span className="text-red-500">❤</span> for the community.
             </p>
@@ -474,21 +440,12 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
         </div>
       </main>
 
-      {/* Custom CSS for fade-in animation */}
       <style>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0);    }
         }
-        .animate-fadeIn {
-          animation: fadeIn 0.4s ease-out;
-        }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
       `}</style>
     </div>
   );

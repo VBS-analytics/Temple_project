@@ -137,16 +137,6 @@ const AppLayout = () => {
       show: canViewPaymentStatement(user),
     },
     {
-      to: "/profile/about",
-      label: "Kakkalani Gramam Members",
-      show: Boolean(user),
-    },
-    {
-      to: "/profile/family-tree",
-      label: "Kakkalani Gramam Family Tree",
-      show: Boolean(user),
-    },
-    {
       to: "/profile/kovi-details",
       label: "About Kovil",
       show: Boolean(user),

@@ -51,61 +51,109 @@ const AboutKakkalaniVillage: React.FC = () => {
         </div>
 
         {/* Hero Section */}
-        <section className="relative pt-20 pb-16 sm:pt-24 sm:pb-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-4xl text-center">
-              {/* Eyebrow */}
-              <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-100 to-amber-100 px-4 py-2 mb-6">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-                </span>
-                <span className="text-xs font-semibold tracking-wider uppercase text-orange-800">
-                  Our Village Heritage
-                </span>
+        <section className="relative pt-8 pb-8 sm:pt-10 sm:pb-10">
+          <div className="pointer-events-none absolute inset-x-4 top-6 z-10 hidden items-start justify-between lg:flex xl:inset-x-8">
+            {/* Image Card 1 - Top Left Corner */}
+            <div className="pointer-events-auto group relative w-64 overflow-hidden rounded-3xl bg-white shadow-lg transition-all duration-500 hover:shadow-2xl xl:w-72">
+              <div className="aspect-[4/5] overflow-hidden">
+                <img
+                  src="/images/kakkalani-000.jpg"
+                  alt="Guardian of Tradition"
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-60 transition-opacity duration-500 group-hover:opacity-80" />
               </div>
-
-              {/* Main Heading */}
-              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6">
-                A Resilient Heritage of{' '}
-                <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-                  Faith, Rivers & Temples
-                </span>
-              </h1>
-
-              {/* Description */}
-              <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
-                Kakkalani Agraharam has grown around sacred shrines, ancestral homes, and nourishing water. 
-                Every pond, temple, and tree has its own story of guardianship and service from the families 
-                that still call this village home.
-              </p>
-
-              {/* Quick Stats */}
-              <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
-                {[
-                  { label: 'Location', value: '10km SE of Thiruvarur' },
-                  { label: 'Temples', value: '5+ Sacred Sites' },
-                  { label: 'Heritage', value: '4-5 Generations' },
-                  { label: 'Blessings', value: 'Mahaperiyava' },
-                ].map((stat) => (
-                  <div key={stat.label} className="group">
-                    <div className="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-orange-100 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
-                      <p className="text-xs font-medium text-orange-600 uppercase tracking-wider mb-1">
-                        {stat.label}
-                      </p>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {stat.value}
-                      </p>
-                    </div>
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <div className="space-y-1">
+                  <div className="inline-block rounded-full bg-white/20 px-3 py-1 backdrop-blur-md">
+                    <p className="text-xs font-bold uppercase tracking-widest text-white">
+                      Guardian of Tradition
+                    </p>
                   </div>
-                ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Image Card 2 - Top Right Corner */}
+            <div className="pointer-events-auto group relative w-64 overflow-hidden rounded-3xl bg-white shadow-lg transition-all duration-500 hover:shadow-2xl xl:w-72">
+              <div className="aspect-[4/5] overflow-hidden">
+                <img
+                  src="/images/kakkalani-001.jpg"
+                  alt="Ancestral Wisdom"
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-60 transition-opacity duration-500 group-hover:opacity-80" />
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <div className="space-y-1">
+                  <div className="inline-block rounded-full bg-white/20 px-3 py-1 backdrop-blur-md">
+                    <p className="text-xs font-bold uppercase tracking-widest text-white">
+                      Ancestral Wisdom
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="space-y-8">
+              <div className="mx-auto max-w-4xl text-center">
+                {/* Eyebrow */}
+                <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-100 to-amber-100 px-4 py-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                  </span>
+                  <span className="text-xs font-semibold tracking-wider uppercase text-orange-800">
+                    Our Village Heritage
+                  </span>
+                </div>
+
+                {/* Main Heading */}
+                <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6">
+                  A Resilient Heritage of{' '}
+                  <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                    Faith, Rivers & Temples
+                  </span>
+                </h1>
+
+                {/* Description */}
+                <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
+                  Kakkalani Agraharam has grown around sacred shrines, ancestral homes, and nourishing water. 
+                  Every pond, temple, and tree has its own story of guardianship and service from the families 
+                  that still call this village home.
+                </p>
+
+                {/* Quick Stats */}
+                <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
+                  {[
+                    { label: 'Location', value: '10km SE of Thiruvarur' },
+                    { label: 'Temples', value: '5+ Sacred Sites' },
+                    { label: 'Heritage', value: '4-5 Generations' },
+                    { label: 'Blessings', value: 'Mahaperiyava & Ramana Maharishi' },
+                  ].map((stat) => (
+                    <div key={stat.label} className="group">
+                      <div className="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-orange-100 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
+                        <p className="text-xs font-medium text-orange-600 uppercase tracking-wider mb-1">
+                          {stat.label}
+                        </p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {stat.value}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
         {/* Main Content Section */}
-        <section className="relative py-16 sm:py-20">
+        <section className="relative pt-8 pb-16 sm:pt-10 sm:pb-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-12 gap-8 lg:gap-12">
               
@@ -177,56 +225,6 @@ const AboutKakkalaniVillage: React.FC = () => {
                     <div className="absolute -top-4 -left-4 w-24 h-24 rounded-full bg-white/10" />
                   </div>
 
-                  {/* Image Card 1 */}
-                  <div className="group relative overflow-hidden rounded-3xl bg-white shadow-lg hover:shadow-2xl transition-all duration-500">
-                    <div className="aspect-[4/5] overflow-hidden">
-                      <img
-                        src="/images/kakkalani-000.jpg"
-                        alt="Guardian of Tradition"
-                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        loading="lazy"
-                      />
-                      {/* Gradient Overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <div className="space-y-2">
-                        <div className="inline-block px-3 py-1 rounded-full bg-white/20 backdrop-blur-md">
-                          <p className="text-xs font-bold text-white uppercase tracking-widest">
-                            Guardian of Tradition
-                          </p>
-                        </div>
-                        <p className="text-sm text-white/80 leading-relaxed">
-                          Preserving wisdom through generations
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Image Card 2 */}
-                  <div className="group relative overflow-hidden rounded-3xl bg-white shadow-lg hover:shadow-2xl transition-all duration-500">
-                    <div className="aspect-[4/5] overflow-hidden">
-                      <img
-                        src="/images/kakkalani-001.jpg"
-                        alt="Ancestral Wisdom"
-                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <div className="space-y-2">
-                        <div className="inline-block px-3 py-1 rounded-full bg-white/20 backdrop-blur-md">
-                          <p className="text-xs font-bold text-white uppercase tracking-widest">
-                            Ancestral Wisdom
-                          </p>
-                        </div>
-                        <p className="text-sm text-white/80 leading-relaxed">
-                          Stories that connect past and future
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </aside>
             </div>

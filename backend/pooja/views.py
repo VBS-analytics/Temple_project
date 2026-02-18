@@ -71,7 +71,7 @@ class LargePagePagination(PageNumberPagination):
 
 PAUSE_REASON_NO_POJA_NO_PAYMENT = "No Pooja and No Payment"
 PAUSE_REASON_USE_FOR_TEMPLE = "No Pooja and use the money for temple purpose"
-PAUSE_REASON_SAMY = "Continue the pooja with the Samy's names"
+PAUSE_REASON_SAMY = "Continue the pooja with the Swamy's names"
 
 SATURDAY_NAVAGRAHA_POOJA_NAME = "4 saturday navagraha pooja per month"
 PRADOSHA_POOJA_NAME = "2 pradosha pooja per month"

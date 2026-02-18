@@ -27,7 +27,6 @@ type Person = {
 };
 
 type ViewMode = "diagram" | "tree" | "timeline" | "table";
-
 type SortField = "name" | "generation" | "birthYear" | "birthPlace";
 type SortDirection = "asc" | "desc";
 
@@ -466,6 +465,7 @@ const Icon = ({ path, className = "" }: { path: string; className?: string }) =>
   </svg>
 );
 
+// ── TreeNode ──────────────────────────────────────────────────────────────────
 const TreeNode = ({
   node,
   level,
@@ -477,6 +477,7 @@ const TreeNode = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(level < 2);
   const hasChildren = node.children.length > 0;
+
   const handlePersonClick = () => {
     const { children: _children, ...personData } = node;
     onPersonClick(personData);
@@ -489,50 +490,62 @@ const TreeNode = ({
           <button
             type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
-            className="mt-1 rounded p-1 transition-colors hover:bg-slate-100"
+            className="mt-1 rounded p-1 transition-colors hover:bg-orange-50"
             aria-label={isExpanded ? "Collapse branch" : "Expand branch"}
           >
             <Icon
-              className="h-4 w-4 text-slate-600"
+              className="h-4 w-4 text-orange-600"
               path={isExpanded ? "m19 9-7 7-7-7" : "m9 5 7 7-7 7"}
             />
           </button>
         ) : (
           <div className="w-6" />
         )}
-
         <div className="mb-3 flex-1" style={{ marginLeft: level > 0 ? "1rem" : "0" }}>
           <button
             type="button"
             onClick={handlePersonClick}
-            className="w-full rounded-lg border-2 border-slate-200 bg-white p-3 text-left shadow-sm transition-all hover:border-blue-400 hover:shadow-md"
+            className="w-full rounded-2xl border-2 border-orange-100 bg-white p-3 text-left shadow-sm transition-all hover:border-orange-400 hover:shadow-md"
           >
             <div className="flex items-start gap-3">
               <div
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
-                  node.gender === "male" ? "bg-blue-100 text-blue-600" : "bg-rose-100 text-rose-600"
+                  node.gender === "male"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-rose-100 text-rose-600"
                 }`}
               >
-                <Icon className="h-5 w-5" path="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.12a7.5 7.5 0 1 1 15 0" />
+                <Icon
+                  className="h-5 w-5"
+                  path="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.12a7.5 7.5 0 1 1 15 0"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-slate-800">{node.name}</div>
-                <div className="mt-0.5 text-sm text-slate-600">
-                  {node.birthYear ? `${node.birthYear}${node.deathYear ? ` - ${node.deathYear}` : ""}` : "Year unknown"}
+                <div className="mt-0.5 text-sm text-slate-500">
+                  {node.birthYear
+                    ? `${node.birthYear}${node.deathYear ? ` – ${node.deathYear}` : ""}`
+                    : "Year unknown"}
                   {node.birthPlace ? ` | ${node.birthPlace}` : ""}
                 </div>
-                {node.occupation && <div className="mt-1 text-xs text-slate-500">{node.occupation}</div>}
+                {node.occupation && (
+                  <div className="mt-1 text-xs text-slate-400">{node.occupation}</div>
+                )}
               </div>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+              <span className="rounded-full bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 border border-orange-100">
                 Gen {node.generation}
               </span>
             </div>
           </button>
-
           {hasChildren && isExpanded && (
-            <div className="ml-4 mt-2 border-l-2 border-slate-200 pl-4">
+            <div className="ml-4 mt-2 border-l-2 border-orange-100 pl-4">
               {node.children.map((child) => (
-                <TreeNode key={child.id} node={child} level={level + 1} onPersonClick={onPersonClick} />
+                <TreeNode
+                  key={child.id}
+                  node={child}
+                  level={level + 1}
+                  onPersonClick={onPersonClick}
+                />
               ))}
             </div>
           )}
@@ -542,6 +555,7 @@ const TreeNode = ({
   );
 };
 
+// ── TreeView ──────────────────────────────────────────────────────────────────
 const TreeView = ({
   people,
   rootPersonId,
@@ -552,11 +566,9 @@ const TreeView = ({
   onPersonClick: (person: Person) => void;
 }) => {
   const root = useMemo(() => buildHierarchy(people, rootPersonId), [people, rootPersonId]);
-
   if (!root) {
     return <div className="p-8 text-center text-slate-500">No lineage data available.</div>;
   }
-
   return (
     <div className="p-4 sm:p-6">
       <div className="mx-auto max-w-4xl">
@@ -566,7 +578,14 @@ const TreeView = ({
   );
 };
 
-const TimelineView = ({ people, onPersonClick }: { people: Person[]; onPersonClick: (person: Person) => void }) => {
+// ── TimelineView ──────────────────────────────────────────────────────────────
+const TimelineView = ({
+  people,
+  onPersonClick,
+}: {
+  people: Person[];
+  onPersonClick: (person: Person) => void;
+}) => {
   const grouped = useMemo(() => {
     const out: Record<number, Person[]> = {};
     people.forEach((person) => {
@@ -584,36 +603,48 @@ const TimelineView = ({ people, onPersonClick }: { people: Person[]; onPersonCli
         {grouped.map((group) => (
           <section key={group.generation}>
             <div className="mb-4 flex items-center gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 font-bold text-white">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-600 font-bold text-white shadow-md">
                 {group.generation}
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-800">Generation {group.generation}</h3>
+                <h3 className="text-lg font-semibold text-slate-800">
+                  Generation {group.generation}
+                </h3>
                 <p className="text-sm text-slate-500">
-                  {group.persons.length} {group.persons.length === 1 ? "person" : "people"}
+                  {group.persons.length}{" "}
+                  {group.persons.length === 1 ? "person" : "people"}
                 </p>
               </div>
             </div>
-
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {group.persons.map((person) => {
-                const spouse = person.spouseId ? getPerson(people, person.spouseId) : undefined;
+                const spouse = person.spouseId
+                  ? getPerson(people, person.spouseId)
+                  : undefined;
                 return (
                   <button
                     key={person.id}
                     type="button"
                     onClick={() => onPersonClick(person)}
-                    className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:border-blue-400 hover:shadow-md"
+                    className="rounded-2xl border border-orange-100 bg-white p-4 text-left shadow-sm transition-all hover:border-orange-400 hover:shadow-md"
                   >
                     <div className="font-semibold text-slate-800">{person.name}</div>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-slate-500">
                       {person.birthYear || "Year unknown"}
-                      {person.deathYear ? ` - ${person.deathYear}` : ""}
+                      {person.deathYear ? ` – ${person.deathYear}` : ""}
                     </p>
-                    {person.birthPlace && <p className="text-sm text-slate-500">{person.birthPlace}</p>}
-                    {spouse && <p className="mt-2 text-xs text-blue-700">Spouse: {spouse.name}</p>}
+                    {person.birthPlace && (
+                      <p className="text-sm text-slate-400">{person.birthPlace}</p>
+                    )}
+                    {spouse && (
+                      <p className="mt-2 text-xs text-orange-700 font-medium">
+                        Spouse: {spouse.name}
+                      </p>
+                    )}
                     {(person.children?.length || 0) > 0 && (
-                      <p className="text-xs text-indigo-700">Children: {person.children?.length}</p>
+                      <p className="text-xs text-amber-700">
+                        Children: {person.children?.length}
+                      </p>
                     )}
                   </button>
                 );
@@ -626,18 +657,27 @@ const TimelineView = ({ people, onPersonClick }: { people: Person[]; onPersonCli
   );
 };
 
-const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick: (person: Person) => void }) => {
+// ── TableView ─────────────────────────────────────────────────────────────────
+const TableView = ({
+  people,
+  onPersonClick,
+}: {
+  people: Person[];
+  onPersonClick: (person: Person) => void;
+}) => {
   const [query, setQuery] = useState("");
   const [generationFilter, setGenerationFilter] = useState<number | "all">("all");
   const [sortField, setSortField] = useState<SortField>("generation");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
-  const generations = useMemo(() => [...new Set(people.map((p) => p.generation))].sort((a, b) => a - b), [people]);
+  const generations = useMemo(
+    () => [...new Set(people.map((p) => p.generation))].sort((a, b) => a - b),
+    [people],
+  );
 
   const rows = useMemo(() => {
     let filtered = [...people];
     const normalized = query.trim().toLowerCase();
-
     if (normalized) {
       filtered = filtered.filter(
         (p) =>
@@ -647,11 +687,9 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
           p.branch?.toLowerCase().includes(normalized),
       );
     }
-
     if (generationFilter !== "all") {
       filtered = filtered.filter((p) => p.generation === generationFilter);
     }
-
     filtered.sort((a, b) => {
       const aVal = a[sortField] ?? "";
       const bVal = b[sortField] ?? "";
@@ -660,7 +698,6 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
       const cmp = valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
       return sortDirection === "asc" ? cmp : -cmp;
     });
-
     return filtered;
   }, [people, query, generationFilter, sortField, sortDirection]);
 
@@ -673,6 +710,21 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
     setSortDirection("asc");
   };
 
+  const SortTh = ({ field, label }: { field: SortField; label: string }) => (
+    <th className="px-4 py-3">
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="flex items-center gap-1 font-semibold text-slate-700 hover:text-orange-600 transition-colors"
+      >
+        {label}
+        {sortField === field && (
+          <span className="text-orange-500">{sortDirection === "asc" ? " ↑" : " ↓"}</span>
+        )}
+      </button>
+    </th>
+  );
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mx-auto max-w-7xl">
@@ -681,16 +733,18 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, place, occupation..."
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            placeholder="Search name, place, occupation…"
+            className="w-full rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
             aria-label="Search people"
           />
           <select
             value={generationFilter}
             onChange={(e) =>
-              setGenerationFilter(e.target.value === "all" ? "all" : Number(e.target.value))
+              setGenerationFilter(
+                e.target.value === "all" ? "all" : Number(e.target.value),
+              )
             }
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
             aria-label="Filter generation"
           >
             <option value="all">All Generations</option>
@@ -702,42 +756,26 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
           </select>
         </div>
 
-        <div className="mb-3 text-sm text-slate-600">
+        <div className="mb-3 text-sm text-slate-500">
           Showing {rows.length} of {people.length}
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-orange-100 bg-white shadow-sm">
           <table className="w-full min-w-[760px]">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-sm text-slate-700">
-                <th className="px-4 py-3">
-                  <button type="button" onClick={() => onSort("name")} className="font-semibold">
-                    Name
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button type="button" onClick={() => onSort("generation")} className="font-semibold">
-                    Generation
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button type="button" onClick={() => onSort("birthYear")} className="font-semibold">
-                    Birth
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button type="button" onClick={() => onSort("birthPlace")} className="font-semibold">
-                    Place
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-semibold">Occupation</th>
-                <th className="px-4 py-3 font-semibold">Branch</th>
+              <tr className="border-b border-orange-100 bg-orange-50/60 text-left text-sm">
+                <SortTh field="name" label="Name" />
+                <SortTh field="generation" label="Generation" />
+                <SortTh field="birthYear" label="Birth" />
+                <SortTh field="birthPlace" label="Place" />
+                <th className="px-4 py-3 font-semibold text-slate-700">Occupation</th>
+                <th className="px-4 py-3 font-semibold text-slate-700">Branch</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                     No matching people found.
                   </td>
                 </tr>
@@ -745,18 +783,18 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
                 rows.map((person) => (
                   <tr
                     key={person.id}
-                    className="cursor-pointer border-b border-slate-100 text-sm hover:bg-blue-50"
+                    className="cursor-pointer border-b border-orange-50 text-sm transition-colors hover:bg-orange-50/50"
                     onClick={() => onPersonClick(person)}
                   >
                     <td className="px-4 py-3 font-medium text-slate-800">{person.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{person.generation}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {person.birthYear || "-"}
-                      {person.deathYear ? ` - ${person.deathYear}` : ""}
+                    <td className="px-4 py-3 text-slate-500">{person.generation}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {person.birthYear || "–"}
+                      {person.deathYear ? ` – ${person.deathYear}` : ""}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{person.birthPlace || "-"}</td>
-                    <td className="px-4 py-3 text-slate-600">{person.occupation || "-"}</td>
-                    <td className="px-4 py-3 text-slate-600">{person.branch || "-"}</td>
+                    <td className="px-4 py-3 text-slate-500">{person.birthPlace || "–"}</td>
+                    <td className="px-4 py-3 text-slate-500">{person.occupation || "–"}</td>
+                    <td className="px-4 py-3 text-slate-500">{person.branch || "–"}</td>
                   </tr>
                 ))
               )}
@@ -768,6 +806,7 @@ const TableView = ({ people, onPersonClick }: { people: Person[]; onPersonClick:
   );
 };
 
+// ── PersonDetailModal ─────────────────────────────────────────────────────────
 const PersonDetailModal = ({
   person,
   allPeople,
@@ -790,26 +829,28 @@ const PersonDetailModal = ({
   const JumpLink = ({ label, target }: { label: string; target: Person }) => (
     <button
       type="button"
-      onClick={() => {
-        onNavigate(target.id);
-      }}
-      className="block text-left text-sm text-blue-700 hover:underline"
+      onClick={() => onNavigate(target.id)}
+      className="block text-left text-sm text-orange-700 hover:underline font-medium"
     >
       {label}: {target.name}
     </button>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white shadow-2xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-3xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 rounded-t-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
+        {/* Modal Header */}
+        <div className="sticky top-0 rounded-t-3xl bg-gradient-to-r from-orange-500 to-amber-600 p-6 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold">{person.name}</h2>
-              <p className="text-sm text-blue-100">
+              <h2 className="text-2xl font-bold font-serif">{person.name}</h2>
+              <p className="text-sm text-orange-100 mt-1">
                 Generation {person.generation}
                 {person.branch ? ` | Branch ${person.branch}` : ""}
               </p>
@@ -817,7 +858,7 @@ const PersonDetailModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-white/20 px-2 py-1 text-sm transition-colors hover:bg-white/30"
+              className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/30"
               aria-label="Close"
             >
               Close
@@ -825,37 +866,40 @@ const PersonDetailModal = ({
           </div>
         </div>
 
-        <div className="space-y-5 p-5">
+        {/* Modal Body */}
+        <div className="space-y-5 p-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <div className="text-slate-500">Birth</div>
-              <div className="font-medium text-slate-800">
-                {person.birthYear || "Unknown"}
-                {person.deathYear ? ` - ${person.deathYear}` : ""}
+            {[
+              {
+                label: "Birth",
+                value: person.birthYear
+                  ? `${person.birthYear}${person.deathYear ? ` – ${person.deathYear}` : ""}`
+                  : "Unknown",
+              },
+              { label: "Birthplace", value: person.birthPlace || "Unknown" },
+              { label: "Occupation", value: person.occupation || "Not recorded" },
+              { label: "Gender", value: person.gender },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-2xl bg-orange-50/60 p-3 text-sm border border-orange-100">
+                <div className="text-orange-600 font-medium text-xs uppercase tracking-wider mb-1">
+                  {label}
+                </div>
+                <div className="font-semibold text-slate-800 capitalize">{value}</div>
               </div>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <div className="text-slate-500">Birthplace</div>
-              <div className="font-medium text-slate-800">{person.birthPlace || "Unknown"}</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <div className="text-slate-500">Occupation</div>
-              <div className="font-medium text-slate-800">{person.occupation || "Not recorded"}</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <div className="text-slate-500">Gender</div>
-              <div className="font-medium capitalize text-slate-800">{person.gender}</div>
-            </div>
+            ))}
           </div>
 
           {person.notes && (
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
               {person.notes}
             </div>
           )}
 
-          <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-            <h3 className="font-semibold text-slate-800">Relationships</h3>
+          <div className="rounded-2xl border border-orange-100 p-4 space-y-3">
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+              <span className="w-1 h-5 rounded-full bg-gradient-to-b from-orange-500 to-amber-600 inline-block" />
+              Relationships
+            </h3>
             {spouse && <JumpLink label="Spouse" target={spouse} />}
             {father && <JumpLink label="Father" target={father} />}
             {mother && <JumpLink label="Mother" target={mother} />}
@@ -865,9 +909,13 @@ const PersonDetailModal = ({
             {children.map((child) => (
               <JumpLink key={child.id} label="Child" target={child} />
             ))}
-            {!spouse && !father && !mother && siblings.length === 0 && children.length === 0 && (
-              <p className="text-sm text-slate-500">No recorded relationships.</p>
-            )}
+            {!spouse &&
+              !father &&
+              !mother &&
+              siblings.length === 0 &&
+              children.length === 0 && (
+                <p className="text-sm text-slate-400">No recorded relationships.</p>
+              )}
           </div>
         </div>
       </div>
@@ -875,7 +923,12 @@ const PersonDetailModal = ({
   );
 };
 
-const FamilyTreePage = () => {
+// ── FamilyTreePage ────────────────────────────────────────────────────────────
+type FamilyTreePageProps = {
+  embedded?: boolean;
+};
+
+const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
   const [activeTreeId, setActiveTreeId] = useState(familyTrees[0]?.id);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [viewMode, setViewMode] = useState<ViewMode>("diagram");
@@ -921,40 +974,55 @@ const FamilyTreePage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
-      <div className="border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="space-y-3 text-center">
-            <h1 className="bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 bg-clip-text text-3xl font-bold text-transparent sm:text-4xl lg:text-5xl">
-              Kakkalani Gramam Family Tree
-            </h1>
+    <div
+      className={
+        embedded
+          ? "rounded-3xl border border-orange-100 bg-white p-4 shadow-sm sm:p-6 lg:p-8 hover:shadow-xl hover:border-orange-200 transition-all duration-500"
+          : "min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50"
+      }
+    >
+      {/* Subtitle shown in both embedded and standalone */}
+      <div className={embedded ? "mb-6 text-center" : "border-b border-orange-100 bg-white/80 backdrop-blur-sm"}>
+        {!embedded && (
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 text-center">
             <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
               {activeTree?.subtitle || "Explore your family heritage"}
             </p>
           </div>
-        </div>
+        )}
+        {embedded && (
+          <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
+            {activeTree?.subtitle || "Explore your family heritage"}
+          </p>
+        )}
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-12">
+      <div
+        className={
+          embedded
+            ? "mx-auto max-w-7xl"
+            : "mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-12"
+        }
+      >
+        {/* Family selector tabs */}
         <div className="mb-6">
           <div className="relative">
             <button
               type="button"
               onClick={() => scrollTabs(-220)}
-              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-slate-200 bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
+              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-orange-200 bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
               aria-label="Scroll family trees left"
             >
-              <Icon className="h-5 w-5 text-slate-600" path="m15 19-7-7 7-7" />
+              <Icon className="h-5 w-5 text-orange-600" path="m15 19-7-7 7-7" />
             </button>
             <button
               type="button"
               onClick={() => scrollTabs(220)}
-              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-slate-200 bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
+              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-orange-200 bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
               aria-label="Scroll family trees right"
             >
-              <Icon className="h-5 w-5 text-slate-600" path="m9 5 7 7-7 7" />
+              <Icon className="h-5 w-5 text-orange-600" path="m9 5 7 7-7 7" />
             </button>
-
             <div
               ref={tabsRef}
               className="flex gap-2 overflow-x-auto px-8 pb-2 sm:gap-3 lg:flex-wrap lg:justify-center lg:px-0 [&::-webkit-scrollbar]:hidden"
@@ -969,8 +1037,8 @@ const FamilyTreePage = () => {
                     onClick={() => setActiveTreeId(tree.id)}
                     className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 sm:px-5 ${
                       isActive
-                        ? "scale-105 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
-                        : "border border-slate-300 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md"
+                        ? "scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/30"
+                        : "border border-orange-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-orange-400 hover:shadow-md"
                     }`}
                     aria-pressed={isActive}
                   >
@@ -982,7 +1050,8 @@ const FamilyTreePage = () => {
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        {/* View mode tabs */}
+        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-orange-100 bg-white p-2 shadow-sm">
           {views.map((view) => {
             const disabled = Boolean(view.needsData && !hasDetailedData);
             const active = viewMode === view.id;
@@ -992,10 +1061,10 @@ const FamilyTreePage = () => {
                 type="button"
                 disabled={disabled}
                 onClick={() => setViewMode(view.id)}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
                   active
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                    : "text-slate-700 hover:bg-slate-100"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-md shadow-orange-500/20"
+                    : "text-slate-600 hover:bg-orange-50 hover:text-orange-700"
                 } disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 {view.label}
@@ -1004,22 +1073,28 @@ const FamilyTreePage = () => {
           })}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        {/* Main content card */}
+        <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-sm hover:shadow-xl hover:border-orange-200 transition-all duration-500">
+
+          {/* Diagram view */}
           {viewMode === "diagram" && (
             <>
-              <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/50 px-4 py-4 sm:px-6">
+              <div className="border-b border-orange-100 bg-gradient-to-r from-orange-50/60 to-amber-50/40 px-4 py-4 sm:px-6">
                 <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  {/* Zoom controls */}
+                  <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 py-2 shadow-sm">
                     <button
                       type="button"
                       onClick={zoomOut}
                       disabled={zoomLevel <= 50}
-                      className="rounded-lg p-1.5 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-1.5 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Zoom out"
                     >
-                      <Icon className="h-4 w-4 text-slate-600" path="m21 21-4.35-4.35M8 11h6m5-1a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                      <Icon
+                        className="h-4 w-4 text-orange-600"
+                        path="m21 21-4.35-4.35M8 11h6m5-1a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                      />
                     </button>
-
                     <div className="flex items-center gap-2 px-2">
                       <input
                         type="range"
@@ -1028,37 +1103,41 @@ const FamilyTreePage = () => {
                         step="25"
                         value={zoomLevel}
                         onChange={(e) => setZoomLevel(Number(e.target.value))}
-                        className="h-2 w-24 cursor-pointer appearance-none rounded-lg bg-slate-200 accent-blue-600 sm:w-32"
+                        className="h-2 w-24 cursor-pointer appearance-none rounded-lg bg-orange-100 accent-orange-500 sm:w-32"
                         aria-label="Zoom level"
                       />
-                      <span className="min-w-[3rem] text-center text-sm font-medium text-slate-700">{zoomLevel}%</span>
+                      <span className="min-w-[3rem] text-center text-sm font-medium text-slate-700">
+                        {zoomLevel}%
+                      </span>
                     </div>
-
                     <button
                       type="button"
                       onClick={zoomIn}
                       disabled={zoomLevel >= 300}
-                      className="rounded-lg p-1.5 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-1.5 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Zoom in"
                     >
-                      <Icon className="h-4 w-4 text-slate-600" path="m21 21-4.35-4.35M11 8v6m-3-3h6m5-1a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                      <Icon
+                        className="h-4 w-4 text-orange-600"
+                        path="m21 21-4.35-4.35M11 8v6m-3-3h6m5-1a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                      />
                     </button>
-
-                    <div className="mx-1 h-6 w-px bg-slate-300" />
-
+                    <div className="mx-1 h-6 w-px bg-orange-200" />
                     <button
                       type="button"
                       onClick={resetZoom}
-                      className="rounded-lg p-1.5 transition-colors hover:bg-slate-100"
+                      className="rounded-lg p-1.5 transition-colors hover:bg-orange-50"
                       aria-label="Reset zoom"
                       title="Reset zoom"
                     >
-                      <Icon className="h-4 w-4 text-slate-600" path="M8 3H5a2 2 0 0 0-2 2v3m0 8v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3m0-8V5a2 2 0 0 0-2-2h-3" />
+                      <Icon
+                        className="h-4 w-4 text-orange-600"
+                        path="M8 3H5a2 2 0 0 0-2 2v3m0 8v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3m0-8V5a2 2 0 0 0-2-2h-3"
+                      />
                     </button>
                   </div>
-
                   {hasDetailedData && (
-                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 font-medium">
                       Detailed data available: switch to Tree, Timeline, or Table.
                     </div>
                   )}
@@ -1067,11 +1146,17 @@ const FamilyTreePage = () => {
 
               <div className="relative">
                 {activeTree?.isAvailable && activeTree.image ? (
-                  <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 sm:p-6">
-                    <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner" style={{ maxHeight: "70vh" }}>
+                  <div className="bg-gradient-to-br from-orange-50/40 to-amber-50/20 p-4 sm:p-6">
+                    <div
+                      className="overflow-auto rounded-2xl border border-orange-100 bg-white shadow-inner"
+                      style={{ maxHeight: "70vh" }}
+                    >
                       <div
                         className="p-4 transition-transform duration-300 ease-out sm:p-6"
-                        style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: "top center" }}
+                        style={{
+                          transform: `scale(${zoomLevel / 100})`,
+                          transformOrigin: "top center",
+                        }}
                       >
                         <img
                           src={activeTree.image}
@@ -1082,12 +1167,13 @@ const FamilyTreePage = () => {
                         />
                       </div>
                     </div>
-
                     {activeTree.description && (
-                      <div className="mt-4 rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+                      <div className="mt-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
                         <div className="flex items-start gap-3">
-                          <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-blue-500 to-indigo-500" />
-                          <p className="text-sm leading-relaxed text-slate-600">{activeTree.description}</p>
+                          <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-orange-500 to-amber-500" />
+                          <p className="text-sm leading-relaxed text-slate-600">
+                            {activeTree.description}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -1095,9 +1181,13 @@ const FamilyTreePage = () => {
                 ) : (
                   <div className="px-6 py-24 text-center">
                     <div className="mx-auto max-w-md space-y-4">
-                      <h3 className="text-xl font-semibold text-slate-800">Family Tree Coming Soon</h3>
-                      <p className="text-slate-600">
-                        This family tree visualization is being prepared. Share additional records with the admin team.
+                      <div className="text-5xl mb-4">🌳</div>
+                      <h3 className="text-xl font-semibold text-slate-800">
+                        Family Tree Coming Soon
+                      </h3>
+                      <p className="text-slate-500">
+                        This family tree visualization is being prepared. Share additional
+                        records with the admin team.
                       </p>
                     </div>
                   </div>
@@ -1106,16 +1196,20 @@ const FamilyTreePage = () => {
             </>
           )}
 
+          {/* No detailed data fallback */}
           {viewMode !== "diagram" && !hasDetailedData && (
             <div className="p-8 text-center">
-              <h3 className="text-lg font-semibold text-slate-800">Detailed lineage data is not available yet</h3>
-              <p className="mt-2 text-sm text-slate-600">
+              <div className="text-4xl mb-4">📋</div>
+              <h3 className="text-lg font-semibold text-slate-800">
+                Detailed lineage data is not available yet
+              </h3>
+              <p className="mt-2 text-sm text-slate-500">
                 This family currently has diagram data only. Use the Diagram view for now.
               </p>
               <button
                 type="button"
                 onClick={() => setViewMode("diagram")}
-                className="mt-4 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white"
+                className="mt-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
               >
                 Switch to Diagram
               </button>
@@ -1123,13 +1217,15 @@ const FamilyTreePage = () => {
           )}
 
           {viewMode === "tree" && hasDetailedData && (
-            <TreeView people={detailedPeople} rootPersonId={rootPersonId} onPersonClick={setSelectedPerson} />
+            <TreeView
+              people={detailedPeople}
+              rootPersonId={rootPersonId}
+              onPersonClick={setSelectedPerson}
+            />
           )}
-
           {viewMode === "timeline" && hasDetailedData && (
             <TimelineView people={detailedPeople} onPersonClick={setSelectedPerson} />
           )}
-
           {viewMode === "table" && hasDetailedData && (
             <TableView people={detailedPeople} onPersonClick={setSelectedPerson} />
           )}
