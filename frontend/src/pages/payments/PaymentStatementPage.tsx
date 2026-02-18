@@ -2178,6 +2178,14 @@ const PaymentStatementPage = () => {
         ),
       );
 
+      const mainOpeningBalance = apiPassbookEntries
+        .filter((entry) => entry.donor === mainDonorId && entry.entry_type === 'balance')
+        .reduce((sum, entry) => sum + parseNumeric(entry.closing_due), 0);
+
+      const parentOpeningBalanceTotal = apiPassbookEntries
+        .filter((entry) => parentDonorIds.includes(entry.donor) && entry.entry_type === 'balance')
+        .reduce((sum, entry) => sum + parseNumeric(entry.closing_due), 0);
+
       // Aggregate parent dues and paid amounts by month
       const parentMonthTotals = new Map<
         string,
@@ -2213,8 +2221,8 @@ const PaymentStatementPage = () => {
           },
           dueAmount: 0,
           paidAmount: 0,
-          openingBalance: 0,
-          closingDue: 0,
+          openingBalance: parentOpeningBalanceTotal,
+          closingDue: parentOpeningBalanceTotal,
           displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
           isCurrentBalanceEntry: true,
         },
@@ -2230,8 +2238,8 @@ const PaymentStatementPage = () => {
         },
         dueAmount: 0,
         paidAmount: 0,
-        openingBalance: 0,
-        closingDue: 0,
+        openingBalance: mainOpeningBalance,
+        closingDue: mainOpeningBalance,
         displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
         isCurrentBalanceEntry: true,
       };
@@ -2299,6 +2307,13 @@ const PaymentStatementPage = () => {
 
       let runningBalance = 0;
       const recomputed = combinedEntries.map((entry) => {
+        if (entry.isCurrentBalanceEntry) {
+          // Opening rows carry starting balances (main + aggregate parent balances).
+          const openingBalance = runningBalance;
+          const closingDue = openingBalance + parseNumeric(entry.closingDue);
+          runningBalance = closingDue;
+          return { ...entry, openingBalance, closingDue };
+        }
         const openingBalance = runningBalance;
         const closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
         runningBalance = closingDue;
