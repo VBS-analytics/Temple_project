@@ -14,16 +14,15 @@ type NavLinkItem = {
 
 const navLinks: NavLinkItem[] = [
   { label: 'Home', href: '#top', type: 'anchor' },
-  { label: 'History of Kakkalani', href: '/history', type: 'route' },
-  {
-    label: 'Why we should visit our village',
-    href: '/why-visit-native-village',
-    type: 'route'
-  },
   { label: 'About Kakkalani Village', href: '/about-kakkalani-village', type: 'route' },
   {
     label: 'About',
     href: '/about',
+    type: 'route'
+  },
+  {
+    label: 'Why we should visit our village',
+    href: '/why-visit-native-village',
     type: 'route'
   }
 ];
