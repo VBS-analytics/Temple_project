@@ -758,7 +758,7 @@ const PaymentPage = () => {
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="rounded-full border border-slate-700 bg-slate-900/95 px-6 py-3 text-base font-semibold text-slate-100 shadow-xl backdrop-blur-sm">
-              🙏 Temple seva received successfully. Thank you.
+                Payment received successfully. Thank you.
             </div>
           </div>
         </div>

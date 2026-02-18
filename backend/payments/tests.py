@@ -69,6 +69,44 @@ class PassbookRefreshDetectionTests(TestCase):
 
         self.assertTrue(_donor_passbook_needs_refresh(self.donor.id, current_month))
 
+    def test_needs_refresh_when_earliest_due_month_is_missing(self):
+        RecurringPoojaPlan.objects.create(
+            donor=self.donor,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 1, 1),
+            amount=Decimal("500.00"),
+            is_active=True,
+        )
+
+        # Simulate stale passbook generated with old logic: Jan due missing, Feb due present.
+        PassbookEntry.objects.create(
+            donor=self.donor,
+            entry_date=date(2025, 12, 31),
+            entry_type="balance",
+            transaction_details="-",
+            opening_balance=Decimal("0.00"),
+            due_amount=Decimal("0.00"),
+            paid_amount=Decimal("0.00"),
+            closing_due=Decimal("0.00"),
+        )
+        PassbookEntry.objects.create(
+            donor=self.donor,
+            entry_date=date(2026, 2, 1),
+            entry_type="due",
+            transaction_details="--- Pooja DUE ---",
+            opening_balance=Decimal("0.00"),
+            due_amount=Decimal("500.00"),
+            paid_amount=Decimal("0.00"),
+            closing_due=Decimal("500.00"),
+        )
+
+        current_month = date(2026, 2, 1)
+        self.assertTrue(_donor_passbook_needs_refresh(self.donor.id, current_month))
+
 
 class PassbookDeduplicationTests(TestCase):
     def test_dedup_prefers_latest_created_entry(self):
