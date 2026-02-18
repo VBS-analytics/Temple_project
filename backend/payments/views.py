@@ -102,6 +102,37 @@ def _donor_passbook_needs_refresh(donor_id: int, current_month: date) -> bool:
 
     if latest_source_ts and latest_passbook_ts and latest_source_ts > latest_passbook_ts:
         return True
+
+    # Detect stale passbooks that missed earlier recurring due months.
+    # This can happen when a passbook was generated with old logic and no
+    # later source updates occurred to trigger timestamp-based refresh.
+    earliest_expected_due_month = (
+        RecurringPoojaPlan.objects.filter(
+            donor_id=donor_id,
+            is_active=True,
+            recurrence_kind=RecurrenceKind.RECURRING,
+        )
+        .exclude(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
+        .order_by("start_date", "created_at")
+        .values_list("start_date", "created_at")
+        .first()
+    )
+    if earliest_expected_due_month:
+        start_date, created_at = earliest_expected_due_month
+        seed_date = start_date or (created_at.date() if created_at else None)
+        if seed_date:
+            expected_month = seed_date.replace(day=1)
+            if expected_month <= current_month:
+                first_due_entry = (
+                    PassbookEntry.objects.filter(donor_id=donor_id, entry_type="due")
+                    .order_by("entry_date", "id")
+                    .only("entry_date")
+                    .first()
+                )
+                if first_due_entry is None:
+                    return True
+                if first_due_entry.entry_date.replace(day=1) > expected_month:
+                    return True
     return False
 
 
