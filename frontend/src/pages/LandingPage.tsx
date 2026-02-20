@@ -1,7 +1,4 @@
-import { useState, useEffect, useRef } from "react";
 import PublicSiteHeader from "../components/PublicSiteHeader";
-import api, { extractResults } from "../lib/api";
-import { resolveMediaUrl } from "../lib/media";
 
 const howToReachRoutes = [
   {
@@ -40,109 +37,336 @@ const howToReachRoutes = [
   },
 ] as const;
 
+const ArrowRightIcon = () => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
 
 const LandingPage = () => {
   return (
-    <div id="top" className="bg-slate-50 text-slate-800">
-      <PublicSiteHeader variant="overlay" />
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Outfit:wght@300;400;500;600&display=swap');
 
-      <main>
-        {/* HERO */}
-        <section
-          id="hero-map"
-          className="relative pt-24 sm:pt-28 md:pt-32 text-white min-h-screen"
-        >
-          <div className="absolute inset-0 z-0 bg-slate-900">
+        :root {
+          --crimson: #b10026;
+          --crimson-dark: #8e001c;
+          --navy: #05091f;
+          --gold: #c9a84c;
+          --sand: #f0e6d3;        /* warm parchment */
+          --sand-mid: #e8d5b7;    /* mid sand for section bg */
+          --terracotta: #c4703a;  /* warm accent */
+          --earth: #7a5c3a;       /* deep brown text */
+          --card-bg: #fdf8f2;     /* warm off-white cards */
+        }
+
+        .landing-root {
+          font-family: 'Outfit', sans-serif;
+          /* warm sandy parchment — mirrors the map illustration palette */
+          background: var(--sand);
+          color: #2a1f14;
+        }
+
+        /* ── HERO: full-viewport image, all devices ── */
+        .hero {
+          width: 100%;
+          height: 100vh;
+          line-height: 0;
+          overflow: hidden;
+        }
+
+        .hero-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center center;
+        }
+
+        /* ── HOW TO REACH ── */
+        .reach-section {
+          /* alternating warm band: slightly deeper sand with a subtle noise feel */
+          background: linear-gradient(160deg, #ede0c8 0%, #e8d4b0 50%, #eddcc6 100%);
+          padding: 4rem 0 5.5rem;
+          position: relative;
+        }
+
+        /* decorative top border strip */
+        .reach-section::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 4px;
+          background: linear-gradient(to right, var(--terracotta), var(--gold), var(--crimson));
+        }
+
+        .reach-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 2rem;
+        }
+
+        .reach-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 2.25rem;
+        }
+
+        .reach-pin {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          background: var(--crimson);
+          border-radius: 50%;
+          color: #fff;
+          flex-shrink: 0;
+        }
+
+        .reach-label {
+          font-size: 0.68rem;
+          font-weight: 700;
+          letter-spacing: 0.3em;
+          text-transform: uppercase;
+          color: var(--crimson);
+        }
+
+        .reach-divider {
+          flex: 1;
+          height: 1px;
+          background: linear-gradient(to right, rgba(177,0,38,0.35), rgba(177,0,38,0.05));
+        }
+
+        .route-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1.1rem;
+        }
+
+        .route-card {
+          position: relative;
+          /* warm card with a subtle parchment tint */
+          background: var(--card-bg);
+          border: 1px solid rgba(122, 92, 58, 0.18);
+          border-radius: 1.1rem;
+          padding: 1.5rem 1.6rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.55rem;
+          overflow: hidden;
+          transition: box-shadow 0.22s, transform 0.18s, border-color 0.22s;
+        }
+
+        /* animated top bar on hover */
+        .route-card::after {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(to right, var(--crimson), var(--terracotta));
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform 0.25s ease;
+        }
+
+        .route-card:hover {
+          box-shadow: 0 16px 40px -10px rgba(122, 92, 58, 0.22);
+          transform: translateY(-2px);
+          border-color: rgba(122, 92, 58, 0.32);
+        }
+
+        .route-card:hover::after {
+          transform: scaleX(1);
+        }
+
+        .route-number {
+          font-size: 0.62rem;
+          font-weight: 700;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: var(--crimson);
+        }
+
+        .route-title {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: #2a1f14;
+          line-height: 1.55;
+          margin: 0;
+        }
+
+        .route-distance {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.3rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--earth);
+          /* warm sand pill instead of cold grey */
+          background: rgba(122, 92, 58, 0.1);
+          padding: 0.25rem 0.65rem;
+          border-radius: 999px;
+          width: fit-content;
+        }
+
+        .route-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          margin-top: 0.5rem;
+          padding-top: 0.75rem;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: var(--crimson);
+          text-decoration: none;
+          border-top: 1px solid rgba(122,92,58,0.15);
+          transition: gap 0.18s, color 0.18s;
+        }
+        .route-link:hover {
+          gap: 0.55rem;
+          color: var(--crimson-dark);
+        }
+
+        .route-pending {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          margin-top: 0.5rem;
+          padding-top: 0.75rem;
+          font-size: 0.78rem;
+          font-weight: 500;
+          color: #a08060;
+          border-top: 1px solid rgba(122,92,58,0.15);
+        }
+
+        /* ── FOOTER ── */
+        .footer {
+          background: var(--navy);
+          padding: 2.25rem 2rem;
+        }
+
+        .footer-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.35rem;
+        }
+
+        .footer-brand {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 1rem;
+          font-weight: 500;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: var(--gold);
+        }
+
+        .footer-rule {
+          width: 40px;
+          height: 1px;
+          background: rgba(201,168,76,0.4);
+          margin: 0.2rem 0;
+        }
+
+        .footer-copy {
+          font-size: 0.75rem;
+          color: rgba(255,255,255,0.35);
+          letter-spacing: 0.03em;
+        }
+
+        @media (max-width: 640px) {
+          .reach-inner { padding: 0 1.25rem; }
+          .route-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
+
+      <div id="top" className="landing-root">
+        {/*
+          Switched from variant="overlay" to variant="solid".
+          "overlay" was injecting separate colour classes for the brand name
+          (blue) and nav links (gold/yellow), creating the visual inconsistency.
+          "solid" keeps a single unified colour palette across all header elements.
+          
+          ⚠️  If PublicSiteHeader doesn't accept variant="solid", share the
+          component code and I'll patch the colour logic there directly.
+        */}
+        <PublicSiteHeader variant="solid" />
+
+        <main>
+          {/* ── HERO: image only, no text ── */}
+          <section id="hero-map" className="hero">
             <img
               src="/images/landing-page-image.jpg"
-              alt="Kakkalani Village Landscape Plan"
-              className="h-full w-full object-contain"
+              alt="Kakkalani Village Landscape Plan, Tamil Nadu"
+              className="hero-img"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#05091f]/85 via-[#05091f]/60 to-[#05091f]/10" />
+          </section>
+
+          {/* ── HOW TO REACH ── */}
+          <section id="how-to-reach" className="reach-section">
+            <div className="reach-inner">
+              <div className="reach-header">
+                <span className="reach-pin">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </span>
+                <span className="reach-label">How to Reach</span>
+                <div className="reach-divider" />
+              </div>
+
+              <div className="route-grid">
+                {howToReachRoutes.map((route) => (
+                  <div key={route.route} className="route-card">
+                    <span className="route-number">{route.route}</span>
+                    <p className="route-title">{route.title}</p>
+                    <span className="route-distance">🛣 {route.distance}</span>
+                    {route.href ? (
+                      <a
+                        href={route.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="route-link"
+                      >
+                        Open in Google Maps <ArrowRightIcon />
+                      </a>
+                    ) : (
+                      <p className="route-pending">⏳ Map link coming soon</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </main>
+
+        {/* ── FOOTER ── */}
+        <footer id="contact" className="footer">
+          <div className="footer-inner">
+            <span className="footer-brand">Kakkalani Gramam</span>
+            <div className="footer-rule" />
+            <p className="footer-copy">
+              © 2026 Kakkalani Gramam Temple, Agraharam. All rights reserved.
+            </p>
           </div>
-        </section>
-
-        {/* HOW TO REACH */}
-        <section
-          id="how-to-reach"
-          className="relative z-20 pb-12 sm:pb-16 pt-6 sm:pt-8 mt-12 sm:mt-16"
-        >
-          <div className="responsive-layout md:px-10">
-            <div className="mb-4 sm:mb-6 flex items-center gap-3">
-              <span className="text-xl">📍</span>
-              <p className="text-sm font-semibold uppercase tracking-[0.26em] text-[#b10026]">
-                How to Reach
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {howToReachRoutes.map((route) => (
-                <div
-                  key={route.route}
-                  className="flex flex-col gap-2 sm:gap-3 rounded-[1.75rem] border border-[#f5d5d5] bg-white p-4 sm:p-6 shadow-[0_25px_45px_-20px_rgba(12,16,43,0.25)]"
-                >
-                  <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-[#b10026]">
-                    {route.route}
-                  </p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {route.title}
-                  </p>
-                  <p className="text-sm text-slate-600">{route.distance}</p>
-                  {route.href ? (
-                    <a
-                      href={route.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-auto text-xs sm:text-sm font-semibold text-[#b10026] hover:text-[#8e001c]"
-                    >
-                      Open route in Google Maps →
-                    </a>
-                  ) : (
-                    <p className="mt-auto text-xs sm:text-sm font-semibold text-slate-500">
-                      Map link will be updated.
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* SUPPORT */}
-        <section id="support" className="bg-gradient-to-r from-red-800 to-red-600 py-12 sm:py-14 text-white">
-          <div className="responsive-layout flex flex-col gap-6 sm:gap-8 md:flex-row md:items-center md:justify-between md:px-10">
-            <div className="max-w-2xl space-y-3 sm:space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Support the Temple</p>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">Preserve the legacy of Kakkalani Gramam Temple's</h2>
-              <p className="text-base text-amber-100">
-                Contributions maintain daily poojas, heritage conservation, annadanam, and cultural outreach. Join hands to
-                safeguard centuries of devotion and artistry.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 sm:gap-4 text-sm font-semibold uppercase tracking-wide">
-              <a
-                href="/donation"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-white px-4 sm:px-6 py-2 sm:py-3 text-red-700 transition hover:bg-amber-100"
-              >
-                Donate Now
-              </a>
-              <a href="#" className="rounded-full border border-white px-4 sm:px-6 py-2 sm:py-3 transition hover:bg-white/10">Contact to Become a Patron</a>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* FOOTER */}
-      <footer id="contact" className="bg-slate-950 py-6 sm:py-8 text-slate-300">
-        <div className="responsive-layout md:px-10">
-          <p className="text-center text-sm sm:text-base">
-            © 2026 Kakkalani Gramam Temple, Agraharam. All rights reserved.
-          </p>
-        </div>
-      </footer>
-    </div>
+        </footer>
+      </div>
+    </>
   );
 };
 

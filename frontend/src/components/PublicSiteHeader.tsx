@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, To, useLocation } from 'react-router-dom';
 
 
@@ -32,6 +33,11 @@ const navLinks: NavLinkItem[] = [
   }
 ];
 
+const patronContacts = [
+  { name: 'R S Mani', phoneDisplay: '+91 88790 71390', phoneRaw: '+918879071390' },
+  { name: 'V Lakshmi Anand', phoneDisplay: '+91 98427 59013', phoneRaw: '+919842759013' }
+] as const;
+
 const resolveAnchorTo = (hash: string): To => ({
   pathname: '/',
   hash: hash.startsWith('#') ? hash : `#${hash}`
@@ -43,18 +49,23 @@ type PublicSiteHeaderProps = {
 
 const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const location = useLocation();
-  const showAuthCtas = location.pathname !== '/login';
+  const showLoginCta = location.pathname !== '/login';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [patronDialogOpen, setPatronDialogOpen] = useState(false);
+  const handlePatronContactClick = () => {
+    setPatronDialogOpen(true);
+  };
+  const closePatronDialog = () => setPatronDialogOpen(false);
   const headerClass = clsx(
     'z-30',
     variant === 'overlay'
       ? 'absolute inset-x-0 top-0 bg-transparent text-white'
-      : 'relative sticky top-0 border-b border-orange-100/70 bg-gradient-to-r from-orange-50/95 via-white/95 to-amber-50/95 text-slate-900 backdrop-blur'
+      : 'relative sticky top-0 border-b border-amber-200/70 bg-[linear-gradient(90deg,rgba(255,252,245,0.96)_0%,rgba(255,255,255,0.97)_42%,rgba(255,247,231,0.97)_100%)] text-slate-900 shadow-[0_14px_32px_-24px_rgba(120,69,13,0.6)] backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-amber-300/80 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-gradient-to-r after:from-orange-400/75 after:via-amber-400/95 after:to-orange-500/75'
   );
   const navLinkClass =
     variant === 'overlay'
       ? 'text-white transition hover:text-[#f4ba1a]'
-      : 'text-slate-700 transition hover:text-orange-700';
+      : 'text-slate-700 transition hover:text-[#a24a10]';
   const dropdownClass = variant === 'overlay' ? 'bg-white/95 text-slate-700' : 'bg-gradient-to-br from-orange-50 to-white text-slate-700 border border-orange-100';
   const buttonBase =
     variant === 'overlay'
@@ -64,7 +75,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const brandTextClass =
     variant === 'overlay'
       ? 'text-white/80'
-      : 'text-slate-900/70';
+      : 'text-slate-900/80';
 
   const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -78,9 +89,17 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     variant === 'overlay'
       ? 'border-white/40 text-white hover:bg-white/10'
       : 'border-orange-200 text-slate-700 hover:bg-orange-50';
+  const donateButtonClass =
+    variant === 'overlay'
+      ? 'rounded-full bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-red-700 transition hover:bg-amber-100'
+      : 'rounded-full bg-gradient-to-r from-orange-500 to-amber-600 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:from-orange-600 hover:to-amber-700';
+  const patronButtonClass =
+    variant === 'overlay'
+      ? 'rounded-full border border-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10'
+      : 'rounded-full border border-orange-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-orange-700 transition hover:bg-orange-50';
 
   useEffect(() => {
-    if (!mobileMenuOpen) {
+    if (!mobileMenuOpen && !patronDialogOpen) {
       return;
     }
     const previousOverflow = document.body.style.overflow;
@@ -88,12 +107,28 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [mobileMenuOpen]);
+  }, [mobileMenuOpen, patronDialogOpen]);
 
   useEffect(() => {
-    // Close drawer after any route/hash navigation.
+    // Close overlays after any route/hash navigation.
     setMobileMenuOpen(false);
+    setPatronDialogOpen(false);
   }, [location.pathname, location.hash]);
+
+  useEffect(() => {
+    if (!patronDialogOpen) {
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPatronDialogOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [patronDialogOpen]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -177,12 +212,27 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                 </Link>
               );
             })}
+            <a
+              href="/donation"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={donateButtonClass}
+            >
+              Donate Now
+            </a>
+            <button
+              type="button"
+              onClick={handlePatronContactClick}
+              className={patronButtonClass}
+            >
+              Contact to Become a Patron
+            </button>
           </nav>
         </div>
 
           <div className="flex flex-shrink-0 items-center gap-3">
             <div className="hidden min-w-[98px] items-center justify-end sm:flex">
-              {showAuthCtas && (
+              {showLoginCta && (
                 <Link
                   to="/login"
                   target="_blank"
@@ -276,8 +326,27 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   );
                 })}
               </ul>
-              {showAuthCtas && (
-                <div className="mt-8 space-y-3">
+              <div className="mt-8 space-y-3">
+                <a
+                  href="/donation"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={closeMobileMenu}
+                  className="block w-full rounded-full bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:from-orange-600 hover:to-amber-700"
+                >
+                  Donate Now
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMobileMenu();
+                    handlePatronContactClick();
+                  }}
+                  className="block w-full rounded-full border border-orange-300 px-4 py-3 text-center text-sm font-semibold text-orange-700 transition hover:bg-orange-50"
+                >
+                  Contact to Become a Patron
+                </button>
+                {showLoginCta && (
                   <Link
                     to="/login"
                     target="_blank"
@@ -290,12 +359,93 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   >
                     Login
                   </Link>
-                </div>
-              )}
+                )}
+              </div>
             </nav>
           </div>
         </div>
       )}
+
+      {patronDialogOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[70] overflow-y-auto bg-slate-900/55 px-4 py-6 backdrop-blur-sm sm:px-6 sm:py-10"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="patron-contact-title"
+            aria-describedby="patron-contact-description"
+            onClick={closePatronDialog}
+          >
+            <div className="flex min-h-full items-start justify-center sm:items-center">
+              <div
+                className="relative w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl border border-amber-100 bg-gradient-to-br from-[#fffdf8] via-[#fff7ea] to-[#fef3d8] p-5 shadow-[0_30px_80px_-30px_rgba(106,53,7,0.65)] sm:max-h-[calc(100dvh-5rem)]"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600" />
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.24em] text-orange-700/80">
+                      Contact to Become a Patron
+                    </p>
+                    <h2 id="patron-contact-title" className="mt-1 text-xl font-semibold text-slate-900">
+                      Patron Contact Details
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closePatronDialog}
+                    className="rounded-full border border-orange-200 p-2 text-slate-600 transition hover:bg-orange-50 hover:text-slate-900"
+                    aria-label="Close patron popup"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <p id="patron-contact-description" className="mt-2 text-sm text-slate-600">
+                  Please call any coordinator below for patron enrollment details.
+                </p>
+
+                <div className="mt-4 space-y-3">
+                  {patronContacts.map((contact) => (
+                    <a
+                      key={contact.phoneRaw}
+                      href={`tel:${contact.phoneRaw}`}
+                      className="group flex items-center justify-between rounded-xl border border-orange-100 bg-white/80 px-4 py-3 transition hover:border-orange-300 hover:bg-white"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{contact.name}</p>
+                        <p className="text-sm text-slate-600">{contact.phoneDisplay}</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700 transition group-hover:border-orange-300 group-hover:bg-orange-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M2 4.5A2.5 2.5 0 014.5 2h1.707a1 1 0 01.95.684l1.2 3.6a1 1 0 01-.24 1.022l-1.27 1.27a11.042 11.042 0 004.848 4.848l1.27-1.27a1 1 0 011.022-.24l3.6 1.2a1 1 0 01.684.95V15.5A2.5 2.5 0 0115.5 18h-1C7.596 18 2 12.404 2 5.5v-1z" />
+                        </svg>
+                        Call
+                      </span>
+                    </a>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closePatronDialog}
+                    className="rounded-full bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:from-orange-600 hover:to-amber-700"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </header>
   );
 };
