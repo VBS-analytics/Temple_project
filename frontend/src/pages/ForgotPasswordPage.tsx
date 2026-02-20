@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { publicHeaderLinks } from '../data/publicHeaderLinks';
+import PublicSiteHeader from '../components/PublicSiteHeader';
 
 import api from '../lib/api';
 import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
@@ -119,9 +119,6 @@ const ForgotPasswordPage = () => {
     }
   };
 
-  const navBtn =
-    'inline-flex h-10 items-center justify-center rounded-full px-5 whitespace-nowrap leading-none text-white transition-all duration-300 shadow-sm hover:shadow-lg transform hover:-translate-y-0.5';
-
   const handleFocus = (fieldName: string) => {
     setIsFocused(fieldName);
   };
@@ -143,7 +140,7 @@ const ForgotPasswordPage = () => {
       className="relative min-h-screen overflow-hidden"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(9,2,3,0.94), rgba(9,2,3,0.95)), url("https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1800&q=80")',
+          'linear-gradient(rgba(9,2,3,0.94), rgba(9,2,3,0.95)), url("/images/landing-page-image.jpg")',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
@@ -164,38 +161,7 @@ const ForgotPasswordPage = () => {
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-amber-900/30 to-transparent opacity-50"></div>
       </div>
 
-      {/* HEADER */}
-      <header className="absolute inset-x-0 top-0 z-20">
-        <div className="bg-transparent text-white">
-          <div className="responsive-layout flex items-center justify-between gap-6 py-4 text-white lg:px-10">
-            <Link
-              to="/"
-              className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
-            >
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
-                Kakkalani Gramam
-              </p>
-            </Link>
-
-            <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-white">
-              {publicHeaderLinks.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <div className="flex items-center gap-3">
-                <Link to="/login" className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60]`}>
-                  Login
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader variant="overlay" />
 
       {/* MAIN */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-6 pb-14 pt-36 lg:px-10">

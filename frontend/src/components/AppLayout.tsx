@@ -98,7 +98,7 @@ const AppLayout = () => {
     },
     {
       to: "/reports",
-      label: "Pooja Reports",
+      label: "Reports",
       show: Boolean(user && isAdmin(user.role)),
     },
     {
@@ -120,6 +120,16 @@ const AppLayout = () => {
       show: Boolean(user && !isAdmin(user.role)),
       end: true,
     },
+    {
+      to: "/profile/cow-samrakshana-seva",
+      label: "Cow Samrakshana Seva",
+      show: Boolean(user),
+    },
+    {
+      to: "/profile/pooja-seva",
+      label: "Pooja Seva",
+      show: Boolean(user),
+    },
     { to: "/pooja/register", label: "Pooja Registration", show: !isAdminUser },
     {
       to: "/payments/general",
@@ -135,11 +145,6 @@ const AppLayout = () => {
       to: "/payments/statement",
       label: "Payment Statement",
       show: canViewPaymentStatement(user),
-    },
-    {
-      to: "/profile/kovi-details",
-      label: "About Kovil",
-      show: Boolean(user),
     },
   ];
 

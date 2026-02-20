@@ -1,10 +1,10 @@
 // LoginPage.jsx
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
-import { countryDialCodes, CountryDialCode } from '../data/countryDialCodes';
-import { publicHeaderLinks } from '../data/publicHeaderLinks';
+import { useNavigate } from 'react-router-dom';
+import { countryDialCodes } from '../data/countryDialCodes';
 import { CountryCodePicker } from '../components/CountryCodePicker';
+import PublicSiteHeader from '../components/PublicSiteHeader';
 import { CountryOption } from '../types/country';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
@@ -47,7 +47,6 @@ const LoginPage = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const {
     register,
@@ -120,9 +119,6 @@ const LoginPage = () => {
     }
   };
 
-  const navBtn =
-    'inline-flex h-10 items-center justify-center rounded-full px-5 whitespace-nowrap leading-none text-white transition-all duration-300 shadow-sm hover:shadow-lg transform hover:-translate-y-0.5';
-
   const handleFocus = (fieldName: string) => {
     setIsFocused(fieldName);
   };
@@ -140,7 +136,7 @@ const LoginPage = () => {
       className="relative min-h-screen overflow-hidden"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(9,2,3,0.94), rgba(9,2,3,0.95)), url("https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1800&q=80")',
+          'linear-gradient(rgba(9,2,3,0.94), rgba(9,2,3,0.95)), url("/images/landing-page-image.jpg")',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
@@ -161,107 +157,7 @@ const LoginPage = () => {
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-amber-900/30 to-transparent opacity-50"></div>
       </div>
       
-      {/* HEADER */}
-      <header className="absolute inset-x-0 top-0 z-20">
-        <div className="bg-transparent text-white">
-        <div className="responsive-layout flex items-center py-3 text-white lg:px-10">
-            <div className="flex h-16 w-full items-center justify-between">
-              <Link
-                to="/"
-                className="flex min-w-0 flex-col gap-1 text-left shrink-0 group"
-              >
-                <p className="text-sm sm:text-base font-semibold uppercase tracking-[0.28em] text-amber-200 group-hover:text-amber-100 transition-colors">
-                  Kakkalani Gramam
-                </p>
-              </Link>
-              
-              {/* Desktop Nav */}
-              <div className="hidden md:flex items-center gap-4 sm:gap-6 text-sm font-semibold">
-              {publicHeaderLinks.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  className="text-white transition-all duration-300 hover:text-[#f4ba1a] hover:scale-105"
-                >
-                  {item.label}
-                </Link>
-              ))}
-              </div>
-
-              {/* Mobile Hamburger Button */}
-              <div className="md:hidden">
-                <button
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  className="inline-flex items-center justify-center rounded-md p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400"
-                  aria-controls="mobile-menu"
-                  aria-expanded={isMobileMenuOpen}
-                >
-                  <span className="sr-only">Open main menu</span>
-                  {isMobileMenuOpen ? (
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  ) : (
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-8 6h8" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Menu Panel */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-md md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        >
-          <div
-            className="absolute right-0 top-0 h-full w-4/5 max-w-xs bg-gradient-to-b from-[#090203] to-gray-900 p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-8">
-              <span className="text-base font-semibold uppercase tracking-[0.28em] text-amber-200">
-                Menu
-              </span>
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="rounded-md p-2 text-white hover:bg-white/10"
-              >
-                <span className="sr-only">Close menu</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <nav className="flex flex-col space-y-4">
-              {publicHeaderLinks.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="rounded-md px-3 py-3 text-base font-medium text-white transition-all duration-300 hover:bg-white/10 hover:text-[#f4ba1a]"
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <hr className="border-white/20 pt-4" />
-              <div className="flex flex-col space-y-3">
-                <Link
-                  to="/login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`${navBtn} bg-[#f06f4a] hover:bg-[#ff8a60] w-full`}
-                >
-                  Login
-                </Link>
-              </div>
-            </nav>
-          </div>
-        </div>
-      )}
+      <PublicSiteHeader variant="overlay" />
 
       {/* MAIN */}
       <div className="relative z-10 flex items-center justify-center px-4 py-10 sm:py-12 sm:px-6 lg:px-10">

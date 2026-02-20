@@ -282,6 +282,12 @@ const formatPlanAmount = (value?: string | number | null) => {
   return String(value);
 };
 
+const formatDonorDisplayName = (name?: string | null, sarmanName?: string | null) => {
+  const primaryName = (name ?? '').trim() || '—';
+  const trimmedSarmanName = (sarmanName ?? '').trim();
+  return trimmedSarmanName ? `${primaryName} (${trimmedSarmanName})` : primaryName;
+};
+
 const formatDateForInput = (value?: string | null) => {
   if (!value) return '';
   const parsed = new Date(value);
@@ -1014,7 +1020,7 @@ const DonorProfile = () => {
                     {getInitials(user.name)}
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-800">{user.name}</h1>
+                    <h1 className="text-2xl font-bold text-slate-800">{formatDonorDisplayName(user.name, profile.tamil_name)}</h1>
                     <p className="text-sm text-slate-500">{profile.donor_id} • {user.phone_number}</p>
                   </div>
                 </div>
@@ -1118,7 +1124,7 @@ const DonorProfile = () => {
                         <p className="mt-1 text-base font-semibold text-slate-900">{user.name}</p>
                       </div>
                       <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">
-                        <p className="text-xs font-bold uppercase text-slate-500">Tamil Name</p>
+                        <p className="text-xs font-bold uppercase text-slate-500">Sarman</p>
                         <p className="mt-1 text-base font-semibold text-slate-900">{resolveText(profile.tamil_name)}</p>
                       </div>
                       <div className="rounded-lg bg-white p-4 ring-1 ring-slate-200">

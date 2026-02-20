@@ -60,6 +60,22 @@ class PaymentRecord(models.Model):
         return f"Payment {self.pk} - {self.donor}"
 
 
+class Donation(models.Model):
+    donor_name = models.CharField(max_length=255)
+    donor_phone_no = models.CharField(max_length=20)
+    transaction_id = models.CharField(max_length=255)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
+    donation_date = models.DateField()
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "donation"
+        ordering = ("-donation_date", "-id")
+
+    def __str__(self):
+        return f"Donation {self.pk} - {self.donor_name}"
+
+
 class PassbookEntry(models.Model):
     """
     Stores pre-calculated passbook entries for each donor.

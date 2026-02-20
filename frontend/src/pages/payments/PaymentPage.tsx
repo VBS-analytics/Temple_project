@@ -278,7 +278,7 @@ const PaymentPage = () => {
   const [shareError, setShareError] = useState<string | null>(null);
   const [petalSeed, setPetalSeed] = useState(0);
   const [copiedUpi, setCopiedUpi] = useState(false);
-  const [, setLatestPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
+  const [latestPassbookEntry, setLatestPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
   const [, setLatestPaidPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
   const [, setPassbookSummaryLoading] = useState(false);
   const [activeMethod, setActiveMethod] = useState<'upi' | 'bank'>('upi');
@@ -342,18 +342,22 @@ const PaymentPage = () => {
   
   const loadLatestPassbookEntry = useCallback(async () => {
     setPassbookSummaryLoading(true);
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     try {
       const response = await api.get('payments/passbook-entries/', {
         params: {
-          page_size: 1,
-          ordering: '-entry_date',
+          page_size: 500,
+          month: currentMonthKey,
+          ordering: 'entry_date',
         },
       });
       if (!latestPassbookMountedRef.current) {
         return;
       }
       const payload = extractResults<PassbookSummaryEntry>(response.data);
-      setLatestPassbookEntry(payload.length > 0 ? payload[0] : null);
+      const latestCurrentMonthEntry = payload.length > 0 ? payload[payload.length - 1] : null;
+      setLatestPassbookEntry(latestCurrentMonthEntry);
     } catch (error) {
       console.error('Unable to load latest passbook entry', error);
       if (latestPassbookMountedRef.current) {
@@ -431,6 +435,7 @@ const PaymentPage = () => {
   const effectiveCartAmount = paymentSnapshot ? cartTotalAmount : dueTotalAmount;
   const needToPayForPooja = Math.max(0, runningBalance + effectiveCartAmount);
   const netPaymentAmount = needToPayForPooja;
+  const totalDueAmount = Math.max(0, parseAmount(latestPassbookEntry?.closing_due));
   
   const parentName = combinedTo?.name ?? 'Parent donor';
   const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
@@ -788,13 +793,19 @@ const PaymentPage = () => {
       
       <div className="mx-auto w-full max-w-7xl">
         <header className="mb-6 px-1">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-100 p-2">
-              <svg className="h-5 w-5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-slate-100 p-2">
+                <svg className="h-5 w-5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Payment Page</h1>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Payment Page</h1>
+            <div className="text-right">
+              <p className="text-xs font-semibold uppercase text-slate-500">Total Due</p>
+              <p className="text-lg font-bold text-orange-600">₹ {formatCurrency(totalDueAmount)}</p>
+            </div>
           </div>
         </header>
 

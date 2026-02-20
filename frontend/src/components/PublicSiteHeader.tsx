@@ -21,6 +21,11 @@ const navLinks: NavLinkItem[] = [
     type: 'route'
   },
   {
+    label: 'About Kovil',
+    href: '/kovi-details',
+    type: 'route'
+  },
+  {
     label: 'Why we should visit our village',
     href: '/why-visit-native-village',
     type: 'route'
@@ -38,23 +43,23 @@ type PublicSiteHeaderProps = {
 
 const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const location = useLocation();
-  const showAuthCtas = location.pathname !== '/login' && location.pathname !== '/register';
+  const showAuthCtas = location.pathname !== '/login';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const headerClass = clsx(
     'z-30',
     variant === 'overlay'
       ? 'absolute inset-x-0 top-0 bg-transparent text-white'
-      : 'relative sticky top-0 border-b border-slate-200 bg-white/90 text-slate-900 backdrop-blur supports-[backdrop-filter]:bg-white/75'
+      : 'relative sticky top-0 border-b border-orange-100/70 bg-gradient-to-r from-orange-50/95 via-white/95 to-amber-50/95 text-slate-900 backdrop-blur'
   );
   const navLinkClass =
     variant === 'overlay'
       ? 'text-white transition hover:text-[#f4ba1a]'
-      : 'text-slate-700 transition hover:text-green-600';
-  const dropdownClass = variant === 'overlay' ? 'bg-white/95 text-slate-700' : 'bg-white text-slate-700';
+      : 'text-slate-700 transition hover:text-orange-700';
+  const dropdownClass = variant === 'overlay' ? 'bg-white/95 text-slate-700' : 'bg-gradient-to-br from-orange-50 to-white text-slate-700 border border-orange-100';
   const buttonBase =
     variant === 'overlay'
       ? 'bg-[#f06f4a] hover:bg-[#ff8a60]'
-      : 'bg-green-600 hover:bg-green-700';
+      : 'bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700';
 
   const brandTextClass =
     variant === 'overlay'
@@ -63,10 +68,16 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
 
   const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
   const closeMobileMenu = () => setMobileMenuOpen(false);
+  const isNavItemActive = (item: NavLinkItem) => {
+    if (item.type === 'route') {
+      return location.pathname === item.href;
+    }
+    return location.pathname === '/' && (location.hash === item.href || location.hash === '' || location.hash === '#top');
+  };
   const toggleButtonBase =
     variant === 'overlay'
       ? 'border-white/40 text-white hover:bg-white/10'
-      : 'border-slate-300 text-slate-700 hover:bg-slate-100';
+      : 'border-orange-200 text-slate-700 hover:bg-orange-50';
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -78,6 +89,22 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
       document.body.style.overflow = previousOverflow;
     };
   }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    // Close drawer after any route/hash navigation.
+    setMobileMenuOpen(false);
+  }, [location.pathname, location.hash]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <header className={headerClass}>
@@ -154,21 +181,19 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
         </div>
 
           <div className="flex flex-shrink-0 items-center gap-3">
-            <div className="hidden items-center gap-3 sm:flex">
+            <div className="hidden min-w-[98px] items-center justify-end sm:flex">
               {showAuthCtas && (
-                <>
-                  <Link
-                    to="/login"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={clsx(
-                      'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
-                      buttonBase
-                    )}
-                  >
-                    Login
-                  </Link>
-                </>
+                <Link
+                  to="/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={clsx(
+                    'rounded-full px-4 py-2 text-sm font-semibold text-white transition',
+                    buttonBase
+                  )}
+                >
+                  Login
+                </Link>
               )}
             </div>
             <button
@@ -190,15 +215,15 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0" onClick={closeMobileMenu} />
-          <div className="absolute inset-y-0 right-0 flex h-full w-full max-w-sm flex-col bg-white text-slate-900 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col bg-gradient-to-br from-orange-50 via-white to-amber-50 text-slate-900 shadow-2xl sm:max-w-sm">
+            <div className="flex items-center justify-between border-b border-orange-100 px-6 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Kakkalani Gramam</p>
               </div>
               <button
                 type="button"
                 onClick={closeMobileMenu}
-                className="rounded-full border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50"
+                className="rounded-full border border-orange-200 p-2 text-slate-600 transition hover:bg-orange-50"
                 aria-label="Close menu"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -210,32 +235,27 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                 </svg>
               </button>
             </div>
-            <nav className="flex-1 overflow-y-auto px-6 py-6">
-              <ul className="space-y-4 text-base font-semibold text-slate-800">
+            <nav className="flex-1 overflow-y-auto px-4 py-4">
+              <ul className="space-y-2">
                 {navLinks.map((item) => {
                   const toValue = resolveLinkTo(item.href, item.type);
                   return (
-                    <li key={item.label} className="space-y-3">
+                    <li key={item.label}>
                       <Link
                         to={toValue}
                         onClick={closeMobileMenu}
-                        className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-slate-300"
-                      >
-                        <span>{item.label}</span>
-                        {item.children && (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4 text-slate-500"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                          </svg>
+                        className={clsx(
+                          'block w-full rounded-xl border px-4 py-3 text-sm font-semibold text-slate-700 transition',
+                          isNavItemActive(item)
+                            ? 'border-orange-200 bg-orange-50 text-orange-700'
+                            : 'border-orange-100 bg-white/90 hover:border-orange-200 hover:bg-orange-50/70'
                         )}
+                        aria-current={isNavItemActive(item) ? 'page' : undefined}
+                      >
+                        {item.label}
                       </Link>
                       {item.children && (
-                        <ul className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-sm font-medium">
+                        <ul className="mt-2 space-y-1 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-sm font-medium">
                           {item.children.map((child) => {
                             const childTo = resolveLinkTo(child.href, child.type);
                             return (
@@ -243,7 +263,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                                 <Link
                                   to={childTo}
                                   onClick={closeMobileMenu}
-                                  className="block rounded-xl px-3 py-2 text-slate-600 transition hover:bg-white"
+                                  className="block rounded-lg px-3 py-2 text-slate-600 transition hover:bg-white"
                                 >
                                   {child.label}
                                 </Link>
