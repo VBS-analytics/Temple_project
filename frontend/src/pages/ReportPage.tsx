@@ -466,6 +466,11 @@ const DATABASE_BUTTON_INFO = [
       'Exports all records from the general donation register into a single Excel workbook.',
   },
   {
+    label: 'Donor Feedback',
+    description:
+      'Exports all donor corner feedback entries with donor name, phone number, message, and submission timestamp.',
+  },
+  {
     label: 'Opening Balance',
     description:
       'Exports each donor\'s opening balance to help review outstanding pledges or credits.',
@@ -972,6 +977,7 @@ const ReportPage = () => {
   const [exportingExcessDonation, setExportingExcessDonation] = useState(false);
   const [exportingPaymentDetails, setExportingPaymentDetails] = useState(false);
   const [exportingGeneralDonation, setExportingGeneralDonation] = useState(false);
+  const [exportingDonorFeedback, setExportingDonorFeedback] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
@@ -1337,6 +1343,41 @@ const ReportPage = () => {
     }
   }, [exportingGeneralDonation]);
 
+  const handleDonorFeedbackDownload = useCallback(async () => {
+    if (exportingDonorFeedback) return;
+    setExportError(null);
+    setExportingDonorFeedback(true);
+    try {
+      const response = await api.get<Blob>('auth/donor-feedback-export/', {
+        responseType: 'blob',
+      });
+      const blobData = response.data;
+      if (!(blobData instanceof Blob)) {
+        throw new Error('Received an invalid donor feedback file.');
+      }
+
+      const contentDispositionHeader =
+        response.headers['content-disposition'] ?? response.headers['Content-Disposition'] ?? null;
+      const headerFilename = extractFilenameFromContentDisposition(contentDispositionHeader);
+      const fallbackFilename = `donor-feedback-${formatFilenameDate(new Date())}.xlsx`;
+      const rawFilename = headerFilename ?? fallbackFilename;
+      const downloadFilename = sanitizeFilename(rawFilename) || fallbackFilename;
+
+      triggerBlobDownload(blobData, downloadFilename);
+    } catch (error) {
+      console.error('Failed to download donor feedback report', error);
+      const detail =
+        (error as AxiosError<{ detail?: string | null }>).response?.data?.detail ?? null;
+      if (typeof detail === 'string' && detail.length > 0) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the donor feedback report right now.');
+      }
+    } finally {
+      setExportingDonorFeedback(false);
+    }
+  }, [exportingDonorFeedback]);
+
   const handleOpeningBalanceDownload = useCallback(async () => {
     if (exportingOpeningBalance) return;
     setExportError(null);
@@ -1655,6 +1696,19 @@ const ReportPage = () => {
                     </div>
                     <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
                       {exportingGeneralDonation ? 'Preparing…' : 'General Donation'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleDonorFeedbackDownload}
+                    disabled={exportingDonorFeedback}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingDonorFeedback ? <LoadingSpinner /> : <DownloadIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingDonorFeedback ? 'Preparing…' : 'Donor Feedback'}
                     </p>
                   </button>
 

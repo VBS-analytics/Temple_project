@@ -5,6 +5,8 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     DashboardMetricsView,
+    DonorFeedbackView,
+    DonorFeedbackExportView,
     DonorDetailView,
     DonorListView,
     FamilyMemberDetailView,
@@ -30,6 +32,8 @@ urlpatterns = [
     path('verify-otp/', VerifyOtpView.as_view(), name='verify-otp'),
     path('reset-password/', PasswordResetView.as_view(), name='reset-password'),
     path('profile/', ProfileView.as_view(), name='profile'),
+    path('donor-feedback/', DonorFeedbackView.as_view(), name='donor-feedback'),
+    path('donor-feedback-export/', DonorFeedbackExportView.as_view(), name='donor-feedback-export'),
     path('family-members/', FamilyMemberView.as_view(), name='family-members'),
     path('family-members/<int:pk>/', FamilyMemberDetailView.as_view(), name='family-member-detail'),
     path('donors/', DonorListView.as_view(), name='donor-list'),
