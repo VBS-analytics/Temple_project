@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import DonorProfile, FamilyMember, GothraOption, OtpToken, User
+from .models import DonorFeedback, DonorProfile, FamilyMember, GothraOption, OtpToken, User
 
 
 @admin.register(User)
@@ -64,3 +64,10 @@ class FamilyMemberAdmin(admin.ModelAdmin):
 class GothraOptionAdmin(admin.ModelAdmin):
     list_display = ("name", "display_order", "created_at")
     ordering = ("display_order", "name")
+
+
+@admin.register(DonorFeedback)
+class DonorFeedbackAdmin(admin.ModelAdmin):
+    list_display = ("id", "donor_name", "donor_phone_number", "feedback", "created_at")
+    search_fields = ("donor_name", "donor_phone_number", "feedback")
+    ordering = ("-created_at", "-id")

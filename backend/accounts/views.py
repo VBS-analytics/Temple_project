@@ -1,20 +1,25 @@
 """API views for user authentication and profile management."""
 
-from decimal import Decimal
 import secrets
+from decimal import Decimal
+from io import BytesIO
 
+from django.http import FileResponse
 from django.db.models import Max, OuterRef, Subquery, Sum
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from openpyxl import Workbook
 from payments.models import CombinePaymentMapping, PaymentRecord, PaymentStatus
 
-from .models import DonorProfile, FamilyMember, GothraOption, User, UserRole
+from .models import DonorFeedback, DonorProfile, FamilyMember, GothraOption, User, UserRole
 from .serializers import (
     AdminDonorUserUpdateSerializer,
     BulkDonorUploadSerializer,
+    DonorFeedbackSerializer,
     DonorProfileSerializer,
     FamilyMemberSerializer,
     LoginSerializer,
@@ -245,6 +250,76 @@ class FamilyMemberDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class DonorFeedbackView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        if request.user.role != UserRole.DONOR:
+            return Response({"detail": "Only donors can submit feedback."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = DonorFeedbackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        feedback = serializer.save(
+            donor_name=request.user.name,
+            donor_phone_number=request.user.phone_number,
+        )
+        return Response(DonorFeedbackSerializer(feedback).data, status=status.HTTP_201_CREATED)
+
+
+class DonorFeedbackExportView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @staticmethod
+    def _format_datetime(value):
+        if not value:
+            return ""
+        try:
+            return timezone.localtime(value).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return str(value)
+
+    def get(self, request):
+        if request.user.role != UserRole.ADMIN:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Donor Feedback"
+        sheet.append(
+            [
+                "ID",
+                "Donor Name",
+                "Donor Phone Number",
+                "Feedback",
+                "Created At",
+            ]
+        )
+
+        feedback_rows = DonorFeedback.objects.all().order_by("-created_at", "-id")
+        for feedback in feedback_rows:
+            sheet.append(
+                [
+                    feedback.id,
+                    feedback.donor_name,
+                    feedback.donor_phone_number,
+                    feedback.feedback,
+                    self._format_datetime(feedback.created_at),
+                ]
+            )
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        filename = f"donor-feedback-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+
 class DonorListView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -293,24 +368,22 @@ class DonorDetailView(APIView):
     def get(self, request, pk: int):
         """Get donor details. Users can fetch their own details or parent donor details if linked."""
         donor = self.get_object(pk)
-        
+
         # Allow access if:
         # 1. User is requesting their own details
         # 2. User is an admin
         # 3. User has a parent-child relationship with the donor
         if request.user.id != donor.id and request.user.role != UserRole.ADMIN:
             # Check if requesting user has this donor as a parent
-            from django.utils import timezone
-            
             current_month = timezone.localdate().replace(day=1)
             mapping = CombinePaymentMapping.objects.filter(
                 main_donor=request.user,
                 parent_donor_id=pk,
             ).first()
-            
+
             if not mapping or not mapping.is_active_on(current_month):
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
-        
+
         profile, _ = DonorProfile.objects.get_or_create(user=donor)
         return Response(
             {

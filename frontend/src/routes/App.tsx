@@ -19,6 +19,7 @@ import LandingPage from "../pages/LandingPage";
 import About from "../pages/About";
 import AboutKakkalaniVillage from "../pages/AboutKakkalaniVillage";
 import CowSamrakshanaSeva from "../pages/CowSamrakshanaSeva";
+import DonorCornerPage from "../pages/DonorCornerPage";
 import DonorProfile from "../pages/DonorProfile";
 import FamilyTreePage from "../pages/FamilyTreePage";
 import KovilDetailsPage from "../pages/KovilDetailsPage";
@@ -81,6 +82,7 @@ const App = () => (
     <Route element={<ProtectedRoute />}>
       <Route element={<AppLayout />}>
         <Route path="/profile" element={<DonorProfile />} />
+        <Route path="/profile/donor-corner" element={<DonorCornerPage />} />
         <Route path="/pooja/register" element={<PoojaRegistrationPage />} />
         <Route path="/payments/general" element={<PaymentPage />} />
         <Route path="/payments/combine" element={<CombinePaymentPage />} />

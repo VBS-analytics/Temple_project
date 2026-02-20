@@ -2,12 +2,13 @@ import os
 import tempfile
 from decimal import Decimal
 from datetime import timedelta
+from io import BytesIO
 
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -15,6 +16,7 @@ from payments.models import PaymentMode, PaymentRecord, PaymentStatus
 from pooja.models import PoojaOption, PoojaRegistration
 
 from .models import (
+    DonorFeedback,
     DonorProfile,
     FamilyMember,
     OtpPurpose,
@@ -259,8 +261,112 @@ class AdminAccessPolicyTests(TestCase):
             name="Hidden Statement Admin",
             password="adminpass2",
         )
-
         self.assertTrue(is_read_only_admin(read_only_admin))
         self.assertFalse(can_view_payment_statement(hidden_statement_admin))
         self.assertFalse(is_read_only_admin(full_admin))
         self.assertTrue(can_view_payment_statement(full_admin))
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class DonorFeedbackViewTests(TestCase):
+    def setUp(self):
+        self.donor = User.objects.create_user(
+            phone_number="8111111111",
+            name="Donor Feedback User",
+            password="donorpass",
+        )
+        self.admin = User.objects.create_superuser(
+            phone_number="9111111111",
+            name="Admin User",
+            password="adminpass",
+        )
+        self.client = APIClient()
+
+    def test_donor_can_submit_feedback(self):
+        self.client.force_authenticate(self.donor)
+        response = self.client.post(
+            reverse("donor-feedback"),
+            {"feedback": "Please add more monthly progress updates."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(DonorFeedback.objects.count(), 1)
+        row = DonorFeedback.objects.first()
+        self.assertEqual(row.donor_name, self.donor.name)
+        self.assertEqual(row.donor_phone_number, self.donor.phone_number)
+        self.assertEqual(row.feedback, "Please add more monthly progress updates.")
+
+    def test_admin_cannot_submit_feedback(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            reverse("donor-feedback"),
+            {"feedback": "This should be forbidden for admins."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_feedback_length_must_be_250_or_less(self):
+        self.client.force_authenticate(self.donor)
+        response = self.client.post(
+            reverse("donor-feedback"),
+            {"feedback": "a" * 251},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class DonorFeedbackExportViewTests(TestCase):
+    def setUp(self):
+        self.donor = User.objects.create_user(
+            phone_number="8222222222",
+            name="Feedback Donor",
+            password="donorpass",
+        )
+        self.admin = User.objects.create_superuser(
+            phone_number="9222222222",
+            name="Feedback Admin",
+            password="adminpass",
+        )
+        self.client = APIClient()
+
+    def test_admin_can_download_feedback_excel(self):
+        first = DonorFeedback.objects.create(
+            donor_name="Donor One",
+            donor_phone_number="9000000001",
+            feedback="First feedback",
+        )
+        second = DonorFeedback.objects.create(
+            donor_name="Donor Two",
+            donor_phone_number="9000000002",
+            feedback="Second feedback",
+        )
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("donor-feedback-export"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertIn("attachment;", response.get("Content-Disposition", ""))
+
+        payload = b"".join(response.streaming_content)
+        workbook = load_workbook(filename=BytesIO(payload))
+        sheet = workbook["Donor Feedback"]
+        rows = list(sheet.iter_rows(values_only=True))
+
+        self.assertEqual(
+            rows[0],
+            ("ID", "Donor Name", "Donor Phone Number", "Feedback", "Created At"),
+        )
+        self.assertEqual(rows[1][0], second.id)
+        self.assertEqual(rows[1][1], "Donor Two")
+        self.assertEqual(rows[2][0], first.id)
+        self.assertEqual(rows[2][1], "Donor One")
+
+    def test_donor_cannot_download_feedback_excel(self):
+        self.client.force_authenticate(self.donor)
+        response = self.client.get(reverse("donor-feedback-export"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

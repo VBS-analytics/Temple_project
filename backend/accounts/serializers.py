@@ -14,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from pooja.models import PoojaRegistration, PoojaDayOption, RecurrenceKind
 from payments.models import PaymentRecord, PaymentStatus
 
-from .models import DonorProfile, FamilyMember, GothraOption, OtpPurpose, OtpToken, User
+from .models import DonorFeedback, DonorProfile, FamilyMember, GothraOption, OtpPurpose, OtpToken, User
 
 
 def _start_of_next_month(value: date) -> date:
@@ -272,6 +272,19 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = validated_data.pop("user")
         return FamilyMember.objects.create(user=user, **validated_data)
+
+
+class DonorFeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DonorFeedback
+        fields = (
+            "id",
+            "donor_name",
+            "donor_phone_number",
+            "feedback",
+            "created_at",
+        )
+        read_only_fields = ("id", "donor_name", "donor_phone_number", "created_at")
 
 
 class GothraOptionSerializer(serializers.ModelSerializer):

@@ -196,6 +196,20 @@ class FamilyMember(models.Model):
         return f"{self.name} ({self.relationship or 'member'})"
 
 
+class DonorFeedback(models.Model):
+    donor_name = models.CharField(max_length=255)
+    donor_phone_number = models.CharField(max_length=15)
+    feedback = models.CharField(max_length=250)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "donor_feedback"
+        ordering = ("-created_at", "-id")
+
+    def __str__(self) -> str:
+        return f"DonorFeedback({self.donor_phone_number})"
+
+
 class GothraOption(models.Model):
     name = models.CharField(max_length=128, unique=True)
     display_order = models.PositiveIntegerField(default=0)

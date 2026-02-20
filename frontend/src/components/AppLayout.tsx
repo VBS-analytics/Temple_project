@@ -121,6 +121,11 @@ const AppLayout = () => {
       end: true,
     },
     {
+      to: "/profile/donor-corner",
+      label: "Donor Corner",
+      show: Boolean(user && !isAdmin(user.role)),
+    },
+    {
       to: "/profile/cow-samrakshana-seva",
       label: "Cow Samrakshana Seva",
       show: Boolean(user),
