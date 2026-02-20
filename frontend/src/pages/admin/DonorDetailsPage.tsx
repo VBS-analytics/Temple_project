@@ -4,6 +4,7 @@ import { indianCities } from '../../data/indianCities';
 import { rasiOptions, tamilStarOptions } from '../../data/familyAttributes';
 import api from '../../lib/api';
 import { useMasterDataStore } from '../../store/masterData';
+import { isReadOnlyAdmin, useAuthStore } from '../../store/auth';
 
 interface DonorProfile {
   donor_id?: string | null;
@@ -201,6 +202,12 @@ const resolveText = (value?: string | null, fallback = 'Not provided') => {
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
+const formatDonorDisplayName = (name?: string | null, savmanName?: string | null) => {
+  const trimmedName = (name ?? '').trim() || 'Unknown Donor';
+  const trimmedSavmanName = (savmanName ?? '').trim();
+  return trimmedSavmanName ? `${trimmedName} (${trimmedSavmanName})` : trimmedName;
+};
+
 const extractRegistrationResults = (payload: any): RegistrationRecord[] => {
   if (Array.isArray(payload)) {
     return payload as RegistrationRecord[];
@@ -326,6 +333,7 @@ const normalizeAdminOverview = (payload: any): GroupedRegistrations[] => {
 };
 
 const DonorDetailsPage = () => {
+  const authUser = useAuthStore((state) => state.user);
   const [donors, setDonors] = useState<DonorRecord[]>([]);
   const [registrationGroups, setRegistrationGroups] = useState<GroupedRegistrations[]>([]);
   const [loading, setLoading] = useState(true);
@@ -342,6 +350,7 @@ const DonorDetailsPage = () => {
   const [customNumberValues, setCustomNumberValues] = useState<Record<number, string>>({});
   const [customNumberSavingIds, setCustomNumberSavingIds] = useState<Set<number>>(() => new Set());
   const [customNumberErrors, setCustomNumberErrors] = useState<Record<number, string>>({});
+  const readOnlyAdmin = isReadOnlyAdmin(authUser);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
 
@@ -983,66 +992,70 @@ const DonorDetailsPage = () => {
                   </div>
                 </div>
               ))}
-              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Sign Up</p>
-                    <p className="text-sm text-slate-600 mt-2">Open donor registration page</p>
-                    <a
-                      href="/register"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
-                    >
-                      Go to Sign Up
-                    </a>
+              {!readOnlyAdmin && (
+                <>
+                  <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Sign Up</p>
+                        <p className="text-sm text-slate-600 mt-2">Open donor registration page</p>
+                        <a
+                          href="/register"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                        >
+                          Go to Sign Up
+                        </a>
+                      </div>
+                      <div className="p-3 rounded-lg bg-indigo-100 text-indigo-600">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-7 w-7"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-indigo-100 text-indigo-600">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-7 w-7"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
+                  <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Forgot Password</p>
+                        <p className="text-sm text-slate-600 mt-2">Open password reset page</p>
+                        <a
+                          href="/forgot-password"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700"
+                        >
+                          Go to Forgot Password
+                        </a>
+                      </div>
+                      <div className="p-3 rounded-lg bg-amber-100 text-amber-600">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-7 w-7"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 9v3.75m0 3h.008v.008H12v-.008zM10.5 6.75a1.5 1.5 0 113 0v1.02a4.5 4.5 0 11-3 0V6.75z"
+                          />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Forgot Password</p>
-                    <p className="text-sm text-slate-600 mt-2">Open password reset page</p>
-                    <a
-                      href="/forgot-password"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700"
-                    >
-                      Go to Forgot Password
-                    </a>
-                  </div>
-                  <div className="p-3 rounded-lg bg-amber-100 text-amber-600">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-7 w-7"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 9v3.75m0 3h.008v.008H12v-.008zM10.5 6.75a1.5 1.5 0 113 0v1.02a4.5 4.5 0 11-3 0V6.75z"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -1205,7 +1218,7 @@ const DonorDetailsPage = () => {
                 ),
               },
               {
-                label: 'Tamil Name (Sarman)',
+                label: 'Sarman',
                 value: resolveText(profile.tamil_name),
                 icon: (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1261,7 +1274,9 @@ const DonorDetailsPage = () => {
                               Donor #{profile.donor_id}
                             </span>
                           )}
-                          <h2 className="text-lg sm:text-xl font-bold text-slate-800">{user.name}</h2>
+                          <h2 className="text-lg sm:text-xl font-bold text-slate-800">
+                            {formatDonorDisplayName(user.name, profile.tamil_name)}
+                          </h2>
                         </div>
                         
                         <div className="flex flex-wrap gap-2 mb-3">
@@ -1870,13 +1885,6 @@ const DonorDetailsPage = () => {
                                       {member.family_name}
                                     </span>
                                   )}
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 border border-slate-200">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M4.5 9.75h15" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 7.5h13.5A1.5 1.5 0 0120.25 9v9a1.5 1.5 0 01-1.5 1.5H5.25A1.5 1.5 0 003.75 18V9a1.5 1.5 0 011.5-1.5z" />
-                                    </svg>
-                                    DOB: {formatDonorDate(member.date_of_birth)}
-                                  </span>
                                 </div>
                               </div>
                             ))}

@@ -18,10 +18,13 @@ import PoojaPauseCancelPage from "../pages/admin/PoojaPauseCancelPage";
 import LandingPage from "../pages/LandingPage";
 import About from "../pages/About";
 import AboutKakkalaniVillage from "../pages/AboutKakkalaniVillage";
+import CowSamrakshanaSeva from "../pages/CowSamrakshanaSeva";
 import DonorProfile from "../pages/DonorProfile";
 import FamilyTreePage from "../pages/FamilyTreePage";
 import KovilDetailsPage from "../pages/KovilDetailsPage";
+import PoojaSeva from "../pages/PoojaSeva";
 import CombinePaymentPage from "../pages/payments/CombinePaymentPage";
+import DonationPage from "../pages/payments/DonationPage";
 import ReportPage from "../pages/ReportPage";
 import WhyVisitNativeVillage from "../pages/WhyVisitNativeVillage";
 import History from "../pages/History";
@@ -50,6 +53,7 @@ const PaymentStatementRoute = () => {
 const App = () => (
   <Routes>
     <Route path="/" element={<HomeRoute />} />
+    <Route path="/donation" element={<DonationPage />} />
     <Route
       path="/login"
       element={
@@ -83,7 +87,8 @@ const App = () => (
         <Route path="/payments/statement" element={<PaymentStatementRoute />} />
         <Route path="/profile/about" element={<About embedded />} />
         <Route path="/profile/family-tree" element={<FamilyTreePage />} />
-        <Route path="/profile/kovi-details" element={<KovilDetailsPage />} />
+        <Route path="/profile/cow-samrakshana-seva" element={<CowSamrakshanaSeva />} />
+        <Route path="/profile/pooja-seva" element={<PoojaSeva />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>
@@ -111,6 +116,7 @@ const App = () => (
       </Route>
     </Route>
     <Route path="/about" element={<About />} />
+    <Route path="/kovi-details" element={<KovilDetailsPage />} />
     <Route
       path="/about-kakkalani-village"
       element={<AboutKakkalaniVillage />}
@@ -120,6 +126,7 @@ const App = () => (
       element={<WhyVisitNativeVillage />}
     />
     <Route path="/history" element={<History />} />
+    <Route path="/profile/kovi-details" element={<Navigate to="/kovi-details" replace />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
 );

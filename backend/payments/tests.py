@@ -5,7 +5,10 @@ from unittest.mock import patch
 from django.db.models import F, Window
 from django.db.models.functions import RowNumber
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
+
+from rest_framework.test import APIClient
 
 from accounts.models import User
 from pooja.models import (
@@ -17,9 +20,47 @@ from pooja.models import (
     RecurringPoojaPlan,
 )
 from payments.models import PassbookEntry
-from payments.models import PaymentRecord, PaymentStatus
+from payments.models import Donation, PaymentRecord, PaymentStatus
 from payments.services import regenerate_donor_passbook
 from payments.views import _donor_passbook_needs_refresh
+
+
+class DonationApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.create_url = reverse("donation-create")
+
+    def test_anyone_can_create_donation_without_login(self):
+        response = self.client.post(
+            self.create_url,
+            {
+                "donor_name": "Lakshmi V",
+                "donor_phone_no": "+919876543210",
+                "transaction_id": "DON-1001",
+                "amount_paid": "750.00",
+                "donation_date": "2026-02-03",
+                "notes": "Monthly donation",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        created = Donation.objects.get(id=response.json()["id"])
+        self.assertEqual(created.donor_name, "Lakshmi V")
+        self.assertEqual(created.donor_phone_no, "+919876543210")
+        self.assertEqual(created.transaction_id, "DON-1001")
+        self.assertEqual(created.amount_paid, Decimal("750.00"))
+
+    def test_missing_required_fields_returns_400(self):
+        response = self.client.post(
+            self.create_url,
+            {
+                "donor_name": "Lakshmi V",
+                "amount_paid": "750.00",
+                "donation_date": "2026-02-03",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
 
 
 class PassbookRefreshDetectionTests(TestCase):

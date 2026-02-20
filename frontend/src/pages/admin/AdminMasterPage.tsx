@@ -305,72 +305,6 @@ const AdminMasterPage = () => {
     );
   }, [tableData, searchTerm]);
 
-  const summaryCards = useMemo(
-    () => [
-      { 
-        label: 'Pooja Titiles', 
-        value: headerCount, 
-        helper: 'Grouping categories',
-        icon: (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-          </svg>
-        )
-      },
-      { 
-        label: 'Pooja Entries', 
-        value: totalPoojaEntries, 
-        helper: `${poojaOptions.length} total records`,
-        icon: (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
-        )
-      },
-      { 
-        label: 'Pooja Options', 
-        value: englishDayOptions.length, 
-        helper: 'Weekday & special day tags',
-        icon: (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        )
-      },
-      { 
-        label: 'Tamil Nakshatras', 
-        value: nakshatraOptions.length, 
-        helper: 'Tamil star references',
-        icon: (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        )
-      },
-      { 
-        label: 'Rasi', 
-        value: rasiOptions.length, 
-        helper: 'Zodiac references',
-        icon: (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.9 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z" />
-          </svg>
-        )
-      },
-      { 
-        label: 'Gothram', 
-        value: gothraOptions.length, 
-        helper: 'Gotra references',
-        icon: (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 10.5a4.5 4.5 0 10-9 0 4.5 4.5 0 009 0zM4.5 21a7.5 7.5 0 0115 0" />
-          </svg>
-        )
-      },
-    ],
-    [headerCount, totalPoojaEntries, poojaOptions.length, englishDayOptions.length, gothraOptions.length],
-  );
-
   const formatCategoryLabel = (value: string) => {
     const fallback = value.replace(/_/g, ' ');
     const label = categoryDisplayNames[value] ?? fallback;
@@ -1242,86 +1176,6 @@ const AdminMasterPage = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-16">
       <div className="mx-auto max-w-full px-4 pt-6 sm:px-6 lg:px-8">
-        {/* Header Section */}
-        <header className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-600 to-slate-900 p-5 sm:p-6 md:p-8 text-white shadow-2xl ring-1 ring-black/5">
-          <div
-            className="pointer-events-none absolute inset-0 opacity-40"
-            style={{
-              backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.25) 1px, transparent 0)',
-              backgroundSize: '22px 22px',
-            }}
-            aria-hidden
-          />
-          <div className="pointer-events-none absolute -right-16 top-0 h-48 w-48 rounded-full bg-white/20 blur-3xl" aria-hidden />
-          <div className="relative z-10 flex flex-col gap-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-3">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 sm:px-4 py-1 sm:py-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-white/90 backdrop-blur-sm">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Admin Console
-                </span>
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Master Data Control</h1>
-                  <p className="mt-2 max-w-2xl text-sm sm:text-base text-indigo-100/90">
-                    Configure headers, pooja catalog items, and day codes that power bookings and rituals.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 text-sm text-white sm:flex-row sm:items-center">
-                <button
-                  onClick={load}
-                  disabled={isLoading || isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-50"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Refresh Data
-                </button>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-100">
-                  <span className={`flex h-2 w-2 rounded-full ${isLoading ? 'bg-yellow-200 animate-pulse' : 'bg-lime-300'}`} />
-                  {isLoading ? 'Syncing data…' : 'Data synced'}
-                </div>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-              {summaryCards.map((card) => (
-                <div
-                  key={card.label}
-                  className="flex items-start gap-3 rounded-2xl bg-white/12 px-4 py-3 text-white shadow-inner ring-1 ring-white/30 backdrop-blur"
-                >
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-white">
-                    {card.icon}
-                  </span>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-orange-100/90">{card.label}</p>
-                    <p className="text-2xl font-bold">{card.value}</p>
-                    <p className="text-xs text-orange-100">{card.helper}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </header>
-
         {/* Notice Alert */}
         {notice && (
           <div className="mt-6 rounded-2xl border-l-4 border-orange-500 bg-orange-50 px-4 sm:px-6 py-4 shadow-sm">
@@ -1349,7 +1203,7 @@ const AdminMasterPage = () => {
         )}
 
         {/* Tab Navigation */}
-        <div className="mt-6 rounded-3xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+        <div className="rounded-3xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           <div className="border-b border-slate-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-0">
               <nav className="flex -mb-px overflow-x-auto">
@@ -1369,6 +1223,21 @@ const AdminMasterPage = () => {
                   </div>
                 </button>
                 <button
+                  onClick={() => setActiveTab('daily')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'daily'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 7h14M5 12h10M5 17h6" />
+                    </svg>
+                    Daily Pooja Header Text
+                  </div>
+                </button>
+                <button
                   onClick={() => setActiveTab('english')}
                   className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'english'
@@ -1380,7 +1249,7 @@ const AdminMasterPage = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    Pooja Options
+                    Daily Pooja Options
                   </div>
                 </button>
                 <button
@@ -1426,21 +1295,6 @@ const AdminMasterPage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     List of Gothram
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('daily')}
-                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'daily'
-                      ? 'border-orange-500 text-orange-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 7h14M5 12h10M5 17h6" />
-                    </svg>
-                    Daily Pooja Header Text
                   </div>
                 </button>
               </nav>

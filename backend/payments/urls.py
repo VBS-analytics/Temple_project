@@ -6,7 +6,9 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CombinePaymentAccessView,
     CombinePaymentMappingView,
+    DonationCreateView,
     ExpenseRecordViewSet,
+    GeneralDonationExportView,
     PaymentDetailsExportView,
     PaymentRecordViewSet,
     PassbookEntryViewSet,
@@ -19,7 +21,9 @@ router.register('passbook-entries', PassbookEntryViewSet, basename='passbook-ent
 
 urlpatterns = router.urls
 urlpatterns += [
+    path('donations/', DonationCreateView.as_view(), name='donation-create'),
     path('combine-mappings/', CombinePaymentMappingView.as_view(), name='combine-payment-mappings'),
     path('combine-access/', CombinePaymentAccessView.as_view(), name='combine-payment-access'),
     path('payment-details-export/', PaymentDetailsExportView.as_view(), name='payment-details-export'),
+    path('general-donation-export/', GeneralDonationExportView.as_view(), name='general-donation-export'),
 ]

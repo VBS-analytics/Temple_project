@@ -24,12 +24,18 @@ from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import (
     CombinePaymentMapping,
+    Donation,
     ExpenseRecord,
     PaymentRecord,
     PassbookEntry,
     PaymentStatus,
 )
-from .serializers import ExpenseRecordSerializer, PaymentRecordSerializer, PassbookEntrySerializer
+from .serializers import (
+    DonationSerializer,
+    ExpenseRecordSerializer,
+    PassbookEntrySerializer,
+    PaymentRecordSerializer,
+)
 from .services import regenerate_all_passbooks, regenerate_donor_passbook
 from pooja.services.recurrence import _clean_stale_chrt_dues
 from openpyxl import Workbook
@@ -342,6 +348,16 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
         # The closing due for the current month is calculated as:
         # closing_balance = opening_balance + current_month_due - current_month_payments
         # This is computed dynamically in the serializer and on the Payment Statement page.
+
+
+class DonationCreateView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        serializer = DonationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ExpenseRecordViewSet(viewsets.ModelViewSet):
@@ -1144,47 +1160,47 @@ class PaymentDetailsExportView(APIView):
                 ]
             )
 
-        # Sheet 3: Donor Statements (ordered passbook entries per donor)
+        # Sheet 3: Donor Statements (latest passbook entry per donor)
         statement_sheet = workbook.create_sheet(title="Donor Statements")
         statement_headers = [
             "Donor ID",
             "Donor Name",
             "Donor Phone",
-            "Entry #",
-            "Entry Date",
             "Entry Type",
             "Transaction Details",
-            "Opening Balance",
             "Due Amount",
             "Paid Amount",
             "Closing Due",
             "Payment Record ID",
-            "Registration ID",
         ]
         statement_sheet.append(statement_headers)
 
-        current_donor = None
-        entry_counter = 0
-        for entry in passbook_qs:
-            if entry.donor_id != current_donor:
-                current_donor = entry.donor_id
-                entry_counter = 0
-            entry_counter += 1
+        latest_statement_qs = (
+            PassbookEntry.objects.select_related("donor", "payment_record", "registration")
+            .exclude(donor__role=UserRole.ADMIN)
+            .annotate(
+                donor_latest_rank=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("donor_id")],
+                    order_by=(F("entry_date").desc(), F("id").desc()),
+                )
+            )
+            .filter(donor_latest_rank=1)
+            .order_by("donor_id")
+        )
+
+        for entry in latest_statement_qs:
             statement_sheet.append(
                 [
                     entry.donor_id,
                     getattr(entry.donor, "name", ""),
                     getattr(entry.donor, "phone_number", ""),
-                    entry_counter,
-                    self._format_date(entry.entry_date),
                     entry.entry_type,
                     entry.transaction_details,
-                    float(entry.opening_balance or 0),
                     float(entry.due_amount or 0),
                     float(entry.paid_amount or 0),
                     float(entry.closing_due or 0),
                     entry.payment_record_id,
-                    entry.registration_id,
                 ]
             )
 
@@ -1193,6 +1209,62 @@ class PaymentDetailsExportView(APIView):
         buffer.seek(0)
 
         filename = f"payment-details-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+
+class GeneralDonationExportView(APIView):
+    """Export all records from the donation table to a single Excel sheet."""
+
+    permission_classes = (IsAdminRole,)
+
+    @staticmethod
+    def _format_date(value):
+        if not value:
+            return ""
+        try:
+            return value.strftime("%Y-%m-%d")
+        except Exception:
+            return str(value)
+
+    def get(self, request):
+        workbook = Workbook()
+        donation_sheet = workbook.active
+        donation_sheet.title = "General Donations"
+        headers = [
+            "ID",
+            "Donor Name",
+            "Donor Phone",
+            "Transaction ID",
+            "Amount Paid",
+            "Donation Date",
+            "Notes",
+        ]
+        donation_sheet.append(headers)
+
+        donations = Donation.objects.all().order_by("-donation_date", "-id")
+        for donation in donations:
+            donation_sheet.append(
+                [
+                    donation.id,
+                    donation.donor_name,
+                    donation.donor_phone_no,
+                    donation.transaction_id,
+                    float(donation.amount_paid or 0),
+                    self._format_date(donation.donation_date),
+                    donation.notes,
+                ]
+            )
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        filename = f"general-donation-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return FileResponse(
             buffer,
             as_attachment=True,
@@ -1335,4 +1407,3 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
         if ordering_param in ('entry_date', '-entry_date'):
             return qs.order_by(ordering_param)
         return qs.order_by('donor', 'entry_date')
-

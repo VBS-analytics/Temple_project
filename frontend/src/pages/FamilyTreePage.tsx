@@ -761,7 +761,7 @@ const TableView = ({
         </div>
 
         <div className="overflow-x-auto rounded-2xl border border-orange-100 bg-white shadow-sm">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[680px]">
             <thead>
               <tr className="border-b border-orange-100 bg-orange-50/60 text-left text-sm">
                 <SortTh field="name" label="Name" />
@@ -769,13 +769,12 @@ const TableView = ({
                 <SortTh field="birthYear" label="Birth" />
                 <SortTh field="birthPlace" label="Place" />
                 <th className="px-4 py-3 font-semibold text-slate-700">Occupation</th>
-                <th className="px-4 py-3 font-semibold text-slate-700">Branch</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
                     No matching people found.
                   </td>
                 </tr>
@@ -794,7 +793,6 @@ const TableView = ({
                     </td>
                     <td className="px-4 py-3 text-slate-500">{person.birthPlace || "–"}</td>
                     <td className="px-4 py-3 text-slate-500">{person.occupation || "–"}</td>
-                    <td className="px-4 py-3 text-slate-500">{person.branch || "–"}</td>
                   </tr>
                 ))
               )}

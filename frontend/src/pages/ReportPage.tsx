@@ -461,6 +461,11 @@ const DATABASE_BUTTON_INFO = [
       'Exports payment records, passbook entries, and donor-wise statements into a single Excel workbook for audits.',
   },
   {
+    label: 'General Donation (Homepage)',
+    description:
+      'Exports all records from the general donation register into a single Excel workbook.',
+  },
+  {
     label: 'Opening Balance',
     description:
       'Exports each donor\'s opening balance to help review outstanding pledges or credits.',
@@ -966,6 +971,7 @@ const ReportPage = () => {
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
   const [exportingExcessDonation, setExportingExcessDonation] = useState(false);
   const [exportingPaymentDetails, setExportingPaymentDetails] = useState(false);
+  const [exportingGeneralDonation, setExportingGeneralDonation] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
@@ -1296,6 +1302,41 @@ const ReportPage = () => {
     }
   }, [exportingPaymentDetails]);
 
+  const handleGeneralDonationDownload = useCallback(async () => {
+    if (exportingGeneralDonation) return;
+    setExportError(null);
+    setExportingGeneralDonation(true);
+    try {
+      const response = await api.get<Blob>('payments/general-donation-export/', {
+        responseType: 'blob',
+      });
+      const blobData = response.data;
+      if (!(blobData instanceof Blob)) {
+        throw new Error('Received an invalid general donation file.');
+      }
+
+      const contentDispositionHeader =
+        response.headers['content-disposition'] ?? response.headers['Content-Disposition'] ?? null;
+      const headerFilename = extractFilenameFromContentDisposition(contentDispositionHeader);
+      const fallbackFilename = `general-donation-${formatFilenameDate(new Date())}.xlsx`;
+      const rawFilename = headerFilename ?? fallbackFilename;
+      const downloadFilename = sanitizeFilename(rawFilename) || fallbackFilename;
+
+      triggerBlobDownload(blobData, downloadFilename);
+    } catch (error) {
+      console.error('Failed to download general donation report', error);
+      const detail =
+        (error as AxiosError<{ detail?: string | null }>).response?.data?.detail ?? null;
+      if (typeof detail === 'string' && detail.length > 0) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the general donation report right now.');
+      }
+    } finally {
+      setExportingGeneralDonation(false);
+    }
+  }, [exportingGeneralDonation]);
+
   const handleOpeningBalanceDownload = useCallback(async () => {
     if (exportingOpeningBalance) return;
     setExportError(null);
@@ -1601,6 +1642,19 @@ const ReportPage = () => {
                     </div>
                     <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
                       {exportingOpeningBalance ? 'Preparing…' : 'Opening Balance'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleGeneralDonationDownload}
+                    disabled={exportingGeneralDonation}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingGeneralDonation ? <LoadingSpinner /> : <DownloadIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingGeneralDonation ? 'Preparing…' : 'General Donation'}
                     </p>
                   </button>
 
