@@ -997,3 +997,4 @@ def process_recurring_plans(
         "due_payments_created": due_payments_created,
         "chrt_due_payments_created": chrt_due_payments_created,
     }
+

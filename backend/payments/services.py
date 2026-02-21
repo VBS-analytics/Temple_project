@@ -421,3 +421,4 @@ def regenerate_all_passbooks() -> None:
     for donor in donors:
         # Avoid re-running due generation per donor during bulk run
         regenerate_donor_passbook(donor.id, ensure_dues=False)
+
