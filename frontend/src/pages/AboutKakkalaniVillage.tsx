@@ -1,5 +1,6 @@
 import React from 'react';
 import PublicSiteHeader from "../components/PublicSiteHeader";
+import EnglishTamilToggle from "../components/EnglishTamilToggle";
 
 // Types for the content structure
 interface Section {
@@ -84,6 +85,10 @@ const AboutKakkalaniVillage: React.FC = () => {
       <PublicSiteHeader />
       
       <main className="relative overflow-x-hidden">
+        <div className="relative z-10 pt-3 sm:pt-4">
+          <EnglishTamilToggle />
+        </div>
+
         {/* Decorative Elements - Hidden on mobile to prevent overflow */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 right-10 w-32 h-32 sm:w-64 sm:h-64 bg-amber-200/20 rounded-full blur-3xl" />

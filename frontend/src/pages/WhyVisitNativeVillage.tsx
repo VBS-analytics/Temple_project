@@ -1,10 +1,15 @@
 import PublicSiteHeader from "../components/PublicSiteHeader";
+import EnglishTamilToggle from "../components/EnglishTamilToggle";
 
 const WhyVisitNativeVillage = () => (
   <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
     <PublicSiteHeader />
     
     <main className="relative overflow-x-hidden">
+      <div className="relative z-10 pt-3 sm:pt-4">
+        <EnglishTamilToggle />
+      </div>
+
       {/* Decorative background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 right-10 w-32 h-32 sm:w-64 sm:h-64 bg-amber-200/20 rounded-full blur-3xl" />

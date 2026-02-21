@@ -29,6 +29,154 @@ type Person = {
 type ViewMode = "diagram" | "tree" | "timeline" | "table";
 type SortField = "name" | "generation" | "birthYear" | "birthPlace";
 type SortDirection = "asc" | "desc";
+const MOBILE_BREAKPOINT = 768;
+const getDefaultDiagramZoom = (isMobile: boolean) => (isMobile ? 100 : 150);
+
+type SvgRectNode = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type SvgTextNode = {
+  x: number;
+  y: number;
+  value: string;
+};
+
+const getNumericAttribute = (element: Element, attribute: string): number | null => {
+  const value = Number(element.getAttribute(attribute));
+  return Number.isFinite(value) ? value : null;
+};
+
+const normalizeText = (value: string): string =>
+  value.replace(/\s+/g, " ").replace(/\s*\/\s*/g, " / ").trim();
+
+const inferGender = (value: string): Person["gender"] => {
+  const text = value.toLowerCase();
+  if (
+    /\b(daughter|wife|mother|sister|amma|lakshmi|gayathri|meena|radha|haripriya|revathy|prema|sajji)\b/.test(
+      text,
+    )
+  ) {
+    return "female";
+  }
+  return "male";
+};
+
+const extractPeopleFromSvg = (svgMarkup: string, idPrefix: string): Person[] => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
+  if (doc.querySelector("parsererror")) return [];
+
+  const rects: SvgRectNode[] = Array.from(doc.querySelectorAll("rect"))
+    .map((node) => ({
+      x: getNumericAttribute(node, "x"),
+      y: getNumericAttribute(node, "y"),
+      width: getNumericAttribute(node, "width"),
+      height: getNumericAttribute(node, "height"),
+    }))
+    .filter(
+      (
+        node,
+      ): node is {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } =>
+        node.x !== null && node.y !== null && node.width !== null && node.height !== null,
+    )
+    .filter((node) => node.width > 70 && node.width < 260 && node.height > 40 && node.height < 260);
+
+  const texts: SvgTextNode[] = Array.from(doc.querySelectorAll("text"))
+    .map((node) => ({
+      x: getNumericAttribute(node, "x"),
+      y: getNumericAttribute(node, "y"),
+      value: normalizeText(node.textContent ?? ""),
+    }))
+    .filter((node): node is { x: number; y: number; value: string } => node.x !== null && node.y !== null)
+    .filter((node) => Boolean(node.value));
+
+  const records = rects
+    .map((rect) => {
+      const lines = texts
+        .filter(
+          (text) =>
+            text.x >= rect.x - 4 &&
+            text.x <= rect.x + rect.width + 4 &&
+            text.y >= rect.y - 8 &&
+            text.y <= rect.y + rect.height + 8,
+        )
+        .sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y))
+        .map((line) => line.value);
+
+      if (lines.length === 0) return null;
+
+      const fullLabel = normalizeText(lines.join(" / "));
+      if (!fullLabel) return null;
+
+      const primaryName = normalizeText(
+        lines[0].replace(/\((?:L|D)\)/gi, "").replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ""),
+      );
+
+      return {
+        rect,
+        fullLabel,
+        primaryName: primaryName || fullLabel,
+        yCenter: rect.y + rect.height / 2,
+      };
+    })
+    .filter(
+      (
+        record,
+      ): record is {
+        rect: SvgRectNode;
+        fullLabel: string;
+        primaryName: string;
+        yCenter: number;
+      } => record !== null,
+    );
+
+  if (records.length === 0) return [];
+
+  const sortedByY = [...records].sort((a, b) => a.yCenter - b.yCenter);
+  const generationCenters: number[] = [];
+  const threshold = 110;
+
+  sortedByY.forEach((record) => {
+    const lastCenter = generationCenters[generationCenters.length - 1];
+    if (lastCenter === undefined || Math.abs(record.yCenter - lastCenter) > threshold) {
+      generationCenters.push(record.yCenter);
+      return;
+    }
+    generationCenters[generationCenters.length - 1] = (lastCenter + record.yCenter) / 2;
+  });
+
+  return records
+    .sort((a, b) => (a.rect.y === b.rect.y ? a.rect.x - b.rect.x : a.rect.y - b.rect.y))
+    .map((record, index) => {
+      const closestGeneration = generationCenters.reduce(
+        (best, center, centerIndex) => {
+          const distance = Math.abs(center - record.yCenter);
+          if (distance < best.distance) {
+            return { centerIndex, distance };
+          }
+          return best;
+        },
+        { centerIndex: 0, distance: Number.POSITIVE_INFINITY },
+      );
+
+      return {
+        id: `${idPrefix}-svg-${index + 1}`,
+        name: record.primaryName,
+        gender: inferGender(record.fullLabel),
+        generation: closestGeneration.centerIndex + 1,
+        notes: record.fullLabel,
+      };
+    });
+};
 
 const familyTrees: FamilyTreeInfo[] = [
   {
@@ -600,58 +748,64 @@ const TimelineView = ({
   return (
     <div className="p-4 sm:p-6">
       <div className="mx-auto max-w-5xl space-y-8">
-        {grouped.map((group) => (
-          <section key={group.generation}>
-            <div className="mb-4 flex items-center gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-600 font-bold text-white shadow-md">
-                {group.generation}
+        {grouped.length === 0 ? (
+          <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-8 text-center text-slate-500">
+            No timeline records available for this family yet.
+          </div>
+        ) : (
+          grouped.map((group) => (
+            <section key={group.generation}>
+              <div className="mb-4 flex items-center gap-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-600 font-bold text-white shadow-md">
+                  {group.generation}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">
+                    Generation {group.generation}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {group.persons.length}{" "}
+                    {group.persons.length === 1 ? "person" : "people"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800">
-                  Generation {group.generation}
-                </h3>
-                <p className="text-sm text-slate-500">
-                  {group.persons.length}{" "}
-                  {group.persons.length === 1 ? "person" : "people"}
-                </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {group.persons.map((person) => {
+                  const spouse = person.spouseId
+                    ? getPerson(people, person.spouseId)
+                    : undefined;
+                  return (
+                    <button
+                      key={person.id}
+                      type="button"
+                      onClick={() => onPersonClick(person)}
+                      className="rounded-2xl border border-orange-100 bg-white p-4 text-left shadow-sm transition-all hover:border-orange-400 hover:shadow-md"
+                    >
+                      <div className="font-semibold text-slate-800">{person.name}</div>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {person.birthYear || "Year unknown"}
+                        {person.deathYear ? ` – ${person.deathYear}` : ""}
+                      </p>
+                      {person.birthPlace && (
+                        <p className="text-sm text-slate-400">{person.birthPlace}</p>
+                      )}
+                      {spouse && (
+                        <p className="mt-2 text-xs text-orange-700 font-medium">
+                          Spouse: {spouse.name}
+                        </p>
+                      )}
+                      {(person.children?.length || 0) > 0 && (
+                        <p className="text-xs text-amber-700">
+                          Children: {person.children?.length}
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {group.persons.map((person) => {
-                const spouse = person.spouseId
-                  ? getPerson(people, person.spouseId)
-                  : undefined;
-                return (
-                  <button
-                    key={person.id}
-                    type="button"
-                    onClick={() => onPersonClick(person)}
-                    className="rounded-2xl border border-orange-100 bg-white p-4 text-left shadow-sm transition-all hover:border-orange-400 hover:shadow-md"
-                  >
-                    <div className="font-semibold text-slate-800">{person.name}</div>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {person.birthYear || "Year unknown"}
-                      {person.deathYear ? ` – ${person.deathYear}` : ""}
-                    </p>
-                    {person.birthPlace && (
-                      <p className="text-sm text-slate-400">{person.birthPlace}</p>
-                    )}
-                    {spouse && (
-                      <p className="mt-2 text-xs text-orange-700 font-medium">
-                        Spouse: {spouse.name}
-                      </p>
-                    )}
-                    {(person.children?.length || 0) > 0 && (
-                      <p className="text-xs text-amber-700">
-                        Children: {person.children?.length}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+            </section>
+          ))
+        )}
       </div>
     </div>
   );
@@ -775,7 +929,9 @@ const TableView = ({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
-                    No matching people found.
+                    {people.length === 0
+                      ? "No people records available for this family yet."
+                      : "No matching people found."}
                   </td>
                 </tr>
               ) : (
@@ -928,32 +1084,85 @@ type FamilyTreePageProps = {
 
 const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
   const [activeTreeId, setActiveTreeId] = useState(familyTrees[0]?.id);
-  const [zoomLevel, setZoomLevel] = useState(100);
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false,
+  );
+  const [zoomLevel, setZoomLevel] = useState(() =>
+    getDefaultDiagramZoom(typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false),
+  );
   const [viewMode, setViewMode] = useState<ViewMode>("diagram");
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [svgDerivedPeopleByTree, setSvgDerivedPeopleByTree] = useState<
+    Record<string, Person[] | null>
+  >({});
   const tabsRef = useRef<HTMLDivElement>(null);
 
   const activeTree = familyTrees.find((tree) => tree.id === activeTreeId) ?? familyTrees[0];
-  const detailedPeople = detailedPeopleByTree[activeTreeId] || [];
+  const staticPeopleForTree = detailedPeopleByTree[activeTreeId] || [];
+  const svgDerivedPeopleForTree = svgDerivedPeopleByTree[activeTreeId];
+  const detailedPeople = staticPeopleForTree.length > 0
+    ? staticPeopleForTree
+    : svgDerivedPeopleForTree || [];
   const hasDetailedData = detailedPeople.length > 0;
   const rootPersonId = rootPersonByTree[activeTreeId] || "";
+  const isLoadingDerivedPeople =
+    staticPeopleForTree.length === 0 &&
+    svgDerivedPeopleForTree === undefined &&
+    Boolean(activeTree?.image?.endsWith(".svg"));
 
   useEffect(() => {
-    const isMobile = window.innerWidth < 768;
+    if (staticPeopleForTree.length > 0) return;
+    if (svgDerivedPeopleForTree !== undefined) return;
+    if (!activeTree?.image?.endsWith(".svg")) {
+      setSvgDerivedPeopleByTree((prev) => ({ ...prev, [activeTreeId]: null }));
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFromSvg = async () => {
+      try {
+        const response = await fetch(activeTree.image as string);
+        if (!response.ok) {
+          throw new Error(`Failed to load ${activeTree.image}`);
+        }
+        const svgMarkup = await response.text();
+        const people = extractPeopleFromSvg(svgMarkup, activeTreeId);
+        if (cancelled) return;
+        setSvgDerivedPeopleByTree((prev) => ({ ...prev, [activeTreeId]: people }));
+      } catch {
+        if (cancelled) return;
+        setSvgDerivedPeopleByTree((prev) => ({ ...prev, [activeTreeId]: null }));
+      }
+    };
+
+    loadFromSvg();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTree?.image, activeTreeId, staticPeopleForTree.length, svgDerivedPeopleForTree]);
+
+  useEffect(() => {
+    const syncViewport = () => {
+      const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
+      setIsMobileViewport(isMobile);
+    };
+
+    const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
     setViewMode(isMobile ? "timeline" : "diagram");
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
   useEffect(() => {
-    if (!hasDetailedData && viewMode !== "diagram") {
-      setViewMode("diagram");
-    }
     setSelectedPerson(null);
-    setZoomLevel(100);
-  }, [activeTreeId, hasDetailedData, viewMode]);
+    setZoomLevel(getDefaultDiagramZoom(isMobileViewport));
+  }, [activeTreeId, isMobileViewport]);
 
   const zoomIn = () => setZoomLevel((prev) => Math.min(prev + 25, 300));
   const zoomOut = () => setZoomLevel((prev) => Math.max(prev - 25, 50));
-  const resetZoom = () => setZoomLevel(100);
+  const resetZoom = () => setZoomLevel(getDefaultDiagramZoom(isMobileViewport));
 
   const scrollTabs = (delta: number) => {
     tabsRef.current?.scrollBy({ left: delta, behavior: "smooth" });
@@ -964,11 +1173,11 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
     if (person) setSelectedPerson(person);
   };
 
-  const views: { id: ViewMode; label: string; needsData?: boolean }[] = [
+  const views: { id: ViewMode; label: string }[] = [
     { id: "diagram", label: "Diagram" },
-    { id: "tree", label: "Tree", needsData: true },
-    { id: "timeline", label: "Timeline", needsData: true },
-    { id: "table", label: "Table", needsData: true },
+    { id: "tree", label: "Tree" },
+    { id: "timeline", label: "Timeline" },
+    { id: "table", label: "Table" },
   ];
 
   return (
@@ -1051,19 +1260,17 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
         {/* View mode tabs */}
         <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-orange-100 bg-white p-2 shadow-sm">
           {views.map((view) => {
-            const disabled = Boolean(view.needsData && !hasDetailedData);
             const active = viewMode === view.id;
             return (
               <button
                 key={view.id}
                 type="button"
-                disabled={disabled}
                 onClick={() => setViewMode(view.id)}
                 className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
                   active
                     ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-md shadow-orange-500/20"
                     : "text-slate-600 hover:bg-orange-50 hover:text-orange-700"
-                } disabled:cursor-not-allowed disabled:opacity-40`}
+                }`}
               >
                 {view.label}
               </button>
@@ -1144,32 +1351,36 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
 
               <div className="relative">
                 {activeTree?.isAvailable && activeTree.image ? (
-                  <div className="bg-gradient-to-br from-orange-50/40 to-amber-50/20 p-4 sm:p-6">
+                  <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-4 sm:p-6">
                     <div
-                      className="overflow-auto rounded-2xl border border-orange-100 bg-white shadow-inner"
-                      style={{ maxHeight: "70vh" }}
+                      className="overflow-auto rounded-2xl border border-slate-700/80 bg-slate-950 shadow-inner shadow-black/40"
+                      style={{ maxHeight: "82vh" }}
                     >
                       <div
                         className="p-4 transition-transform duration-300 ease-out sm:p-6"
                         style={{
                           transform: `scale(${zoomLevel / 100})`,
-                          transformOrigin: "top center",
+                          transformOrigin: isMobileViewport ? "top left" : "top center",
                         }}
                       >
                         <img
                           src={activeTree.image}
                           alt={`Family tree diagram for ${activeTree.subtitle}`}
-                          className="mx-auto block h-auto w-full"
+                          className="mx-auto block h-auto drop-shadow-[0_20px_35px_rgba(0,0,0,0.45)]"
                           loading="lazy"
-                          style={{ maxWidth: "100%" }}
+                          style={
+                            isMobileViewport
+                              ? { width: "auto", maxWidth: "none" }
+                              : { width: "100%", maxWidth: "100%" }
+                          }
                         />
                       </div>
                     </div>
                     {activeTree.description && (
-                      <div className="mt-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+                      <div className="mt-4 rounded-2xl border border-slate-700/80 bg-slate-900/90 p-4 shadow-sm">
                         <div className="flex items-start gap-3">
                           <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-orange-500 to-amber-500" />
-                          <p className="text-sm leading-relaxed text-slate-600">
+                          <p className="text-sm leading-relaxed text-slate-200">
                             {activeTree.description}
                           </p>
                         </div>
@@ -1194,37 +1405,21 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
             </>
           )}
 
-          {/* No detailed data fallback */}
-          {viewMode !== "diagram" && !hasDetailedData && (
-            <div className="p-8 text-center">
-              <div className="text-4xl mb-4">📋</div>
-              <h3 className="text-lg font-semibold text-slate-800">
-                Detailed lineage data is not available yet
-              </h3>
-              <p className="mt-2 text-sm text-slate-500">
-                This family currently has diagram data only. Use the Diagram view for now.
-              </p>
-              <button
-                type="button"
-                onClick={() => setViewMode("diagram")}
-                className="mt-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
-              >
-                Switch to Diagram
-              </button>
-            </div>
+          {isLoadingDerivedPeople && viewMode !== "diagram" && (
+            <div className="p-8 text-center text-slate-500">Loading lineage details...</div>
           )}
 
-          {viewMode === "tree" && hasDetailedData && (
+          {!isLoadingDerivedPeople && viewMode === "tree" && (
             <TreeView
               people={detailedPeople}
               rootPersonId={rootPersonId}
               onPersonClick={setSelectedPerson}
             />
           )}
-          {viewMode === "timeline" && hasDetailedData && (
+          {!isLoadingDerivedPeople && viewMode === "timeline" && (
             <TimelineView people={detailedPeople} onPersonClick={setSelectedPerson} />
           )}
-          {viewMode === "table" && hasDetailedData && (
+          {!isLoadingDerivedPeople && viewMode === "table" && (
             <TableView people={detailedPeople} onPersonClick={setSelectedPerson} />
           )}
         </div>

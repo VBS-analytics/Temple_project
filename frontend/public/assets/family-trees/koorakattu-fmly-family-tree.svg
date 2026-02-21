@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1309" height="1864" viewBox="0 0 1309 1864" role="img" aria-labelledby="title desc">
 <title id="title">Koorakattu Family Tree</title>
 <desc id="desc">Auto-generated from Excel diagram.</desc>
-<rect x="0" y="0" width="1309" height="1864" fill="#f8fafc"/>
+<rect x="0" y="0" width="1309" height="1864" fill="#0b1220"/>
 <line x1="341.73" y1="410.72" x2="341.80" y2="484.33" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
 <line x1="100.95" y1="699.95" x2="485.16" y2="709.59" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
 <line x1="102.51" y1="710.72" x2="104.14" y2="767.43" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
@@ -42,82 +42,82 @@
 <line x1="682.13" y1="1642.58" x2="761.13" y2="1642.58" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
 <line x1="734.98" y1="1467.91" x2="736.57" y2="1618.43" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
 <rect x="273.90" y="280.06" width="136.62" height="127.60" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="342.21" y="341.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Koorakattu Krishna</text>
-<text x="342.21" y="353.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Iyr</text>
+<text x="342.21" y="341.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Koorakattu Krishna</text>
+<text x="342.21" y="353.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Iyr</text>
 <rect x="744.44" y="280.06" width="140.66" height="132.25" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="814.77" y="344.19" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Koorakattu Natesa</text>
-<text x="814.77" y="356.19" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Iyr</text>
+<text x="814.77" y="344.19" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Koorakattu Natesa</text>
+<text x="814.77" y="356.19" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Iyr</text>
 <rect x="277.05" y="497.25" width="135.84" height="127.60" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="344.97" y="565.05" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Prof Rangaswamy</text>
+<text x="344.97" y="565.05" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Prof Rangaswamy</text>
 <rect x="156.24" y="770.83" width="110.00" height="122.61" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="211.24" y="824.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">R</text>
-<text x="211.24" y="836.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Venkateshwaran</text>
-<text x="211.24" y="848.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">@Appulu/ Banu</text>
+<text x="211.24" y="824.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">R</text>
+<text x="211.24" y="836.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Venkateshwaran</text>
+<text x="211.24" y="848.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">@Appulu/ Banu</text>
 <rect x="48.00" y="770.83" width="110.00" height="122.61" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="103.00" y="836.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">R Balakrishnan</text>
+<text x="103.00" y="836.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">R Balakrishnan</text>
 <rect x="479.80" y="760.06" width="110.00" height="127.60" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="534.80" y="821.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">R Natarajan</text>
-<text x="534.80" y="833.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">@pappati</text>
+<text x="534.80" y="821.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">R Natarajan</text>
+<text x="534.80" y="833.86" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">@pappati</text>
 <rect x="280.95" y="1000.06" width="110.00" height="130.09" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="335.95" y="1063.11" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Nagalakshmi</text>
-<text x="335.95" y="1075.11" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">(unmarried)</text>
+<text x="335.95" y="1063.11" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Nagalakshmi</text>
+<text x="335.95" y="1075.11" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">(unmarried)</text>
 <rect x="382.95" y="1010.72" width="110.00" height="122.72" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="437.95" y="1070.08" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Saraswathi</text>
-<text x="437.95" y="1082.08" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">(unmarried)</text>
+<text x="437.95" y="1070.08" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Saraswathi</text>
+<text x="437.95" y="1082.08" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">(unmarried)</text>
 <rect x="280.95" y="773.33" width="110.00" height="127.48" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="335.95" y="835.07" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Visalakshi</text>
-<text x="335.95" y="847.07" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">(unmarried)</text>
+<text x="335.95" y="835.07" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Visalakshi</text>
+<text x="335.95" y="847.07" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">(unmarried)</text>
 <rect x="380.54" y="773.33" width="110.00" height="129.98" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="435.54" y="836.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Jayalakshmi</text>
-<text x="435.54" y="848.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">(unmarried)</text>
+<text x="435.54" y="836.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Jayalakshmi</text>
+<text x="435.54" y="848.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">(unmarried)</text>
 <rect x="787.25" y="588.11" width="110.00" height="161.16" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="842.25" y="654.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">1st son-</text>
-<text x="842.25" y="666.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Raajagopal ex</text>
-<text x="842.25" y="678.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Tata steel</text>
-<text x="842.25" y="690.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Jamshedpur</text>
+<text x="842.25" y="654.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">1st son-</text>
+<text x="842.25" y="666.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Raajagopal ex</text>
+<text x="842.25" y="678.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Tata steel</text>
+<text x="842.25" y="690.69" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Jamshedpur</text>
 <rect x="679.02" y="590.83" width="110.00" height="122.61" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="734.02" y="656.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">D1- Rajam</text>
+<text x="734.02" y="656.14" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">D1- Rajam</text>
 <rect x="1042.13" y="593.33" width="110.00" height="129.98" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="1097.13" y="656.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">D3-Thangu @</text>
-<text x="1097.13" y="668.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Trichi</text>
+<text x="1097.13" y="656.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">D3-Thangu @</text>
+<text x="1097.13" y="668.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Trichi</text>
 <rect x="912.67" y="593.33" width="110.00" height="127.48" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="967.67" y="661.07" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">D2- name?</text>
+<text x="967.67" y="661.07" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">D2- name?</text>
 <rect x="1164.44" y="593.33" width="110.00" height="129.98" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="1219.44" y="656.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">2nd Son ( not</text>
-<text x="1219.44" y="668.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">avail)</text>
+<text x="1219.44" y="656.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">2nd Son ( not</text>
+<text x="1219.44" y="668.32" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">avail)</text>
 <rect x="853.49" y="888.00" width="110.00" height="127.60" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="908.49" y="955.80" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Ganesh</text>
+<text x="908.49" y="955.80" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Ganesh</text>
 <rect x="745.25" y="885.28" width="110.00" height="168.30" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="800.25" y="955.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Balu - worked</text>
-<text x="800.25" y="967.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">at kalpakkam &amp;</text>
-<text x="800.25" y="979.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">now in</text>
-<text x="800.25" y="991.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">kumbakonam (NI)</text>
+<text x="800.25" y="955.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Balu - worked</text>
+<text x="800.25" y="967.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">at kalpakkam &amp;</text>
+<text x="800.25" y="979.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">now in</text>
+<text x="800.25" y="991.43" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">kumbakonam (NI)</text>
 <rect x="540.87" y="48.00" width="110.00" height="99.91" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="595.87" y="95.96" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Father ? /</text>
-<text x="595.87" y="107.96" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Mother ?</text>
+<text x="595.87" y="95.96" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Father ? /</text>
+<text x="595.87" y="107.96" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Mother ?</text>
 <rect x="1069.63" y="890.72" width="110.00" height="122.61" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="1124.63" y="956.03" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">1st Daughter</text>
+<text x="1124.63" y="956.03" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">1st Daughter</text>
 <rect x="978.20" y="890.72" width="110.00" height="122.61" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="1033.20" y="956.03" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">1 son</text>
+<text x="1033.20" y="956.03" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">1 son</text>
 <rect x="1181.73" y="880.06" width="110.00" height="127.48" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="1236.73" y="947.80" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">2nd Daughter</text>
+<text x="1236.73" y="947.80" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">2nd Daughter</text>
 <rect x="689.96" y="1269.43" width="110.00" height="179.32" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="744.96" y="1357.09" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Saraswathi /</text>
-<text x="744.96" y="1369.09" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Subramanian</text>
+<text x="744.96" y="1357.09" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Saraswathi /</text>
+<text x="744.96" y="1369.09" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Subramanian</text>
 <rect x="598.57" y="1266.60" width="110.00" height="129.98" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="653.57" y="1329.58" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Sundaresan /</text>
-<text x="653.57" y="1341.58" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Wife?</text>
+<text x="653.57" y="1329.58" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Sundaresan /</text>
+<text x="653.57" y="1341.58" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Wife?</text>
 <rect x="802.13" y="1261.27" width="110.00" height="127.48" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="857.13" y="1323.01" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Jayalakshmi /</text>
-<text x="857.13" y="1335.01" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Jayaraman</text>
+<text x="857.13" y="1323.01" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Jayalakshmi /</text>
+<text x="857.13" y="1335.01" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Jayaraman</text>
 <rect x="912.67" y="1261.27" width="110.00" height="127.48" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="967.67" y="1329.01" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Latha / Murali</text>
+<text x="967.67" y="1329.01" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Latha / Murali</text>
 <rect x="599.76" y="1467.91" width="110.00" height="127.71" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="654.76" y="1535.77" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Akshaya</text>
+<text x="654.76" y="1535.77" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Akshaya</text>
 <rect x="806.07" y="1462.58" width="110.00" height="129.98" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="861.07" y="1531.57" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Jaiganesh</text>
+<text x="861.07" y="1531.57" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Jaiganesh</text>
 <rect x="737.39" y="1702.70" width="110.00" height="108.43" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="792.39" y="1760.91" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Pradeep</text>
+<text x="792.39" y="1760.91" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Pradeep</text>
 <rect x="644.88" y="1702.70" width="110.00" height="113.20" rx="12" ry="12" fill="#ffffff" stroke="#312e81" stroke-width="1"/>
-<text x="699.88" y="1763.29" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#111827">Devshankar</text>
+<text x="699.88" y="1763.29" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#1e3a8a">Devshankar</text>
 </svg>
