@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import PublicSiteHeader from "../components/PublicSiteHeader";
+import EnglishTamilToggle from "../components/EnglishTamilToggle";
 
 type Tab = {
   id: string;
@@ -63,6 +64,8 @@ const KovilDetailsPage = () => {
         />
 
         <div className="responsive-layout space-y-6 pt-4 pb-10 lg:pt-6 lg:pb-14">
+          <EnglishTamilToggle />
+
           <div className="flex justify-center">
             <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-100 to-amber-100 px-3 py-1.5 sm:px-4 sm:py-2">
               <span className="relative flex h-2 w-2">

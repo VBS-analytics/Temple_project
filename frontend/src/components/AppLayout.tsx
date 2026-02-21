@@ -72,8 +72,13 @@ const AppLayout = () => {
       show: Boolean(user && isAdmin(user.role)),
     },
     {
-      to: "/admin/bulk-upload",
-      label: "Bulk Upload",
+      to: "/profile/pooja-seva",
+      label: "Pooja Seva",
+      show: Boolean(user && isAdmin(user.role)),
+    },
+    {
+      to: "/profile/cow-samrakshana-seva",
+      label: "Cow Samrakshana Seva",
       show: Boolean(user && isAdmin(user.role)),
     },
     {

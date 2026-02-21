@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import PublicSiteHeader from "../components/PublicSiteHeader";
+import EnglishTamilToggle from "../components/EnglishTamilToggle";
 import FamilyTreePage from "./FamilyTreePage";
 
 /**
@@ -317,6 +318,8 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
         />
 
         <div className={containerClasses}>
+          {!embedded && <EnglishTamilToggle />}
+
           {/* ── Hero Stats Section ── */}
           <section className="space-y-4 sm:space-y-6 md:space-y-8">
             {!embedded && (
