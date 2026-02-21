@@ -36,7 +36,7 @@ from .serializers import (
     PassbookEntrySerializer,
     PaymentRecordSerializer,
 )
-from .services import regenerate_all_passbooks, regenerate_donor_passbook
+from .services import _plan_due_anchor_date, regenerate_all_passbooks, regenerate_donor_passbook
 from pooja.services.recurrence import _clean_stale_chrt_dues
 from openpyxl import Workbook
 
@@ -112,33 +112,47 @@ def _donor_passbook_needs_refresh(donor_id: int, current_month: date) -> bool:
     # Detect stale passbooks that missed earlier recurring due months.
     # This can happen when a passbook was generated with old logic and no
     # later source updates occurred to trigger timestamp-based refresh.
-    earliest_expected_due_month = (
+    earliest_expected_due_month = None
+    plans = (
         RecurringPoojaPlan.objects.filter(
             donor_id=donor_id,
             is_active=True,
             recurrence_kind=RecurrenceKind.RECURRING,
         )
         .exclude(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
-        .order_by("start_date", "created_at")
-        .values_list("start_date", "created_at")
-        .first()
+        .select_related("origin_registration")
     )
+    for plan in plans:
+        anchor_date = _plan_due_anchor_date(plan)
+        if not anchor_date:
+            continue
+        anchor_month = anchor_date.replace(day=1)
+        if earliest_expected_due_month is None or anchor_month < earliest_expected_due_month:
+            earliest_expected_due_month = anchor_month
+
     if earliest_expected_due_month:
-        start_date, created_at = earliest_expected_due_month
-        seed_date = start_date or (created_at.date() if created_at else None)
-        if seed_date:
-            expected_month = seed_date.replace(day=1)
-            if expected_month <= current_month:
-                first_due_entry = (
-                    PassbookEntry.objects.filter(donor_id=donor_id, entry_type="due")
-                    .order_by("entry_date", "id")
-                    .only("entry_date")
-                    .first()
-                )
-                if first_due_entry is None:
-                    return True
-                if first_due_entry.entry_date.replace(day=1) > expected_month:
-                    return True
+        first_due_entry = (
+            PassbookEntry.objects.filter(
+                donor_id=donor_id,
+                entry_type="due",
+                registration__isnull=True,
+            )
+            .order_by("entry_date", "id")
+            .only("entry_date")
+            .first()
+        )
+        if first_due_entry is None:
+            if earliest_expected_due_month <= current_month:
+                return True
+        else:
+            first_due_month = first_due_entry.entry_date.replace(day=1)
+            if first_due_month < earliest_expected_due_month:
+                return True
+            if (
+                earliest_expected_due_month <= current_month
+                and first_due_month > earliest_expected_due_month
+            ):
+                return True
     return False
 
 
