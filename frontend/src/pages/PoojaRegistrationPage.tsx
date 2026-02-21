@@ -3425,6 +3425,10 @@ const PoojaRegistrationPage = () => {
                   min={todayIso}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                   value={group.date}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Tab') return;
+                    event.preventDefault();
+                  }}
                   onChange={(event) =>
                     updatePreferredDateGroupField(poojaId, group.key, 'date', event.target.value)
                   }

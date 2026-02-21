@@ -74,7 +74,7 @@ const AppLayout = () => {
     {
       to: "/admin/bulk-upload",
       label: "Bulk Upload",
-      show: false,
+      show: Boolean(user && isAdmin(user.role)),
     },
     {
       to: "/admin/donors",

@@ -314,6 +314,7 @@ const POOJA_REPORT_KEYS = [
   'tillOil',
   'nityaNeivedhyam',
   'gauSamrakshana',
+  'postPrasadam',
 ] as const;
 
 type PoojaReportKey = (typeof POOJA_REPORT_KEYS)[number];
@@ -324,6 +325,7 @@ const POOJA_OPTION_NAMES: Record<PoojaReportKey, string> = {
   tillOil: 'till oil for lamps',
   nityaNeivedhyam: 'nitya neivedhyam',
   gauSamrakshana: 'gau samrakshana seva',
+  postPrasadam: '',
 };
 
 const POOJA_REPORTS: Record<
@@ -383,6 +385,15 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Gau Samrakshana report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.gauSamrakshana,
   },
+  postPrasadam: {
+    endpoint: 'pooja/registrations/post-prasadam-report/',
+    label: 'Post Prasadam Report',
+    filenamePrefix: 'post-prasadam-report',
+    sheetName: 'Post Prasadam',
+    emptyMessage: 'No donors have selected Post Prasadam yet.',
+    errorMessage: 'Unable to download the Post Prasadam report right now.',
+    poojaOptionName: POOJA_OPTION_NAMES.postPrasadam,
+  },
 };
 
 const initialPoojaExportState: Record<PoojaReportKey, boolean> = POOJA_REPORT_KEYS.reduce(
@@ -397,6 +408,7 @@ const GENERAL_POOJA_REPORT_KEYS: PoojaReportKey[] = [
   'tillOil',
   'nityaNeivedhyam',
   'gauSamrakshana',
+  'postPrasadam',
   'saturdayNavagraha',
   'pradosha',
 ];
@@ -489,6 +501,8 @@ const POOJA_REPORT_HINTS: Record<PoojaReportKey, string> = {
     'Grab the Nitya Neivedhyam registrations so you can hand over attendee lists or financial reports.',
   gauSamrakshana:
     'Gather Gau Samrakshana Seva records and choose PDF for a print-ready snapshot or Excel for analysis.',
+  postPrasadam:
+    'Download donor registrations where Post Prasadam was selected as Yes.',
   saturdayNavagraha:
     'Collect Saturday Navagraha Pooja registrations to track attendance and cart details.',
   pradosha:

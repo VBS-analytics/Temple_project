@@ -623,6 +623,36 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
         return Response({"count": len(results), "results": results})
 
+    @action(detail=False, methods=["get"], url_path="post-prasadam-report")
+    def post_prasadam_report(self, request):
+        if request.user.role != UserRole.ADMIN:
+            raise PermissionDenied("Admin access required.")
+
+        queryset = (
+            PoojaRegistration.objects.filter(
+                post_prasadam=True,
+                donor__isnull=False,
+            )
+            .select_related("donor")
+            .order_by("start_date", "donor__name", "donor__id")
+        )
+
+        results = []
+        for registration in queryset:
+            donor = registration.donor
+            if donor is None:
+                continue
+            results.append(
+                {
+                    "donor_id": donor.id,
+                    "name": donor.name or "",
+                    "phone_number": donor.phone_number or "",
+                    "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
+                }
+            )
+
+        return Response({"count": len(results), "results": results})
+
 
 class RecurringPoojaPlanViewSet(
     mixins.ListModelMixin,
