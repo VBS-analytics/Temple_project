@@ -47,6 +47,25 @@ def _add_months(value: date, months: int) -> date:
     return date(year, month, day)
 
 
+def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
+    """
+    Compute the anchor date used for monthly due generation.
+
+    Dues should never appear before the registration date chosen when the plan
+    was created, even if the computed pooja start date falls in an earlier month.
+    """
+    anchor = (
+        plan.start_date
+        or (timezone.localtime(plan.created_at).date() if plan.created_at else None)
+    )
+    origin_registration = getattr(plan, "origin_registration", None)
+    if origin_registration and origin_registration.created_at:
+        origin_created_date = timezone.localtime(origin_registration.created_at).date()
+        if anchor is None or origin_created_date > anchor:
+            anchor = origin_created_date
+    return anchor
+
+
 def _calculate_next_occurrence(base_date: date, frequency: RecurrenceFrequency) -> date:
     months = FREQUENCY_MONTHS.get(frequency, 1)
     return _add_months(base_date, months)
@@ -422,9 +441,6 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
         donors_to_process[donor_id]['plans'].append(plan)
     
     created_count = 0
-    # Track which (donor, month) adjustments have been logged to avoid noisy repeats
-    chrt_adjustment_logged = set()
-    
     # Process each donor's combined due
     for donor_id, donor_data in donors_to_process.items():
         plans = donor_data['plans']
@@ -444,15 +460,7 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
         else:
             plan_months: List[date] = []
             for plan in plans:
-                plan_date = plan.start_date or (plan.created_at.date() if plan.created_at else None)
-                # If the registration was created earlier than the selected start date,
-                # use the registration's created_at as the anchor so dues begin from registration month.
-                if hasattr(plan, "origin_registration") and plan.origin_registration:
-                    reg_created = plan.origin_registration.created_at
-                    if reg_created:
-                        reg_created_date = reg_created.date()
-                        if plan_date is None or reg_created_date < plan_date:
-                            plan_date = reg_created_date
+                plan_date = _plan_due_anchor_date(plan)
                 if plan_date:
                     plan_months.append(plan_date.replace(day=1))
             if plan_months:
@@ -461,51 +469,16 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
         if first_due_month is None or first_due_month > current_month:
             continue
 
-        # CRITICAL: Before creating the due, check if this donor has CHRT poojas
-        # and if so, ensure we're not including their amounts
-        has_chrt = RecurringPoojaPlan.objects.filter(
-            donor_id=donor_id,
-            is_active=True,
-            recurrence_kind=RecurrenceKind.RECURRING,
-        ).filter(_chrt_plan_filter()).exists()
-
         for month_start in _month_range(first_due_month, current_month):
             # Calculate applicable total for this month based on plan start/created dates
             month_total = Decimal('0.00')
             for plan in plans:
-                plan_date = plan.start_date or (plan.created_at.date() if plan.created_at else None)
-                if hasattr(plan, "origin_registration") and plan.origin_registration:
-                    reg_created = plan.origin_registration.created_at
-                    if reg_created:
-                        reg_created_date = reg_created.date()
-                        if plan_date is None or reg_created_date < plan_date:
-                            plan_date = reg_created_date
+                plan_date = _plan_due_anchor_date(plan)
                 if plan_date and plan_date.replace(day=1) <= month_start:
                     month_total += plan.amount or Decimal('0.00')
 
             if month_total <= 0:
                 continue
-
-            if has_chrt:
-                # Calculate only non-CHRT recurring total
-                non_chrt_total = RecurringPoojaPlan.objects.filter(
-                    donor_id=donor_id,
-                    is_active=True,
-                    recurrence_kind=RecurrenceKind.RECURRING,
-                ).exclude(_chrt_plan_filter()).aggregate(total=Sum("amount")).get("total") or Decimal("0.00")
-
-                if non_chrt_total != month_total:
-                    key = (donor_id, month_start)
-                    if key not in chrt_adjustment_logged:
-                        LOGGER.info(
-                            "Donor %s has CHRT poojas - adjusted due for %s from ₹%.2f to ₹%.2f (non-CHRT only)",
-                            donor_id,
-                            month_start.isoformat(),
-                            float(month_total),
-                            float(non_chrt_total),
-                        )
-                        chrt_adjustment_logged.add(key)
-                    month_total = non_chrt_total
 
             # Skip if a payment (success) already exists for this month
             if PaymentRecord.objects.filter(

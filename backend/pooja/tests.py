@@ -37,6 +37,62 @@ SQLITE_DB_CONFIG = {
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
+class PoojaPostPrasadamReportTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            phone_number="9000000100",
+            name="Report Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        self.pooja_option = PoojaOption.objects.create(code="PPR", name="Post Prasadam Test Pooja")
+
+    def test_post_prasadam_report_returns_only_yes_registrations(self):
+        donor_yes = User.objects.create_user(phone_number="9000000101", name="Donor Yes", password="secret")
+        donor_no = User.objects.create_user(phone_number="9000000102", name="Donor No", password="secret")
+
+        PoojaRegistration.objects.create(
+            donor=donor_yes,
+            pooja_option=self.pooja_option,
+            start_date=date(2026, 2, 17),
+            post_prasadam=True,
+        )
+        PoojaRegistration.objects.create(
+            donor=donor_no,
+            pooja_option=self.pooja_option,
+            start_date=date(2026, 2, 18),
+            post_prasadam=False,
+        )
+
+        response = self.client.get(reverse("pooja-registrations-post-prasadam-report"))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["donor_id"], donor_yes.id)
+        self.assertEqual(payload["results"][0]["name"], donor_yes.name)
+        self.assertEqual(payload["results"][0]["phone_number"], donor_yes.phone_number)
+        self.assertEqual(payload["results"][0]["pooja_date"], "2026-02-17")
+
+    def test_post_prasadam_report_is_admin_only(self):
+        donor = User.objects.create_user(phone_number="9000000103", name="Donor", password="secret")
+        PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            start_date=date(2026, 2, 20),
+            post_prasadam=True,
+        )
+
+        self.client.force_authenticate(user=donor)
+        response = self.client.get(reverse("pooja-registrations-post-prasadam-report"))
+        self.assertEqual(response.status_code, 403)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
 class DayOptionOccurrenceViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(phone_number="9000000000", name="Test Donor", password="secret")
@@ -809,7 +865,7 @@ class RecurringMonthlyDueBackfillTests(TestCase):
 
     def setUp(self):
         self.donor = User.objects.create_user(phone_number="9000000040", name="Monthly Donor", password="secret")
-        DonorProfile.objects.create(user=self.donor)
+        DonorProfile.objects.get_or_create(user=self.donor)
         self.pooja_option = PoojaOption.objects.create(code="RPOOJA", name="Recurring Pooja")
         self.day_option = PoojaDayOption.objects.create(
             code="REGULAR",
@@ -864,3 +920,105 @@ class RecurringMonthlyDueBackfillTests(TestCase):
         self.assertEqual(entries[1].due_amount, Decimal("200.00"))
         self.assertEqual(entries[2].due_amount, Decimal("200.00"))
         self.assertEqual(entries[-1].closing_due, Decimal("400.00"))
+
+    def test_future_start_date_does_not_create_due_in_registration_created_month(self):
+        """
+        If a recurring plan starts in a future month, dues must start from the plan's
+        start month, even when the originating registration was created earlier.
+        """
+        february_run_date = date(2026, 2, 20)
+        march_start = date(2026, 3, 1)
+
+        origin_registration = PoojaRegistration.objects.create(
+            donor=self.donor,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=march_start,
+            total_amount=Decimal("200.00"),
+        )
+        PoojaRegistration.objects.filter(pk=origin_registration.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 2, 2, 10, 30)),
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=self.donor,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=march_start,
+            next_occurrence=march_start,
+            amount=Decimal("200.00"),
+            is_active=True,
+            origin_registration=origin_registration,
+        )
+
+        process_recurring_plans(today=february_run_date)
+
+        february_due = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 2, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+        self.assertFalse(february_due.exists(), "February due must not be created before March start_date.")
+
+        process_recurring_plans(today=date(2026, 3, 20))
+
+        march_due = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 3, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+        self.assertEqual(march_due.count(), 1, "March due should be created once start month is reached.")
+
+    def test_plan_starting_end_of_previous_month_is_anchored_to_registration_month(self):
+        """
+        If the computed start_date falls in the previous month but the registration date
+        is in the current month, due generation must start from registration month.
+        """
+        february_run_date = date(2026, 2, 21)
+        registration_date = timezone.make_aware(datetime(2026, 3, 1, 0, 0))
+
+        origin_registration = PoojaRegistration.objects.create(
+            donor=self.donor,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=date(2026, 2, 28),
+            total_amount=Decimal("100.00"),
+        )
+        PoojaRegistration.objects.filter(pk=origin_registration.pk).update(created_at=registration_date)
+
+        RecurringPoojaPlan.objects.create(
+            donor=self.donor,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 2, 28),
+            next_occurrence=date(2026, 3, 28),
+            amount=Decimal("100.00"),
+            is_active=True,
+            origin_registration=origin_registration,
+        )
+
+        process_recurring_plans(today=february_run_date)
+
+        february_due = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 2, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+        self.assertFalse(february_due.exists(), "February due must not exist before registration month.")
+
+        process_recurring_plans(today=date(2026, 3, 21))
+
+        march_due = PaymentRecord.objects.filter(
+            donor=self.donor,
+            payment_month=date(2026, 3, 1),
+            status=PaymentStatus.PENDING,
+            registration__isnull=True,
+        )
+        self.assertEqual(march_due.count(), 1, "March due should be created once registration month begins.")

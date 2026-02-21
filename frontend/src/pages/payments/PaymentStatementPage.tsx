@@ -30,9 +30,9 @@
  *   - Passbook Table: Main display for payment history
  * 
  * Admin Features:
- *   - View all donors' passbooks
+ *   - View all donors' latest passbook snapshot (one row per donor)
  *   - See donor phone numbers
- *   - Access complete payment history
+ *   - Access donor-wise current due state quickly
  *   - Download reports by donor
  * 
  * ============================================================================
@@ -114,6 +114,20 @@ interface DonorListEntry {
     name?: string | null;
     phone_number?: string | null;
   };
+}
+
+interface CombineMappingParentEntry {
+  id?: number | null;
+  active?: boolean | null;
+}
+
+interface CombineMappingMainEntry {
+  id?: number | null;
+}
+
+interface CombineMappingEntry {
+  main_donor?: CombineMappingMainEntry | null;
+  parent_donors?: CombineMappingParentEntry[] | null;
 }
 
 interface DonorNameOption {
@@ -619,6 +633,23 @@ const getRecordTimestamp = (record: PaymentRecordEntry) => {
   return 0;
 };
 
+const getApiPassbookEntryTimestamp = (entry: Pick<ApiPassbookEntry, 'entry_date'>) => {
+  const parsed = Date.parse(entry.entry_date);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const isApiPassbookEntryMoreRecent = (
+  candidate: Pick<ApiPassbookEntry, 'entry_date' | 'id'>,
+  current: Pick<ApiPassbookEntry, 'entry_date' | 'id'>,
+) => {
+  const candidateTimestamp = getApiPassbookEntryTimestamp(candidate);
+  const currentTimestamp = getApiPassbookEntryTimestamp(current);
+  if (candidateTimestamp !== currentTimestamp) {
+    return candidateTimestamp > currentTimestamp;
+  }
+  return candidate.id > current.id;
+};
+
 // ============================================================================
 // DATE TRANSFORMATION UTILITY
 // ============================================================================
@@ -890,6 +921,9 @@ const PaymentStatementPage = () => {
   const [apiPassbookLoading, setApiPassbookLoading] = useState(false);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
+  const [activeParentDonorIdsByMain, setActiveParentDonorIdsByMain] = useState<
+    Record<number, number[]>
+  >({});
   const combineRole = useCombineAccessStore((state) => state.role);
   const combinedTo = useCombineAccessStore((state) => state.combinedTo);
   const combineLoading = useCombineAccessStore((state) => state.loading);
@@ -1068,10 +1102,8 @@ const PaymentStatementPage = () => {
         params.set('page_size', '500');
         // Always paginate because non-admin combined views can span multiple pages.
         const paginate = true;
-        // If admin selected specific donors, include donor_id filter (backend supports single id)
-        if (isAdminUser && selectedDonorIds.length === 1) {
-          params.set('donor_id', String(selectedDonorIds[0]));
-        }
+        // Keep admin fetch donor-unfiltered so combined main-donor totals can
+        // include active parent donors even when only the main donor is selected.
         // If user filtered by month, pass month filter
         if (selectedMonthKey) {
           params.set('month', selectedMonthKey);
@@ -1112,7 +1144,55 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAdminUser, selectedDonorIds, selectedMonthKey]);
+  }, [isAdminUser, selectedMonthKey]);
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setActiveParentDonorIdsByMain({});
+      return;
+    }
+
+    let isMounted = true;
+    const loadCombineMappings = async () => {
+      try {
+        const response = await api.get<CombineMappingEntry[]>('payments/combine-mappings/');
+        if (!isMounted) {
+          return;
+        }
+
+        const payload: CombineMappingEntry[] = Array.isArray(response.data) ? response.data : [];
+        const mapping: Record<number, number[]> = {};
+
+        payload.forEach((entry) => {
+          const mainDonorId = entry.main_donor?.id;
+          if (typeof mainDonorId !== 'number') {
+            return;
+          }
+          const parentIds = (Array.isArray(entry.parent_donors) ? entry.parent_donors : [])
+            .filter((parent) => parent?.active === true && typeof parent.id === 'number')
+            .map((parent) => parent.id as number);
+
+          if (parentIds.length === 0) {
+            return;
+          }
+          mapping[mainDonorId] = Array.from(new Set(parentIds));
+        });
+
+        setActiveParentDonorIdsByMain(mapping);
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+        console.error('Unable to load combine mappings for admin payment statement', err);
+        setActiveParentDonorIdsByMain({});
+      }
+    };
+
+    loadCombineMappings();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdminUser]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2485,8 +2565,12 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
       return [];
     }
 
-    const matchesFilters = (entry: typeof apiPassbookEntries[number]) => {
-      if (selectedDonorIds.length > 0 && !selectedDonorIds.includes(entry.donor)) {
+    const matchesFilters = (
+      entry: typeof apiPassbookEntries[number],
+      options?: { applyDonorFilter?: boolean },
+    ) => {
+      const applyDonorFilter = options?.applyDonorFilter ?? true;
+      if (applyDonorFilter && selectedDonorIds.length > 0 && !selectedDonorIds.includes(entry.donor)) {
         return false;
       }
       if (selectedMonthKey) {
@@ -2504,29 +2588,44 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
       return true;
     };
 
-    const groupsByDonor = new Map<number, AdminDonorPassbookGroup>();
+    const latestEntriesByDonor = new Map<number, ApiPassbookEntry>();
+    const latestAggregateEntriesByDonor = new Map<number, ApiPassbookEntry>();
     let matchedCount = 0;
 
     apiPassbookEntries.forEach((entry) => {
+      if (matchesFilters(entry, { applyDonorFilter: false })) {
+        const currentAggregateLatest = latestAggregateEntriesByDonor.get(entry.donor);
+        if (!currentAggregateLatest || isApiPassbookEntryMoreRecent(entry, currentAggregateLatest)) {
+          latestAggregateEntriesByDonor.set(entry.donor, entry);
+        }
+      }
       if (!matchesFilters(entry)) {
         return;
       }
       matchedCount += 1;
-      const donorId = entry.donor;
+      const currentLatest = latestEntriesByDonor.get(entry.donor);
+      if (!currentLatest || isApiPassbookEntryMoreRecent(entry, currentLatest)) {
+        latestEntriesByDonor.set(entry.donor, entry);
+      }
+    });
+
+    const groups = Array.from(latestEntriesByDonor.entries()).map(([donorId, entry]) => {
       const donorPhone = donorPhones[donorId] ?? '';
       const donorLabel =
         entry.donor_name ||
         donorOptions.find((d) => d.id === donorId)?.label ||
         `Donor #${donorId}`;
-      if (!groupsByDonor.has(donorId)) {
-        groupsByDonor.set(donorId, {
-          id: `donor-${donorId}`,
-          donorId,
-          label: `${donorLabel} - ${donorPhone || 'phone N/A'}`,
-          entries: [],
-        });
-      }
-
+      const activeParentDonorIds = activeParentDonorIdsByMain[donorId] ?? [];
+      const parentClosingDueTotal = activeParentDonorIds.reduce((sum, parentDonorId) => {
+        const parentLatestEntry = latestAggregateEntriesByDonor.get(parentDonorId);
+        if (!parentLatestEntry) {
+          return sum;
+        }
+        return sum + parseNumeric(parentLatestEntry.closing_due);
+      }, 0);
+      const computedClosingDue =
+        parseNumeric(entry.closing_due) +
+        (activeParentDonorIds.length > 0 ? parentClosingDueTotal : 0);
       const passbookEntry: PassbookEntry = {
         record: {
           id: entry.id,
@@ -2544,26 +2643,30 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
         dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
         paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
         openingBalance: 0,
-        closingDue: entry.closing_due,
+        closingDue: computedClosingDue,
         displayDate: formatDisplayDate(entry.entry_date),
         entryType: entry.entry_type === 'paid' ? 'paid' : entry.entry_type === 'due' ? 'due' : undefined,
         isCurrentBalanceEntry: entry.entry_type === 'balance',
       };
 
-      groupsByDonor.get(donorId)!.entries.push(passbookEntry);
+      return {
+        id: `donor-${donorId}`,
+        donorId,
+        label: `${donorLabel} - ${donorPhone || 'phone N/A'}`,
+        entries: [passbookEntry],
+      };
     });
-
-    const groups = Array.from(groupsByDonor.values()).map((group) => ({
-      ...group,
-      entries: [...group.entries].sort(
-        (a, b) => getRecordTimestamp(a.record) - getRecordTimestamp(b.record),
-      ),
-    }));
 
     if (matchedCount === 0) {
       console.warn('[PaymentStatement] No passbook entries matched filters for admin view');
     } else {
-      console.log('[PaymentStatement] Admin passbook groups', groups.length, 'entries', matchedCount);
+      console.log(
+        '[PaymentStatement] Admin passbook groups',
+        groups.length,
+        'latest rows from',
+        matchedCount,
+        'matched entries',
+      );
     }
 
     return groups.sort((a, b) => a.label.localeCompare(b.label));
@@ -2576,6 +2679,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     paymentStatusFilter,
     selectedDonorIds,
     selectedMonthKey,
+    activeParentDonorIdsByMain,
   ]);
 
   const adminFallbackPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
@@ -2604,11 +2708,18 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
           donorOpeningBalances[donorId] ?? 0,
           true,
         );
+        const nonBalanceEntries = entries.filter((entry) => !entry.isCurrentBalanceEntry);
+        const sortableEntries = nonBalanceEntries.length > 0 ? nonBalanceEntries : entries;
+        const sortedEntries = sortableEntries
+          .slice()
+          .sort((a, b) => getRecordTimestamp(a.record) - getRecordTimestamp(b.record));
+        const latestEntry =
+          sortedEntries.length > 0 ? sortedEntries[sortedEntries.length - 1] : null;
         return {
           id: `fallback-donor-${donorId}`,
           donorId,
           label: `${donorLabel} - ${donorPhone || 'phone N/A'}`,
-          entries,
+          entries: latestEntry ? [latestEntry] : [],
         };
       })
       .filter((group) => group.entries.length > 0)

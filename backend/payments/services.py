@@ -21,6 +21,24 @@ _thread_local = threading.local()
 _passbook_lock = threading.Lock()
 
 
+def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
+    """
+    Compute the recurring-due anchor date for passbook generation.
+
+    Dues should not be shown before the origin registration date when one exists.
+    """
+    anchor = (
+        plan.start_date
+        or (timezone.localtime(plan.created_at).date() if plan.created_at else None)
+    )
+    origin_registration = getattr(plan, "origin_registration", None)
+    if origin_registration and origin_registration.created_at:
+        origin_created_date = timezone.localtime(origin_registration.created_at).date()
+        if anchor is None or origin_created_date > anchor:
+            anchor = origin_created_date
+    return anchor
+
+
 def passbook_guard_active() -> bool:
     """Expose whether passbook regeneration is already running (used by signals to prevent recursion)."""
     return getattr(_thread_local, "passbook_in_progress", False)
@@ -138,7 +156,7 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
                 return value.replace(year=value.year + 1, month=1, day=1)
             return value.replace(month=value.month + 1, day=1)
 
-        plan_monthly_total = Decimal("0.00")
+        non_chrt_plans = []
         earliest_plan_month = None
         for plan in RecurringPoojaPlan.objects.filter(
             donor_id=donor_id,
@@ -152,20 +170,34 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
                 continue
 
             plan_amount = Decimal(str(plan.amount or "0.00"))
-            plan_monthly_total += plan_amount
+            if plan_amount <= 0:
+                continue
 
-            start_date = plan.start_date or plan.created_at.date()
-            if start_date:
-                month_start = start_date.replace(day=1)
-                if earliest_plan_month is None or month_start < earliest_plan_month:
-                    earliest_plan_month = month_start
+            anchor_date_for_plan = _plan_due_anchor_date(plan)
+            if not anchor_date_for_plan:
+                continue
 
-        if plan_monthly_total > 0 and earliest_plan_month:
+            month_start = anchor_date_for_plan.replace(day=1)
+            non_chrt_plans.append((month_start, plan_amount))
+            if earliest_plan_month is None or month_start < earliest_plan_month:
+                earliest_plan_month = month_start
+
+        def _non_chrt_total_for_month(month_start: date) -> Decimal:
+            total = Decimal("0.00")
+            for plan_start_month, plan_amount in non_chrt_plans:
+                if plan_start_month <= month_start:
+                    total += plan_amount
+            return total
+
+        if earliest_plan_month:
             cursor = max(earliest_plan_month, anchor_date.replace(day=1))
             while cursor <= current_month:
                 existing = monthly_dues_by_month.get(cursor)
                 existing_amount = existing["amount"] if existing else Decimal("0.00")
-                target_amount = plan_monthly_total
+                target_amount = _non_chrt_total_for_month(cursor)
+                if target_amount <= 0:
+                    cursor = _next_month(cursor)
+                    continue
                 if existing_amount < target_amount:
                     monthly_dues_by_month[cursor] = {
                         "record": existing["record"] if existing else None,
@@ -212,7 +244,7 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             )
 
         for month_start, chrt_total_for_month in chrt_amounts_by_month.items():
-            base_non_chrt = plan_monthly_total if plan_monthly_total > 0 else Decimal("0.00")
+            base_non_chrt = _non_chrt_total_for_month(month_start)
             target_amount = base_non_chrt + chrt_total_for_month
             existing = monthly_dues_by_month.get(month_start)
             existing_amount = existing["amount"] if existing else Decimal("0.00")
@@ -248,15 +280,27 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         chrt_plan_dates = {
             plan.origin_registration_id: plan.one_time_date
             for plan in RecurringPoojaPlan.objects.filter(
+                donor_id=donor_id,
+                recurrence_kind=RecurrenceKind.RECURRING,
+            ).filter(
                 Q(day_option__code="CHRT") | Q(one_time_date__isnull=False)
             )
             if plan.origin_registration_id and plan.one_time_date
+        }
+        recurring_plan_anchor_dates = {
+            plan.origin_registration_id: _plan_due_anchor_date(plan)
+            for plan in RecurringPoojaPlan.objects.filter(
+                donor_id=donor_id,
+                recurrence_kind=RecurrenceKind.RECURRING,
+            ).exclude(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
+            if plan.origin_registration_id
         }
 
         for rr in registration_records:
             # For CHRT Poojas, use the preferred date from RecurringPoojaPlan.one_time_date
             # instead of the registration's start_date. Covers legacy rows with missing day_option.
             preferred_date = None
+            recurring_anchor_date = recurring_plan_anchor_dates.get(rr.id)
             if rr.day_option and rr.day_option.code == "CHRT":
                 preferred_date = chrt_plan_dates.get(rr.id)
             elif rr.id in chrt_plan_dates:
@@ -264,6 +308,8 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
 
             if preferred_date:
                 date_val = preferred_date
+            elif recurring_anchor_date:
+                date_val = recurring_anchor_date
             else:
                 date_val = rr.start_date or rr.created_at.date()
 
