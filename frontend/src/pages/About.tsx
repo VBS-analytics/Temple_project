@@ -167,6 +167,8 @@ const aboutUsAcknowledgements: string[] = [
   "All honorary committee members for their commitment to the above objectives.",
   "All members whose support made these efforts possible in practice and not just on paper.",
   "Shri Radhakrishna Sastrigal from our village, for bringing 20 known contacts from outside Kakkalani village families as regular members in our group.",
+  "We sincerely thanks Mr Ravichandran for spontaneously giving return advance of Rs 50,000/- in the year of 2022 to start this group. With this support only we are what we are today.",
+  "We sincerely thanks Mr Chander Mahalingam helping us develop this webpage and application totally at his own expense. Also we thank Mr Gowtham R, his IT Engineer, who supports him on this project.",
 ];
 
 // --- Reusable UI Components ----------------------------------------------
@@ -306,7 +308,7 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
     <div className={wrapperClass}>
       {!embedded && <PublicSiteHeader />}
 
-      <main className="relative overflow-x-hidden">
+      <main className="relative overflow-x-hidden senior-readable-content">
         {/* Decorative background blobs */}
         <div
           aria-hidden="true"
@@ -456,6 +458,10 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
       </main>
 
       <style>{`
+        .senior-readable-content :where(p, li, td) {
+          font-weight: 500;
+        }
+
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0);    }

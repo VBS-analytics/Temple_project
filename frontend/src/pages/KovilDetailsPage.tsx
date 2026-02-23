@@ -63,7 +63,7 @@ const KovilDetailsPage = () => {
           className="pointer-events-none absolute left-1/2 top-[-9rem] -z-10 h-[24rem] w-[52rem] -translate-x-1/2 rounded-full bg-purple-200 blur-3xl opacity-30"
         />
 
-        <div className="responsive-layout space-y-6 pt-4 pb-10 lg:pt-6 lg:pb-14">
+        <div className="responsive-layout senior-readable-content space-y-6 pt-4 pb-10 lg:pt-6 lg:pb-14">
           <EnglishTamilToggle />
 
           <div className="flex justify-center">
@@ -110,6 +110,12 @@ const KovilDetailsPage = () => {
           {renderContent()}
         </div>
       </div>
+
+      <style>{`
+        .senior-readable-content :where(p, li, td) {
+          font-weight: 500;
+        }
+      `}</style>
     </div>
   );
 };

@@ -84,7 +84,7 @@ const AboutKakkalaniVillage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
       <PublicSiteHeader />
       
-      <main className="relative overflow-x-hidden">
+      <main className="relative overflow-x-hidden senior-readable-content">
         <div className="relative z-10 pt-3 sm:pt-4">
           <EnglishTamilToggle />
         </div>
@@ -337,6 +337,10 @@ const AboutKakkalaniVillage: React.FC = () => {
 
       {/* Custom CSS for animations */}
       <style>{`
+        .senior-readable-content :where(p, li, td) {
+          font-weight: 500;
+        }
+
         @keyframes fadeInUp {
           from {
             opacity: 0;
