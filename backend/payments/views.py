@@ -18,7 +18,11 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.access import can_view_payment_statement
+from accounts.access import (
+    can_download_reports,
+    can_view_payment_statement,
+    REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
+)
 from accounts.models import User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
@@ -1071,6 +1075,12 @@ class PaymentDetailsExportView(APIView):
             return str(value)
 
     def get(self, request):
+        if not can_download_reports(request.user):
+            return Response(
+                {"detail": REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Refresh passbooks so donor-wise statements are up to date
         regenerate_all_passbooks()
 
@@ -1246,6 +1256,12 @@ class GeneralDonationExportView(APIView):
             return str(value)
 
     def get(self, request):
+        if not can_download_reports(request.user):
+            return Response(
+                {"detail": REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         workbook = Workbook()
         donation_sheet = workbook.active
         donation_sheet.title = "General Donations"

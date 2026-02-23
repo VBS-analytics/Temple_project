@@ -16,6 +16,10 @@ from typing import Optional
 from django.conf import settings
 from django.http import FileResponse, JsonResponse
 from django.utils import timezone
+from rest_framework.decorators import api_view, permission_classes
+
+from accounts.access import can_download_reports, REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
+from common.permissions import IsAdminRole
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +43,15 @@ def health_check(request):
     )
 
 
+@api_view(["GET"])
+@permission_classes([IsAdminRole])
 def download_database_backup(request):
+    if not can_download_reports(request.user):
+        return JsonResponse(
+            {"detail": REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE},
+            status=403,
+        )
+
     temp_dir = Path(tempfile.mkdtemp(prefix='database-download-'))
     try:
         backup_files = _collect_backup_files()

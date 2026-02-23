@@ -16,6 +16,7 @@ from openpyxl import Workbook
 from payments.models import CombinePaymentMapping, PaymentRecord, PaymentStatus
 
 from .models import DonorFeedback, DonorProfile, FamilyMember, GothraOption, User, UserRole
+from .access import can_download_reports, REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
 from .serializers import (
     AdminDonorUserUpdateSerializer,
     BulkDonorUploadSerializer,
@@ -281,6 +282,11 @@ class DonorFeedbackExportView(APIView):
     def get(self, request):
         if request.user.role != UserRole.ADMIN:
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        if not can_download_reports(request.user):
+            return Response(
+                {"detail": REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         workbook = Workbook()
         sheet = workbook.active

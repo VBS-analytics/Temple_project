@@ -35,7 +35,8 @@ const navLinks: NavLinkItem[] = [
 
 const patronContacts = [
   { name: 'R S Mani', phoneDisplay: '+91 88790 71390', phoneRaw: '+918879071390' },
-  { name: 'V Lakshmi Anand', phoneDisplay: '+91 98427 59013', phoneRaw: '+919842759013' }
+  { name: 'V Lakshmi Anand', phoneDisplay: '+91 98427 59013', phoneRaw: '+919842759013' },
+  { name: 'V Swaminathan', phoneDisplay: '+91 98407 41719', phoneRaw: '+919840741719' }
 ] as const;
 
 const resolveAnchorTo = (hash: string): To => ({

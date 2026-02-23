@@ -82,6 +82,7 @@ const LandingPage = () => {
         .hero {
           width: 100%;
           height: 100vh;
+          position: relative;
           line-height: 0;
           overflow: hidden;
         }
@@ -92,6 +93,29 @@ const LandingPage = () => {
           height: 100%;
           object-fit: cover;
           object-position: center center;
+        }
+
+        .hero-overlay-message {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 2;
+          max-width: min(92vw, 720px);
+          padding: 0.85rem 1.4rem;
+          border-radius: 999px;
+          border: 1px solid rgba(122, 92, 58, 0.28);
+          background: rgba(255, 248, 236, 0.88);
+          color: #7a2c12;
+          font-family: 'Cormorant Garamond', serif;
+          font-size: clamp(1.1rem, 2.2vw, 2rem);
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-align: center;
+          box-shadow: 0 12px 30px -18px rgba(0, 0, 0, 0.55);
+          backdrop-filter: blur(1.5px);
+          line-height: 1.2;
+          pointer-events: none;
         }
 
         /* ── HOW TO REACH ── */
@@ -315,6 +339,7 @@ const LandingPage = () => {
               alt="Kakkalani Village Landscape Plan, Tamil Nadu"
               className="hero-img"
             />
+            <div className="hero-overlay-message">This page is under correction</div>
           </section>
 
           {/* ── HOW TO REACH ── */}

@@ -8,8 +8,10 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from rest_framework import status
 from rest_framework.test import APIClient
 
+from accounts.access import REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
 from accounts.models import User
 from pooja.models import (
     DayOptionCategory,
@@ -61,6 +63,38 @@ class DonationApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class PaymentExportAccessTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.full_admin = User.objects.create_superuser(
+            phone_number="9999999999",
+            name="Full Admin",
+            password="adminpass",
+        )
+        self.restricted_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Restricted Admin",
+            password="adminpass2",
+        )
+
+    def test_restricted_admin_cannot_download_payment_details_export(self):
+        self.client.force_authenticate(self.restricted_admin)
+        response = self.client.get(reverse("payment-details-export"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["detail"], REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE)
+
+    def test_restricted_admin_cannot_download_general_donation_export(self):
+        self.client.force_authenticate(self.restricted_admin)
+        response = self.client.get(reverse("general-donation-export"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["detail"], REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE)
+
+    def test_full_admin_can_download_payment_details_export(self):
+        self.client.force_authenticate(self.full_admin)
+        response = self.client.get(reverse("payment-details-export"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class PassbookRefreshDetectionTests(TestCase):

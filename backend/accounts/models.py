@@ -129,6 +129,10 @@ class DonorProfile(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     family_name = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True)
+    pooja_registration_access = models.BooleanField(
+        default=False,
+        help_text="Controls whether donor can add/save pooja registrations.",
+    )
     custom_number = models.IntegerField(blank=True, null=True)
     monthly_donation_amount = models.DecimalField(
         max_digits=12,

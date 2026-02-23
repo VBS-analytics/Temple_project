@@ -85,6 +85,10 @@ export const isAdmin = (role?: string) => role === 'admin';
 
 const READ_ONLY_ADMIN_PHONES = new Set(['9999999998', '9999999997']);
 const PAYMENT_STATEMENT_HIDDEN_ADMIN_PHONES = new Set(['9999999997']);
+const REPORT_DOWNLOAD_RESTRICTED_ADMIN_PHONES = new Set(['9999999997']);
+
+export const REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE =
+  "You don't have access for downloading the reports, contact other admins.";
 
 const phoneCandidates = (phoneNumber?: string): string[] => {
   if (!phoneNumber) {
@@ -113,4 +117,14 @@ export const canViewPaymentStatement = (user?: UserProfile): boolean => {
     return true;
   }
   return !isInPhoneSet(user.phone_number, PAYMENT_STATEMENT_HIDDEN_ADMIN_PHONES);
+};
+
+export const canDownloadReports = (user?: UserProfile): boolean => {
+  if (!user) {
+    return false;
+  }
+  if (!isAdmin(user.role)) {
+    return false;
+  }
+  return !isInPhoneSet(user.phone_number, REPORT_DOWNLOAD_RESTRICTED_ADMIN_PHONES);
 };

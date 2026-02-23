@@ -20,6 +20,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.access import can_download_reports, REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
 from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole, ReadOnlyOrAdmin
 from payments.models import CombinePaymentMapping, PaymentRecord, PaymentStatus
@@ -78,6 +79,14 @@ PRADOSHA_POOJA_NAME = "2 pradosha pooja per month"
 TILL_OIL_FOR_LAMPS_NAME = "till oil for lamps"
 NITYA_NEIVEDHYAM_NAME = "nitya neivedhyam"
 GAU_SAMRAKHSHANA_SEVA_NAME = "gau samrakshana seva"
+POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = "Please contact Admin for the pooja registration"
+
+
+def _ensure_report_download_access(user: User) -> None:
+    if user.role != UserRole.ADMIN:
+        raise PermissionDenied("Admin access required.")
+    if not can_download_reports(user):
+        raise PermissionDenied(REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE)
 
 
 def _is_registration_in_pause_window(registration, pause_start):
@@ -399,6 +408,10 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         return queryset.prefetch_related("members")
 
     def perform_create(self, serializer):
+        if self.request.user.role != UserRole.ADMIN:
+            donor_profile, _ = DonorProfile.objects.get_or_create(user=self.request.user)
+            if not donor_profile.pooja_registration_access:
+                raise PermissionDenied(POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE)
         serializer.save(donor=self.request.user)
 
     @action(detail=False, methods=["get"], url_path="summary")
@@ -475,8 +488,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="saturday-navagraha-report")
     def saturday_navagraha_report(self, request):
-        if request.user.role != UserRole.ADMIN:
-            raise PermissionDenied("Admin access required.")
+        _ensure_report_download_access(request.user)
 
         queryset = (
             PoojaRegistration.objects.filter(
@@ -505,8 +517,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="pradosha-pooja-report")
     def pradosha_pooja_report(self, request):
-        if request.user.role != UserRole.ADMIN:
-            raise PermissionDenied("Admin access required.")
+        _ensure_report_download_access(request.user)
 
         queryset = (
             PoojaRegistration.objects.filter(
@@ -535,8 +546,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="till-oil-for-lamps-report")
     def till_oil_for_lamps_report(self, request):
-        if request.user.role != UserRole.ADMIN:
-            raise PermissionDenied("Admin access required.")
+        _ensure_report_download_access(request.user)
 
         queryset = (
             PoojaRegistration.objects.filter(
@@ -565,8 +575,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="nitya-neivedhyam-report")
     def nitya_neivedhyam_report(self, request):
-        if request.user.role != UserRole.ADMIN:
-            raise PermissionDenied("Admin access required.")
+        _ensure_report_download_access(request.user)
 
         queryset = (
             PoojaRegistration.objects.filter(
@@ -595,8 +604,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="gau-samrakshana-seva-report")
     def gau_samrakshana_seva_report(self, request):
-        if request.user.role != UserRole.ADMIN:
-            raise PermissionDenied("Admin access required.")
+        _ensure_report_download_access(request.user)
 
         queryset = (
             PoojaRegistration.objects.filter(
@@ -625,8 +633,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="post-prasadam-report")
     def post_prasadam_report(self, request):
-        if request.user.role != UserRole.ADMIN:
-            raise PermissionDenied("Admin access required.")
+        _ensure_report_download_access(request.user)
 
         queryset = (
             PoojaRegistration.objects.filter(
@@ -1057,6 +1064,12 @@ class PoojaCartSnapshotReportView(APIView):
         return batch
 
     def get(self, request):
+        if not can_download_reports(request.user):
+            return Response(
+                {"detail": REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         donor_id_raw = request.query_params.get("donor_id")
         donor_phone_raw = request.query_params.get("phone")
         batch_id_raw = request.query_params.get("batch_id")
