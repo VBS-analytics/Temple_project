@@ -4,6 +4,11 @@ import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interface
 import * as XLSX from 'xlsx';
 import api, { extractResults } from '../lib/api';
 import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../lib/pdfMakeLoader';
+import {
+  canDownloadReports,
+  REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
+  useAuthStore,
+} from '../store/auth';
 import type { CartItem } from '../store/cart';
 
 interface DonorRecord {
@@ -983,6 +988,7 @@ const LoadingSpinner = () => (
 );
 
 const ReportPage = () => {
+  const user = useAuthStore((state) => state.user);
   const [exportingDonorDatabase, setExportingDonorDatabase] = useState(false);
   const [exportingDatabaseBackup, setExportingDatabaseBackup] = useState(false);
   const [exportingDonorDetails, setExportingDonorDetails] = useState(false);
@@ -1001,6 +1007,14 @@ const ReportPage = () => {
     loadPdfMake().catch((err) => console.error('pdfMake preload failed', err));
   }, []);
 
+  const ensureReportDownloadAccess = useCallback(() => {
+    if (canDownloadReports(user)) {
+      return true;
+    }
+    setExportError(REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE);
+    return false;
+  }, [user]);
+
   const fetchDonors = useCallback(async (): Promise<DonorRecord[]> => {
     const { data } = await api.get<DonorRecord[]>('auth/donors/');
     const donors = extractResults<DonorRecord>(data);
@@ -1009,6 +1023,7 @@ const ReportPage = () => {
 
   const handleDonorDatabaseDownload = useCallback(async () => {
     if (exportingDonorDatabase) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingDonorDatabase(true);
     try {
@@ -1120,10 +1135,11 @@ const ReportPage = () => {
     } finally {
       setExportingDonorDatabase(false);
     }
-  }, [exportingDonorDatabase, fetchDonors]);
+  }, [ensureReportDownloadAccess, exportingDonorDatabase, fetchDonors]);
 
   const handleDatabaseBackupDownload = useCallback(async () => {
     if (exportingDatabaseBackup) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingDatabaseBackup(true);
     try {
@@ -1171,10 +1187,11 @@ const ReportPage = () => {
     } finally {
       setExportingDatabaseBackup(false);
     }
-  }, [exportingDatabaseBackup]);
+  }, [ensureReportDownloadAccess, exportingDatabaseBackup]);
 
   const handlePoojaRegistrationDatabaseDownload = useCallback(async () => {
     if (exportingPoojaRegistrationDatabase) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingPoojaRegistrationDatabase(true);
     try {
@@ -1247,10 +1264,11 @@ const ReportPage = () => {
     } finally {
       setExportingPoojaRegistrationDatabase(false);
     }
-  }, [exportingPoojaRegistrationDatabase]);
+  }, [ensureReportDownloadAccess, exportingPoojaRegistrationDatabase]);
 
   const handleDonorDetailsDownload = useCallback(async () => {
     if (exportingDonorDetails) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingDonorDetails(true);
     try {
@@ -1285,10 +1303,11 @@ const ReportPage = () => {
     } finally {
       setExportingDonorDetails(false);
     }
-  }, [exportingDonorDetails, fetchDonors]);
+  }, [ensureReportDownloadAccess, exportingDonorDetails, fetchDonors]);
 
   const handlePaymentDetailsDownload = useCallback(async () => {
     if (exportingPaymentDetails) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingPaymentDetails(true);
     try {
@@ -1320,10 +1339,11 @@ const ReportPage = () => {
     } finally {
       setExportingPaymentDetails(false);
     }
-  }, [exportingPaymentDetails]);
+  }, [ensureReportDownloadAccess, exportingPaymentDetails]);
 
   const handleGeneralDonationDownload = useCallback(async () => {
     if (exportingGeneralDonation) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingGeneralDonation(true);
     try {
@@ -1355,10 +1375,11 @@ const ReportPage = () => {
     } finally {
       setExportingGeneralDonation(false);
     }
-  }, [exportingGeneralDonation]);
+  }, [ensureReportDownloadAccess, exportingGeneralDonation]);
 
   const handleDonorFeedbackDownload = useCallback(async () => {
     if (exportingDonorFeedback) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingDonorFeedback(true);
     try {
@@ -1390,10 +1411,11 @@ const ReportPage = () => {
     } finally {
       setExportingDonorFeedback(false);
     }
-  }, [exportingDonorFeedback]);
+  }, [ensureReportDownloadAccess, exportingDonorFeedback]);
 
   const handleOpeningBalanceDownload = useCallback(async () => {
     if (exportingOpeningBalance) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingOpeningBalance(true);
     try {
@@ -1427,10 +1449,11 @@ const ReportPage = () => {
     } finally {
       setExportingOpeningBalance(false);
     }
-  }, [exportingOpeningBalance, fetchDonors]);
+  }, [ensureReportDownloadAccess, exportingOpeningBalance, fetchDonors]);
 
   const handleExcessDonationDownload = useCallback(async () => {
     if (exportingExcessDonation) return;
+    if (!ensureReportDownloadAccess()) return;
     setExportError(null);
     setExportingExcessDonation(true);
     try {
@@ -1472,11 +1495,12 @@ const ReportPage = () => {
     } finally {
       setExportingExcessDonation(false);
     }
-  }, [exportingExcessDonation, fetchDonors]);
+  }, [ensureReportDownloadAccess, exportingExcessDonation, fetchDonors]);
 
   const downloadPoojaReport = useCallback(
     async (key: PoojaReportKey, format: PoojaReportFormat) => {
       if (exportingReports[key]) return;
+      if (!ensureReportDownloadAccess()) return;
       const report = POOJA_REPORTS[key];
       setExportError(null);
       setExportingReports((prev) => ({ ...prev, [key]: true }));
@@ -1524,15 +1548,16 @@ const ReportPage = () => {
         setExportingReports((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [exportingReports],
+    [ensureReportDownloadAccess, exportingReports],
   );
 
   const openReportFormatDialog = useCallback(
     (key: PoojaReportKey) => {
       if (exportingReports[key]) return;
+      if (!ensureReportDownloadAccess()) return;
       setPendingReportKey(key);
     },
-    [exportingReports],
+    [ensureReportDownloadAccess, exportingReports],
   );
 
   const closeReportFormatDialog = useCallback(() => {
@@ -1542,11 +1567,15 @@ const ReportPage = () => {
   const handleFormatSelection = useCallback(
     (format: PoojaReportFormat) => {
       if (!pendingReportKey) return;
+      if (!ensureReportDownloadAccess()) {
+        setPendingReportKey(null);
+        return;
+      }
       const key = pendingReportKey;
       setPendingReportKey(null);
       downloadPoojaReport(key, format);
     },
-    [pendingReportKey, downloadPoojaReport],
+    [ensureReportDownloadAccess, pendingReportKey, downloadPoojaReport],
   );
 
   const getPoojaReportLabel = useCallback(

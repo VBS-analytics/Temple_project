@@ -166,6 +166,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "tamil_name",
             "family_name",
             "notes",
+            "pooja_registration_access",
             "custom_number",
             "monthly_donation_amount",
             "opening_balance",
@@ -186,6 +187,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "gender": {"required": False, "allow_blank": True},
             "rasi": {"required": False, "allow_blank": True},
+            "pooja_registration_access": {"required": False},
         }
 
     def get_donor_id(self, obj):

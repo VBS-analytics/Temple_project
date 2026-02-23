@@ -5,8 +5,10 @@ from unittest.mock import Mock, patch
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework import status
 from rest_framework.test import APIClient
 
+from accounts.access import REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
 from accounts.models import DonorProfile, User, UserRole
 from payments.models import PaymentMode, PaymentRecord, PaymentStatus
 from payments.services import regenerate_donor_passbook
@@ -42,6 +44,13 @@ class PoojaPostPrasadamReportTests(TestCase):
         self.admin = User.objects.create_user(
             phone_number="9000000100",
             name="Report Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.restricted_admin = User.objects.create_user(
+            phone_number="+91 9999999997",
+            name="Restricted Report Admin",
             password="secret",
             role=UserRole.ADMIN,
             is_staff=True,
@@ -90,6 +99,76 @@ class PoojaPostPrasadamReportTests(TestCase):
         self.client.force_authenticate(user=donor)
         response = self.client.get(reverse("pooja-registrations-post-prasadam-report"))
         self.assertEqual(response.status_code, 403)
+
+    def test_restricted_admin_cannot_download_post_prasadam_report(self):
+        donor_yes = User.objects.create_user(phone_number="9000000104", name="Donor Yes", password="secret")
+        PoojaRegistration.objects.create(
+            donor=donor_yes,
+            pooja_option=self.pooja_option,
+            start_date=date(2026, 2, 21),
+            post_prasadam=True,
+        )
+
+        self.client.force_authenticate(user=self.restricted_admin)
+        response = self.client.get(reverse("pooja-registrations-post-prasadam-report"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["detail"], REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class PoojaRegistrationAccessControlTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.donor = User.objects.create_user(
+            phone_number="9000000200",
+            name="Access Donor",
+            password="secret",
+        )
+        self.admin = User.objects.create_user(
+            phone_number="9000000201",
+            name="Access Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.option = PoojaOption.objects.create(code="ACC", name="Access Test Pooja")
+        self.url = reverse("pooja-registrations-list")
+
+    def _payload(self) -> dict[str, object]:
+        return {
+            "pooja_option": self.option.id,
+            "start_date": "2026-02-22",
+            "total_amount": "150.00",
+        }
+
+    def test_default_profile_without_access_is_blocked(self):
+        self.client.force_authenticate(user=self.donor)
+
+        response = self.client.post(self.url, self._payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["detail"], "Please contact Admin for the pooja registration")
+        self.assertEqual(PoojaRegistration.objects.filter(donor=self.donor).count(), 0)
+
+    def test_donor_with_access_can_register(self):
+        donor_profile = DonorProfile.objects.get(user=self.donor)
+        donor_profile.pooja_registration_access = True
+        donor_profile.save(update_fields=["pooja_registration_access"])
+        self.client.force_authenticate(user=self.donor)
+
+        response = self.client.post(self.url, self._payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PoojaRegistration.objects.filter(donor=self.donor).count(), 1)
+
+    def test_admin_bypasses_access_flag(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(self.url, self._payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PoojaRegistration.objects.filter(donor=self.admin).count(), 1)
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
@@ -713,6 +792,13 @@ class PoojaCartSnapshotReportViewTests(TestCase):
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.admin)
+        self.restricted_admin = User.objects.create_user(
+            phone_number="+91 9999999997",
+            name="Restricted Export Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
 
     def _create_snapshot(self, donor, items):
         return PoojaCartSnapshot.objects.create(donor=donor, items=items)
@@ -753,6 +839,16 @@ class PoojaCartSnapshotReportViewTests(TestCase):
         self.assertEqual(second_response.status_code, 200)
         self.assertEqual(second_response.json()[0]["items"], original_items)
         self.assertEqual(PoojaCartSnapshotExportBatch.objects.count(), 1)
+
+    def test_restricted_admin_cannot_download_snapshot_report(self):
+        donor = User.objects.create_user(phone_number="9000000032", name="Snapshot Donor", password="secret")
+        self._create_snapshot(donor, [{"cartId": "restricted"}])
+
+        self.client.force_authenticate(user=self.restricted_admin)
+        response = self.client.get(reverse("pooja-cart-snapshots-report"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["detail"], REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE)
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)

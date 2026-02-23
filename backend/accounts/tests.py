@@ -23,7 +23,12 @@ from .models import (
     OtpToken,
     User,
 )
-from .access import can_view_payment_statement, is_read_only_admin
+from .access import (
+    can_download_reports,
+    can_view_payment_statement,
+    is_read_only_admin,
+    REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
+)
 from .serializers import DonorProfileSerializer, RegisterSerializer
 
 SQLITE_DB_CONFIG = {
@@ -263,8 +268,10 @@ class AdminAccessPolicyTests(TestCase):
         )
         self.assertTrue(is_read_only_admin(read_only_admin))
         self.assertFalse(can_view_payment_statement(hidden_statement_admin))
+        self.assertFalse(can_download_reports(hidden_statement_admin))
         self.assertFalse(is_read_only_admin(full_admin))
         self.assertTrue(can_view_payment_statement(full_admin))
+        self.assertTrue(can_download_reports(full_admin))
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
@@ -328,6 +335,11 @@ class DonorFeedbackExportViewTests(TestCase):
             name="Feedback Admin",
             password="adminpass",
         )
+        self.restricted_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Restricted Feedback Admin",
+            password="adminpass2",
+        )
         self.client = APIClient()
 
     def test_admin_can_download_feedback_excel(self):
@@ -370,3 +382,9 @@ class DonorFeedbackExportViewTests(TestCase):
         self.client.force_authenticate(self.donor)
         response = self.client.get(reverse("donor-feedback-export"))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_restricted_admin_cannot_download_feedback_excel(self):
+        self.client.force_authenticate(self.restricted_admin)
+        response = self.client.get(reverse("donor-feedback-export"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["detail"], REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE)

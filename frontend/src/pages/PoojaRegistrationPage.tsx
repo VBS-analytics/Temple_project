@@ -240,6 +240,7 @@ interface ProfileDetails {
   date_of_birth?: string | null;
   family_name?: string | null;
   rasi?: string | null;
+  pooja_registration_access?: boolean;
 }
 
 interface ProfilePayload {
@@ -337,6 +338,7 @@ const POOJA_ICON_KEYWORDS: {
   { icon: '🧘', className: 'bg-purple-100 text-purple-700', keywords: ['bhajan', 'vigil', 'satsang'] },
 ];
 const DEFAULT_POOJA_ICON = { icon: '⛩️', className: 'bg-slate-100 text-slate-800' };
+const POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = 'Please contact Admin for the pooja registration';
 
 const resolvePoojaIcon = (row: MasterRow) => {
   const sourceText = `${row.uiLabel} ${row.displayName} ${row.code}`.toLowerCase();
@@ -1096,10 +1098,19 @@ const PoojaRegistrationPage = () => {
   const [isDatePromptOpen, setIsDatePromptOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const nextFirstDayOccurrence = useMemo(() => computeNextEnglishMonthFirstDay(todayIso), [todayIso]);
+  const isAdminUser = (profile?.user?.role ?? user?.role) === 'admin';
+  const canRegisterPooja = isAdminUser || Boolean(profile?.profile?.pooja_registration_access);
   const handleUseSystemDate = useCallback(() => {
     setSelectedRegistrationDate(todayIso);
   }, [todayIso]);
   const handleSavePooja = useCallback(async (): Promise<boolean> => {
+    if (!canRegisterPooja) {
+      setTableMessage({
+        status: 'error',
+        text: POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE,
+      });
+      return false;
+    }
     if (cartItems.length === 0) {
       setTableMessage({
         status: 'error',
@@ -1147,7 +1158,7 @@ const PoojaRegistrationPage = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [cartItems, cartKey, clearCart, clearGeneralPayment, navigate, selectedRegistrationDate, setItemsForUser, validPoojaIds]);
+  }, [canRegisterPooja, cartItems, cartKey, clearCart, clearGeneralPayment, navigate, selectedRegistrationDate, setItemsForUser, validPoojaIds]);
   const openDatePrompt = useCallback(() => setIsDatePromptOpen(true), []);
   const closeDatePrompt = useCallback(() => setIsDatePromptOpen(false), []);
   const handleDatePromptSubmit = useCallback(
@@ -1168,7 +1179,6 @@ const PoojaRegistrationPage = () => {
     setDeityFilter('');
     setSelectedCategory('all');
   }, []);
-  const isAdminUser = (profile?.user?.role ?? user?.role) === 'admin';
   const requiresMemberSelection = !isAdminUser;
   const fallbackMemberSelection = useMemo(() => [], []);
   const normalizeMemberSelection = useCallback(
@@ -2837,6 +2847,11 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
+    if (!canRegisterPooja) {
+      showWarningPopup(POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE);
+      return;
+    }
+
     if (!dayOptionDisabled && availableDayOptions.length > 0 && !selectedDayId) {
       showWarningPopup('Please select a day option before adding this pooja.');
       return;
@@ -3129,6 +3144,12 @@ const PoojaRegistrationPage = () => {
         [selectedPooja.id]: normalizedSelectedMembers,
       }));
       handleCloseModal();
+      return;
+    }
+
+    if (!canRegisterPooja) {
+      setFormError(POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE);
+      showWarningPopup(POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE);
       return;
     }
 
@@ -3482,8 +3503,8 @@ const PoojaRegistrationPage = () => {
     <>
       <div className="min-h-screen bg-slate-50 py-4 sm:py-6 md:py-8 px-3 sm:px-4 lg:px-6 xl:px-8 pb-24">
       {warningPopup && (
-        <div className="fixed bottom-6 right-6 z-50 flex pointer-events-none">
-          <div className="pointer-events-auto w-full max-w-sm xl:max-w-md">
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center px-3 sm:inset-x-auto sm:inset-y-auto sm:right-6 sm:bottom-6 sm:block sm:px-0">
+          <div className="pointer-events-auto w-full max-w-md sm:w-[26rem] xl:max-w-md">
             <div
               role="alert"
               className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-[0_20px_40px_-20px_rgba(15,23,42,0.9)] transition duration-200 hover:shadow-[0_25px_40px_-10px_rgba(15,23,42,0.8)]"
@@ -3491,7 +3512,7 @@ const PoojaRegistrationPage = () => {
               <span className="flex items-center justify-center rounded-full bg-white/20 p-2 text-base">
                 ⚠️
               </span>
-              <p className="flex-1 leading-snug">{warningPopup}</p>
+              <p className="flex-1 leading-snug break-words">{warningPopup}</p>
               <button
                 type="button"
                 onClick={hideWarningPopup}
@@ -3514,11 +3535,43 @@ const PoojaRegistrationPage = () => {
 
         <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6 sm:mb-8 border border-gray-200">
           <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-              <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Available Poojas</h2>
+            {/* ── MOBILE layout (hidden on md+) ── */}
+            <div className="md:hidden space-y-2">
+              {/* Title + Save button in same row */}
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-gray-900">Available Poojas</h2>
+                <button
+                  type="button"
+                  onClick={openDatePrompt}
+                  className="flex-shrink-0 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
+                >
+                  Save Pooja
+                </button>
               </div>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
+              {/* Compact cart summary */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">
+                  {cartTotals.count} {cartTotals.count === 1 ? 'pooja' : 'poojas'} · ₹ {formattedCartAmount}
+                </span>
+                <span className="text-slate-300">|</span>
+                <span>Recurring ₹ {formattedRecurringAmount}</span>
+                <span className="text-slate-300">·</span>
+                <span>One-time ₹ {formattedOneTimeAmount}</span>
+              </div>
+              {/* Tamil text - smaller on mobile */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5">
+                <p className="text-xs text-orange-900 font-medium leading-relaxed">
+                  நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
+                </p>
+              </div>
+            </div>
+
+            {/* ── DESKTOP layout (hidden on < md) ── */}
+            <div className="hidden md:flex md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Available Poojas</h2>
+              </div>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm max-w-xs lg:max-w-sm">
                 <p className="text-orange-900 font-medium">
                   நாள் விருப்பம் - உங்கள் நட்சத்திரங்களின் அடிப்படையில், உங்கள் சொந்த தேதியை நீங்கள் தேர்வு செய்யலாம்.
                 </p>
@@ -3536,7 +3589,6 @@ const PoojaRegistrationPage = () => {
                     <span>One-time ₹ {formattedOneTimeAmount}</span>
                   </div>
                 </div>
-
                 <button
                   type="button"
                   onClick={openDatePrompt}
@@ -3550,8 +3602,9 @@ const PoojaRegistrationPage = () => {
 
           <div className="p-4 sm:p-6">
             <div className="mb-4 space-y-2 border-b border-gray-100 pb-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {/* Category tabs: scroll horizontally on mobile, wrap on sm+ */}
+                <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0 sm:flex-wrap scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
                   {POJA_CATEGORY_DEFINITIONS.map((category) => {
                     const isActive = selectedCategory === category.key;
                     return (
@@ -3560,7 +3613,7 @@ const PoojaRegistrationPage = () => {
                         type="button"
                         onClick={() => setSelectedCategory(category.key)}
                         className={clsx(
-                          'rounded-full border px-3 py-1 text-xs font-semibold transition',
+                          'flex-shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition',
                           isActive
                             ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
                             : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50',
@@ -3571,14 +3624,15 @@ const PoojaRegistrationPage = () => {
                     );
                   })}
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                {/* Grid/List toggle: always visible, pushed right on sm+ */}
+                <div className="flex items-center gap-2 sm:ml-auto flex-shrink-0">
                   {VIEW_MODES.map((mode) => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => setViewMode(mode)}
                       className={clsx(
-                        'rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide transition',
+                        'flex-shrink-0 rounded-full border px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-wide transition',
                         viewMode === mode
                           ? 'border-slate-600 bg-slate-900 text-white shadow'
                           : 'border-gray-200 bg-white text-gray-600 hover:border-slate-300 hover:bg-gray-50',
@@ -3590,7 +3644,7 @@ const PoojaRegistrationPage = () => {
                 </div>
               </div>
               <p className="text-xs text-gray-500">{selectedCategoryDefinition.description}</p>
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-[0.6rem] font-semibold uppercase text-gray-500">
                     Search
@@ -3797,8 +3851,8 @@ const PoojaRegistrationPage = () => {
 
                         <div
                           className={clsx(
-                            'grid gap-4 border-t border-gray-100 px-4 py-4 md:px-5',
-                            isListView ? 'md:grid-cols-2 md:gap-3' : 'md:grid-cols-[1.25fr_0.75fr]',
+                            'grid gap-3 border-t border-gray-100 px-3 py-3 sm:px-4 sm:py-4 md:px-5',
+                            isListView ? 'md:grid-cols-2 md:gap-3' : 'sm:grid-cols-[1.25fr_0.75fr]',
                           )}
                         >
                             <div className="space-y-4">
@@ -3914,7 +3968,7 @@ const PoojaRegistrationPage = () => {
                                 </div>
                               )}
                             </div>
-                            <div className="space-y-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-xs text-gray-700">
+                            <div className="space-y-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-3 sm:p-4 text-xs text-gray-700">
                               <div className="space-y-2">
                                 <p className="text-[0.65rem] font-semibold uppercase text-gray-500">Amount</p>
                                 {hasAdjustableAmount ? (
