@@ -79,6 +79,12 @@ PRADOSHA_POOJA_NAME = "2 pradosha pooja per month"
 TILL_OIL_FOR_LAMPS_NAME = "till oil for lamps"
 NITYA_NEIVEDHYAM_NAME = "nitya neivedhyam"
 GAU_SAMRAKHSHANA_SEVA_NAME = "gau samrakshana seva"
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP4", "GP6"}
+UBHAYAM_EXCLUDED_POOJA_NAMES = {
+    TILL_OIL_FOR_LAMPS_NAME,
+    NITYA_NEIVEDHYAM_NAME,
+    GAU_SAMRAKHSHANA_SEVA_NAME,
+}
 POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = "Please contact Admin for the pooja registration"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
 ANY_DAY_OPTION_DESCRIPTION = "any day of month"
@@ -1312,12 +1318,37 @@ class PoojaDonorCalendarView(APIView):
         debug_mode = request.query_params.get("debug") == "1"
         debug_info: list[dict[str, Any]] = [] if debug_mode else []
         snapshot_option_counter = count(-1, -1)
+        normalized_excluded_codes = {code.strip().upper() for code in UBHAYAM_EXCLUDED_POOJA_CODES}
+        normalized_excluded_names = {name.strip().lower() for name in UBHAYAM_EXCLUDED_POOJA_NAMES}
+        excluded_option_ids = set(
+            PoojaOption.objects.filter(
+                Q(code__in=normalized_excluded_codes)
+                | Q(name__iexact=TILL_OIL_FOR_LAMPS_NAME)
+                | Q(name__iexact=NITYA_NEIVEDHYAM_NAME)
+                | Q(name__iexact=GAU_SAMRAKHSHANA_SEVA_NAME)
+            ).values_list("id", flat=True)
+        )
+
+        def is_ubhayam_excluded_pooja(
+            *,
+            pooja_id: int | None = None,
+            pooja_code: str | None = None,
+            pooja_name: str | None = None,
+        ) -> bool:
+            if pooja_id is not None and pooja_id in excluded_option_ids:
+                return True
+            normalized_code = (pooja_code or "").strip().upper()
+            if normalized_code and normalized_code in normalized_excluded_codes:
+                return True
+            normalized_name = (pooja_name or "").strip().lower()
+            return bool(normalized_name and normalized_name in normalized_excluded_names)
 
         queryset = (
             PoojaRegistration.objects.filter(
                 donor__isnull=False,
                 status__in=(PoojaStatus.PENDING, PoojaStatus.CONFIRMED, PoojaStatus.COMPLETED),
             )
+            .exclude(pooja_option_id__in=excluded_option_ids)
             .filter(
                 Q(start_date__range=(first_day, last_day))
                 | Q(start_date__isnull=True, created_at__date__range=(first_day, last_day))
@@ -1484,6 +1515,12 @@ class PoojaDonorCalendarView(APIView):
                 "phone_number": donor.phone_number or "",
             }
             for item in snapshot.items or []:
+                if is_ubhayam_excluded_pooja(
+                    pooja_id=item.get("poojaId"),
+                    pooja_code=item.get("poojaCode"),
+                    pooja_name=item.get("poojaName"),
+                ):
+                    continue
                 snapshot_option_payload = build_snapshot_day_option_payload(item)
                 registration_date = _parse_iso_date(item.get("customDayDate") or item.get("bookingDate"))
                 if registration_date is None:
@@ -1514,6 +1551,7 @@ class PoojaDonorCalendarView(APIView):
                 is_active=True,
                 recurrence_kind=RecurrenceKind.RECURRING,
             )
+            .exclude(pooja_option_id__in=excluded_option_ids)
             .select_related("donor")
             .order_by("donor__name", "donor__id")
         )

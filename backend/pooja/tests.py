@@ -365,10 +365,10 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.client.force_authenticate(user=self.admin)
         self.pooja_option = PoojaOption.objects.create(code="CA", name="Calendar Activity")
 
-    def _create_registration(self, donor, tz_datetime, start_date_value=None, day_option=None):
+    def _create_registration(self, donor, tz_datetime, start_date_value=None, day_option=None, pooja_option=None):
         registration = PoojaRegistration.objects.create(
             donor=donor,
-            pooja_option=self.pooja_option,
+            pooja_option=pooja_option or self.pooja_option,
             status=PoojaStatus.PENDING,
             start_date=start_date_value,
             day_option=day_option,
@@ -523,6 +523,128 @@ class PoojaDonorCalendarViewTests(TestCase):
         snapshot_entry = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-12")
         self.assertEqual(snapshot_entry["donor_names"], "Snapshot Donor")
         self.assertEqual(snapshot_entry["donor_phones"], "9000000014")
+
+    def test_ubhayam_calendar_excludes_first_day_special_poojas(self):
+        excluded_option = PoojaOption.objects.create(code="GP1", name="Till Oil for Lamps")
+        included_donor = User.objects.create_user(
+            phone_number="9000000016",
+            name="Included Donor",
+            password="secret",
+        )
+        excluded_donor = User.objects.create_user(
+            phone_number="9000000017",
+            name="Excluded Donor",
+            password="secret",
+        )
+
+        self._create_registration(
+            included_donor,
+            timezone.make_aware(datetime(2025, 1, 1, 9, 0)),
+            start_date_value=date(2025, 1, 1),
+            pooja_option=self.pooja_option,
+        )
+        self._create_registration(
+            excluded_donor,
+            timezone.make_aware(datetime(2025, 1, 1, 10, 0)),
+            start_date_value=date(2025, 1, 1),
+            pooja_option=excluded_option,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        january_first = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-01")
+        self.assertEqual(january_first["donor_names"], "Included Donor")
+        self.assertNotIn("Excluded Donor", january_first["donor_names"])
+
+    def test_ubhayam_calendar_excludes_first_day_special_snapshot_items(self):
+        included_snapshot_donor = User.objects.create_user(
+            phone_number="9000000018",
+            name="Included Snapshot Donor",
+            password="secret",
+        )
+        excluded_snapshot_donor = User.objects.create_user(
+            phone_number="9000000019",
+            name="Excluded Snapshot Donor",
+            password="secret",
+        )
+        PoojaCartSnapshot.objects.create(
+            donor=included_snapshot_donor,
+            items=[
+                {
+                    "cartId": "snapshot-included",
+                    "bookingDate": "2025-01-01",
+                    "poojaCode": "CA",
+                    "poojaName": "Calendar Activity",
+                }
+            ],
+        )
+        PoojaCartSnapshot.objects.create(
+            donor=excluded_snapshot_donor,
+            items=[
+                {
+                    "cartId": "snapshot-excluded",
+                    "bookingDate": "2025-01-01",
+                    "poojaCode": "GP6",
+                    "poojaName": "Nitya Neivedhyam",
+                }
+            ],
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        january_first = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-01")
+        self.assertIn("Included Snapshot Donor", january_first["donor_names"])
+        self.assertNotIn("Excluded Snapshot Donor", january_first["donor_names"])
+
+    def test_ubhayam_calendar_excludes_first_day_special_recurring_plans(self):
+        day_option = PoojaDayOption.objects.create(
+            code="REG",
+            description="Regular Day",
+            category=DayOptionCategory.CODE,
+        )
+        excluded_option = PoojaOption.objects.create(code="GP4", name="Gau Samrakshana Seva")
+        included_donor = User.objects.create_user(
+            phone_number="9000000022",
+            name="Included Plan Donor",
+            password="secret",
+        )
+        excluded_donor = User.objects.create_user(
+            phone_number="9000000023",
+            name="Excluded Plan Donor",
+            password="secret",
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=included_donor,
+            pooja_option=self.pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2025, 1, 1),
+            next_occurrence=date(2025, 1, 1),
+            amount=Decimal("100.00"),
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=excluded_donor,
+            pooja_option=excluded_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2025, 1, 1),
+            next_occurrence=date(2025, 1, 1),
+            amount=Decimal("100.00"),
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        january_first = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-01")
+        self.assertIn("Included Plan Donor", january_first["donor_names"])
+        self.assertNotIn("Excluded Plan Donor", january_first["donor_names"])
 
     def test_cart_snapshot_day_option_is_exposed(self):
         snapshot_donor = User.objects.create_user(
