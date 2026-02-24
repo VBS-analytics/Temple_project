@@ -11,6 +11,15 @@
 
 ---
 
+## 🔄 Payment Statement Refresh
+
+- Page: `frontend/src/pages/payments/PaymentStatementPage.tsx`
+- Button: `Refresh statement`
+- Behavior: Triggers a forced refetch of passbook data by calling passbook API with `refresh=true`.
+- Use this when latest passbook rows are not visible immediately after recent changes.
+
+---
+
 ## 🔑 User Roles & Access
 
 ### 1. MAIN DONOR (role='main' ∧ canCombine=true)
@@ -317,4 +326,3 @@ Body: { "main_phone": string }
 **Version:** 1.0  
 **Status:** ✅ COMPLETE  
 **Date:** January 28, 2026
-
