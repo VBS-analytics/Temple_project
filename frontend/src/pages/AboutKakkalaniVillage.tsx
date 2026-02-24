@@ -81,7 +81,7 @@ const CornerImageCard: React.FC<CornerImageCardProps> = ({
 
 const AboutKakkalaniVillage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       <PublicSiteHeader />
       
       <main className="relative overflow-x-hidden senior-readable-content">
@@ -91,8 +91,8 @@ const AboutKakkalaniVillage: React.FC = () => {
 
         {/* Decorative Elements - Hidden on mobile to prevent overflow */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 right-10 w-32 h-32 sm:w-64 sm:h-64 bg-amber-200/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-20 left-10 w-48 h-48 sm:w-96 sm:h-96 bg-orange-200/20 rounded-full blur-3xl" />
+          <div className="absolute top-20 right-10 w-32 h-32 sm:w-64 sm:h-64 bg-blue-200/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 left-10 w-48 h-48 sm:w-96 sm:h-96 bg-blue-200/20 rounded-full blur-3xl" />
         </div>
 
         {/* Hero Section */}
@@ -111,12 +111,12 @@ const AboutKakkalaniVillage: React.FC = () => {
 
               <div className="mx-auto max-w-4xl text-center">
               {/* Eyebrow */}
-              <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-100 to-amber-100 px-3 py-1.5 sm:px-4 sm:py-2">
+              <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-100 to-blue-100 px-3 py-1.5 sm:px-4 sm:py-2">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                 </span>
-                <span className="text-[10px] sm:text-xs font-semibold tracking-wider uppercase text-orange-800">
+                <span className="text-[10px] sm:text-xs font-semibold tracking-wider uppercase text-blue-800">
                   Our Village Heritage
                 </span>
               </div>
@@ -124,7 +124,7 @@ const AboutKakkalaniVillage: React.FC = () => {
               {/* Main Heading - Responsive text sizes */}
               <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight mb-4 sm:mb-6 px-2">
                 A Resilient Heritage of{' '}
-                <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-blue-600 to-blue-600 bg-clip-text text-transparent">
                   Faith, Rivers & Temples
                 </span>
               </h1>
@@ -163,8 +163,8 @@ const AboutKakkalaniVillage: React.FC = () => {
                   { label: 'Blessings', value: 'Mahaperiyava & Ramana Maharishi' },
                 ].map((stat) => (
                   <div key={stat.label} className="group w-full">
-                    <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white/60 backdrop-blur-sm border border-orange-100 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
-                      <p className="text-[10px] sm:text-xs font-medium text-orange-600 uppercase tracking-wider mb-1">
+                    <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
+                      <p className="text-[10px] sm:text-xs font-medium text-blue-600 uppercase tracking-wider mb-1">
                         {stat.label}
                       </p>
                       <p className="text-xs sm:text-sm font-semibold text-slate-900 break-words hyphens-auto">
@@ -199,21 +199,21 @@ const AboutKakkalaniVillage: React.FC = () => {
                 {sections.map((section, index) => (
                   <article 
                     key={section.title}
-                    className="group relative bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-sm border border-slate-100 hover:shadow-xl transition-all duration-500 hover:border-orange-200"
+                    className="group relative bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-sm border border-slate-100 hover:shadow-xl transition-all duration-500 hover:border-blue-200"
                     style={{
                       animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`
                     }}
                   >
                     {/* Section Icon & Title */}
                     <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6">
-                      <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-300">
+                      <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-100 to-blue-100 flex items-center justify-center text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-300">
                         {section.icon}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h2 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 mb-2 break-words">
                           {section.title}
                         </h2>
-                        <div className="h-1 w-12 sm:w-16 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full" />
+                        <div className="h-1 w-12 sm:w-16 bg-gradient-to-r from-blue-500 to-blue-500 rounded-full" />
                       </div>
                     </div>
 
@@ -230,7 +230,7 @@ const AboutKakkalaniVillage: React.FC = () => {
                     </div>
 
                     {/* Decorative Corner - Hidden on mobile */}
-                    <div className="hidden sm:block absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-orange-50 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="hidden sm:block absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   </article>
                 ))}
               </div>
@@ -240,7 +240,7 @@ const AboutKakkalaniVillage: React.FC = () => {
                 <div className="lg:sticky lg:top-24 space-y-4 sm:space-y-6">
                   
                   {/* Village Snapshot Card */}
-                  <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-orange-600 to-amber-600 p-6 sm:p-8 text-white shadow-lg">
+                  <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-600 to-blue-600 p-6 sm:p-8 text-white shadow-lg">
                     <div className="relative z-10">
                       <div className="flex items-center gap-2 mb-3 sm:mb-4">
                         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
@@ -265,7 +265,7 @@ const AboutKakkalaniVillage: React.FC = () => {
                   {/* Quick Links - Fully responsive */}
                   <div className="rounded-2xl sm:rounded-3xl bg-white border border-slate-100 p-4 sm:p-6 shadow-sm">
                     <h3 className="font-semibold text-sm sm:text-base text-slate-900 mb-3 sm:mb-4 flex items-center gap-2">
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
                       <span className="truncate">Explore More</span>
@@ -280,7 +280,7 @@ const AboutKakkalaniVillage: React.FC = () => {
                         <a
                           key={link.label}
                           href={link.href}
-                          className="block px-3 py-2 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium text-slate-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200 truncate"
+                          className="block px-3 py-2 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 truncate"
                         >
                           {link.label}
                         </a>
@@ -295,7 +295,7 @@ const AboutKakkalaniVillage: React.FC = () => {
 
         {/* CTA Section - Fully responsive */}
         <section className="relative py-12 sm:py-16 md:py-20 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-orange-600 to-amber-600" />
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-600" />
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-20" />
           
           <div className="relative mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
@@ -317,7 +317,7 @@ const AboutKakkalaniVillage: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center max-w-md sm:max-w-none mx-auto px-2">
               <a 
                 href="/login"
-                className="group px-6 py-3 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl bg-white text-orange-600 font-semibold text-sm sm:text-base md:text-lg shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2 w-full sm:w-auto"
+                className="group px-6 py-3 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl bg-white text-blue-600 font-semibold text-sm sm:text-base md:text-lg shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 Get Started
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -326,7 +326,7 @@ const AboutKakkalaniVillage: React.FC = () => {
               </a>
               <a 
                 href="/history-of-kakkalani"
-                className="px-6 py-3 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl bg-transparent border-2 border-white text-white font-semibold text-sm sm:text-base md:text-lg hover:bg-white hover:text-orange-600 transition-all duration-300 w-full sm:w-auto text-center"
+                className="px-6 py-3 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl bg-transparent border-2 border-white text-white font-semibold text-sm sm:text-base md:text-lg hover:bg-white hover:text-blue-600 transition-all duration-300 w-full sm:w-auto text-center"
               >
                 Learn More
               </a>

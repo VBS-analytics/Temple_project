@@ -63,6 +63,10 @@ const AppLayout = () => {
     : isAdminUser
       ? "Admin command center"
       : "Donor hub";
+  const navTopStripColor = "#1565C0";
+  const navMenuRowColor = "#1976D2";
+  const navInactiveClass = "text-white hover:bg-[#1565C0] hover:text-white";
+  const userChipBgColor = "#0F56A8";
 
   const adminNavItems: NavItem[] = [
     { to: "/admin/dashboard", label: "Dashboard", show: false, end: true },
@@ -174,92 +178,107 @@ const AppLayout = () => {
     <div className="min-h-screen bg-slate-50">
       <SessionExpiryPrompt {...sessionTimeout} />
       {/* HEADER */}
-      <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 shadow-sm">
-        <div className="responsive-layout flex flex-col gap-4 py-3">
-          {/* TOP ROW */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* LOGO */}
-            <Link to="/" className="flex items-center gap-3 text-left">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-lg font-semibold text-white shadow-sm">
-                TD
-              </span>
-              <span>
-                <span className="block text-lg font-semibold text-slate-900">
-                  Temple Donor Portal
+      <header className="border-b shadow-sm" style={{ borderColor: navMenuRowColor }}>
+        <div style={{ backgroundColor: navTopStripColor }}>
+          <div className="responsive-layout py-3">
+            {/* TOP ROW */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              {/* LOGO */}
+              <Link to="/" className="flex items-center gap-3 text-left">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#F5C518] text-lg font-bold text-[#000000] shadow-sm">
+                  TD
                 </span>
-                <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  {headerSubtitle.toUpperCase()}
-                </span>
-              </span>
-            </Link>
-
-            {/* ACTIONS */}
-            <div className="notranslate flex items-center gap-3" translate="no">
-              <div className="hidden h-10 w-px bg-slate-200 md:block" />
-
-              <div className="flex items-center gap-3">
-                {/* USER CARD */}
-                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-600">
-                    {userInitials}
+                <span>
+                  <span className="block text-lg font-semibold text-white">
+                    Temple Donor Portal
                   </span>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-slate-700">
-                      {user?.name ?? "Temple Admin"}
-                    </span>
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                      {userRoleLabel}
-                    </span>
-                    {sessionTimeout.timeLeftMs !== null && (
-                      <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
-                        Session Expires in{" "}
-                        {formatCountdown(sessionTimeout.timeLeftMs)}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                  <span
+                    className="block text-xs font-semibold uppercase tracking-[0.16em]"
+                    style={{ color: isAdminUser ? "#F5C518" : "#BBDEFB" }}
+                  >
+                    {headerSubtitle.toUpperCase()}
+                  </span>
+                </span>
+              </Link>
 
-                {/* LOGOUT BUTTON */}
-                <button
-                  type="button"
-                  onClick={clear}
-                  className="rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-600 hover:to-purple-700"
-                >
-                  Logout
-                </button>
+              {/* ACTIONS */}
+              <div className="notranslate flex items-center gap-3" translate="no">
+                <div className="hidden h-10 w-px bg-[#F5C518]/35 md:block" />
+
+                <div className="flex items-center gap-3">
+                  {/* USER CARD */}
+                  <div
+                    className="flex items-center gap-2 rounded-full border border-[#F5C518]/30 px-3 py-1.5 shadow-sm"
+                    style={{ backgroundColor: userChipBgColor }}
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F5C518]/20 text-sm font-semibold text-[#F5C518]">
+                      {userInitials}
+                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-white">
+                        {user?.name ?? "Temple Admin"}
+                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-[#BBDEFB]">
+                        {userRoleLabel}
+                      </span>
+                      {sessionTimeout.timeLeftMs !== null && (
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#BBDEFB]">
+                          Session Expires in{" "}
+                          {formatCountdown(sessionTimeout.timeLeftMs)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* LOGOUT BUTTON */}
+                  <button
+                    type="button"
+                    onClick={clear}
+                    className="rounded-full bg-[#E65100] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#F57C00]"
+                  >
+                    Logout
+                  </button>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* NAVIGATION */}
-          <nav className="flex items-center gap-2 overflow-x-auto rounded-full border border-slate-200 bg-white/85 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-            {navItems
-              .filter((item) => item.show)
-              .map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    clsx(
-                      "relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition",
-                      isActive
-                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-[0_12px_20px_-14px_rgba(79,70,229,0.6)]"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                    )
-                  }
-                >
-                  {item.label}
+        {/* NAVIGATION */}
+        <div style={{ backgroundColor: navMenuRowColor }}>
+          <div className="responsive-layout py-2">
+            <nav
+              className="flex items-center gap-2 overflow-x-auto rounded-full border border-[#F5C518]/35 p-1"
+              style={{ backgroundColor: navMenuRowColor }}
+            >
+              {navItems
+                .filter((item) => item.show)
+                .map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      clsx(
+                        "relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition",
+                        isActive
+                          ? "bg-[#F5C518] text-[#000000] shadow-[0_10px_20px_-16px_rgba(245,197,24,0.8)]"
+                          : navInactiveClass,
+                      )
+                    }
+                  >
+                    {item.label}
 
-                  {/* BADGE */}
-                  {item.badge && (
-                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1 text-xs font-semibold text-orange-600 shadow-sm">
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
-          </nav>
+                    {/* BADGE */}
+                    {item.badge && (
+                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#E65100] px-1 text-xs font-semibold text-white shadow-sm">
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                ))}
+            </nav>
+          </div>
         </div>
       </header>
 

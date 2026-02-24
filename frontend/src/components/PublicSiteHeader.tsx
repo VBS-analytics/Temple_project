@@ -61,22 +61,22 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     'z-30',
     variant === 'overlay'
       ? 'absolute inset-x-0 top-0 bg-transparent text-white'
-      : 'relative sticky top-0 border-b border-amber-200/70 bg-[linear-gradient(90deg,rgba(255,252,245,0.96)_0%,rgba(255,255,255,0.97)_42%,rgba(255,247,231,0.97)_100%)] text-slate-900 shadow-[0_14px_32px_-24px_rgba(120,69,13,0.6)] backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-amber-300/80 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-gradient-to-r after:from-orange-400/75 after:via-amber-400/95 after:to-orange-500/75'
+      : 'relative sticky top-0 border-b border-[#90CAF9] bg-[#E3F2FD]/95 text-black shadow-[0_10px_24px_-20px_rgba(21,101,192,0.35)] backdrop-blur'
   );
   const navLinkClass =
     variant === 'overlay'
       ? 'text-white transition hover:text-[#f4ba1a]'
-      : 'text-slate-700 transition hover:text-[#a24a10]';
-  const dropdownClass = variant === 'overlay' ? 'bg-white/95 text-slate-700' : 'bg-gradient-to-br from-orange-50 to-white text-slate-700 border border-orange-100';
+      : 'text-black transition hover:text-[#1565C0]';
+  const dropdownClass = variant === 'overlay' ? 'bg-white/95 text-slate-700' : 'bg-white text-black border border-[#90CAF9]';
   const buttonBase =
     variant === 'overlay'
       ? 'bg-[#f06f4a] hover:bg-[#ff8a60]'
-      : 'bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700';
+      : 'bg-[#E65100] hover:bg-[#F57C00]';
 
   const brandTextClass =
     variant === 'overlay'
       ? 'text-white/80'
-      : 'text-slate-900/80';
+      : 'text-[#1565C0]';
 
   const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -89,15 +89,15 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const toggleButtonBase =
     variant === 'overlay'
       ? 'border-white/40 text-white hover:bg-white/10'
-      : 'border-orange-200 text-slate-700 hover:bg-orange-50';
+      : 'border-[#90CAF9] text-[#1565C0] hover:bg-white/80';
   const donateButtonClass =
     variant === 'overlay'
       ? 'rounded-full bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-red-700 transition hover:bg-amber-100'
-      : 'rounded-full bg-gradient-to-r from-orange-500 to-amber-600 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:from-orange-600 hover:to-amber-700';
+      : 'rounded-full bg-[#E65100] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-[#F57C00]';
   const patronButtonClass =
     variant === 'overlay'
       ? 'rounded-full border border-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10'
-      : 'rounded-full border border-orange-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-orange-700 transition hover:bg-orange-50';
+      : 'rounded-full border border-[#1565C0] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:bg-blue-50';
 
   useEffect(() => {
     if (!mobileMenuOpen && !patronDialogOpen) {
@@ -188,7 +188,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                           <Link
                             key={child.label}
                             to={toValue}
-                            className="block rounded-lg px-3 py-2 transition hover:bg-indigo-50 hover:text-indigo-900"
+                            className="block rounded-lg px-3 py-2 transition hover:bg-blue-50 hover:text-blue-900"
                           >
                             {child.label}
                           </Link>
@@ -266,15 +266,15 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0" onClick={closeMobileMenu} />
-          <div className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col bg-gradient-to-br from-orange-50 via-white to-amber-50 text-slate-900 shadow-2xl sm:max-w-sm">
-            <div className="flex items-center justify-between border-b border-orange-100 px-6 py-4">
+          <div className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col bg-white text-black shadow-2xl sm:max-w-sm">
+            <div className="flex items-center justify-between border-b border-[#90CAF9] px-6 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Kakkalani Gramam</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#1565C0]">Kakkalani Gramam</p>
               </div>
               <button
                 type="button"
                 onClick={closeMobileMenu}
-                className="rounded-full border border-orange-200 p-2 text-slate-600 transition hover:bg-orange-50"
+                className="rounded-full border border-[#90CAF9] p-2 text-[#1565C0] transition hover:bg-blue-50"
                 aria-label="Close menu"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -296,17 +296,17 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                         to={toValue}
                         onClick={closeMobileMenu}
                         className={clsx(
-                          'block w-full rounded-xl border px-4 py-3 text-sm font-semibold text-slate-700 transition',
+                          'block w-full rounded-xl border px-4 py-3 text-sm font-semibold text-black transition',
                           isNavItemActive(item)
-                            ? 'border-orange-200 bg-orange-50 text-orange-700'
-                            : 'border-orange-100 bg-white/90 hover:border-orange-200 hover:bg-orange-50/70'
+                            ? 'border-[#90CAF9] bg-blue-50 text-[#1565C0]'
+                            : 'border-blue-100 bg-white hover:border-[#90CAF9] hover:bg-blue-50/70'
                         )}
                         aria-current={isNavItemActive(item) ? 'page' : undefined}
                       >
                         {item.label}
                       </Link>
                       {item.children && (
-                        <ul className="mt-2 space-y-1 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-sm font-medium">
+                        <ul className="mt-2 space-y-1 rounded-xl border border-blue-100 bg-blue-50/50 p-2 text-sm font-medium">
                           {item.children.map((child) => {
                             const childTo = resolveLinkTo(child.href, child.type);
                             return (
@@ -314,7 +314,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                                 <Link
                                   to={childTo}
                                   onClick={closeMobileMenu}
-                                  className="block rounded-lg px-3 py-2 text-slate-600 transition hover:bg-white"
+                                  className="block rounded-lg px-3 py-2 text-black transition hover:bg-white"
                                 >
                                   {child.label}
                                 </Link>
@@ -333,7 +333,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={closeMobileMenu}
-                  className="block w-full rounded-full bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:from-orange-600 hover:to-amber-700"
+                  className="block w-full rounded-full bg-[#E65100] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#F57C00]"
                 >
                   Donate Now
                 </a>
@@ -343,7 +343,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                     closeMobileMenu();
                     handlePatronContactClick();
                   }}
-                  className="block w-full rounded-full border border-orange-300 px-4 py-3 text-center text-sm font-semibold text-orange-700 transition hover:bg-orange-50"
+                  className="block w-full rounded-full border border-[#1565C0] px-4 py-3 text-center text-sm font-semibold text-[#1565C0] transition hover:bg-blue-50"
                 >
                   Contact to Become a Patron
                 </button>
@@ -379,23 +379,23 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
           >
             <div className="flex min-h-full items-start justify-center sm:items-center">
               <div
-                className="relative w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl border border-amber-100 bg-gradient-to-br from-[#fffdf8] via-[#fff7ea] to-[#fef3d8] p-5 shadow-[0_30px_80px_-30px_rgba(106,53,7,0.65)] sm:max-h-[calc(100dvh-5rem)]"
+                className="relative w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl border border-[#90CAF9] bg-white p-5 shadow-[0_30px_80px_-30px_rgba(21,101,192,0.55)] sm:max-h-[calc(100dvh-5rem)]"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#1565C0] via-[#1976D2] to-[#1565C0]" />
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.24em] text-orange-700/80">
+                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.24em] text-[#1565C0]">
                       Contact to Become a Patron
                     </p>
-                    <h2 id="patron-contact-title" className="mt-1 text-xl font-semibold text-slate-900">
+                    <h2 id="patron-contact-title" className="mt-1 text-xl font-semibold text-black">
                       Patron Contact Details
                     </h2>
                   </div>
                   <button
                     type="button"
                     onClick={closePatronDialog}
-                    className="rounded-full border border-orange-200 p-2 text-slate-600 transition hover:bg-orange-50 hover:text-slate-900"
+                    className="rounded-full border border-[#EF9A9A] p-2 text-[#C62828] transition hover:bg-[#FFEBEE] hover:text-[#B71C1C]"
                     aria-label="Close patron popup"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -408,7 +408,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   </button>
                 </div>
 
-                <p id="patron-contact-description" className="mt-2 text-sm text-slate-600">
+                <p id="patron-contact-description" className="mt-2 text-sm text-black">
                   Please call any coordinator below for patron enrollment details.
                 </p>
 
@@ -417,13 +417,13 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                     <a
                       key={contact.phoneRaw}
                       href={`tel:${contact.phoneRaw}`}
-                      className="group flex items-center justify-between rounded-xl border border-orange-100 bg-white/80 px-4 py-3 transition hover:border-orange-300 hover:bg-white"
+                      className="group flex items-center justify-between rounded-xl border border-blue-100 bg-white px-4 py-3 transition hover:border-[#90CAF9]"
                     >
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{contact.name}</p>
-                        <p className="text-sm text-slate-600">{contact.phoneDisplay}</p>
+                        <p className="text-sm font-semibold text-black">{contact.name}</p>
+                        <p className="text-sm text-black">{contact.phoneDisplay}</p>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700 transition group-hover:border-orange-300 group-hover:bg-orange-100">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#2E7D32]/35 bg-[#E8F5E9] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#2E7D32] transition group-hover:bg-[#C8E6C9]">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                           <path d="M2 4.5A2.5 2.5 0 014.5 2h1.707a1 1 0 01.95.684l1.2 3.6a1 1 0 01-.24 1.022l-1.27 1.27a11.042 11.042 0 004.848 4.848l1.27-1.27a1 1 0 011.022-.24l3.6 1.2a1 1 0 01.684.95V15.5A2.5 2.5 0 0115.5 18h-1C7.596 18 2 12.404 2 5.5v-1z" />
                         </svg>
@@ -437,7 +437,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   <button
                     type="button"
                     onClick={closePatronDialog}
-                    className="rounded-full bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:from-orange-600 hover:to-amber-700"
+                    className="rounded-full bg-[#C62828] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#B71C1C]"
                   >
                     Close
                   </button>

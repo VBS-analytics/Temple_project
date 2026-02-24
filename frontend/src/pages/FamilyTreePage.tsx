@@ -1351,9 +1351,9 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
 
               <div className="relative">
                 {activeTree?.isAvailable && activeTree.image ? (
-                  <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-4 sm:p-6">
+                  <div className="bg-gradient-to-br from-[#F0F4FF] via-white to-[#F0F4FF] p-4 sm:p-6">
                     <div
-                      className="overflow-auto rounded-2xl border border-slate-700/80 bg-slate-950 shadow-inner shadow-black/40"
+                      className="overflow-auto rounded-2xl border border-[#90CAF9] bg-white shadow-inner shadow-[#1565C0]/10"
                       style={{ maxHeight: "82vh" }}
                     >
                       <div
@@ -1366,7 +1366,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                         <img
                           src={activeTree.image}
                           alt={`Family tree diagram for ${activeTree.subtitle}`}
-                          className="mx-auto block h-auto drop-shadow-[0_20px_35px_rgba(0,0,0,0.45)]"
+                          className="mx-auto block h-auto drop-shadow-[0_12px_22px_rgba(21,101,192,0.18)]"
                           loading="lazy"
                           style={
                             isMobileViewport
@@ -1377,10 +1377,10 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                       </div>
                     </div>
                     {activeTree.description && (
-                      <div className="mt-4 rounded-2xl border border-slate-700/80 bg-slate-900/90 p-4 shadow-sm">
+                      <div className="mt-4 rounded-2xl border border-[#90CAF9] bg-[#E3F2FD] p-4 shadow-sm">
                         <div className="flex items-start gap-3">
-                          <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-orange-500 to-amber-500" />
-                          <p className="text-sm leading-relaxed text-slate-200">
+                          <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-[#1565C0] to-[#E65100]" />
+                          <p className="text-sm leading-relaxed text-black">
                             {activeTree.description}
                           </p>
                         </div>
