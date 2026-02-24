@@ -482,6 +482,25 @@ const AdminMasterPage = () => {
     }
   };
 
+  const handleDeleteSpecialAnnouncement = async (item: SpecialAnnouncementEntry) => {
+    const confirmDelete = window.confirm(`Delete announcement "${item.label}"?`);
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      await api.delete(`/pooja/special-announcements/${item.id}/`);
+      setSpecialAnnouncements((prev) => prev.filter((entry) => entry.id !== item.id));
+      if (editingSpecialId === item.id) {
+        cancelSpecialEdit();
+      }
+      setNotice('Special announcement deleted.');
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      setNotice(`Error deleting special announcement: ${errorMessage}`);
+    }
+  };
+
   const handleAddGothra = async () => {
     const trimmed = newGothraName.trim();
     if (!trimmed) {
@@ -2367,19 +2386,42 @@ const AdminMasterPage = () => {
                               >
                                 Cancel
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSpecialAnnouncement(item)}
+                                className="rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600 transition hover:bg-red-100"
+                              >
+                                Delete
+                              </button>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => startSpecialEdit(item)}
-                              className="rounded-full border border-transparent px-2 py-1 text-[10px] font-semibold text-orange-600"
-                              aria-label={`Edit ${item.label}`}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
-                                <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
-                              </svg>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startSpecialEdit(item)}
+                                className="rounded-full border border-transparent px-2 py-1 text-[10px] font-semibold text-orange-600"
+                                aria-label={`Edit ${item.label}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
+                                  <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSpecialAnnouncement(item)}
+                                className="rounded-full border border-transparent px-2 py-1 text-[10px] font-semibold text-red-600 transition hover:text-red-700"
+                                aria-label={`Delete ${item.label}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M8.5 2a1 1 0 00-.8.4L7 3H4a1 1 0 100 2h.6l.9 10.2A2 2 0 007.49 17h5.02a2 2 0 001.99-1.8L15.4 5H16a1 1 0 100-2h-3l-.7-.6a1 1 0 00-.8-.4h-3zM8 7a1 1 0 112 0v6a1 1 0 11-2 0V7zm4-1a1 1 0 00-1 1v6a1 1 0 102 0V7a1 1 0 00-1-1z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
