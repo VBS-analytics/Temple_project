@@ -918,7 +918,7 @@ const PaymentStatementPage = () => {
   const [cartSnapshots, setCartSnapshots] = useState<CartSnapshotRecord[]>([]);
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
   const [apiPassbookEntries, setApiPassbookEntries] = useState<ApiPassbookEntry[]>([]);
-  const [apiPassbookLoading, setApiPassbookLoading] = useState(false);
+  const [apiPassbookLoading, setApiPassbookLoading] = useState(true);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const [activeParentDonorIdsByMain, setActiveParentDonorIdsByMain] = useState<
@@ -2740,9 +2740,12 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     (sum, group) => sum + group.entries.length,
     0,
   );
-  const isStatementLoading = loading || apiPassbookLoading;
+  const isStatementLoading = loading;
+  const isPassbookRefreshing = apiPassbookLoading;
 
-  const passbookSummaryText = isAdminUser
+  const passbookSummaryText = isPassbookRefreshing
+    ? 'Refreshing statement...'
+    : isAdminUser
     ? adminGroupsToRender.length
       ? `${adminGroupsRecordCount} record${
           adminGroupsRecordCount === 1 ? '' : 's'
@@ -2950,6 +2953,10 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
         </div>
         {isStatementLoading ? (
           <div className="px-4 py-5 text-sm text-slate-500">Loading payment records…</div>
+        ) : isPassbookRefreshing ? (
+          <div className="px-4 py-5 text-sm text-slate-500">
+            Refreshing statement… latest due values will appear shortly.
+          </div>
         ) : error ? (
           <div className="px-4 py-5 text-sm text-rose-600">{error}</div>
         ) : isAdminUser ? (
