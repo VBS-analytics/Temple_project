@@ -50,7 +50,7 @@ const KovilDetailsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 text-slate-900">
       <PublicSiteHeader />
 
       <div className="relative overflow-x-clip">

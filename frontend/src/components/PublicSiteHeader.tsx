@@ -17,7 +17,7 @@ const navLinks: NavLinkItem[] = [
   { label: 'Home', href: '#top', type: 'anchor' },
   { label: 'About Kakkalani Village', href: '/about-kakkalani-village', type: 'route' },
   {
-    label: 'About',
+    label: 'About Us',
     href: '/about',
     type: 'route'
   },
@@ -51,6 +51,8 @@ type PublicSiteHeaderProps = {
 const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const location = useLocation();
   const showLoginCta = location.pathname !== '/login';
+  const visibleNavLinks =
+    location.pathname === '/' ? navLinks.filter((item) => item.label !== 'Home') : navLinks;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [patronDialogOpen, setPatronDialogOpen] = useState(false);
   const handlePatronContactClick = () => {
@@ -153,7 +155,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
           </Link>
 
           <nav className="hidden flex-1 items-center justify-center gap-6 text-sm font-semibold md:flex">
-            {navLinks.map((item) => {
+            {visibleNavLinks.map((item) => {
               if (item.children?.length) {
                 return (
                   <div key={item.label} className="group relative">
@@ -288,7 +290,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
             </div>
             <nav className="flex-1 overflow-y-auto px-4 py-4">
               <ul className="space-y-2">
-                {navLinks.map((item) => {
+                {visibleNavLinks.map((item) => {
                   const toValue = resolveLinkTo(item.href, item.type);
                   return (
                     <li key={item.label}>

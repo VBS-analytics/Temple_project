@@ -298,7 +298,7 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
 
   const containerClasses = embedded
     ? "space-y-6 sm:space-y-8 md:space-y-10 py-4 sm:py-6"
-    : "max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 space-y-6 sm:space-y-10 md:space-y-14 pt-2 pb-10 sm:pt-3 sm:pb-14 lg:pt-4 lg:pb-18";
+    : "max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 space-y-4 sm:space-y-6 md:space-y-8 pt-2 pb-10 sm:pt-3 sm:pb-14 lg:pt-4 lg:pb-18";
 
   const wrapperClass = embedded
     ? "bg-transparent"
@@ -320,10 +320,10 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
         />
 
         <div className={containerClasses}>
-          {!embedded && <EnglishTamilToggle />}
+          {!embedded && <EnglishTamilToggle className="mb-0" />}
 
           {/* ── Hero Stats Section ── */}
-          <section className="space-y-4 sm:space-y-6 md:space-y-8">
+          <section className="space-y-3 sm:space-y-4 md:space-y-6">
             {!embedded && (
               <div className="flex justify-center">
                 <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-100 to-blue-100 px-3 py-1.5 sm:px-4 sm:py-2">
