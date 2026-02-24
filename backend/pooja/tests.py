@@ -133,6 +133,16 @@ class PoojaRegistrationAccessControlTests(TestCase):
             is_staff=True,
         )
         self.option = PoojaOption.objects.create(code="ACC", name="Access Test Pooja")
+        self.any_day_option = PoojaDayOption.objects.create(
+            code="AD",
+            description="Any Day of Month",
+            category=DayOptionCategory.CODE,
+        )
+        self.first_day_option = PoojaDayOption.objects.create(
+            code="FE",
+            description="1st day of English month",
+            category=DayOptionCategory.CODE,
+        )
         self.url = reverse("pooja-registrations-list")
 
     def _payload(self) -> dict[str, object]:
@@ -169,6 +179,40 @@ class PoojaRegistrationAccessControlTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(PoojaRegistration.objects.filter(donor=self.admin).count(), 1)
+
+    def test_any_day_option_keeps_start_date_null_when_not_provided(self):
+        donor_profile = DonorProfile.objects.get(user=self.donor)
+        donor_profile.pooja_registration_access = True
+        donor_profile.save(update_fields=["pooja_registration_access"])
+        self.client.force_authenticate(user=self.donor)
+
+        payload = {
+            "pooja_option": self.option.id,
+            "day_option": self.any_day_option.id,
+            "total_amount": "150.00",
+        }
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        registration = PoojaRegistration.objects.get(donor=self.donor)
+        self.assertIsNone(registration.start_date)
+
+    def test_non_any_day_option_defaults_start_date_to_today_when_missing(self):
+        donor_profile = DonorProfile.objects.get(user=self.donor)
+        donor_profile.pooja_registration_access = True
+        donor_profile.save(update_fields=["pooja_registration_access"])
+        self.client.force_authenticate(user=self.donor)
+
+        payload = {
+            "pooja_option": self.option.id,
+            "day_option": self.first_day_option.id,
+            "total_amount": "150.00",
+        }
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        registration = PoojaRegistration.objects.get(donor=self.donor)
+        self.assertEqual(registration.start_date, timezone.localdate())
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
@@ -407,6 +451,53 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertTrue(feb_entry["day_options"])
         self.assertTrue(any(option["code"] == day_option.code for option in feb_entry["day_options"]))
         self.assertTrue(any(option["description"] == day_option.description for option in feb_entry["day_options"]))
+
+    def test_any_day_without_date_distributes_donors_across_any_day_rows(self):
+        any_day_option = PoojaDayOption.objects.create(
+            code="AD",
+            description="Any Day of Month",
+            category=DayOptionCategory.CODE,
+        )
+        expected_phones: set[str] = set()
+        base_created_at = timezone.make_aware(datetime(2025, 1, 10, 9, 0))
+
+        for index in range(5):
+            donor_phone = f"90000003{index + 10}"
+            donor = User.objects.create_user(
+                phone_number=donor_phone,
+                name=f"Any Day Donor {index + 1}",
+                password="secret",
+            )
+            expected_phones.add(donor_phone)
+            self._create_registration(
+                donor,
+                base_created_at + timedelta(minutes=index),
+                start_date_value=None,
+                day_option=any_day_option,
+            )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        date_to_count: dict[str, int] = {}
+        observed_phones: set[str] = set()
+
+        for entry in payload["dates"]:
+            matching_phones = [
+                donor["phone_number"]
+                for donor in entry["donors"]
+                if donor.get("phone_number") in expected_phones
+            ]
+            if not matching_phones:
+                continue
+            observed_phones.update(matching_phones)
+            date_to_count[entry["date"]] = len(matching_phones)
+            self.assertTrue(any(option.get("code") == "AD" for option in entry["day_options"]))
+
+        self.assertEqual(observed_phones, expected_phones)
+        self.assertGreater(len(date_to_count), 1)
+        self.assertLessEqual(max(date_to_count.values()) - min(date_to_count.values()), 1)
 
     def test_cart_snapshot_donors_are_included(self):
         snapshot_donor = User.objects.create_user(

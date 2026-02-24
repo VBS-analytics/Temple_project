@@ -40,6 +40,18 @@ const normalizeIsoDate = (value?: string | null) => {
   return parsed.toISOString().split('T')[0];
 };
 
+const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
+const ANY_DAY_OPTION_DESCRIPTION = 'any day of month';
+
+const isAnyDayOfMonthCartItem = (item: CartItem): boolean => {
+  const code = (item.dayOptionCode ?? item.day_option_code ?? '').trim().toUpperCase();
+  if (ANY_DAY_OPTION_CODES.has(code)) {
+    return true;
+  }
+  const description = (item.dayOptionDescription ?? item.day_option_description ?? '').trim().toLowerCase();
+  return description === ANY_DAY_OPTION_DESCRIPTION;
+};
+
 export interface RegistrationPayload {
   additional_notes?: string;
   [key: string]: unknown;
@@ -65,7 +77,7 @@ export const buildRegistrationPayload = (
 
   const quantity = Math.max(members.length, 1);
   const registrationDate = item.customDayDate ?? item.bookingDate ?? paymentDate ?? new Date().toISOString();
-  const normalizedStartDate = normalizeIsoDate(registrationDate);
+  const normalizedStartDate = isAnyDayOfMonthCartItem(item) ? null : normalizeIsoDate(registrationDate);
 
   const payload: RegistrationPayload = {
     pooja_option: item.poojaId,

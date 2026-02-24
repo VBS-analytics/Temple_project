@@ -56,23 +56,23 @@ const KovilDetailsPage = () => {
       <div className="relative overflow-x-clip">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-purple-50 via-white to-amber-50"
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-purple-50 via-white to-blue-50"
         />
         <div
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-[-9rem] -z-10 h-[24rem] w-[52rem] -translate-x-1/2 rounded-full bg-purple-200 blur-3xl opacity-30"
         />
 
-        <div className="responsive-layout space-y-6 pt-4 pb-10 lg:pt-6 lg:pb-14">
+        <div className="responsive-layout senior-readable-content space-y-6 pt-4 pb-10 lg:pt-6 lg:pb-14">
           <EnglishTamilToggle />
 
           <div className="flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-100 to-amber-100 px-3 py-1.5 sm:px-4 sm:py-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-100 to-blue-100 px-3 py-1.5 sm:px-4 sm:py-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
               </span>
-              <span className="text-[10px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.3em] uppercase text-orange-800">
+              <span className="text-[10px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.3em] uppercase text-blue-800">
                 About Kovil
               </span>
             </div>
@@ -86,17 +86,17 @@ const KovilDetailsPage = () => {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTabId(tab.id)}
-                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-full px-3 py-2 text-[13px] font-semibold leading-tight transition-all duration-300 sm:px-4 sm:py-2.5 sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 ${
+                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-full px-3 py-2 text-[13px] font-semibold leading-tight transition-all duration-300 sm:px-4 sm:py-2.5 sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     isActive
-                      ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/30"
-                      : "border-2 border-slate-200 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50"
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30"
+                      : "border-2 border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
                   }`}
                 >
                   <span
                     className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-bold ${
                       isActive
                         ? "border-white/40 bg-white/20 text-white"
-                        : "border-orange-200 bg-orange-100 text-orange-700"
+                        : "border-blue-200 bg-blue-100 text-blue-700"
                     }`}
                   >
                     {tab.tag}
@@ -110,6 +110,12 @@ const KovilDetailsPage = () => {
           {renderContent()}
         </div>
       </div>
+
+      <style>{`
+        .senior-readable-content :where(p, li, td) {
+          font-weight: 500;
+        }
+      `}</style>
     </div>
   );
 };
@@ -134,8 +140,8 @@ const GnanambalContent = () => {
               on way to Thevur, via Retta madagadi.
             </p>
 
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
-              <p className="text-sm text-amber-900">
+            <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-4">
+              <p className="text-sm text-blue-900">
                 <strong>Temple Heritage:</strong> Currently, pooja activities are carried out by
                 Shri Manikandan Kurukkal (alias Sridhar). He is from the 5th generation in his family
                 taking care of poojas here. From this, it is estimated that this temple is
@@ -278,8 +284,8 @@ const GnanambalContent = () => {
                 Just behind Lord Shiva sannidhanam is Lord Kasi Viswanathar with goddess Visalakshi.
                 This idol was brought by Koorakattu family from Kasi and installed here.
               </p>
-              <div className="mt-2 p-3 bg-amber-50 rounded border border-amber-200">
-                <p className="text-sm text-amber-900">
+              <div className="mt-2 p-3 bg-blue-50 rounded border border-blue-200">
+                <p className="text-sm text-blue-900">
                   <strong>Unique Feature:</strong> Here Lord Shiva is facing West. It is said you
                   take darshan of Lord Shiva facing west you attain path to moksha. In our village
                   it is unique to have Lord Shiva facing east as well as west.
@@ -370,14 +376,14 @@ const GnanambalContent = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-6 shadow-sm">
-        <h3 className="text-xl font-serif font-bold text-orange-900 mb-4">
+      <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-50 p-6 shadow-sm">
+        <h3 className="text-xl font-serif font-bold text-blue-900 mb-4">
           🕉️ Sacred Story: How Kakkalani Got Its Name (Point 13)
         </h3>
 
         <div className="space-y-4 text-slate-800 leading-relaxed">
-          <div className="rounded-lg bg-white/70 p-4 border border-orange-200">
-            <h4 className="font-semibold text-orange-900 mb-2">The Divine Worship</h4>
+          <div className="rounded-lg bg-white/70 p-4 border border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2">The Divine Worship</h4>
             <p className="text-sm">
               As advised by devas, the negatively afflicted (dosham petra) Rahu and Ketu worshiped
               Lord Shiva at Srikalahasti and got salvation. Devas who worshiped Lord Shiva obtained
@@ -387,8 +393,8 @@ const GnanambalContent = () => {
             </p>
           </div>
 
-          <div className="rounded-lg bg-white/70 p-4 border border-orange-200">
-            <h4 className="font-semibold text-orange-900 mb-2">Temple Significance</h4>
+          <div className="rounded-lg bg-white/70 p-4 border border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2">Temple Significance</h4>
             <p className="text-sm">
               As Rahu, Ketu and Sanishwara Bhagavan worshiped Lord Shiva in our village, Lord Shiva
               and Goddess Parvati were sacredly named as <strong>SriGnanambika Sameda SriKalahastheeswarar</strong> who
@@ -396,8 +402,8 @@ const GnanambalContent = () => {
             </p>
           </div>
 
-          <div className="rounded-lg bg-white/70 p-4 border border-orange-200">
-            <h4 className="font-semibold text-orange-900 mb-2">The Divine Intervention</h4>
+          <div className="rounded-lg bg-white/70 p-4 border border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2">The Divine Intervention</h4>
             <p className="text-sm">
               While Rahu, Ketu and Sanishwara Bhagavan were worshiping Lord Shiva, Lord Shiva appeared
               before them and told them to perform puja with Gangai water for redemption of sins and
@@ -405,8 +411,8 @@ const GnanambalContent = () => {
             </p>
           </div>
 
-          <div className="rounded-lg bg-white/70 p-4 border border-orange-200">
-            <h4 className="font-semibold text-orange-900 mb-2">Mazhai Mariamman's Help</h4>
+          <div className="rounded-lg bg-white/70 p-4 border border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2">Mazhai Mariamman's Help</h4>
             <p className="text-sm">
               Even though there were lot of hurdles to bring Gangai water, Lord Surya with the help
               of our village Goddess Mariamman Ambal brought Ganges water through the sky and poured
@@ -414,8 +420,8 @@ const GnanambalContent = () => {
             </p>
           </div>
 
-          <div className="rounded-lg bg-gradient-to-r from-orange-100 to-amber-100 p-4 border-2 border-orange-300">
-            <h4 className="font-bold text-orange-900 mb-2">🌟 Origin of the Name</h4>
+          <div className="rounded-lg bg-gradient-to-r from-blue-100 to-blue-100 p-4 border-2 border-blue-300">
+            <h4 className="font-bold text-blue-900 mb-2">🌟 Origin of the Name</h4>
             <p className="text-sm font-medium">
               As gangai water was brought and filled into the well, this village was named as
               <strong> Gangaikenni</strong> which over a period of time changed to <strong>Kakkazhani</strong>.
@@ -506,7 +512,7 @@ const AathangaraiPillayarContent = () => {
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500 text-white font-bold text-xs">
                 2010
               </div>
-              <div className="w-0.5 grow bg-gradient-to-b from-green-500 to-orange-500"></div>
+              <div className="w-0.5 grow bg-gradient-to-b from-green-500 to-blue-500"></div>
             </div>
             <div className="pb-8">
               <h4 className="font-semibold text-slate-900">First Kumbabishekam</h4>
@@ -519,7 +525,7 @@ const AathangaraiPillayarContent = () => {
 
           <div className="flex gap-4">
             <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white font-bold text-xs">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white font-bold text-xs">
                 2022
               </div>
             </div>
@@ -529,8 +535,8 @@ const AathangaraiPillayarContent = () => {
                 In the year 2022, the next Kumbabishekam was due and the temple structure was due
                 for major repair.
               </p>
-              <div className="mt-3 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border border-orange-200">
-                <p className="text-sm text-orange-900">
+              <div className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-900">
                   <strong>Community Effort:</strong> This group just started their activity and this
                   temple kumbabishekam was a big project. Same was conducted in grand manner with
                   support of all donors in this group. <strong>Naga Bhagwan</strong> was also installed
@@ -672,8 +678,8 @@ const LakshmiNarayanarTempleContent = () => {
           </div>
 
           <div className="prose prose-slate max-w-none">
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
-              <p className="text-sm text-amber-900">
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+              <p className="text-sm text-blue-900">
                 <strong>📚 History in Progress:</strong> We are still in the process of collecting history about this temple.
               </p>
             </div>
@@ -687,10 +693,10 @@ const LakshmiNarayanarTempleContent = () => {
         <div className="space-y-4">
           <div className="flex gap-4">
             <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white font-bold text-xs">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white font-bold text-xs">
                 2018
               </div>
-              <div className="w-0.5 grow bg-gradient-to-b from-orange-500 to-red-500"></div>
+              <div className="w-0.5 grow bg-gradient-to-b from-blue-500 to-red-500"></div>
             </div>
             <div className="pb-8">
               <h4 className="font-semibold text-slate-900">Last Kumbabishekam</h4>
@@ -947,11 +953,11 @@ const MangalaAzhagarAyyanarKoilContent = () => {
         <h3 className="text-xl font-serif font-bold text-slate-900 mb-4">Temple Features</h3>
 
         <div className="space-y-4">
-          <div className="rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 p-4 border border-orange-200">
+          <div className="rounded-lg bg-gradient-to-br from-blue-50 to-blue-50 p-4 border border-blue-200">
             <div className="flex items-start gap-3">
               <span className="text-2xl">🪔</span>
               <div>
-                <h4 className="font-semibold text-orange-900 mb-2">Saptakanni</h4>
+                <h4 className="font-semibold text-blue-900 mb-2">Saptakanni</h4>
                 <p className="text-sm text-slate-700">
                   In the video you can see <strong>Saptakanni</strong> inside the temple. This is a sacred feature of the temple.
                 </p>
@@ -1044,10 +1050,10 @@ const MangalaAzhagarAyyanarKoilContent = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-6 shadow-sm">
+      <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-50 p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-3">
           <span className="text-3xl">📞</span>
-          <h3 className="text-lg font-serif font-bold text-amber-900">Contact for More Information</h3>
+          <h3 className="text-lg font-serif font-bold text-blue-900">Contact for More Information</h3>
         </div>
         <p className="text-sm text-slate-700 leading-relaxed">
           For detailed information about special poojas like "Palayam" and to schedule worship services,

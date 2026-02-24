@@ -1025,7 +1025,7 @@ const DonorProfile = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                  <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-[#E8F5E9] px-3 py-1.5 text-sm font-semibold text-[#1B5E20] ring-1 ring-inset ring-[#2E7D32]/30">
                     <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
@@ -1044,8 +1044,8 @@ const DonorProfile = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
                       activeTab === tab.id
-                        ? 'border-orange-600 text-orange-600'
-                        : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                        ? 'border-orange-600 text-orange-600 font-black'
+                        : 'border-transparent text-slate-700 hover:border-slate-300 hover:text-slate-900'
                     }`}
                   >
                     <span className="text-base">{tab.icon}</span>
@@ -1073,38 +1073,38 @@ const DonorProfile = () => {
               <div className="space-y-6">
                 {/* Quick Stats */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 p-5 ring-1 ring-blue-200">
+                  <div className="rounded-xl bg-[#E3F2FD] p-5 ring-1 ring-[#90CAF9]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold uppercase text-blue-600">Family Members</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-900">{members.length}</p>
+                        <p className="text-xs font-extrabold uppercase text-black">Family Members</p>
+                        <p className="mt-2 text-[32px] leading-none font-black text-black">{members.length}</p>
                       </div>
                       <div className="text-3xl">👨‍👩‍👧‍👦</div>
                     </div>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 p-5 ring-1 ring-violet-200">
+                  <div className="rounded-xl bg-[#FFF3E0] p-5 ring-1 ring-[#FFCC80]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold uppercase text-violet-600">Registrations</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-900">{visibleRegistrations.length}</p>
+                        <p className="text-xs font-extrabold uppercase text-black">Registrations</p>
+                        <p className="mt-2 text-[32px] leading-none font-black text-black">{visibleRegistrations.length}</p>
                       </div>
                       <div className="text-3xl">📋</div>
                     </div>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 ring-1 ring-emerald-200">
+                  <div className="rounded-xl bg-[#E8F5E9] p-5 ring-1 ring-[#A5D6A7]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold uppercase text-emerald-600">Active Plans</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-900">{recurringPlansToShow.length}</p>
+                        <p className="text-xs font-extrabold uppercase text-black">Active Plans</p>
+                        <p className="mt-2 text-[32px] leading-none font-black text-black">{recurringPlansToShow.length}</p>
                       </div>
                       <div className="text-3xl">🔄</div>
                     </div>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 p-5 ring-1 ring-amber-200">
+                  <div className="rounded-xl bg-[#FFFDE7] p-5 ring-1 ring-[#FFE082]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold uppercase text-amber-600">Monthly Contribution</p>
-                        <p className="mt-2 text-2xl font-bold text-slate-900">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
+                        <p className="text-xs font-extrabold uppercase text-black">Monthly Contribution</p>
+                        <p className="mt-2 text-[32px] leading-none font-black text-black">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
                       </div>
                       <div className="text-3xl">💰</div>
                     </div>
@@ -1143,8 +1143,8 @@ const DonorProfile = () => {
                         <p className="text-xs font-bold uppercase text-slate-500">Phone Number</p>
                         <p className="mt-1 text-base font-semibold text-slate-900">{user.phone_number}</p>
                       </div>
-                      <div className="sm:col-span-2 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
-                        <p className="text-xs font-bold uppercase text-amber-700">Donor Header Text</p>
+                      <div className="sm:col-span-2 rounded-lg bg-[#FFF8E1] p-4 ring-1 ring-[#F5C518]">
+                        <p className="text-xs font-bold uppercase text-[#1565C0]">Donor Header Text</p>
                         <p className="mt-2 text-sm text-slate-900">{resolveText(profile.notes)}</p>
                       </div>
                     </div>

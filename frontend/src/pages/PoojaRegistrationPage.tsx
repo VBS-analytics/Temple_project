@@ -3153,10 +3153,11 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    if (!dateValue) {
-      setFormError('Please choose a booking date to proceed.');
-      return;
-    }
+    const chosenDayOption =
+      !selectedPoojaDayOptionDisabled && selectedDayOptionId ? dayOptionMap.get(selectedDayOptionId) : undefined;
+    const requiresChartDetails = isChartDayOption(chosenDayOption);
+    const isAnyDayOfMonthSelected = isAnyDayOfMonthOption(chosenDayOption);
+    const postPrasadam = prasadamSelectionMap[selectedPooja.id] ?? false;
 
     if (
       selectedPooja.source === 'master' &&
@@ -3168,10 +3169,10 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    const chosenDayOption =
-      !selectedPoojaDayOptionDisabled && selectedDayOptionId ? dayOptionMap.get(selectedDayOptionId) : undefined;
-    const requiresChartDetails = isChartDayOption(chosenDayOption);
-    const postPrasadam = prasadamSelectionMap[selectedPooja.id] ?? false;
+    if (!isAnyDayOfMonthSelected && !dateValue) {
+      setFormError('Please choose a booking date to proceed.');
+      return;
+    }
 
     const memberKeys = normalizedSelectedMembers;
     const membersPayload = memberKeys.map((key, index) => ({
@@ -3286,7 +3287,8 @@ const PoojaRegistrationPage = () => {
       return;
     }
 
-    const recurrenceFields = buildRecurrenceFields(selectedRecurrenceSelection, dateValue);
+    const modalBookingDate = isAnyDayOfMonthSelected ? '' : dateValue;
+    const recurrenceFields = buildRecurrenceFields(selectedRecurrenceSelection, modalBookingDate);
     const item = createCartItem({
       poojaId: selectedPooja.id,
       poojaName: selectedPooja.name,
@@ -3294,7 +3296,7 @@ const PoojaRegistrationPage = () => {
       poojaImage: selectedPooja.image ?? '',
       poojaImageUrl: selectedPooja.image_url,
       amount: selectedPooja.amount,
-      bookingDate: dateValue,
+      bookingDate: modalBookingDate,
       fullName: primaryEntry?.name ?? resolvedName,
       email: resolvedEmail,
       phoneNumber: contactDetails.phoneNumber,
@@ -3362,6 +3364,13 @@ const PoojaRegistrationPage = () => {
         selectedDayOption &&
         isChartDayOption(selectedDayOption),
     );
+
+  const modalUsesAnyDayOption = Boolean(
+    selectedPooja &&
+      !selectedPoojaDayOptionDisabled &&
+      selectedDayOption &&
+      isAnyDayOfMonthOption(selectedDayOption),
+  );
 
   useEffect(() => {
     if (!modalRequiresChartDetails || !selectedPooja) {
@@ -4384,20 +4393,26 @@ const PoojaRegistrationPage = () => {
                         placeholder="Address for correspondence"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Booking Date
-                      </label>
-                      <input
-                        name="bookingDate"
-                        type="date"
-                        min={new Date().toISOString().split('T')[0]}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
-                        value={dateValue}
-                        onChange={(event) => setDateValue(event.target.value)}
-                        required
-                      />
-                    </div>
+                    {!modalUsesAnyDayOption ? (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Booking Date
+                        </label>
+                        <input
+                          name="bookingDate"
+                          type="date"
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                          value={dateValue}
+                          onChange={(event) => setDateValue(event.target.value)}
+                          required
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+                        Booking date is not required for the &quot;Any Day of Month&quot; option.
+                      </div>
+                    )}
                   </>
                 )}
 

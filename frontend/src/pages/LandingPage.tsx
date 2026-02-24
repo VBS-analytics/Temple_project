@@ -60,22 +60,22 @@ const LandingPage = () => {
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Outfit:wght@300;400;500;600&display=swap');
 
         :root {
-          --crimson: #b10026;
-          --crimson-dark: #8e001c;
-          --navy: #05091f;
-          --gold: #c9a84c;
-          --sand: #f0e6d3;        /* warm parchment */
-          --sand-mid: #e8d5b7;    /* mid sand for section bg */
-          --terracotta: #c4703a;  /* warm accent */
-          --earth: #7a5c3a;       /* deep brown text */
-          --card-bg: #fdf8f2;     /* warm off-white cards */
+          --brand-blue: #1565c0;
+          --brand-blue-2: #1976d2;
+          --brand-blue-soft: #e3f2fd;
+          --brand-blue-border: #90caf9;
+          --brand-saffron: #e65100;
+          --brand-saffron-hover: #f57c00;
+          --brand-turmeric: #f5c518;
+          --section-bg: #f0f4ff;
+          --card-bg: #ffffff;
+          --text-main: #000000;
         }
 
         .landing-root {
           font-family: 'Outfit', sans-serif;
-          /* warm sandy parchment — mirrors the map illustration palette */
-          background: var(--sand);
-          color: #2a1f14;
+          background: #ffffff;
+          color: var(--text-main);
         }
 
         /* ── HERO: full-viewport image, all devices ── */
@@ -104,15 +104,15 @@ const LandingPage = () => {
           max-width: min(92vw, 720px);
           padding: 0.85rem 1.4rem;
           border-radius: 999px;
-          border: 1px solid rgba(122, 92, 58, 0.28);
-          background: rgba(255, 248, 236, 0.88);
-          color: #7a2c12;
+          border: 1px solid rgba(144, 202, 249, 0.9);
+          background: rgba(255, 255, 255, 0.9);
+          color: #000000;
           font-family: 'Cormorant Garamond', serif;
           font-size: clamp(1.1rem, 2.2vw, 2rem);
           font-weight: 600;
           letter-spacing: 0.04em;
           text-align: center;
-          box-shadow: 0 12px 30px -18px rgba(0, 0, 0, 0.55);
+          box-shadow: 0 12px 30px -18px rgba(21, 101, 192, 0.5);
           backdrop-filter: blur(1.5px);
           line-height: 1.2;
           pointer-events: none;
@@ -120,8 +120,7 @@ const LandingPage = () => {
 
         /* ── HOW TO REACH ── */
         .reach-section {
-          /* alternating warm band: slightly deeper sand with a subtle noise feel */
-          background: linear-gradient(160deg, #ede0c8 0%, #e8d4b0 50%, #eddcc6 100%);
+          background: var(--section-bg);
           padding: 4rem 0 5.5rem;
           position: relative;
         }
@@ -132,7 +131,7 @@ const LandingPage = () => {
           position: absolute;
           top: 0; left: 0; right: 0;
           height: 4px;
-          background: linear-gradient(to right, var(--terracotta), var(--gold), var(--crimson));
+          background: linear-gradient(to right, var(--brand-blue), var(--brand-saffron), var(--brand-blue-2));
         }
 
         .reach-inner {
@@ -154,7 +153,7 @@ const LandingPage = () => {
           justify-content: center;
           width: 28px;
           height: 28px;
-          background: var(--crimson);
+          background: var(--brand-blue);
           border-radius: 50%;
           color: #fff;
           flex-shrink: 0;
@@ -165,13 +164,13 @@ const LandingPage = () => {
           font-weight: 700;
           letter-spacing: 0.3em;
           text-transform: uppercase;
-          color: var(--crimson);
+          color: var(--brand-blue);
         }
 
         .reach-divider {
           flex: 1;
           height: 1px;
-          background: linear-gradient(to right, rgba(177,0,38,0.35), rgba(177,0,38,0.05));
+          background: linear-gradient(to right, rgba(21, 101, 192, 0.4), rgba(21, 101, 192, 0.08));
         }
 
         .route-grid {
@@ -182,16 +181,15 @@ const LandingPage = () => {
 
         .route-card {
           position: relative;
-          /* warm card with a subtle parchment tint */
           background: var(--card-bg);
-          border: 1px solid rgba(122, 92, 58, 0.18);
+          border: 1px solid var(--brand-blue-border);
           border-radius: 1.1rem;
           padding: 1.5rem 1.6rem;
           display: flex;
           flex-direction: column;
           gap: 0.55rem;
           overflow: hidden;
-          transition: box-shadow 0.22s, transform 0.18s, border-color 0.22s;
+          transition: box-shadow 0.22s, transform 0.18s, border-color 0.22s, background-color 0.22s;
         }
 
         /* animated top bar on hover */
@@ -200,16 +198,17 @@ const LandingPage = () => {
           position: absolute;
           top: 0; left: 0; right: 0;
           height: 3px;
-          background: linear-gradient(to right, var(--crimson), var(--terracotta));
+          background: linear-gradient(to right, var(--brand-blue), var(--brand-saffron));
           transform: scaleX(0);
           transform-origin: left;
           transition: transform 0.25s ease;
         }
 
         .route-card:hover {
-          box-shadow: 0 16px 40px -10px rgba(122, 92, 58, 0.22);
+          box-shadow: 0 16px 40px -10px rgba(21, 101, 192, 0.2);
           transform: translateY(-2px);
-          border-color: rgba(122, 92, 58, 0.32);
+          border-color: var(--brand-blue);
+          background-color: #ffffff;
         }
 
         .route-card:hover::after {
@@ -221,13 +220,13 @@ const LandingPage = () => {
           font-weight: 700;
           letter-spacing: 0.22em;
           text-transform: uppercase;
-          color: var(--crimson);
+          color: var(--brand-blue);
         }
 
         .route-title {
           font-size: 0.875rem;
-          font-weight: 500;
-          color: #2a1f14;
+          font-weight: 700;
+          color: #000000;
           line-height: 1.55;
           margin: 0;
         }
@@ -237,10 +236,10 @@ const LandingPage = () => {
           align-items: center;
           gap: 0.3rem;
           font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--earth);
-          /* warm sand pill instead of cold grey */
-          background: rgba(122, 92, 58, 0.1);
+          font-weight: 700;
+          color: #000000;
+          background: var(--brand-blue-soft);
+          border: 1px solid var(--brand-blue-border);
           padding: 0.25rem 0.65rem;
           border-radius: 999px;
           width: fit-content;
@@ -254,14 +253,14 @@ const LandingPage = () => {
           padding-top: 0.75rem;
           font-size: 0.78rem;
           font-weight: 600;
-          color: var(--crimson);
+          color: var(--brand-saffron);
           text-decoration: none;
-          border-top: 1px solid rgba(122,92,58,0.15);
+          border-top: 1px solid rgba(144, 202, 249, 0.7);
           transition: gap 0.18s, color 0.18s;
         }
         .route-link:hover {
           gap: 0.55rem;
-          color: var(--crimson-dark);
+          color: var(--brand-saffron-hover);
         }
 
         .route-pending {
@@ -271,14 +270,14 @@ const LandingPage = () => {
           margin-top: 0.5rem;
           padding-top: 0.75rem;
           font-size: 0.78rem;
-          font-weight: 500;
-          color: #a08060;
-          border-top: 1px solid rgba(122,92,58,0.15);
+          font-weight: 700;
+          color: var(--brand-blue);
+          border-top: 1px solid rgba(144, 202, 249, 0.7);
         }
 
         /* ── FOOTER ── */
         .footer {
-          background: var(--navy);
+          background: var(--brand-blue);
           padding: 2.25rem 2rem;
         }
 
@@ -294,22 +293,22 @@ const LandingPage = () => {
         .footer-brand {
           font-family: 'Cormorant Garamond', serif;
           font-size: 1rem;
-          font-weight: 500;
+          font-weight: 600;
           letter-spacing: 0.18em;
           text-transform: uppercase;
-          color: var(--gold);
+          color: var(--brand-turmeric);
         }
 
         .footer-rule {
           width: 40px;
           height: 1px;
-          background: rgba(201,168,76,0.4);
+          background: rgba(245, 197, 24, 0.55);
           margin: 0.2rem 0;
         }
 
         .footer-copy {
           font-size: 0.75rem;
-          color: rgba(255,255,255,0.35);
+          color: rgba(255,255,255,0.9);
           letter-spacing: 0.03em;
         }
 
@@ -320,15 +319,7 @@ const LandingPage = () => {
       `}</style>
 
       <div id="top" className="landing-root">
-        {/*
-          Switched from variant="overlay" to variant="solid".
-          "overlay" was injecting separate colour classes for the brand name
-          (blue) and nav links (gold/yellow), creating the visual inconsistency.
-          "solid" keeps a single unified colour palette across all header elements.
-          
-          ⚠️  If PublicSiteHeader doesn't accept variant="solid", share the
-          component code and I'll patch the colour logic there directly.
-        */}
+        {/* Keep the shared public header in the solid mode for consistent branding. */}
         <PublicSiteHeader variant="solid" />
 
         <main>

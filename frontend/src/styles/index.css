@@ -2,6 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --temple-primary: #e65100;
+  --temple-primary-hover: #f57c00;
+  --temple-nav-top: #1565c0;
+  --temple-nav-menu: #1976d2;
+  --temple-admin-nav-top: #1565c0;
+  --temple-admin-nav-menu: #1976d2;
+  --temple-active-tab: #f5c518;
+  --temple-active-tab-text: #000000;
+  --temple-nav-text: #ffffff;
+  --temple-nav-subtext: #bbdefb;
+  --temple-logo-badge: #f5c518;
+  --temple-page-bg: #ffffff;
+  --temple-section-bg: #f0f4ff;
+  --temple-card-bg: #ffffff;
+  --temple-card-shadow: rgba(21, 101, 192, 0.1);
+  --temple-card-tint: #fff8e1;
+  --temple-heading: #000000;
+  --temple-text: #000000;
+  --temple-muted: #000000;
+  --temple-border: #90caf9;
+  --temple-soft-bg: #fff3e0;
+  --temple-danger: #c62828;
+  --temple-access-no-bg: #ffebee;
+  --temple-verified: #1b5e20;
+  --temple-verified-bg: #e8f5e9;
+}
+
 /* Hide default Google Translate UI artifacts */
 .goog-te-banner-frame.skiptranslate,
 #goog-gt-tt,
@@ -15,11 +43,50 @@ body {
 }
 
 body {
-  @apply min-h-screen text-slate-800 font-sans;
+  @apply min-h-screen text-slate-800 font-sans bg-slate-50;
+  background-color: var(--temple-page-bg);
+  color: var(--temple-text);
+}
+
+::placeholder {
+  color: var(--temple-muted);
+  opacity: 1;
 }
 
 a {
   @apply text-brand-600 hover:text-brand-700;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--temple-heading);
+  font-weight: 900;
+}
+
+/* Global readability boost for senior users */
+:where(p, li, td, th, label, dt, dd) {
+  font-weight: 700;
+}
+
+main :where(p.text-xs.font-bold.uppercase, p.text-xs.font-semibold.uppercase, label.text-xs.font-bold.uppercase, label.text-xs.font-semibold.uppercase) {
+  color: #1565c0;
+  font-weight: 800;
+}
+
+.shadow-sm {
+  box-shadow: 0 12px 26px -22px var(--temple-card-shadow), 0 2px 4px rgba(21, 101, 192, 0.06);
+}
+
+.shadow {
+  box-shadow: 0 14px 28px -22px var(--temple-card-shadow), 0 4px 8px rgba(21, 101, 192, 0.08);
+}
+
+.shadow-md {
+  box-shadow: 0 18px 34px -24px var(--temple-card-shadow), 0 6px 12px rgba(21, 101, 192, 0.1);
 }
 
 .flower-petal {

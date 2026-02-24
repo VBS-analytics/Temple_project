@@ -24,6 +24,19 @@ from accounts.models import UserRole
 
 from .services.recurrence import create_plan_from_registration, get_plan_due_summary
 
+ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
+ANY_DAY_OPTION_DESCRIPTION = "any day of month"
+
+
+def _is_any_day_option(option: PoojaDayOption | None) -> bool:
+    if option is None:
+        return False
+    code = (option.code or "").strip().upper()
+    if code in ANY_DAY_OPTION_CODES:
+        return True
+    description = (option.description or "").strip().lower()
+    return description == ANY_DAY_OPTION_DESCRIPTION
+
 
 class PoojaOptionSerializer(serializers.ModelSerializer):
     parent_id = serializers.PrimaryKeyRelatedField(
@@ -229,13 +242,19 @@ class PoojaRegistrationSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        """Ensure start_date is always set to prevent NULL values in database."""
+        """Default start_date only for non-any-day registrations on create."""
         from django.utils import timezone
-        
-        # If start_date is not provided, default to today
+
+        if self.instance is not None:
+            return attrs
+
         if attrs.get("start_date") is None:
-            attrs["start_date"] = timezone.localdate()
-        
+            day_option = attrs.get("day_option")
+            if _is_any_day_option(day_option):
+                attrs["start_date"] = None
+            else:
+                attrs["start_date"] = timezone.localdate()
+
         return attrs
 
     @transaction.atomic

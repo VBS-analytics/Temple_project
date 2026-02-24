@@ -284,14 +284,14 @@ const EnglishTamilToggle: React.FC = () => {
 
   return (
     <div className="notranslate mb-4 flex justify-center" translate="no">
-      <div className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-white p-1 shadow-sm">
+      <div className="inline-flex items-center gap-1 rounded-full border border-[#90CAF9] bg-white p-1 shadow-sm">
         <button
           type="button"
           onClick={() => setLanguage("en")}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
             language === "en"
-              ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white"
-              : "text-slate-700 hover:bg-orange-50"
+              ? "bg-[#F5C518] text-black"
+              : "text-[#1565C0] hover:bg-[#E3F2FD]"
           }`}
         >
           {labels.en}
@@ -301,8 +301,8 @@ const EnglishTamilToggle: React.FC = () => {
           onClick={() => setLanguage("ta")}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
             language === "ta"
-              ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white"
-              : "text-slate-700 hover:bg-orange-50"
+              ? "bg-[#F5C518] text-black"
+              : "text-[#1565C0] hover:bg-[#E3F2FD]"
           }`}
         >
           {labels.ta}
