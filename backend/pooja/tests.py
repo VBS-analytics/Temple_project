@@ -284,6 +284,11 @@ class PoojaDayOptionCalendarViewTests(TestCase):
         def _compress_consecutive_dates(self, occurrences):
             return occurrences
 
+        def _tithi_on(self, day, hour=6, minute=0):
+            if day == date(2025, 1, 25) and hour == 12:
+                return 15
+            return 14
+
         def _is_tamil_month_start(self, day):
             return day.day == 15
 
@@ -691,16 +696,23 @@ class PoojaDonorCalendarViewTests(TestCase):
             def _compress_consecutive_dates(self, occurrences):
                 return occurrences
 
+            def _tithi_on(self, day, hour=6, minute=0):
+                if hour == 9 and day in (date(2026, 1, 10), date(2026, 1, 25)):
+                    return 23
+                return 22
+
         mock_service_factory.return_value = DummyService()
         donor = User.objects.create_user(
             phone_number="9000000020",
             name="Multi Occurrence Donor",
             password="secret",
         )
-        day_option = PoojaDayOption.objects.create(
+        day_option, _ = PoojaDayOption.objects.get_or_create(
             code="AST",
-            description="Second Ashtami",
-            category="code",
+            defaults={
+                "description": "Second Ashtami",
+                "category": "code",
+            },
         )
         registration_date = date(2026, 1, 10)
         tz_datetime = timezone.make_aware(datetime(2026, 1, 6, 9, 0))
@@ -720,6 +732,56 @@ class PoojaDonorCalendarViewTests(TestCase):
         twentyfifth_entry = next(entry for entry in payload["dates"] if entry["date"] == "2026-01-25")
         self.assertEqual(twentyfifth_entry["donor_names"], "Multi Occurrence Donor")
         self.assertEqual(twentyfifth_entry["donor_phones"], "9000000020")
+
+    @patch("pooja.views.get_calendar_service")
+    def test_canonical_recurring_plan_ignores_stale_payload_occurrences(self, mock_service_factory):
+        class DummyService:
+            def _tithi_on(self, day, hour=6, minute=0):
+                if day == date(2026, 2, 14) and hour == 18:
+                    return 28
+                return 29
+
+        mock_service_factory.return_value = DummyService()
+        donor = User.objects.create_user(
+            phone_number="9000000024",
+            name="Canonical Plan Donor",
+            password="secret",
+        )
+        day_option, _ = PoojaDayOption.objects.get_or_create(
+            code="PRD",
+            defaults={
+                "description": "Pradosham (Trayodashi)",
+                "category": "code",
+            },
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 2, 14),
+            next_occurrence=date(2026, 2, 15),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "dayOptionOccurrences": [
+                    {"date": "2026-02-14", "label": "Saturday, 14 Feb 2026"},
+                    {"date": "2026-02-28", "label": "Saturday, 28 Feb 2026"},
+                ]
+            },
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "2"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        feb_14 = next(entry for entry in payload["dates"] if entry["date"] == "2026-02-14")
+        feb_28 = next(entry for entry in payload["dates"] if entry["date"] == "2026-02-28")
+
+        self.assertIn("Canonical Plan Donor", feb_14["donor_names"])
+        self.assertNotIn("Canonical Plan Donor", feb_28["donor_names"])
+        self.assertTrue(any(option.get("code") == "PRD" for option in feb_14["day_options"]))
+        self.assertFalse(any(option.get("code") == "PRD" for option in feb_28["day_options"]))
 
 
 class CalendarCodeAliasTests(SimpleTestCase):
@@ -788,9 +850,63 @@ class TithiSearchBehaviourTests(SimpleTestCase):
         result = TempleCalendarService._next_tithi(service, date(2025, 10, 17), (19,))
         self.assertEqual(result, date(2025, 11, 8))
 
+    @patch.object(TempleCalendarService, "_tithi_on")
+    def test_next_tithi_prefers_later_day_for_adjacent_day_span(self, mock_tithi_on):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+
+        def fake_tithi(day, hour=6, minute=0):
+            if day == date(2026, 2, 16):
+                return 30 if hour == 18 else 29
+            if day == date(2026, 2, 17):
+                return 30 if hour in (6, 9, 12) else 29
+            return 29
+
+        mock_tithi_on.side_effect = fake_tithi
+
+        result = TempleCalendarService._next_tithi(service, date(2026, 2, 1), (30,))
+        self.assertEqual(result, date(2026, 2, 17))
+
+    def test_compress_consecutive_dates_keeps_later_day(self):
+        dates = [
+            date(2026, 2, 16),
+            date(2026, 2, 17),
+            date(2026, 2, 20),
+            date(2026, 2, 21),
+        ]
+        result = TempleCalendarService._compress_consecutive_dates(dates)
+        self.assertEqual(result, [date(2026, 2, 17), date(2026, 2, 21)])
+
+
+class NakshatraAssignmentTests(SimpleTestCase):
+    @patch.object(TempleCalendarService, "_sunrise_time_on")
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_nakshatra_on_uses_sunrise_time(self, mock_nakshatra_index_at, mock_sunrise_time):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 3, 1)
+        mock_sunrise_time.return_value = (7, 33)
+        mock_nakshatra_index_at.return_value = 7
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 7)
+        mock_sunrise_time.assert_called_once_with(target_day)
+        mock_nakshatra_index_at.assert_called_once_with(target_day, hour=7, minute=33)
+
+    @patch.object(TempleCalendarService, "_moon_sidereal_longitude")
+    def test_nakshatra_index_applies_alignment_offset(self, mock_moon_sidereal_longitude):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        service._NAKSHATRA_ALIGNMENT_OFFSET_DEGREES = 0.43
+        # Without offset this remains in Kettai (index 17); with offset it moves to Moolam (index 18).
+        mock_moon_sidereal_longitude.return_value = 239.69
+
+        result = TempleCalendarService._nakshatra_index_at(service, date(2026, 4, 8), hour=6, minute=0)
+
+        self.assertEqual(result, 18)
+        mock_moon_sidereal_longitude.assert_called_once_with(date(2026, 4, 8), hour=6, minute=0)
+
 
 class PradoshamOccurrenceTests(SimpleTestCase):
-    @patch.object(TempleCalendarService, "_upcoming_pradosham_occurrences")
+    @patch.object(TempleCalendarService, "_upcoming_tithi_series_at_reference_time")
     def test_pradosham_branch_returns_upcoming_dates(self, mock_helper):
         service = TempleCalendarService.__new__(TempleCalendarService)
         mock_helper.return_value = [date(2025, 1, 2), date(2025, 1, 17)]
@@ -808,6 +924,28 @@ class PradoshamOccurrenceTests(SimpleTestCase):
         )
 
 
+class CanonicalReferenceTimeTests(SimpleTestCase):
+    @patch.object(TempleCalendarService, "_upcoming_tithi_series_at_reference_time")
+    def test_ashtami_uses_morning_reference_time(self, mock_helper):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_helper.return_value = [date(2026, 3, 11), date(2026, 3, 26)]
+
+        result = TempleCalendarService.next_occurrence(service, "AST", date(2026, 3, 1))
+
+        self.assertEqual(result.date, date(2026, 3, 11))
+        mock_helper.assert_called_once_with(date(2026, 3, 1), targets=(8, 23), hour=9, count=2)
+
+    @patch.object(TempleCalendarService, "_next_tithi_at_reference_time")
+    def test_sankata_chaturthi_uses_evening_reference_time(self, mock_next):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_next.return_value = date(2026, 3, 6)
+
+        result = TempleCalendarService.next_occurrence(service, "SC", date(2026, 3, 1))
+
+        self.assertEqual(result.date, date(2026, 3, 6))
+        mock_next.assert_called_once_with(date(2026, 3, 1), targets=(19,), hour=21)
+
+
 class PradoshamHelperTests(SimpleTestCase):
     def test_helper_skips_duplicate_days(self):
         service = TempleCalendarService.__new__(TempleCalendarService)
@@ -822,7 +960,7 @@ class PradoshamHelperTests(SimpleTestCase):
         with patch.object(TempleCalendarService, "_next_tithi", fake_next_tithi):
             occurrences = TempleCalendarService._upcoming_pradosham_occurrences(service, date(2025, 1, 10))
 
-        self.assertEqual(occurrences, [date(2025, 1, 15), date(2025, 2, 1)])
+        self.assertEqual(occurrences, [date(2025, 1, 16), date(2025, 2, 1)])
 
 
 class RecurringPoojaPlanPauseTests(TestCase):

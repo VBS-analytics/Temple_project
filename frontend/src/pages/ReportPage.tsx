@@ -490,6 +490,11 @@ const DATABASE_BUTTON_INFO = [
       'Downloads registrations, cart snapshots, and a donor-by-day-option workbook for reconciliation.',
   },
   {
+    label: 'Ubhayam Maste Report',
+    description:
+      'Downloads the deduplicated Ubhayam report from the database with donor ID, name, phone, and pooja day option.',
+  },
+  {
     label: 'Donor Details',
     description:
       'Provides a compact list of temple donor IDs, names, and phone numbers for quick reference.',
@@ -1091,6 +1096,7 @@ const ReportPage = () => {
   const user = useAuthStore((state) => state.user);
   const [exportingDonorDatabase, setExportingDonorDatabase] = useState(false);
   const [exportingDatabaseBackup, setExportingDatabaseBackup] = useState(false);
+  const [exportingUbhayamMasteReport, setExportingUbhayamMasteReport] = useState(false);
   const [exportingDonorDetails, setExportingDonorDetails] = useState(false);
   const [exportingPoojaRegistrationDatabase, setExportingPoojaRegistrationDatabase] = useState(false);
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
@@ -1288,6 +1294,58 @@ const ReportPage = () => {
       setExportingDatabaseBackup(false);
     }
   }, [ensureReportDownloadAccess, exportingDatabaseBackup]);
+
+  const handleUbhayamMasteReportDownload = useCallback(async () => {
+    if (exportingUbhayamMasteReport) return;
+    if (!ensureReportDownloadAccess()) return;
+    setExportError(null);
+    setExportingUbhayamMasteReport(true);
+    try {
+      const response = await api.get<Blob>('reports/ubhayam-master-report-download/', {
+        responseType: 'blob',
+      });
+      const blobData = response.data;
+      if (!(blobData instanceof Blob)) {
+        throw new Error('Received an invalid Ubhayam Maste report file.');
+      }
+
+      const contentDispositionHeader =
+        response.headers['content-disposition'] ?? response.headers['Content-Disposition'] ?? null;
+      const headerFilename = extractFilenameFromContentDisposition(contentDispositionHeader);
+      const fallbackFilename = `ubhayam-maste-report-${formatFilenameDate(new Date())}.xlsx`;
+      const rawFilename = headerFilename ?? fallbackFilename;
+      const downloadFilename = sanitizeFilename(rawFilename) || fallbackFilename;
+
+      triggerBlobDownload(blobData, downloadFilename);
+    } catch (error) {
+      console.error('Failed to download Ubhayam Maste report', error);
+      let detail: string | null = null;
+      const axiosError = error as AxiosError<{ detail?: string | null }>;
+      const responseData = axiosError?.response?.data;
+      if (responseData instanceof Blob) {
+        try {
+          const text = await responseData.text();
+          try {
+            const parsed = JSON.parse(text);
+            detail = parsed?.detail ?? parsed?.message ?? text;
+          } catch {
+            detail = text;
+          }
+        } catch {
+          // ignore silently
+        }
+      } else if (responseData && typeof responseData === 'object') {
+        detail = (responseData as { detail?: string | null }).detail ?? null;
+      }
+      if (detail) {
+        setExportError(detail);
+      } else {
+        setExportError('Unable to download the Ubhayam Maste report right now.');
+      }
+    } finally {
+      setExportingUbhayamMasteReport(false);
+    }
+  }, [ensureReportDownloadAccess, exportingUbhayamMasteReport]);
 
   const handlePoojaRegistrationDatabaseDownload = useCallback(async () => {
     if (exportingPoojaRegistrationDatabase) return;
@@ -1805,6 +1863,19 @@ const ReportPage = () => {
                     </div>
                     <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
                       {exportingDonorDatabase ? 'Preparing…' : 'Donor Database'}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={handleUbhayamMasteReportDownload}
+                    disabled={exportingUbhayamMasteReport}
+                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {exportingUbhayamMasteReport ? <LoadingSpinner /> : <DownloadIcon />}
+                    </div>
+                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                      {exportingUbhayamMasteReport ? 'Preparing…' : 'Ubhayam Maste Report'}
                     </p>
                   </button>
 

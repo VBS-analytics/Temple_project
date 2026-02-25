@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
 from itertools import count
 import calendar
+import re
 from typing import Any
 
 from django.db import transaction
@@ -87,7 +88,10 @@ UBHAYAM_EXCLUDED_POOJA_NAMES = {
 }
 POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = "Please contact Admin for the pooja registration"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
-ANY_DAY_OPTION_DESCRIPTION = "any day of month"
+ANY_DAY_OPTION_DESCRIPTIONS = {
+    "any day of month",
+    "any day of the month",
+}
 
 
 def _ensure_report_download_access(user: User) -> None:
@@ -124,8 +128,12 @@ def _is_any_day_option(code: str | None, description: str | None) -> bool:
     normalized_code = (code or "").strip().upper()
     if normalized_code in ANY_DAY_OPTION_CODES:
         return True
-    normalized_description = (description or "").strip().lower()
-    return normalized_description == ANY_DAY_OPTION_DESCRIPTION
+    normalized_description = re.sub(
+        r"\s+",
+        " ",
+        re.sub(r"[^a-z0-9 ]", " ", (description or "").strip().lower()),
+    ).strip()
+    return normalized_description in ANY_DAY_OPTION_DESCRIPTIONS
 
 
 def _credit_custom_balance(user, amount: Decimal):
@@ -1147,6 +1155,25 @@ def _collect_tithi_dates_in_range(service: TempleCalendarService, start: date, e
     return service._compress_consecutive_dates(occurrences)
 
 
+def _collect_tithi_dates_at_hour(
+    service: TempleCalendarService,
+    start: date,
+    end: date,
+    targets: tuple[int, ...],
+    *,
+    hour: int,
+    minute: int = 0,
+) -> list[date]:
+    wanted = set(targets)
+    matches: list[date] = []
+    cursor = start
+    while cursor <= end:
+        if service._tithi_on(cursor, hour=hour, minute=minute) in wanted:
+            matches.append(cursor)
+        cursor += timedelta(days=1)
+    return matches
+
+
 def _collect_tamil_month_starts(service: TempleCalendarService, start: date, end: date) -> list[date]:
     dates: list[date] = []
     cursor = start
@@ -1171,20 +1198,23 @@ def _collect_dates_for_canonical(service: TempleCalendarService, canonical: str,
     if canonical == "weekly_sunday":
         return service._weekday_window(start, end, weekday=6)
     if canonical == "sashti":
-        return _collect_tithi_dates_in_range(service, start, end, targets=(6, 21))
+        # Sashti follows the panchang midday tithi shown on temple calendars.
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(6, 21), hour=12)
     if canonical == "second_ashtami":
-        occurrences = service._upcoming_ashtami_window(start)
-        return [occurrence_date for occurrence_date in occurrences if start <= occurrence_date <= end]
+        # 2-Ashtami aligns with morning panchang assignment.
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(8, 23), hour=9)
     if canonical == "pradosham":
-        return _collect_tithi_dates_in_range(service, start, end, targets=(13, 28))
+        # Pradosham requires Trayodashi at Pradosha kala (sunset), not just any daytime match.
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(13, 28), hour=18)
     if canonical == "pournami":
-        return _collect_tithi_dates_in_range(service, start, end, targets=(15,))
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(15,), hour=12)
     if canonical == "amavasya":
-        return _collect_tithi_dates_in_range(service, start, end, targets=(30,))
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(30,), hour=12)
     if canonical == "sankata_chaturthi":
-        return _collect_tithi_dates_in_range(service, start, end, targets=(19,))
+        # Sankatahara Chaturthi is observed against moonrise/evening tithi.
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(19,), hour=21)
     if canonical == "chaturthi":
-        return _collect_tithi_dates_in_range(service, start, end, targets=(4,))
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(4,), hour=12)
     return []
 
 
@@ -1256,6 +1286,7 @@ class PoojaDayOptionCalendarView(APIView):
         return Response({"year": year, "month": month, "dates": payload_dates})
 
 
+@method_decorator(cache_page(60 * 60), name="dispatch")
 class TamilNakshatraCalendarView(APIView):
     permission_classes = (IsAdminRole,)
 
@@ -1318,6 +1349,11 @@ class PoojaDonorCalendarView(APIView):
         debug_mode = request.query_params.get("debug") == "1"
         debug_info: list[dict[str, Any]] = [] if debug_mode else []
         snapshot_option_counter = count(-1, -1)
+        # Pre-fetch all PoojaDayOption records once to avoid N+1 queries in
+        # build_snapshot_day_option_payload and any-day canonical-options loading.
+        _all_day_options = list(PoojaDayOption.objects.order_by("display_order", "id"))
+        all_day_options_by_id: dict[int, PoojaDayOption] = {opt.id: opt for opt in _all_day_options}
+        all_day_options_by_code: dict[str, PoojaDayOption] = {opt.code: opt for opt in _all_day_options}
         normalized_excluded_codes = {code.strip().upper() for code in UBHAYAM_EXCLUDED_POOJA_CODES}
         normalized_excluded_names = {name.strip().lower() for name in UBHAYAM_EXCLUDED_POOJA_NAMES}
         excluded_option_ids = set(
@@ -1407,11 +1443,14 @@ class PoojaDonorCalendarView(APIView):
             option = None
             option_id = item.get("dayOptionId")
             if option_id:
-                option = PoojaDayOption.objects.filter(id=option_id).first()
+                try:
+                    option = all_day_options_by_id.get(int(option_id))
+                except (TypeError, ValueError):
+                    pass
             if option is None:
                 day_option_code = item.get("dayOptionCode")
                 if day_option_code:
-                    option = PoojaDayOption.objects.filter(code=day_option_code).first()
+                    option = all_day_options_by_code.get(day_option_code)
             if option is not None:
                 return build_day_option_payload(option)
             raw_code = item.get("dayOptionCode") or ""
@@ -1478,32 +1517,40 @@ class PoojaDonorCalendarView(APIView):
             if registration_date is None:
                 continue
 
-            add_donor_for_date(donor.id, donor_payload, registration_date, day_option_payload)
-            if day_option:
-                canonical_code = TempleCalendarService._canonicalize_code(day_option.code or "")
-                if canonical_code in CALENDAR_DAY_OPTION_CANONICAL_CODES:
-                    occurrences = canonical_occurrences_cache.get(canonical_code)
-                    if occurrences is None:
-                        occurrences = _collect_dates_for_canonical(service, canonical_code, first_day, last_day)
-                        canonical_occurrences_cache[canonical_code] = occurrences
-                    anchor_date = registration_date or (
-                        registration.created_at.date() if registration.created_at else first_day
+            canonical_code = (
+                TempleCalendarService._canonicalize_code(day_option.code or "") if day_option else None
+            )
+            is_canonical = bool(canonical_code and canonical_code in CALENDAR_DAY_OPTION_CANONICAL_CODES)
+            # For canonical day options (sashti, pournami, pradosham, etc.) the day option label
+            # must only appear on the actual canonical occurrence dates, not on the donor's
+            # registration_date which may fall on a completely different date type.
+            add_donor_for_date(
+                donor.id, donor_payload, registration_date,
+                None if is_canonical else day_option_payload,
+            )
+            if is_canonical:
+                occurrences = canonical_occurrences_cache.get(canonical_code)
+                if occurrences is None:
+                    occurrences = _collect_dates_for_canonical(service, canonical_code, first_day, last_day)
+                    canonical_occurrences_cache[canonical_code] = occurrences
+                anchor_date = registration_date or (
+                    registration.created_at.date() if registration.created_at else first_day
+                )
+                anchor_date = anchor_date if anchor_date >= first_day else first_day
+                for occurrence_date in occurrences:
+                    if occurrence_date < anchor_date:
+                        continue
+                    add_donor_for_date(donor.id, donor_payload, occurrence_date, day_option_payload)
+                if debug_mode:
+                    debug_info.append(
+                        {
+                            "registration": registration.id,
+                            "day_option_code": day_option.code,
+                            "canonical_code": canonical_code,
+                            "occurrences": [occurrence_date.isoformat() for occurrence_date in occurrences],
+                            "anchor_date": anchor_date.isoformat(),
+                        }
                     )
-                    anchor_date = anchor_date if anchor_date >= first_day else first_day
-                    for occurrence_date in occurrences:
-                        if occurrence_date < anchor_date:
-                            continue
-                        add_donor_for_date(donor.id, donor_payload, occurrence_date, day_option_payload)
-                    if debug_mode:
-                        debug_info.append(
-                            {
-                                "registration": registration.id,
-                                "day_option_code": day_option.code,
-                                "canonical_code": canonical_code,
-                                "occurrences": [occurrence_date.isoformat() for occurrence_date in occurrences],
-                                "anchor_date": anchor_date.isoformat(),
-                            }
-                        )
 
         cart_snapshots = PoojaCartSnapshot.objects.select_related("donor")
         for snapshot in cart_snapshots:
@@ -1565,6 +1612,33 @@ class PoojaDonorCalendarView(APIView):
             }
             payload = getattr(plan, "cart_payload", {}) or {}
             plan_day_option_payload = build_day_option_payload(plan.day_option)
+            canonical_code = (
+                TempleCalendarService._canonicalize_code(plan.day_option.code or "")
+                if plan.day_option
+                else None
+            )
+            is_canonical = bool(canonical_code and canonical_code in CALENDAR_DAY_OPTION_CANONICAL_CODES)
+
+            if is_canonical:
+                occurrences = canonical_occurrences_cache.get(canonical_code)
+                if occurrences is None:
+                    occurrences = _collect_dates_for_canonical(service, canonical_code, first_day, last_day)
+                    canonical_occurrences_cache[canonical_code] = occurrences
+                anchor_date = plan.start_date or plan.next_occurrence or first_day
+                anchor_date = anchor_date if anchor_date >= first_day else first_day
+                for occurrence_date in occurrences:
+                    if occurrence_date < anchor_date:
+                        continue
+                    add_donor_for_date(
+                        donor.id,
+                        donor_payload,
+                        occurrence_date,
+                        plan_day_option_payload,
+                    )
+                # Canonical plans must not fall back to stale cart_payload dayOptionOccurrences.
+                # Those payload dates can be out of sync with corrected tithi calculations.
+                continue
+
             occurrences = payload.get("dayOptionOccurrences")
             added = False
             if isinstance(occurrences, list):
@@ -1598,7 +1672,7 @@ class PoojaDonorCalendarView(APIView):
 
         if unassigned_any_day_donors:
             canonical_options: dict[str, list[PoojaDayOption]] = {}
-            for option in PoojaDayOption.objects.order_by("display_order", "id"):
+            for option in _all_day_options:
                 canonical = TempleCalendarService._canonicalize_code(option.code)
                 if canonical in CALENDAR_DAY_OPTION_CANONICAL_CODES:
                     canonical_options.setdefault(canonical, []).append(option)

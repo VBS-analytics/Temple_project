@@ -16,10 +16,12 @@ from typing import Optional
 from django.conf import settings
 from django.http import FileResponse, JsonResponse
 from django.utils import timezone
+from openpyxl import Workbook
 from rest_framework.decorators import api_view, permission_classes
 
 from accounts.access import can_download_reports, REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
 from common.permissions import IsAdminRole
+from pooja.models import UbhayamReport
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,13 @@ ARCHIVE_NAME_PREFIX = 'temple-database'
 LIVE_BACKUP_FILENAME = 'temple_db-latest.sql.gz'
 BACKUP_TIMESTAMP_PATTERN = re.compile(r'^temple_db-(\d{8}-\d{6})\.sql\.gz$')
 BACKUP_TIMESTAMP_FORMAT = '%Y%m%d-%H%M%S'
+UBHAYAM_MASTER_HEADERS = [
+    "S.No",
+    "Donor ID",
+    "Donor Name",
+    "Donor Phone Number",
+    "Pooja Day Option",
+]
 
 
 def health_check(request):
@@ -119,6 +128,52 @@ def download_database_backup(request):
         shutil.rmtree(temp_dir, ignore_errors=True)
         return JsonResponse(
             {"detail": "Unable to prepare the database download right now."},
+            status=500,
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminRole])
+def download_ubhayam_master_report(request):
+    if not can_download_reports(request.user):
+        return JsonResponse(
+            {"detail": REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE},
+            status=403,
+        )
+
+    try:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Ubhayam Maste Report"
+        sheet.append(UBHAYAM_MASTER_HEADERS)
+
+        rows = UbhayamReport.objects.order_by("donor_id", "donor_name", "pooja_day_option", "s_no")
+        for index, row in enumerate(rows, start=1):
+            sheet.append(
+                [
+                    index,
+                    row.donor_id or "",
+                    row.donor_name or "",
+                    row.donor_phone_number or "",
+                    row.pooja_day_option or "",
+                ]
+            )
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        filename = f"ubhayam-maste-report-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception:
+        logger.exception("Unexpected error while preparing Ubhayam Maste report download")
+        return JsonResponse(
+            {"detail": "Unable to prepare the Ubhayam Maste report download right now."},
             status=500,
         )
 

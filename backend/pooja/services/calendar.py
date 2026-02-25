@@ -13,9 +13,12 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 
 try:
-    from skyfield.api import Loader
+    from skyfield.api import Loader, wgs84
+    from skyfield import almanac
 except ModuleNotFoundError as exc:  # pragma: no cover - protective fallback for optional dependency
     Loader = None  # type: ignore[assignment]
+    wgs84 = None  # type: ignore[assignment]
+    almanac = None  # type: ignore[assignment]
     _SKYFIELD_IMPORT_ERROR = exc
 else:
     _SKYFIELD_IMPORT_ERROR = None
@@ -51,7 +54,7 @@ def _astro_data_dir() -> Path:
 
 
 def _require_skyfield() -> None:
-    if Loader is None:
+    if Loader is None or wgs84 is None or almanac is None:
         raise RuntimeError(
             "Skyfield is required for temple calendar calculations. Install the 'skyfield' package."
         ) from _SKYFIELD_IMPORT_ERROR
@@ -185,10 +188,10 @@ class TempleCalendarService:
         self.location = location or get_temple_location()
         self._loader = _get_loader()
         self._timescale = self._loader.timescale()
-        eph = _get_ephemeris()
-        self._earth = eph["earth"]
-        self._sun = eph["sun"]
-        self._moon = eph["moon"]
+        self._ephemeris = _get_ephemeris()
+        self._earth = self._ephemeris["earth"]
+        self._sun = self._ephemeris["sun"]
+        self._moon = self._ephemeris["moon"]
 
     # ------------------------------- Public API ---------------------------- #
 
@@ -227,10 +230,18 @@ class TempleCalendarService:
             ]
             return result
         if code == "sashti":
-            target = self._next_tithi(start, targets=(6, 21))
-            return self._format_result(target, f"   Sashti Tithi – {TITHI_NAME_MAP.get(self._tithi_on(target), '')}")
+            target = self._next_tithi_at_reference_time(start, targets=(6, 21), hour=12)
+            return self._format_result(
+                target,
+                f"   Sashti Tithi – {TITHI_NAME_MAP.get(self._tithi_on(target, hour=12), '')}",
+            )
         if code == "second_ashtami":
-            occurrences = self._upcoming_ashtami_window(start)
+            occurrences = self._upcoming_tithi_series_at_reference_time(
+                start,
+                targets=(8, 23),
+                hour=9,
+                count=2,
+            )
             primary = occurrences[0]
             result = self._format_result(primary, "Upcoming Ashtami dates")
             result.meta["upcoming_occurrences"] = [
@@ -239,7 +250,12 @@ class TempleCalendarService:
             ]
             return result
         if code == "pradosham":
-            occurrences = self._upcoming_pradosham_occurrences(start)
+            occurrences = self._upcoming_tithi_series_at_reference_time(
+                start,
+                targets=(13, 28),
+                hour=18,
+                count=2,
+            )
             primary = occurrences[0]
             result = self._format_result(primary, "Pradosham (Trayodashi) schedule")
             result.meta["upcoming_occurrences"] = [
@@ -248,16 +264,16 @@ class TempleCalendarService:
             ]
             return result
         if code == "pournami":
-            target = self._next_tithi(start, targets=(15,))
+            target = self._next_tithi_at_reference_time(start, targets=(15,), hour=12)
             return self._format_result(target, "On Pournami day of month")
         if code == "amavasya":
-            target = self._next_tithi(start, targets=(30,))
+            target = self._next_tithi_at_reference_time(start, targets=(30,), hour=12)
             return self._format_result(target, "Amavasya (New moon)")
         if code == "sankata_chaturthi":
-            target = self._next_tithi(start, targets=(19,))
+            target = self._next_tithi_at_reference_time(start, targets=(19,), hour=21)
             return self._format_result(target, "Sankatahara Chaturthi")
         if code == "chaturthi":
-            target = self._next_tithi(start, targets=(4,))
+            target = self._next_tithi_at_reference_time(start, targets=(4,), hour=12)
             return self._format_result(target, "Shukla Chaturthi")
         if code == "tamil_star":
             index = resolve_nakshatra_index(*(tamil_star_labels or []))
@@ -420,28 +436,89 @@ class TempleCalendarService:
         raise RuntimeError("Tamil month transition not found within 40 days. Check ephemeris range.")
 
     def _is_tamil_month_start(self, current: date) -> bool:
-        today_idx = self._tamil_month_index(current)
-        yesterday_idx = self._tamil_month_index(current - timedelta(days=1))
-        return today_idx != yesterday_idx
+        # Tamil month starts on the day the sun first enters a new zodiac sign (Sankranti).
+        # The Sankranti can occur at any hour, so compare the sign at end-of-previous-day
+        # against multiple sample points throughout the current day.  This fixes the
+        # one-day-late error that occurred when Sankranti happened in the afternoon/evening
+        # (e.g. Maasi Sankranti ~6:13 PM IST Feb 13 was incorrectly placed on Feb 14
+        # because the old code only sampled at 6 AM).
+        prev_idx = self._tamil_month_index(current - timedelta(days=1), hour=23, minute=30)
+        for hour, minute in ((0, 0), (6, 0), (12, 0), (18, 0), (23, 30)):
+            if self._tamil_month_index(current, hour=hour, minute=minute) != prev_idx:
+                return True
+        return False
 
-    def _tamil_month_index(self, day: date) -> int:
-        sidereal_lon = self._sun_sidereal_longitude(day)
-        return int(math.floor(sidereal_lon / 30.0)) % 12
+    def _tamil_month_index(self, day: date, hour: int = 6, minute: int = 0) -> int:
+        sun_lon, _ = self._sidereal_longitudes(day, hour=hour, minute=minute)
+        return int(math.floor(sun_lon / 30.0)) % 12
 
     # --------------------------- Tithi helpers ----------------------------- #
 
-    # Tithis stay valid for roughly a day, so sampling every couple of hours still catches them
-    # while cutting the number of Skyfield evaluations by more than 4× in production.
-    _TITHI_SAMPLE_INTERVAL_MINUTES = 120
+    # Tithi sample points during daylight hours (6 AM – 6 PM IST).
+    # Hindu panchang rule: the tithi prevailing at/after sunrise determines observance.
+    # Sampling multiple daylight points still catches late-day starts, and consecutive-day
+    # matches are collapsed to the later date (sunrise day) by helper logic below.
+    _TITHI_SAMPLE_HOURS: tuple[int, ...] = (6, 9, 12, 15, 18)
 
     def _next_tithi(self, start: date, targets: Iterable[int]) -> date:
         wanted = set(targets)
         probe = start
         for _ in range(0, 65):
             if self._tithi_occurs_on_day(probe, wanted):
+                return self._prefer_later_duplicate_tithi_day(probe, wanted)
+            probe += timedelta(days=1)
+        raise RuntimeError("Tithi not found within search horizon.")
+
+    def _next_tithi_at_reference_time(
+        self,
+        start: date,
+        targets: Iterable[int],
+        *,
+        hour: int,
+        minute: int = 0,
+    ) -> date:
+        wanted = set(targets)
+        probe = start
+        for _ in range(0, 65):
+            if self._tithi_on(probe, hour=hour, minute=minute) in wanted:
                 return probe
             probe += timedelta(days=1)
         raise RuntimeError("Tithi not found within search horizon.")
+
+    def _upcoming_tithi_series_at_reference_time(
+        self,
+        start: date,
+        targets: Iterable[int],
+        *,
+        hour: int,
+        minute: int = 0,
+        count: int = 2,
+    ) -> list[date]:
+        occurrences: list[date] = []
+        cursor = start
+        while len(occurrences) < count:
+            next_day = self._next_tithi_at_reference_time(
+                cursor,
+                targets=targets,
+                hour=hour,
+                minute=minute,
+            )
+            if occurrences and next_day == occurrences[-1]:
+                cursor = next_day + timedelta(days=1)
+                continue
+            occurrences.append(next_day)
+            cursor = next_day + timedelta(days=1)
+        return occurrences
+
+    def _prefer_later_duplicate_tithi_day(self, day: date, wanted: set[int]) -> date:
+        """When the same tithi spans adjacent dates, retain the later (sunrise) date."""
+        resolved = day
+        for _ in range(0, 4):
+            next_day = resolved + timedelta(days=1)
+            if not self._tithi_occurs_on_day(next_day, wanted):
+                break
+            resolved = next_day
+        return resolved
 
     def _collect_tithi_dates(self, start: date, end: date, targets: Iterable[int]) -> list[date]:
         """Collect all dates within [start, end] that match the given tithi targets."""
@@ -456,12 +533,13 @@ class TempleCalendarService:
 
     @staticmethod
     def _compress_consecutive_dates(dates: list[date]) -> list[date]:
-        """Drop consecutive next-day duplicates caused by tithi spanning two dates."""
+        """Collapse consecutive matches and retain the later date in each block."""
         if not dates:
             return []
         deduped: list[date] = []
         for day in dates:
             if deduped and (day - deduped[-1]).days <= 1:
+                deduped[-1] = day
                 continue
             deduped.append(day)
         return deduped
@@ -496,6 +574,7 @@ class TempleCalendarService:
         while len(occurrences) < count:
             next_day = self._next_tithi(cursor, targets)
             if occurrences and (next_day - occurrences[-1]).days <= 1:
+                occurrences[-1] = next_day
                 cursor = next_day + timedelta(days=1)
                 continue
             occurrences.append(next_day)
@@ -504,12 +583,12 @@ class TempleCalendarService:
         return occurrences
 
     def _tithi_occurs_on_day(self, day: date, wanted: set[int]) -> bool:
-        for minute_offset in range(0, 24 * 60, self._TITHI_SAMPLE_INTERVAL_MINUTES):
-            hour, minute = divmod(minute_offset, 60)
-            if self._tithi_on(day, hour=hour, minute=minute) in wanted:
+        # Sample only during daylight hours.  This matches the traditional panchang
+        # rule that the tithi at/after sunrise governs the day's observance and avoids
+        # false-positives when a tithi briefly crosses midnight into the previous day.
+        for hour in self._TITHI_SAMPLE_HOURS:
+            if self._tithi_on(day, hour=hour, minute=0) in wanted:
                 return True
-        if self._tithi_on(day, hour=23, minute=59) in wanted:
-            return True
         return False
 
     def _tithi_on(self, day: date, hour: int = 6, minute: int = 0) -> int:
@@ -527,8 +606,19 @@ class TempleCalendarService:
             probe += timedelta(days=1)
         raise RuntimeError("Nakshatra not found within search horizon.")
 
+    # Empirical correction to align the computed nakshatra with the temple's
+    # published Tamil calendar convention.
+    _NAKSHATRA_ALIGNMENT_OFFSET_DEGREES: float = 0.43
+
     def _nakshatra_on(self, day: date) -> int:
-        sidereal_lon = self._moon_sidereal_longitude(day)
+        hour, minute = self._sunrise_time_on(day)
+        return self._nakshatra_index_at(day, hour=hour, minute=minute)
+
+    def _nakshatra_index_at(self, day: date, hour: int = 6, minute: int = 0) -> int:
+        sidereal_lon = (
+            self._moon_sidereal_longitude(day, hour=hour, minute=minute)
+            + self._NAKSHATRA_ALIGNMENT_OFFSET_DEGREES
+        ) % 360.0
         return int(math.floor(sidereal_lon / (360.0 / 27.0))) % 27
 
     def _nakshatra_name(self, index: int) -> str:
@@ -613,13 +703,40 @@ class TempleCalendarService:
 
     # ------------------------- Astronomical helpers ------------------------ #
 
-    def _sun_sidereal_longitude(self, day: date) -> float:
-        sun_lon, _ = self._sidereal_longitudes(day)
+    def _sun_sidereal_longitude(self, day: date, hour: int = 6, minute: int = 0) -> float:
+        sun_lon, _ = self._sidereal_longitudes(day, hour=hour, minute=minute)
         return sun_lon
 
-    def _moon_sidereal_longitude(self, day: date) -> float:
-        _, moon_lon = self._sidereal_longitudes(day)
+    def _moon_sidereal_longitude(self, day: date, hour: int = 6, minute: int = 0) -> float:
+        _, moon_lon = self._sidereal_longitudes(day, hour=hour, minute=minute)
         return moon_lon
+
+    def _sunrise_time_on(self, day: date) -> tuple[int, int]:
+        sunrise = self._sunrise_datetime(day)
+        return sunrise.hour, sunrise.minute
+
+    @lru_cache(maxsize=4096)
+    def _sunrise_datetime(self, day: date) -> datetime:
+        local_start = datetime.combine(day, time(0, 0), tzinfo=self.location.tz)
+        local_end = local_start + timedelta(days=1)
+        t0 = self._timescale.from_datetime(local_start.astimezone(_utc_zone()))
+        t1 = self._timescale.from_datetime(local_end.astimezone(_utc_zone()))
+        observer = wgs84.latlon(self.location.latitude, self.location.longitude)
+        sunrise_fn = almanac.sunrise_sunset(self._ephemeris, observer)
+        transition_times, transition_flags = almanac.find_discrete(t0, t1, sunrise_fn)
+
+        for instant, is_daylight in zip(transition_times, transition_flags):
+            if not is_daylight:
+                continue
+            utc_dt = instant.utc_datetime()
+            if utc_dt.tzinfo is None:
+                utc_dt = utc_dt.replace(tzinfo=_utc_zone())
+            local_dt = utc_dt.astimezone(self.location.tz)
+            if local_dt.date() == day:
+                return local_dt
+
+        # Chennai always has sunrise, but keep a safe fallback for edge cases.
+        return datetime.combine(day, time(6, 0), tzinfo=self.location.tz)
 
     def _sidereal_longitudes(self, day: date, hour: int = 6, minute: int = 0) -> tuple[float, float]:
         sun_lon, moon_lon = self._sun_moon_longitudes(day, hour=hour, minute=minute)

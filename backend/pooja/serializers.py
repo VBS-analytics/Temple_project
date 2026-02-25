@@ -1,6 +1,7 @@
 """Serializers for pooja domain."""
 
 from decimal import Decimal
+import re
 
 from django.db import transaction
 from rest_framework import serializers
@@ -25,7 +26,10 @@ from accounts.models import UserRole
 from .services.recurrence import create_plan_from_registration, get_plan_due_summary
 
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
-ANY_DAY_OPTION_DESCRIPTION = "any day of month"
+ANY_DAY_OPTION_DESCRIPTIONS = {
+    "any day of month",
+    "any day of the month",
+}
 
 
 def _is_any_day_option(option: PoojaDayOption | None) -> bool:
@@ -34,8 +38,12 @@ def _is_any_day_option(option: PoojaDayOption | None) -> bool:
     code = (option.code or "").strip().upper()
     if code in ANY_DAY_OPTION_CODES:
         return True
-    description = (option.description or "").strip().lower()
-    return description == ANY_DAY_OPTION_DESCRIPTION
+    description = re.sub(
+        r"\s+",
+        " ",
+        re.sub(r"[^a-z0-9 ]", " ", (option.description or "").strip().lower()),
+    ).strip()
+    return description in ANY_DAY_OPTION_DESCRIPTIONS
 
 
 class PoojaOptionSerializer(serializers.ModelSerializer):

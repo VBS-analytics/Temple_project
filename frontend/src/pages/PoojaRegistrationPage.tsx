@@ -520,7 +520,14 @@ const CHART_DAY_OPTION_CODE = 'CHRT';
 const VARIABLE_AMOUNT_STEP = 1;
 const EXCLUSIVE_DAY_OPTION_CODES = new Set(['AST', 'PRD']);
 const ANY_DAY_OF_MONTH_CODE = 'AD';
-const ANY_DAY_OF_MONTH_DESCRIPTION = 'any day of month';
+const ANY_DAY_OF_MONTH_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
+
+const normalizeAnyDayDescription = (value?: string | null) =>
+  (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const isAnyDayOfMonthOption = (option?: { code?: string | null; description?: string | null } | null) => {
   if (!option) {
@@ -530,8 +537,8 @@ const isAnyDayOfMonthOption = (option?: { code?: string | null; description?: st
   if (code === ANY_DAY_OF_MONTH_CODE) {
     return true;
   }
-  const description = option.description?.trim().toLowerCase();
-  return description === ANY_DAY_OF_MONTH_DESCRIPTION;
+  const description = normalizeAnyDayDescription(option.description);
+  return ANY_DAY_OF_MONTH_DESCRIPTIONS.has(description);
 };
 
 const isChartDayOption = (option?: { code?: string | null } | null) => {

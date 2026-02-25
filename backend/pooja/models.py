@@ -140,6 +140,27 @@ class PoojaRegistration(models.Model):
         super().save(*args, **kwargs)
 
 
+class UbhayamReport(models.Model):
+    s_no = models.BigAutoField(primary_key=True)
+    donor_id = models.CharField(max_length=32, db_index=True)
+    donor_name = models.CharField(max_length=255)
+    donor_phone_number = models.CharField(max_length=15, blank=True)
+    pooja_day_option = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "ubhayam_report"
+        ordering = ("s_no",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("donor_id", "pooja_day_option"),
+                name="ubhayam_unique_donor_day_option",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Ubhayam #{self.s_no} - {self.donor_name or self.donor_id}"
+
+
 class PoojaRegistrationMember(models.Model):
     registration = models.ForeignKey(PoojaRegistration, on_delete=models.CASCADE, related_name="members")
     name = models.CharField(max_length=255)

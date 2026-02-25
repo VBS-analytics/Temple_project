@@ -12,6 +12,7 @@ from .models import (
     PoojaRegistrationMember,
     RecurringPoojaPlan,
     SpecialAnnouncement,
+    UbhayamReport,
 )
 
 
@@ -121,3 +122,7 @@ class RecurringPoojaPlanAdmin(admin.ModelAdmin):
     upcoming_dates_display.short_description = "Upcoming Occurrence Dates"
 
 
+@admin.register(UbhayamReport)
+class UbhayamReportAdmin(admin.ModelAdmin):
+    list_display = ("s_no", "donor_id", "donor_name", "donor_phone_number", "pooja_day_option")
+    search_fields = ("donor_id", "donor_name", "donor_phone_number", "pooja_day_option")
