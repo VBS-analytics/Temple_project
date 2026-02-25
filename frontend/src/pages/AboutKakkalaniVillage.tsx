@@ -85,8 +85,8 @@ const AboutKakkalaniVillage: React.FC = () => {
       <PublicSiteHeader />
       
       <main className="relative overflow-x-hidden senior-readable-content">
-        <div className="relative z-10 pt-3 sm:pt-4">
-          <EnglishTamilToggle />
+        <div className="relative z-10 pt-2 sm:pt-3">
+          <EnglishTamilToggle className="mb-1 sm:mb-2" />
         </div>
 
         {/* Decorative Elements - Hidden on mobile to prevent overflow */}
@@ -96,7 +96,7 @@ const AboutKakkalaniVillage: React.FC = () => {
         </div>
 
         {/* Hero Section */}
-        <section className="relative px-4 pt-3 pb-8 sm:px-6 sm:pt-5 sm:pb-10 lg:px-8 lg:pt-6 lg:pb-12">
+        <section className="relative px-4 pt-1 pb-8 sm:px-6 sm:pt-2 sm:pb-10 lg:px-8 lg:pt-3 lg:pb-12">
           <div className="mx-auto max-w-7xl">
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,220px)] xl:gap-10 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)_minmax(0,260px)]">
               {/* Image Card 1 - top left */}

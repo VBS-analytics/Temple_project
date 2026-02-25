@@ -6,8 +6,8 @@ const WhyVisitNativeVillage = () => (
     <PublicSiteHeader />
     
     <main className="relative overflow-x-hidden senior-readable-content">
-      <div className="relative z-10 pt-3 sm:pt-4">
-        <EnglishTamilToggle />
+      <div className="relative z-10 pt-2 sm:pt-3">
+        <EnglishTamilToggle className="mb-1 sm:mb-2" />
       </div>
 
       {/* Decorative background elements */}
@@ -16,7 +16,7 @@ const WhyVisitNativeVillage = () => (
         <div className="absolute bottom-20 left-10 w-48 h-48 sm:w-96 sm:h-96 bg-blue-200/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative min-h-[70vh] px-4 pt-3 pb-8 sm:px-6 sm:pt-5 sm:pb-10 md:pt-6 md:pb-12 lg:px-8">
+      <div className="relative min-h-[70vh] px-4 pt-1 pb-8 sm:px-6 sm:pt-2 sm:pb-10 md:pt-3 md:pb-12 lg:px-8">
         <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 md:space-y-10">
           
           {/* Header Section */}
@@ -148,10 +148,10 @@ const WhyVisitNativeVillage = () => (
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center max-w-md sm:max-w-none mx-auto px-2">
                 <a
-                  href="/history-of-kakkalani"
+                  href="/about-kakkalani-village"
                   className="px-5 py-2.5 sm:px-6 sm:py-3 md:px-8 md:py-4 rounded-xl sm:rounded-2xl bg-white text-blue-600 font-semibold text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 w-full sm:w-auto text-center"
                 >
-                  Explore History
+                  Explore Kakkalani Village
                 </a>
                 <a
                   href="/"

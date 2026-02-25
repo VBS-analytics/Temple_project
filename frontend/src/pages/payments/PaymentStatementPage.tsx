@@ -919,6 +919,7 @@ const PaymentStatementPage = () => {
   const [cartSnapshotsVersion, setCartSnapshotsVersion] = useState(0);
   const [apiPassbookEntries, setApiPassbookEntries] = useState<ApiPassbookEntry[]>([]);
   const [apiPassbookLoading, setApiPassbookLoading] = useState(true);
+  const [passbookRefreshToken, setPassbookRefreshToken] = useState(0);
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const [activeParentDonorIdsByMain, setActiveParentDonorIdsByMain] = useState<
@@ -1108,6 +1109,9 @@ const PaymentStatementPage = () => {
         if (selectedMonthKey) {
           params.set('month', selectedMonthKey);
         }
+        if (passbookRefreshToken > 0) {
+          params.set('refresh', 'true');
+        }
 
         let nextUrl: string | null = `${basePath}?${params.toString()}`;
         let pageCount = 0;
@@ -1144,7 +1148,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAdminUser, selectedMonthKey]);
+  }, [isAdminUser, passbookRefreshToken, selectedMonthKey]);
 
   useEffect(() => {
     if (!isAdminUser) {
@@ -2867,6 +2871,17 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
                 onClear={() => setSelectedMonthKey('')}
               />
             </div>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => setPassbookRefreshToken((prev) => prev + 1)}
+              disabled={isPassbookRefreshing}
+              className="rounded-full border border-[#90CAF9] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:bg-[#E3F2FD] disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              {isPassbookRefreshing ? 'Refreshing…' : 'Refresh statement'}
+            </button>
           </div>
 
           {isAdminUser && (

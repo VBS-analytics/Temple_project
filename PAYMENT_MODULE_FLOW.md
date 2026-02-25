@@ -3,6 +3,12 @@
 ## Overview
 The payment module has been updated to support **Combined Payment** functionality, allowing a Main Donor to consolidate payments for multiple linked Family/Group donors.
 
+## Operational Notes
+
+- Rebuilding/restarting containers does not alter historical payment ownership. It only reruns code and passbook regeneration.
+- `regenerate_passbooks` recalculates statements from existing `PaymentRecord` rows; it does not reassign wrongly attributed historical records.
+- Use `Payment Statement -> Refresh statement` to force a fresh passbook pull in UI after backend updates.
+
 ---
 
 ## Payment Module Architecture

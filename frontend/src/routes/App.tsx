@@ -33,7 +33,7 @@ import { canViewPaymentStatement, isAdmin, useAuthStore } from "../store/auth";
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
-    const destination = isAdmin(user.role) ? "/admin/donors" : "/profile";
+    const destination = isAdmin(user.role) ? "/admin/master" : "/profile";
     return <Navigate to={destination} replace />;
   }
   return <LandingPage />;
@@ -45,7 +45,7 @@ const PaymentStatementRoute = () => {
     return <Navigate to="/login" replace />;
   }
   if (!canViewPaymentStatement(user)) {
-    const fallback = isAdmin(user.role) ? "/admin/donors" : "/profile";
+    const fallback = isAdmin(user.role) ? "/admin/master" : "/profile";
     return <Navigate to={fallback} replace />;
   }
   return <PaymentStatementPage />;
@@ -96,7 +96,7 @@ const App = () => (
     </Route>
     <Route element={<ProtectedRoute requireAdmin />}>
       <Route element={<AppLayout />}>
-        <Route path="/admin/dashboard" element={<Navigate to="/admin/donors" replace />} />
+        <Route path="/admin/dashboard" element={<Navigate to="/admin/master" replace />} />
         <Route path="/admin/master" element={<AdminMasterPage />} />
         <Route path="/admin/bulk-upload" element={<Navigate to="/admin/master" replace />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />

@@ -154,7 +154,11 @@ const restoreEnglishText = () => {
   });
 };
 
-const EnglishTamilToggle: React.FC = () => {
+type EnglishTamilToggleProps = {
+  className?: string;
+};
+
+const EnglishTamilToggle: React.FC<EnglishTamilToggleProps> = ({ className = "mb-4" }) => {
   const { language, setLanguage } = useLanguageStore();
   const mutationDebounceRef = useRef<number | null>(null);
   const translatingRef = useRef(false);
@@ -283,7 +287,7 @@ const EnglishTamilToggle: React.FC = () => {
   );
 
   return (
-    <div className="notranslate mb-4 flex justify-center" translate="no">
+    <div className={`notranslate flex justify-center ${className}`} translate="no">
       <div className="inline-flex items-center gap-1 rounded-full border border-[#90CAF9] bg-white p-1 shadow-sm">
         <button
           type="button"
