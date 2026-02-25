@@ -24,7 +24,7 @@ const DonorCornerPage = () => {
   }
 
   if (isAdmin(user.role)) {
-    return <Navigate to="/admin/donors" replace />;
+    return <Navigate to="/admin/master" replace />;
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {

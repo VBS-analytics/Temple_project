@@ -70,8 +70,13 @@ interface PoojaRegistrationRecord {
   id?: number | null;
   donor?: number | null;
   donor_name?: string | null;
-  pooja_option?: string | null;
-  day_option?: string | null;
+  donor_phone?: string | null;
+  pooja_option?: string | number | null;
+  pooja_option_name?: string | null;
+  day_option?: string | number | null;
+  day_option_description?: string | null;
+  day_option_code?: string | null;
+  day_option_category?: string | null;
   start_date?: string | null;
   quantity?: number | null;
   is_group_registration?: boolean | null;
@@ -191,6 +196,23 @@ const sanitizeFilename = (value: string) =>
 
 const sanitizeSheetName = (value: string) =>
   value.replace(/[:\/\\\?\*\[\]]/g, '').trim().slice(0, 31);
+
+const createUniqueOptionSheetName = (baseName: string, usedNames: Set<string>) => {
+  let sanitized = sanitizeSheetName(baseName);
+  if (!sanitized) {
+    sanitized = 'Day Option';
+  }
+  let candidate = sanitized;
+  let counter = 1;
+  while (usedNames.has(candidate)) {
+    const suffix = `-${counter}`;
+    const maxLength = Math.max(1, 31 - suffix.length);
+    candidate = `${sanitized.slice(0, maxLength)}${suffix}`;
+    counter += 1;
+  }
+  usedNames.add(candidate);
+  return candidate;
+};
 
 const createDonorSheetRows = (donor: DonorRecord): (string | number)[][] => {
   const rows: (string | number)[][] = [
@@ -465,7 +487,7 @@ const DATABASE_BUTTON_INFO = [
   {
     label: 'Pooja Registration Database',
     description:
-      'Downloads cart snapshots and paid registrations so the team can reconcile bookings and payments.',
+      'Downloads registrations, cart snapshots, and a donor-by-day-option workbook for reconciliation.',
   },
   {
     label: 'Donor Details',
@@ -563,6 +585,68 @@ const POOJA_REGISTRATIONS_HEADERS: string[] = [
   'Updated At',
 ] as const;
 
+const POOJA_DAY_OPTION_DONOR_HEADERS: string[] = [
+  'S.no',
+  'Registration ID',
+  'Donor ID',
+  'Donor Name',
+  'Donor Phone',
+  'Pooja Option',
+  'Day Option',
+  'Start Date',
+  'Quantity',
+  'Post Prasadam',
+  'Status',
+  'Created At',
+] as const;
+
+const resolvePoojaOptionLabel = (registration: PoojaRegistrationRecord) => {
+  const byName = (registration.pooja_option_name ?? '').trim();
+  if (byName.length > 0) {
+    return byName;
+  }
+  if (typeof registration.pooja_option === 'string') {
+    const trimmed = registration.pooja_option.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  if (
+    registration.pooja_option !== undefined &&
+    registration.pooja_option !== null &&
+    registration.pooja_option !== ''
+  ) {
+    return String(registration.pooja_option);
+  }
+  return '—';
+};
+
+const resolveDayOptionLabel = (registration: PoojaRegistrationRecord) => {
+  const byDescription = (registration.day_option_description ?? '').trim();
+  if (byDescription.length > 0) {
+    return byDescription;
+  }
+  if (typeof registration.day_option === 'string') {
+    const trimmed = registration.day_option.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  if (
+    registration.day_option !== undefined &&
+    registration.day_option !== null &&
+    registration.day_option !== ''
+  ) {
+    return String(registration.day_option);
+  }
+  return '—';
+};
+
+const resolveDayOptionSheetLabel = (registration: PoojaRegistrationRecord) => {
+  const label = resolveDayOptionLabel(registration);
+  return label === '—' ? 'Unknown Day Option' : label;
+};
+
 const buildCartSnapshotRows = (snapshots: CartSnapshotRecord[]) => {
   const output: Record<string, string | number | null>[] = [];
   let sequence = 0;
@@ -659,8 +743,8 @@ const buildPoojaRegistrationRows = (registrations: PoojaRegistrationRecord[]) =>
     'Registration ID': displayValue(registration.registration_number ?? registration.id),
     'Donor ID': registration.donor ?? '—',
     'Donor Name': displayValue(registration.donor_name),
-    'Pooja Option': displayValue(registration.pooja_option),
-    'Day Option': displayValue(registration.day_option),
+    'Pooja Option': resolvePoojaOptionLabel(registration),
+    'Day Option': resolveDayOptionLabel(registration),
     'Start Date': formatDateValue(registration.start_date),
     Quantity: registration.quantity ?? 1,
     'Is Group Registration': formatBooleanValue(registration.is_group_registration),
@@ -670,6 +754,22 @@ const buildPoojaRegistrationRows = (registrations: PoojaRegistrationRecord[]) =>
     Status: displayValue(registration.status),
     'Created At': formatDateValue(registration.created_at),
     'Updated At': formatDateValue(registration.updated_at),
+  }));
+
+const buildPoojaDayOptionDonorRows = (registrations: PoojaRegistrationRecord[]) =>
+  registrations.map((registration, index) => ({
+    'S.no': index + 1,
+    'Registration ID': displayValue(registration.registration_number ?? registration.id),
+    'Donor ID': registration.donor ?? '—',
+    'Donor Name': displayValue(registration.donor_name),
+    'Donor Phone': displayValue(registration.donor_phone),
+    'Pooja Option': resolvePoojaOptionLabel(registration),
+    'Day Option': resolveDayOptionLabel(registration),
+    'Start Date': formatDateValue(registration.start_date),
+    Quantity: registration.quantity ?? 1,
+    'Post Prasadam': formatBooleanValue(registration.post_prasadam),
+    Status: displayValue(registration.status),
+    'Created At': formatDateValue(registration.created_at),
   }));
 
 const isCHRTPlan = (plan: RecurringPoojaPlanRecord) => {
@@ -1252,6 +1352,35 @@ const ReportPage = () => {
       const cartSheet = createSheetWithHeaders(CART_SNAPSHOT_HEADERS, cartRows);
       XLSX.utils.book_append_sheet(cartWorkbook, cartSheet, 'Cart Snapshots');
       downloadWorkbook(cartWorkbook, `pooja-cart-snapshots-${timestamp}.xlsx`);
+
+      const optionWorkbook = XLSX.utils.book_new();
+      const registrationsByDayOption = new Map<string, PoojaRegistrationRecord[]>();
+      filteredRegistrations.forEach((registration) => {
+        const dayOptionLabel = resolveDayOptionSheetLabel(registration);
+        if (!registrationsByDayOption.has(dayOptionLabel)) {
+          registrationsByDayOption.set(dayOptionLabel, []);
+        }
+        registrationsByDayOption.get(dayOptionLabel)?.push(registration);
+      });
+
+      const sortedDayOptionEntries = Array.from(registrationsByDayOption.entries()).sort(([a], [b]) =>
+        a.localeCompare(b, 'en-IN', { sensitivity: 'base' }),
+      );
+      const usedSheetNames = new Set<string>();
+
+      if (!sortedDayOptionEntries.length) {
+        const emptySheet = createSheetWithHeaders(POOJA_DAY_OPTION_DONOR_HEADERS, []);
+        XLSX.utils.book_append_sheet(optionWorkbook, emptySheet, 'Day Options');
+      } else {
+        sortedDayOptionEntries.forEach(([dayOptionLabel, optionRegistrations]) => {
+          const rows = buildPoojaDayOptionDonorRows(optionRegistrations);
+          const sheet = createSheetWithHeaders(POOJA_DAY_OPTION_DONOR_HEADERS, rows);
+          const sheetName = createUniqueOptionSheetName(dayOptionLabel, usedSheetNames);
+          XLSX.utils.book_append_sheet(optionWorkbook, sheet, sheetName);
+        });
+      }
+
+      downloadWorkbook(optionWorkbook, 'donor-data-pooja-options.xlsx');
     } catch (error) {
       const detail =
         (error as AxiosError<{ detail?: string | null }>)?.response?.data?.detail ?? null;
@@ -1259,7 +1388,9 @@ const ReportPage = () => {
       if (typeof detail === 'string' && detail.length > 0) {
         setExportError(detail);
       } else {
-        setExportError('Unable to download the pooja registration database or cart snapshots right now.');
+        setExportError(
+          'Unable to download the pooja registration, cart snapshots, or donor day-option files right now.',
+        );
       }
     } finally {
       setExportingPoojaRegistrationDatabase(false);

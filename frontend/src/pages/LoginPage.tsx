@@ -98,7 +98,7 @@ const LoginPage = () => {
   };
 
   const redirectToDashboard = (role?: string) => {
-    const target = role && role.toLowerCase().includes('admin') ? '/admin/donors' : '/profile';
+    const target = role && role.toLowerCase().includes('admin') ? '/admin/master' : '/profile';
     navigate(target, { replace: true });
     if (typeof window !== 'undefined') {
       window.location.replace(target);
