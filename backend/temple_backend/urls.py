@@ -5,7 +5,11 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.static import serve
 
-from temple_backend.views import download_database_backup, health_check
+from temple_backend.views import (
+    download_database_backup,
+    download_ubhayam_master_report,
+    health_check,
+)
 
 urlpatterns = [
     path('health/', health_check, name='health'),
@@ -14,6 +18,11 @@ urlpatterns = [
     path('api/pooja/', include('pooja.urls')),
     path('api/payments/', include('payments.urls')),
     path('api/reports/database-download/', download_database_backup, name='database-download'),
+    path(
+        'api/reports/ubhayam-master-report-download/',
+        download_ubhayam_master_report,
+        name='ubhayam-master-report-download',
+    ),
 ]
 
 if settings.MEDIA_URL and settings.MEDIA_ROOT:

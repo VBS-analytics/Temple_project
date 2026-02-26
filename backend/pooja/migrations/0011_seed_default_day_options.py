@@ -2,21 +2,21 @@ from django.db import migrations
 
 
 DEFAULT_DAY_OPTIONS = [
-    ("PRD", "Pradosham (Trayodashi)", "code"),
     ("CHRT", "Choose your preferred date", "code"),
     ("CS", "Choose your Tamil star", "code"),
-    ("AD", "Any day of the month", "code"),
-    ("FE", "1st day of the English month", "code"),
-    ("FT", "1st day of the Tamil month", "code"),
-    ("1TU", "1st Tuesday of the month", "code"),
-    ("LSA", "Last Saturday of the month", "code"),
-    ("SUN", "Every Sunday", "code"),
-    ("SAS", "Sashti Tithi", "code"),
-    ("AST", "Upcoming Ashtami day", "code"),
-    ("PRM", "Pournami (Full moon)", "code"),
-    ("AMV", "Amavasai (New moon)", "code"),
-    ("SKT", "Sankata Chaturthi", "code"),
-    ("CTR", "Chaturthi (Shukla)", "code"),
+    ("AD", "Any Day of Month", "code"),
+    ("FE", "1st day of English Month", "code"),
+    ("FT", "1st day of Tamil Month", "code"),
+    ("1TU", "1st Tuesday of month", "code"),
+    ("LSAT", "Last sat day of month", "code"),
+    ("S", "Every Sunday", "code"),
+    ("SH", "On sashti day of month", "code"),
+    ("AST", "On 2 ashtami day of month", "code"),
+    ("P", "On paurnami day of month", "code"),
+    ("AMV", "On amavasai day of month", "code"),
+    ("SC", "On sankatachaturti day of month", "code"),
+    ("C", "On chaturti day of month", "code"),
+    ("PRD", "Pradosham (Trayodashi)", "code"),
 ]
 
 

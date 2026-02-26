@@ -41,15 +41,22 @@ const normalizeIsoDate = (value?: string | null) => {
 };
 
 const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
-const ANY_DAY_OPTION_DESCRIPTION = 'any day of month';
+const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
+
+const normalizeAnyDayDescription = (value?: string | null) =>
+  (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const isAnyDayOfMonthCartItem = (item: CartItem): boolean => {
   const code = (item.dayOptionCode ?? item.day_option_code ?? '').trim().toUpperCase();
   if (ANY_DAY_OPTION_CODES.has(code)) {
     return true;
   }
-  const description = (item.dayOptionDescription ?? item.day_option_description ?? '').trim().toLowerCase();
-  return description === ANY_DAY_OPTION_DESCRIPTION;
+  const description = normalizeAnyDayDescription(item.dayOptionDescription ?? item.day_option_description ?? '');
+  return ANY_DAY_OPTION_DESCRIPTIONS.has(description);
 };
 
 export interface RegistrationPayload {

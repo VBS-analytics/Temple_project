@@ -24,8 +24,26 @@ const formatDateLabel = (date: Date) =>
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const SATURDAY_NAVAGRAHA_LABEL = 'Saturday Navagraha Pooja';
 const DAY_OPTION_FALLBACK_LABEL = 'Any Day of Month';
+const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
+const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
 const DAY_OPTION_BADGE_CLASS =
   'rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-orange-600';
+
+const normalizeAnyDayDescription = (value?: string | null) =>
+  (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isAnyDayOption = (option?: { code?: string | null; description?: string | null } | null) => {
+  if (!option) return false;
+  const code = option.code?.trim().toUpperCase() ?? '';
+  if (ANY_DAY_OPTION_CODES.has(code)) return true;
+  const normalizedDescription = normalizeAnyDayDescription(option.description);
+  return ANY_DAY_OPTION_DESCRIPTIONS.has(normalizedDescription);
+};
+
 const mergeDayOptions = (options: DayOptionCalendarEntry[]) => {
   const seen = new Set<string>();
   const merged: DayOptionCalendarEntry[] = [];
@@ -41,6 +59,9 @@ const mergeDayOptions = (options: DayOptionCalendarEntry[]) => {
 };
 
 const normalizeDayOptionLabel = (option: DayOptionCalendarEntry) => {
+  if (isAnyDayOption(option)) {
+    return DAY_OPTION_FALLBACK_LABEL;
+  }
   const description = option.description?.trim();
   return description || DAY_OPTION_FALLBACK_LABEL;
 };
@@ -131,22 +152,91 @@ type SpecialAnnouncementEntry = {
   description: string;
 };
 
+// Per-date computed data shared between report rows and table render.
+type PerDateData = {
+  date: Date;
+  dateKey: string;
+  tamilStar: string;
+  donorInfo: DonorCalendarSummary | undefined;
+  dayOptionInfo: { combined: DayOptionCalendarEntry[]; showSaturdayLabel: boolean };
+  dayOptionValue: string;
+  dayName: (typeof DAY_NAMES)[number];
+  dailyHeader: string;
+};
+
+// Defined outside the component so it is never recreated on each render.
+type MobileDayCardProps = {
+  data: PerDateData;
+};
+
+const MobileDayCard = ({ data }: MobileDayCardProps) => {
+  const { date, tamilStar, donorInfo, dayOptionInfo, dailyHeader } = data;
+  const { combined: combinedDayOptions, showSaturdayLabel } = dayOptionInfo;
+  const shouldRenderDayOptions = combinedDayOptions.length > 0 || showSaturdayLabel;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-4 mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="font-semibold text-slate-900">{formatDateLabel(date)}</h3>
+        <span className="text-sm text-slate-600">{DAY_NAMES[date.getDay()]}</span>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex justify-between">
+          <span className="text-sm font-medium text-slate-500">Tamil Star:</span>
+          <span className="text-sm text-slate-700">{tamilStar}</span>
+        </div>
+
+        <div>
+          <span className="text-sm font-medium text-slate-500">Pooja Day Option:</span>
+          <div className="mt-1">
+            {shouldRenderDayOptions ? (
+              <div className="flex flex-wrap gap-1">
+                {combinedDayOptions.map((option) => (
+                  <span key={`${option.id}-${option.code}`} className={DAY_OPTION_BADGE_CLASS}>
+                    {normalizeDayOptionLabel(option)}
+                  </span>
+                ))}
+                {showSaturdayLabel && (
+                  <span className={DAY_OPTION_BADGE_CLASS}>{SATURDAY_NAVAGRAHA_LABEL}</span>
+                )}
+              </div>
+            ) : (
+              <span className={DAY_OPTION_BADGE_CLASS}>{DAY_OPTION_FALLBACK_LABEL}</span>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <span className="text-sm font-medium text-slate-500">Daily Message Header:</span>
+          <p className="text-sm text-slate-700 mt-1 whitespace-pre-line">{dailyHeader}</p>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="text-sm font-medium text-slate-500">Donor Name:</span>
+          <span className="text-sm text-slate-700">{donorInfo?.names ?? '—'}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="text-sm font-medium text-slate-500">Donor Mobile:</span>
+          <span className="text-sm text-slate-700">{donorInfo?.phones ?? '—'}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PoojaDetailsPage = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMonthSelector, setShowMobileMonthSelector] = useState(false);
-  
-  // Check for mobile screen size
+
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-  
+
   const monthTabs = useMemo(() => buildMonthTabs(), []);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(() => {
     const today = new Date();
@@ -157,26 +247,123 @@ const PoojaDetailsPage = () => {
   });
   const selectedMonth = monthTabs[selectedMonthIndex] ?? monthTabs[0];
   const selectedMonthDates = useMemo(() => {
-    if (!selectedMonth) {
-      return [];
-    }
+    if (!selectedMonth) return [];
     return buildMonthDates(selectedMonth.year, selectedMonth.monthIndex);
   }, [selectedMonth]);
+
   const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
   const [tamilStars, setTamilStars] = useState<Record<string, string>>({});
-  const [dayOptionsByDate, setDayOptionsByDate] = useState<
-    Record<string, DayOptionCalendarEntry[]>
-  >({});
+  const [dayOptionsByDate, setDayOptionsByDate] = useState<Record<string, DayOptionCalendarEntry[]>>({});
   const [donorCalendarByDate, setDonorCalendarByDate] = useState<Record<string, DonorCalendarSummary>>({});
   const [dailyMessageHeaders, setDailyMessageHeaders] = useState<Record<string, string>>({});
   const [specialAnnouncements, setSpecialAnnouncements] = useState<Record<string, string>>({});
+
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
+    if (typeof window === 'undefined') return;
     const handleEvent = () => setCalendarRefreshToken((prev) => prev + 1);
     window.addEventListener(POOJA_DATA_UPDATED_EVENT, handleEvent);
     return () => window.removeEventListener(POOJA_DATA_UPDATED_EVENT, handleEvent);
+  }, []);
+
+  // Merge the 3 calendar API calls into one parallel fetch → single state update → one re-render.
+  useEffect(() => {
+    if (!selectedMonth) return;
+    let active = true;
+    const params = { year: selectedMonth.year, month: selectedMonth.monthIndex + 1 };
+
+    Promise.all([
+      api.get<TamilNakshatraDay[]>('pooja/calendar/tamil-nakshatras/', { params }),
+      api.get<DayOptionCalendarResponse>('pooja/calendar/day-options/', { params }),
+      api.get<DonorCalendarResponse>('pooja/calendar/donor-registrations/', { params }),
+    ])
+      .then(([nakshatraRes, dayOptionRes, donorRes]) => {
+        if (!active) return;
+
+        const starsMap: Record<string, string> = {};
+        nakshatraRes.data.forEach((entry) => {
+          starsMap[entry.date] = entry.tamil_star_native ?? entry.tamil_star;
+        });
+
+        const optionsMap: Record<string, DayOptionCalendarEntry[]> = {};
+        dayOptionRes.data.dates.forEach((entry) => {
+          optionsMap[entry.date] = entry.day_options ?? [];
+        });
+
+        const donorMap: Record<string, DonorCalendarSummary> = {};
+        donorRes.data.dates.forEach((entry) => {
+          const names = entry.donors
+            .map((d) => d.name?.trim() ?? '')
+            .filter((v) => v.length > 0);
+          const phones = entry.donors
+            .map((d) => d.phone_number?.trim() ?? '')
+            .filter((v) => v.length > 0);
+          const donorNamesLabel =
+            entry.donor_names?.trim() || (names.length > 0 ? names.join(', ') : '');
+          const donorPhonesLabel =
+            entry.donor_phones?.trim() || (phones.length > 0 ? phones.join(', ') : '');
+          donorMap[entry.date] = {
+            names: donorNamesLabel || null,
+            phones: donorPhonesLabel || null,
+            dayOptions: entry.day_options ?? [],
+          };
+        });
+
+        // Batch all three updates so React triggers only one re-render.
+        setTamilStars(starsMap);
+        setDayOptionsByDate(optionsMap);
+        setDonorCalendarByDate(donorMap);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('Failed to load calendar data for Ubhayam report', error);
+        setTamilStars({});
+        setDayOptionsByDate({});
+        setDonorCalendarByDate({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedMonth, calendarRefreshToken]);
+
+  // Daily messages and special announcements are month-independent — fetch once on mount.
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([
+      api.get<DailyMessageEntry[]>('pooja/daily-messages/', {
+        params: { page_size: 200, ordering: 'label' },
+      }),
+      api.get<SpecialAnnouncementEntry[]>('pooja/special-announcements/', {
+        params: { page_size: 200, ordering: 'label' },
+      }),
+    ])
+      .then(([messagesRes, announcementsRes]) => {
+        if (!active) return;
+
+        const headersMap: Record<string, string> = {};
+        extractResults<DailyMessageEntry>(messagesRes.data).forEach((entry) => {
+          if (entry.label) headersMap[entry.label] = entry.header_text;
+        });
+
+        const announcementsMap: Record<string, string> = {};
+        extractResults<SpecialAnnouncementEntry>(announcementsRes.data).forEach((entry) => {
+          if (entry.label) announcementsMap[entry.label] = entry.description;
+        });
+
+        setDailyMessageHeaders(headersMap);
+        setSpecialAnnouncements(announcementsMap);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('Failed to load daily messages / special announcements', error);
+        setDailyMessageHeaders({});
+        setSpecialAnnouncements({});
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const resolveDayOptionInfo = useCallback(
@@ -184,7 +371,11 @@ const PoojaDetailsPage = () => {
       const calendarOptions = (dayOptionsByDate[dateKey] ?? []).filter(
         (option) => option.category !== 'tamil_star',
       );
-      const donorOptions = donorCalendarByDate[dateKey]?.dayOptions ?? [];
+      // Also filter out tamil_star category from donor options so Tamil-star registrations
+      // don't pollute the "Pooja Day Option" column.
+      const donorOptions = (donorCalendarByDate[dateKey]?.dayOptions ?? []).filter(
+        (option) => option.category !== 'tamil_star',
+      );
       const merged = mergeDayOptions([...calendarOptions, ...donorOptions]);
       const normalizedEntries = merged.map((option) => ({
         option,
@@ -199,9 +390,7 @@ const PoojaDetailsPage = () => {
       const seenLabels = new Set<string>();
       const dedupedOptions: DayOptionCalendarEntry[] = [];
       filteredEntries.forEach((entry) => {
-        if (seenLabels.has(entry.label)) {
-          return;
-        }
+        if (seenLabels.has(entry.label)) return;
         seenLabels.add(entry.label);
         dedupedOptions.push(entry.option);
       });
@@ -223,9 +412,8 @@ const PoojaDetailsPage = () => {
       const filteredLabels = hasNonFallback
         ? rawLabels.filter((label) => label !== DAY_OPTION_FALLBACK_LABEL)
         : rawLabels;
-      const labels: string[] = filteredLabels.filter(
-        (label, index) => filteredLabels.indexOf(label) === index,
-      );
+      // Use Set for O(n) deduplication instead of indexOf (O(n²)).
+      const labels: string[] = Array.from(new Set(filteredLabels));
       if (info.showSaturdayLabel) {
         labels.push(SATURDAY_NAVAGRAHA_LABEL);
       }
@@ -257,7 +445,9 @@ const PoojaDetailsPage = () => {
     [dailyMessageHeaders, specialAnnouncements],
   );
 
-  const reportRows = useMemo<ReportRow[]>(() => {
+  // Compute all per-date values ONCE. Both the report rows and the table render consume
+  // this memo — eliminating the previous double-computation of resolveDayOptionInfo etc.
+  const perDateData = useMemo<PerDateData[]>(() => {
     return selectedMonthDates.map((date) => {
       const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
         date.getDate(),
@@ -267,16 +457,8 @@ const PoojaDetailsPage = () => {
       const dayOptionInfo = resolveDayOptionInfo(date, dateKey);
       const dayOptionValue = buildDayOptionText(dayOptionInfo);
       const dayName = DAY_NAMES[date.getDay()];
-      const dailyHeader = formatDailyHeader(dayName, dayOptionValue);
-      return {
-        Date: formatDateLabel(date),
-        'Day of Month': DAY_NAMES[date.getDay()],
-        'Tamil Star': tamilStar,
-        'Pooja Day Option': dayOptionValue,
-        'Daily Message Header': dailyHeader ?? '—',
-        'Donor Name': donorInfo?.names ?? '—',
-        'Donor Mobile Number': donorInfo?.phones ?? '—',
-      };
+      const dailyHeader = formatDailyHeader(dayName, dayOptionValue) ?? '—';
+      return { date, dateKey, tamilStar, donorInfo, dayOptionInfo, dayOptionValue, dayName, dailyHeader };
     });
   }, [
     selectedMonthDates,
@@ -287,10 +469,24 @@ const PoojaDetailsPage = () => {
     formatDailyHeader,
   ]);
 
+  const reportRows = useMemo<ReportRow[]>(() => {
+    return perDateData.map(({ date, tamilStar, donorInfo, dayOptionValue, dailyHeader }) => ({
+      Date: formatDateLabel(date),
+      'Day of Month': DAY_NAMES[date.getDay()],
+      'Tamil Star': tamilStar,
+      'Pooja Day Option': dayOptionValue,
+      'Daily Message Header': dailyHeader,
+      'Donor Name': donorInfo?.names ?? '—',
+      'Donor Mobile Number': donorInfo?.phones ?? '—',
+    }));
+  }, [perDateData]);
+
   const downloadFilenameBase = useMemo(() => {
-    const label = selectedMonth?.label?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase() ?? 'ubhayam-report';
+    const label =
+      selectedMonth?.label?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase() ??
+      'ubhayam-report';
     return `ubhayam-report-${label}-${formatFilenameDate(new Date())}`;
-  }, [selectedMonth, calendarRefreshToken]);
+  }, [selectedMonth]);
 
   const triggerBlobDownload = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -300,15 +496,11 @@ const PoojaDetailsPage = () => {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
 
   const handleDownloadPdf = useCallback(async () => {
-    if (reportRows.length === 0) {
-      return;
-    }
+    if (reportRows.length === 0) return;
     try {
       const pdfMakeInstance = await loadPdfMake();
       const ok = verifyTamilFont();
@@ -363,9 +555,7 @@ const PoojaDetailsPage = () => {
         return;
       }
       if (typeof pdfDoc.getBlob === 'function') {
-        pdfDoc.getBlob((blob: Blob) => {
-          triggerBlobDownload(blob, `${downloadFilenameBase}.pdf`);
-        });
+        pdfDoc.getBlob((blob: Blob) => triggerBlobDownload(blob, `${downloadFilenameBase}.pdf`));
         return;
       }
       if (typeof pdfDoc.getBuffer === 'function') {
@@ -375,9 +565,7 @@ const PoojaDetailsPage = () => {
         }
         pdfDoc.getBuffer((buffer: Uint8Array | ArrayBuffer) => {
           const array = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
-          const blob = new (globalThis as any).Blob([array], {
-            type: 'application/pdf',
-          });
+          const blob = new (globalThis as any).Blob([array], { type: 'application/pdf' });
           triggerBlobDownload(blob, `${downloadFilenameBase}.pdf`);
         });
         return;
@@ -389,9 +577,7 @@ const PoojaDetailsPage = () => {
   }, [reportRows, downloadFilenameBase, selectedMonth, triggerBlobDownload]);
 
   const handleDownloadExcel = useCallback(() => {
-    if (reportRows.length === 0) {
-      return;
-    }
+    if (reportRows.length === 0) return;
     const worksheet = XLSX.utils.json_to_sheet(reportRows, {
       header: TABLE_COLUMNS.map((column) => column),
     });
@@ -399,240 +585,6 @@ const PoojaDetailsPage = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Ubhayam Report');
     XLSX.writeFile(workbook, `${downloadFilenameBase}.xlsx`);
   }, [reportRows, downloadFilenameBase]);
-
-  useEffect(() => {
-    if (!selectedMonth) {
-      return;
-    }
-    let active = true;
-
-    api
-      .get<TamilNakshatraDay[]>('pooja/calendar/tamil-nakshatras/', {
-        params: {
-          year: selectedMonth.year,
-          month: selectedMonth.monthIndex + 1,
-        },
-      })
-      .then((response) => {
-        if (!active) return;
-        const mapping: Record<string, string> = {};
-        response.data.forEach((entry) => {
-          mapping[entry.date] = entry.tamil_star_native ?? entry.tamil_star;
-        });
-        setTamilStars(mapping);
-      })
-      .catch((error) => {
-        if (!active) return;
-        console.error('Failed to load Tamil nakshatra calendar', error);
-        setTamilStars({});
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedMonth, calendarRefreshToken]);
-
-  useEffect(() => {
-    if (!selectedMonth) {
-      return;
-    }
-    let active = true;
-
-    api
-      .get<DayOptionCalendarResponse>('pooja/calendar/day-options/', {
-        params: {
-          year: selectedMonth.year,
-          month: selectedMonth.monthIndex + 1,
-        },
-      })
-      .then((response) => {
-        if (!active) {
-          return;
-        }
-        const mapping: Record<string, DayOptionCalendarEntry[]> = {};
-        response.data.dates.forEach((entry) => {
-          mapping[entry.date] = entry.day_options ?? [];
-        });
-        setDayOptionsByDate(mapping);
-      })
-      .catch((error) => {
-        if (!active) {
-          return;
-        }
-        console.error('Failed to load day option calendar', error);
-        setDayOptionsByDate({});
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedMonth, calendarRefreshToken]);
-
-  useEffect(() => {
-    if (!selectedMonth) {
-      return;
-    }
-    let active = true;
-
-    api
-      .get<DonorCalendarResponse>('pooja/calendar/donor-registrations/', {
-        params: {
-          year: selectedMonth.year,
-          month: selectedMonth.monthIndex + 1,
-        },
-      })
-      .then((response) => {
-        if (!active) {
-          return;
-        }
-        const mapping: Record<string, DonorCalendarSummary> = {};
-        response.data.dates.forEach((entry) => {
-          const names = entry.donors
-            .map((donor) => donor.name?.trim() ?? '')
-            .filter((value) => value.length > 0);
-          const phones = entry.donors
-            .map((donor) => donor.phone_number?.trim() ?? '')
-            .filter((value) => value.length > 0);
-          const donorNamesLabel = entry.donor_names?.trim() || (names.length > 0 ? names.join(', ') : '');
-          const donorPhonesLabel = entry.donor_phones?.trim() || (phones.length > 0 ? phones.join(', ') : '');
-          mapping[entry.date] = {
-            names: donorNamesLabel || null,
-            phones: donorPhonesLabel || null,
-            dayOptions: entry.day_options ?? [],
-          };
-        });
-        setDonorCalendarByDate(mapping);
-      })
-      .catch((error) => {
-        if (!active) {
-          return;
-        }
-        console.error('Failed to load donor calendar', error);
-        setDonorCalendarByDate({});
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedMonth, calendarRefreshToken]);
-
-  useEffect(() => {
-    let active = true;
-
-    api
-      .get<DailyMessageEntry[]>('pooja/daily-messages/', {
-        params: { page_size: 200, ordering: 'label' },
-      })
-      .then((response) => {
-        if (!active) return;
-        const entries = extractResults<DailyMessageEntry>(response.data);
-        const mapping: Record<string, string> = {};
-        entries.forEach((entry) => {
-          if (entry.label) {
-            mapping[entry.label] = entry.header_text;
-          }
-        });
-        setDailyMessageHeaders(mapping);
-      })
-      .catch((error) => {
-        if (!active) return;
-        console.error('Failed to load daily message headers', error);
-        setDailyMessageHeaders({});
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    api
-      .get<SpecialAnnouncementEntry[]>('pooja/special-announcements/', {
-        params: { page_size: 200, ordering: 'label' },
-      })
-      .then((response) => {
-        if (!active) return;
-        const entries = extractResults<SpecialAnnouncementEntry>(response.data);
-        const mapping: Record<string, string> = {};
-        entries.forEach((entry) => {
-          if (entry.label) {
-            mapping[entry.label] = entry.description;
-          }
-        });
-        setSpecialAnnouncements(mapping);
-      })
-      .catch((error) => {
-        if (!active) return;
-        console.error('Failed to load special announcements', error);
-        setSpecialAnnouncements({});
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // Mobile card view for table data
-  const MobileDayCard = ({ date, dateKey, tamilStar, donorInfo, dayOptionInfo, dayName, dailyHeader }) => {
-    const combinedDayOptions = dayOptionInfo.combined;
-    const showSaturdayLabel = dayOptionInfo.showSaturdayLabel;
-    const shouldRenderDayOptions = combinedDayOptions.length > 0 || showSaturdayLabel;
-    const donorNames = donorInfo?.names ?? null;
-    const donorPhones = donorInfo?.phones ?? null;
-    
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-4 mb-4">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-semibold text-slate-900">{formatDateLabel(date)}</h3>
-          <span className="text-sm text-slate-600">{DAY_NAMES[date.getDay()]}</span>
-        </div>
-        
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <span className="text-sm font-medium text-slate-500">Tamil Star:</span>
-            <span className="text-sm text-slate-700">{tamilStar}</span>
-          </div>
-          
-          <div>
-            <span className="text-sm font-medium text-slate-500">Pooja Day Option:</span>
-            <div className="mt-1">
-              {shouldRenderDayOptions ? (
-                <div className="flex flex-wrap gap-1">
-                  {combinedDayOptions.map((option) => (
-                    <span key={option.id} className={DAY_OPTION_BADGE_CLASS}>
-                      {normalizeDayOptionLabel(option)}
-                    </span>
-                  ))}
-                  {showSaturdayLabel && (
-                    <span className={DAY_OPTION_BADGE_CLASS}>{SATURDAY_NAVAGRAHA_LABEL}</span>
-                  )}
-                </div>
-              ) : (
-                <span className={DAY_OPTION_BADGE_CLASS}>{DAY_OPTION_FALLBACK_LABEL}</span>
-              )}
-            </div>
-          </div>
-          
-          <div>
-            <span className="text-sm font-medium text-slate-500">Daily Message Header:</span>
-            <p className="text-sm text-slate-700 mt-1 whitespace-pre-line">{dailyHeader}</p>
-          </div>
-          
-          <div className="flex justify-between">
-            <span className="text-sm font-medium text-slate-500">Donor Name:</span>
-            <span className="text-sm text-slate-700">{donorNames ?? '—'}</span>
-          </div>
-          
-          <div className="flex justify-between">
-            <span className="text-sm font-medium text-slate-500">Donor Mobile:</span>
-            <span className="text-sm text-slate-700">{donorPhones ?? '—'}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -714,11 +666,17 @@ const PoojaDetailsPage = () => {
             className="w-full rounded-lg border border-orange-200 bg-white px-4 py-3 text-left font-medium text-slate-700 flex justify-between items-center"
           >
             <span>{selectedMonth?.label}</span>
-            <svg className={`w-5 h-5 text-slate-500 transition-transform ${showMobileMonthSelector ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              className={`w-5 h-5 text-slate-500 transition-transform ${showMobileMonthSelector ? 'transform rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          
+
           {showMobileMonthSelector && (
             <div className="absolute z-10 mt-1 w-full rounded-lg bg-white shadow-lg border border-orange-100 max-h-60 overflow-y-auto">
               {monthTabs.map((tab, index) => {
@@ -766,45 +724,42 @@ const PoojaDetailsPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-orange-100 bg-white text-slate-700">
-                  {selectedMonthDates.map((date) => {
-                    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-                      date.getDate(),
-                    ).padStart(2, '0')}`;
-                    const tamilStar = tamilStars[dateKey] ?? '—';
-                    const donorInfo = donorCalendarByDate[dateKey];
-                    const dayOptionInfo = resolveDayOptionInfo(date, dateKey);
-                    const combinedDayOptions = dayOptionInfo.combined;
-                    const showSaturdayLabel = dayOptionInfo.showSaturdayLabel;
+                  {perDateData.map((row) => {
+                    const { combined: combinedDayOptions, showSaturdayLabel } = row.dayOptionInfo;
                     const shouldRenderDayOptions = combinedDayOptions.length > 0 || showSaturdayLabel;
-                    const donorNames = donorInfo?.names ?? null;
-                    const donorPhones = donorInfo?.phones ?? null;
-                    const dayOptionValue = buildDayOptionText(dayOptionInfo);
-                    const dayName = DAY_NAMES[date.getDay()];
-                    const dailyHeader = formatDailyHeader(dayName, dayOptionValue) ?? '—';
                     return (
-                      <tr key={dateKey}>
-                        <td className="px-4 py-3 font-medium text-slate-900">{formatDateLabel(date)}</td>
-                        <td className="px-4 py-3 text-slate-600">{DAY_NAMES[date.getDay()]}</td>
-                        <td className="px-4 py-3 text-slate-700">{tamilStar}</td>
+                      <tr key={row.dateKey}>
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          {formatDateLabel(row.date)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{row.dayName}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.tamilStar}</td>
                         <td className="px-4 py-3">
                           {shouldRenderDayOptions ? (
                             <div className="flex flex-wrap gap-1">
                               {combinedDayOptions.map((option) => (
-                                <span key={option.id} className={DAY_OPTION_BADGE_CLASS}>
+                                <span
+                                  key={`${option.id}-${option.code}`}
+                                  className={DAY_OPTION_BADGE_CLASS}
+                                >
                                   {normalizeDayOptionLabel(option)}
                                 </span>
                               ))}
                               {showSaturdayLabel && (
-                                <span className={DAY_OPTION_BADGE_CLASS}>{SATURDAY_NAVAGRAHA_LABEL}</span>
+                                <span className={DAY_OPTION_BADGE_CLASS}>
+                                  {SATURDAY_NAVAGRAHA_LABEL}
+                                </span>
                               )}
                             </div>
                           ) : (
                             <span className={DAY_OPTION_BADGE_CLASS}>{DAY_OPTION_FALLBACK_LABEL}</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-pre-line">{dailyHeader}</td>
-                        <td className="px-4 py-3 text-slate-700">{donorNames ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-700">{donorPhones ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-700 whitespace-pre-line">
+                          {row.dailyHeader}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.names ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.phones ?? '—'}</td>
                       </tr>
                     );
                   })}
@@ -818,29 +773,9 @@ const PoojaDetailsPage = () => {
       {/* Mobile Card View */}
       {isMobile && (
         <section className="px-1">
-          {selectedMonthDates.map((date) => {
-            const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-              date.getDate(),
-            ).padStart(2, '0')}`;
-            const tamilStar = tamilStars[dateKey] ?? '—';
-            const donorInfo = donorCalendarByDate[dateKey];
-            const dayOptionInfo = resolveDayOptionInfo(date, dateKey);
-            const dayName = DAY_NAMES[date.getDay()];
-            const dailyHeader = formatDailyHeader(dayName, buildDayOptionText(dayOptionInfo)) ?? '—';
-            
-            return (
-              <MobileDayCard
-                key={dateKey}
-                date={date}
-                dateKey={dateKey}
-                tamilStar={tamilStar}
-                donorInfo={donorInfo}
-                dayOptionInfo={dayOptionInfo}
-                dayName={dayName}
-                dailyHeader={dailyHeader}
-              />
-            );
-          })}
+          {perDateData.map((row) => (
+            <MobileDayCard key={row.dateKey} data={row} />
+          ))}
         </section>
       )}
     </div>
