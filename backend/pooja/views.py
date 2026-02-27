@@ -153,6 +153,17 @@ def _is_any_day_option(code: str | None, description: str | None) -> bool:
     return _normalize_text(description) in ANY_DAY_OPTION_DESCRIPTIONS
 
 
+def _resolve_donor_identifier(donor: User | None) -> str:
+    if donor is None:
+        return ""
+    profile = getattr(donor, "profile", None)
+    donor_number = getattr(profile, "donor_number", None)
+    if donor_number:
+        return f"D{donor_number}"
+    donor_pk = getattr(donor, "id", None)
+    return str(donor_pk) if donor_pk is not None else ""
+
+
 def _credit_custom_balance(user, amount: Decimal):
     if amount <= Decimal("0.00"):
         return
@@ -1416,7 +1427,7 @@ class PoojaDonorCalendarView(APIView):
                 Q(start_date__range=(first_day, last_day))
                 | Q(start_date__isnull=True, created_at__gte=month_start_dt, created_at__lt=month_end_dt)
             )
-            .select_related("donor", "day_option")
+            .select_related("donor", "donor__profile", "day_option")
             .only(
                 "id",
                 "start_date",
@@ -1424,6 +1435,7 @@ class PoojaDonorCalendarView(APIView):
                 "donor__id",
                 "donor__name",
                 "donor__phone_number",
+                "donor__profile__donor_number",
                 "day_option__id",
                 "day_option__code",
                 "day_option__description",
@@ -1534,6 +1546,7 @@ class PoojaDonorCalendarView(APIView):
             if donor is None:
                 continue
             donor_payload = {
+                "donor_id": _resolve_donor_identifier(donor),
                 "name": donor.name or "",
                 "phone_number": donor.phone_number or "",
             }
@@ -1593,13 +1606,14 @@ class PoojaDonorCalendarView(APIView):
                     )
 
         cart_snapshots = (
-            PoojaCartSnapshot.objects.select_related("donor")
+            PoojaCartSnapshot.objects.select_related("donor", "donor__profile")
             .only(
                 "id",
                 "items",
                 "donor__id",
                 "donor__name",
                 "donor__phone_number",
+                "donor__profile__donor_number",
             )
             .order_by("id")
         )
@@ -1608,6 +1622,7 @@ class PoojaDonorCalendarView(APIView):
             if donor is None:
                 continue
             donor_payload = {
+                "donor_id": _resolve_donor_identifier(donor),
                 "name": donor.name or "",
                 "phone_number": donor.phone_number or "",
             }
@@ -1650,7 +1665,7 @@ class PoojaDonorCalendarView(APIView):
             )
             .filter(Q(start_date__isnull=True) | Q(start_date__lte=last_day))
             .exclude(pooja_option_id__in=excluded_option_ids)
-            .select_related("donor", "day_option")
+            .select_related("donor", "donor__profile", "day_option")
             .only(
                 "id",
                 "start_date",
@@ -1664,6 +1679,7 @@ class PoojaDonorCalendarView(APIView):
                 "donor__id",
                 "donor__name",
                 "donor__phone_number",
+                "donor__profile__donor_number",
             )
             .order_by("donor__id", "id")
         )
@@ -1672,6 +1688,7 @@ class PoojaDonorCalendarView(APIView):
             if donor is None:
                 continue
             donor_payload = {
+                "donor_id": _resolve_donor_identifier(donor),
                 "name": donor.name or "",
                 "phone_number": donor.phone_number or "",
             }
@@ -1795,8 +1812,10 @@ class PoojaDonorCalendarView(APIView):
         cursor = first_day
         while cursor <= last_day:
             donors = donors_by_date.get(cursor, [])
+            donor_ids = [donor.get("donor_id", "").strip() for donor in donors if donor.get("donor_id", "").strip()]
             names = [donor["name"].strip() for donor in donors if donor["name"].strip()]
             phones = [donor["phone_number"].strip() for donor in donors if donor["phone_number"].strip()]
+            donor_ids_label = ", ".join(donor_ids) if donor_ids else ""
             names_label = ", ".join(names) if names else ""
             phones_label = ", ".join(phones) if phones else ""
             day_option_entries = list(day_options_by_date.get(cursor, {}).values())
@@ -1805,6 +1824,7 @@ class PoojaDonorCalendarView(APIView):
                 {
                     "date": cursor.isoformat(),
                     "donors": donors,
+                    "donor_ids": donor_ids_label,
                     "donor_names": names_label,
                     "donor_phones": phones_label,
                     "day_options": day_option_entries,
