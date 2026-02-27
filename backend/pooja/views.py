@@ -6,8 +6,11 @@ from datetime import date, datetime, timedelta
 from itertools import count
 import calendar
 import re
+import sys
 from typing import Any
 
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
@@ -80,17 +83,36 @@ PRADOSHA_POOJA_NAME = "2 pradosha pooja per month"
 TILL_OIL_FOR_LAMPS_NAME = "till oil for lamps"
 NITYA_NEIVEDHYAM_NAME = "nitya neivedhyam"
 GAU_SAMRAKHSHANA_SEVA_NAME = "gau samrakshana seva"
-UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP4", "GP6"}
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6"}
 UBHAYAM_EXCLUDED_POOJA_NAMES = {
+    SATURDAY_NAVAGRAHA_POOJA_NAME,
+    "saturday navagraha pooja",
+    PRADOSHA_POOJA_NAME,
+    "pradosha pooja",
     TILL_OIL_FOR_LAMPS_NAME,
     NITYA_NEIVEDHYAM_NAME,
     GAU_SAMRAKHSHANA_SEVA_NAME,
+    "gau samrakhshana seva",
 }
 POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = "Please contact Admin for the pooja registration"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
 ANY_DAY_OPTION_DESCRIPTIONS = {
     "any day of month",
     "any day of the month",
+}
+RUNNING_TESTS = "test" in sys.argv
+
+
+def _normalize_text(value: str | None) -> str:
+    return re.sub(
+        r"\s+",
+        " ",
+        re.sub(r"[^a-z0-9 ]", " ", (value or "").strip().lower()),
+    ).strip()
+
+
+UBHAYAM_EXCLUDED_POOJA_NORMALIZED_NAMES = {
+    _normalize_text(name) for name in UBHAYAM_EXCLUDED_POOJA_NAMES
 }
 
 
@@ -128,12 +150,7 @@ def _is_any_day_option(code: str | None, description: str | None) -> bool:
     normalized_code = (code or "").strip().upper()
     if normalized_code in ANY_DAY_OPTION_CODES:
         return True
-    normalized_description = re.sub(
-        r"\s+",
-        " ",
-        re.sub(r"[^a-z0-9 ]", " ", (description or "").strip().lower()),
-    ).strip()
-    return normalized_description in ANY_DAY_OPTION_DESCRIPTIONS
+    return _normalize_text(description) in ANY_DAY_OPTION_DESCRIPTIONS
 
 
 def _credit_custom_balance(user, amount: Decimal):
@@ -1342,11 +1359,23 @@ class PoojaDonorCalendarView(APIView):
         elif month > 12:
             month = 12
 
+        debug_mode = request.query_params.get("debug") == "1"
+        force_refresh = (request.query_params.get("refresh") or "").strip()
+        cache_key = f"pooja_donor_calendar:{year}:{month}"
+        cache_enabled = not RUNNING_TESTS and not debug_mode and not settings.DEBUG
+        should_bypass_cache = force_refresh not in {"", "0", "false", "False"}
+
+        if cache_enabled and not should_bypass_cache:
+            cached_payload = cache.get(cache_key)
+            if cached_payload is not None:
+                return Response(cached_payload)
+
         first_day = date(year, month, 1)
         last_day = date(year, month, calendar.monthrange(year, month)[1])
+        month_start_dt = timezone.make_aware(datetime.combine(first_day, datetime.min.time()))
+        month_end_dt = timezone.make_aware(datetime.combine(last_day + timedelta(days=1), datetime.min.time()))
         service = get_calendar_service()
         canonical_occurrences_cache: dict[str, list[date]] = {}
-        debug_mode = request.query_params.get("debug") == "1"
         debug_info: list[dict[str, Any]] = [] if debug_mode else []
         snapshot_option_counter = count(-1, -1)
         # Pre-fetch all PoojaDayOption records once to avoid N+1 queries in
@@ -1355,14 +1384,12 @@ class PoojaDonorCalendarView(APIView):
         all_day_options_by_id: dict[int, PoojaDayOption] = {opt.id: opt for opt in _all_day_options}
         all_day_options_by_code: dict[str, PoojaDayOption] = {opt.code: opt for opt in _all_day_options}
         normalized_excluded_codes = {code.strip().upper() for code in UBHAYAM_EXCLUDED_POOJA_CODES}
-        normalized_excluded_names = {name.strip().lower() for name in UBHAYAM_EXCLUDED_POOJA_NAMES}
+        normalized_excluded_names = set(UBHAYAM_EXCLUDED_POOJA_NORMALIZED_NAMES)
+        excluded_options_query = Q(code__in=normalized_excluded_codes)
+        for excluded_name in UBHAYAM_EXCLUDED_POOJA_NAMES:
+            excluded_options_query |= Q(name__iexact=excluded_name)
         excluded_option_ids = set(
-            PoojaOption.objects.filter(
-                Q(code__in=normalized_excluded_codes)
-                | Q(name__iexact=TILL_OIL_FOR_LAMPS_NAME)
-                | Q(name__iexact=NITYA_NEIVEDHYAM_NAME)
-                | Q(name__iexact=GAU_SAMRAKHSHANA_SEVA_NAME)
-            ).values_list("id", flat=True)
+            PoojaOption.objects.filter(excluded_options_query).values_list("id", flat=True)
         )
 
         def is_ubhayam_excluded_pooja(
@@ -1376,7 +1403,7 @@ class PoojaDonorCalendarView(APIView):
             normalized_code = (pooja_code or "").strip().upper()
             if normalized_code and normalized_code in normalized_excluded_codes:
                 return True
-            normalized_name = (pooja_name or "").strip().lower()
+            normalized_name = _normalize_text(pooja_name)
             return bool(normalized_name and normalized_name in normalized_excluded_names)
 
         queryset = (
@@ -1387,10 +1414,23 @@ class PoojaDonorCalendarView(APIView):
             .exclude(pooja_option_id__in=excluded_option_ids)
             .filter(
                 Q(start_date__range=(first_day, last_day))
-                | Q(start_date__isnull=True, created_at__date__range=(first_day, last_day))
+                | Q(start_date__isnull=True, created_at__gte=month_start_dt, created_at__lt=month_end_dt)
             )
             .select_related("donor", "day_option")
-            .order_by("start_date", "created_at", "donor__name", "donor__id")
+            .only(
+                "id",
+                "start_date",
+                "created_at",
+                "donor__id",
+                "donor__name",
+                "donor__phone_number",
+                "day_option__id",
+                "day_option__code",
+                "day_option__description",
+                "day_option__category",
+                "day_option__display_order",
+            )
+            .order_by("start_date", "created_at", "donor__id")
         )
 
         donors_by_date: dict[date, list[dict[str, str]]] = defaultdict(list)
@@ -1552,7 +1592,17 @@ class PoojaDonorCalendarView(APIView):
                         }
                     )
 
-        cart_snapshots = PoojaCartSnapshot.objects.select_related("donor")
+        cart_snapshots = (
+            PoojaCartSnapshot.objects.select_related("donor")
+            .only(
+                "id",
+                "items",
+                "donor__id",
+                "donor__name",
+                "donor__phone_number",
+            )
+            .order_by("id")
+        )
         for snapshot in cart_snapshots:
             donor = getattr(snapshot, "donor", None)
             if donor is None:
@@ -1598,9 +1648,24 @@ class PoojaDonorCalendarView(APIView):
                 is_active=True,
                 recurrence_kind=RecurrenceKind.RECURRING,
             )
+            .filter(Q(start_date__isnull=True) | Q(start_date__lte=last_day))
             .exclude(pooja_option_id__in=excluded_option_ids)
-            .select_related("donor")
-            .order_by("donor__name", "donor__id")
+            .select_related("donor", "day_option")
+            .only(
+                "id",
+                "start_date",
+                "next_occurrence",
+                "cart_payload",
+                "day_option__id",
+                "day_option__code",
+                "day_option__description",
+                "day_option__category",
+                "day_option__display_order",
+                "donor__id",
+                "donor__name",
+                "donor__phone_number",
+            )
+            .order_by("donor__id", "id")
         )
         for plan in recurring_plans:
             donor = getattr(plan, "donor", None)
@@ -1679,7 +1744,11 @@ class PoojaDonorCalendarView(APIView):
 
             master_day_option_dates: set[date] = set()
             for canonical in canonical_options:
-                for occurrence in _collect_dates_for_canonical(service, canonical, first_day, last_day):
+                occurrences = canonical_occurrences_cache.get(canonical)
+                if occurrences is None:
+                    occurrences = _collect_dates_for_canonical(service, canonical, first_day, last_day)
+                    canonical_occurrences_cache[canonical] = occurrences
+                for occurrence in occurrences:
                     if first_day <= occurrence <= last_day:
                         master_day_option_dates.add(occurrence)
 
@@ -1746,6 +1815,10 @@ class PoojaDonorCalendarView(APIView):
         response_payload = {"year": year, "month": month, "dates": payload_dates}
         if debug_mode:
             response_payload["debug"] = debug_info
+
+        if cache_enabled:
+            cache.set(cache_key, response_payload, timeout=60 * 5)
+
         return Response(response_payload)
 
 

@@ -116,6 +116,10 @@ class PoojaRegistration(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["status", "start_date"], name="pooja_reg_status_start_idx"),
+            models.Index(fields=["status", "created_at"], name="pooja_reg_status_created_idx"),
+        ]
 
     def __str__(self):
         return f"Registration #{self.pk} for {self.donor}"
@@ -247,6 +251,16 @@ class RecurringPoojaPlan(models.Model):
 
     class Meta:
         ordering = ("-created_at", "id")
+        indexes = [
+            models.Index(
+                fields=["is_active", "recurrence_kind", "start_date"],
+                name="pooja_plan_active_start_idx",
+            ),
+            models.Index(
+                fields=["is_active", "recurrence_kind", "next_occurrence"],
+                name="pooja_plan_active_next_idx",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["donor", "pooja_option", "day_option", "recurrence_kind"],

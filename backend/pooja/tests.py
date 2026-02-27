@@ -23,6 +23,7 @@ from .models import (
     RecurrenceFrequency,
     RecurrenceKind,
     RecurringPoojaPlan,
+    UbhayamReport,
 )
 from .serializers import RecurringPoojaPlanSerializer
 from .services.calendar import OccurrenceResult, TempleCalendarService
@@ -213,6 +214,92 @@ class PoojaRegistrationAccessControlTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         registration = PoojaRegistration.objects.get(donor=self.donor)
         self.assertEqual(registration.start_date, timezone.localdate())
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class UbhayamReportSyncTests(TestCase):
+    def setUp(self):
+        self.donor = User.objects.create_user(
+            phone_number="9000000300",
+            name="Ubhayam Donor",
+            password="secret",
+        )
+        self.day_option, _ = PoojaDayOption.objects.get_or_create(
+            code="FE",
+            defaults={
+                "description": "1st day of English Month",
+                "category": DayOptionCategory.CODE,
+            },
+        )
+        self.included_option, _ = PoojaOption.objects.get_or_create(
+            code="AR99",
+            defaults={"name": "Regular Archana"},
+        )
+        self.excluded_options = [
+            PoojaOption.objects.get_or_create(
+                code="GP1",
+                defaults={"name": "Till Oil for Lamps"},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="GP2",
+                defaults={"name": "2 Pradosha Pooja per month"},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="GP3",
+                defaults={"name": "4 Saturday Navagraha Pooja per month"},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="GP4",
+                defaults={"name": "Gau Samrakshana Seva"},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="GP6",
+                defaults={"name": "Nitya Neivedhyam"},
+            )[0],
+        ]
+
+    def test_excluded_special_poojas_are_not_mapped_to_ubhayam_report(self):
+        for index, option in enumerate(self.excluded_options, start=1):
+            PoojaRegistration.objects.create(
+                donor=self.donor,
+                pooja_option=option,
+                day_option=self.day_option,
+                start_date=date(2026, 2, min(25 + index, 28)),
+            )
+
+        self.assertEqual(UbhayamReport.objects.count(), 0)
+
+    def test_included_pooja_creates_ubhayam_report_row(self):
+        PoojaRegistration.objects.create(
+            donor=self.donor,
+            pooja_option=self.included_option,
+            day_option=self.day_option,
+            start_date=date(2026, 2, 25),
+        )
+
+        rows = list(UbhayamReport.objects.all())
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].donor_name, self.donor.name)
+        self.assertEqual(rows[0].pooja_day_option, "1st day of English Month")
+
+    def test_row_is_removed_when_only_excluded_registrations_remain(self):
+        included = PoojaRegistration.objects.create(
+            donor=self.donor,
+            pooja_option=self.included_option,
+            day_option=self.day_option,
+            start_date=date(2026, 2, 25),
+        )
+        PoojaRegistration.objects.create(
+            donor=self.donor,
+            pooja_option=self.excluded_options[0],
+            day_option=self.day_option,
+            start_date=date(2026, 2, 26),
+        )
+
+        self.assertEqual(UbhayamReport.objects.count(), 1)
+
+        included.delete()
+        self.assertEqual(UbhayamReport.objects.count(), 0)
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
