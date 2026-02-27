@@ -269,7 +269,11 @@ const PoojaDetailsPage = () => {
   useEffect(() => {
     if (!selectedMonth) return;
     let active = true;
-    const params = { year: selectedMonth.year, month: selectedMonth.monthIndex + 1 };
+    const params = {
+      year: selectedMonth.year,
+      month: selectedMonth.monthIndex + 1,
+      refresh: calendarRefreshToken,
+    };
 
     Promise.all([
       api.get<TamilNakshatraDay[]>('pooja/calendar/tamil-nakshatras/', { params }),

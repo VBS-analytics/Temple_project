@@ -12,6 +12,17 @@ from .models import PoojaRegistration, UbhayamReport
 ANY_DAY_OPTION_LABEL = "Any day of the month"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
 ANY_DAY_OPTION_DESCRIPTIONS = {"any day of month", "any day of the month"}
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6"}
+UBHAYAM_EXCLUDED_POOJA_NAMES = {
+    "till oil for lamps",
+    "nitya neivedhyam",
+    "gau samrakshana seva",
+    "gau samrakhshana seva",
+    "4 saturday navagraha pooja per month",
+    "saturday navagraha pooja",
+    "2 pradosha pooja per month",
+    "pradosha pooja",
+}
 
 
 def _normalize_description(value: str | None) -> str:
@@ -20,6 +31,11 @@ def _normalize_description(value: str | None) -> str:
         " ",
         re.sub(r"[^a-z0-9 ]", " ", (value or "").strip().lower()),
     ).strip()
+
+
+UBHAYAM_EXCLUDED_POOJA_NORMALIZED_NAMES = {
+    _normalize_description(name) for name in UBHAYAM_EXCLUDED_POOJA_NAMES
+}
 
 
 def _is_any_day_option(code: str | None, description: str | None) -> bool:
@@ -52,6 +68,18 @@ def _resolve_day_option_label(option) -> str:
     return label or ANY_DAY_OPTION_LABEL
 
 
+def _is_ubhayam_excluded_pooja(option) -> bool:
+    if option is None:
+        return False
+
+    normalized_code = (getattr(option, "code", None) or "").strip().upper()
+    if normalized_code in UBHAYAM_EXCLUDED_POOJA_CODES:
+        return True
+
+    normalized_name = _normalize_description(getattr(option, "name", None))
+    return normalized_name in UBHAYAM_EXCLUDED_POOJA_NORMALIZED_NAMES
+
+
 def _resolve_donor(instance: PoojaRegistration) -> User | None:
     donor = getattr(instance, "donor", None)
     if donor is not None:
@@ -63,8 +91,13 @@ def _resolve_donor(instance: PoojaRegistration) -> User | None:
 
 def _collect_unique_day_options_for_donor(donor_id: int) -> list[str]:
     labels: set[str] = set()
-    registrations = PoojaRegistration.objects.filter(donor_id=donor_id).select_related("day_option")
+    registrations = (
+        PoojaRegistration.objects.filter(donor_id=donor_id)
+        .select_related("day_option", "pooja_option")
+    )
     for registration in registrations:
+        if _is_ubhayam_excluded_pooja(getattr(registration, "pooja_option", None)):
+            continue
         labels.add(_resolve_day_option_label(getattr(registration, "day_option", None)))
     return sorted(labels, key=str.casefold)
 
