@@ -12,6 +12,7 @@ const TABLE_COLUMNS = [
   'Tamil Star',
   'Pooja Day Option',
   'Daily Message Header',
+  'Donor ID',
   'Donor Name',
   'Donor Mobile Number',
 ] as const;
@@ -115,6 +116,7 @@ type DayOptionCalendarResponse = {
 };
 
 type DonorCalendarDonor = {
+  donor_id: string | null;
   name: string | null;
   phone_number: string | null;
 };
@@ -122,6 +124,7 @@ type DonorCalendarDonor = {
 type DonorCalendarDate = {
   date: string;
   donors: DonorCalendarDonor[];
+  donor_ids?: string | null;
   donor_names?: string | null;
   donor_phones?: string | null;
   day_options?: DayOptionCalendarEntry[];
@@ -134,6 +137,7 @@ type DonorCalendarResponse = {
 };
 
 type DonorCalendarSummary = {
+  ids: string | null;
   names: string | null;
   phones: string | null;
   dayOptions: DayOptionCalendarEntry[];
@@ -210,6 +214,11 @@ const MobileDayCard = ({ data }: MobileDayCardProps) => {
         <div>
           <span className="text-sm font-medium text-slate-500">Daily Message Header:</span>
           <p className="text-sm text-slate-700 mt-1 whitespace-pre-line">{dailyHeader}</p>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="text-sm font-medium text-slate-500">Donor ID:</span>
+          <span className="text-sm text-slate-700">{donorInfo?.ids ?? '—'}</span>
         </div>
 
         <div className="flex justify-between">
@@ -295,17 +304,23 @@ const PoojaDetailsPage = () => {
 
         const donorMap: Record<string, DonorCalendarSummary> = {};
         donorRes.data.dates.forEach((entry) => {
+          const ids = entry.donors
+            .map((d) => d.donor_id?.trim() ?? '')
+            .filter((v) => v.length > 0);
           const names = entry.donors
             .map((d) => d.name?.trim() ?? '')
             .filter((v) => v.length > 0);
           const phones = entry.donors
             .map((d) => d.phone_number?.trim() ?? '')
             .filter((v) => v.length > 0);
+          const donorIdsLabel =
+            entry.donor_ids?.trim() || (ids.length > 0 ? ids.join(', ') : '');
           const donorNamesLabel =
             entry.donor_names?.trim() || (names.length > 0 ? names.join(', ') : '');
           const donorPhonesLabel =
             entry.donor_phones?.trim() || (phones.length > 0 ? phones.join(', ') : '');
           donorMap[entry.date] = {
+            ids: donorIdsLabel || null,
             names: donorNamesLabel || null,
             phones: donorPhonesLabel || null,
             dayOptions: entry.day_options ?? [],
@@ -480,6 +495,7 @@ const PoojaDetailsPage = () => {
       'Tamil Star': tamilStar,
       'Pooja Day Option': dayOptionValue,
       'Daily Message Header': dailyHeader,
+      'Donor ID': donorInfo?.ids ?? '—',
       'Donor Name': donorInfo?.names ?? '—',
       'Donor Mobile Number': donorInfo?.phones ?? '—',
     }));
@@ -539,7 +555,7 @@ const PoojaDetailsPage = () => {
           {
             table: {
               headerRows: 1,
-              widths: ['12%', '12%', '12%', '32%', '10%', '12%', '10%'],
+              widths: ['11%', '10%', '10%', '19%', '22%', '8%', '10%', '10%'],
               body: tableBody,
             },
             layout: {
@@ -762,6 +778,7 @@ const PoojaDetailsPage = () => {
                         <td className="px-4 py-3 text-slate-700 whitespace-pre-line">
                           {row.dailyHeader}
                         </td>
+                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.ids ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-700">{row.donorInfo?.names ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-700">{row.donorInfo?.phones ?? '—'}</td>
                       </tr>

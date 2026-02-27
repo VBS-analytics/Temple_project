@@ -507,8 +507,10 @@ class PoojaDonorCalendarViewTests(TestCase):
             [donor["phone_number"] for donor in january_tenth["donors"]],
             ["9000000011", "9000000012"],
         )
+        self.assertTrue(all((donor.get("donor_id") or "").startswith("D") for donor in january_tenth["donors"]))
         self.assertEqual(january_tenth["donor_names"], "Donor One, Donor Two")
         self.assertEqual(january_tenth["donor_phones"], "9000000011, 9000000012")
+        self.assertTrue((january_tenth["donor_ids"] or "").startswith("D"))
 
         january_eleventh = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-11")
         self.assertEqual(len(january_eleventh["donors"]), 1)
