@@ -14,20 +14,19 @@ type NavLinkItem = {
 };
 
 const navLinks: NavLinkItem[] = [
-  { label: 'Home', href: '#top', type: 'anchor' },
-  { label: 'About Kakkalani Village', href: '/about-kakkalani-village', type: 'route' },
+  { label: 'HOME', href: '#top', type: 'anchor' },
   {
-    label: 'About Us',
+    label: 'ABOUT US',
     href: '/about',
     type: 'route'
   },
   {
-    label: 'About Kovil',
+    label: 'KAKKALANI TEMPLES',
     href: '/kovi-details',
     type: 'route'
   },
   {
-    label: 'Why we should visit our village',
+    label: 'WHY WE SHOULD VISIT OUR VILLAGE',
     href: '/why-visit-native-village',
     type: 'route'
   }
@@ -45,7 +44,7 @@ const resolveAnchorTo = (hash: string): To => ({
 });
 
 type PublicSiteHeaderProps = {
-  variant?: 'overlay' | 'solid';
+  variant?: 'overlay' | 'solid' | 'amber';
 };
 
 const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
@@ -63,21 +62,34 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     'z-30',
     variant === 'overlay'
       ? 'absolute inset-x-0 top-0 bg-transparent text-white'
+      : variant === 'amber'
+      ? 'relative sticky top-0 border-b border-[#fef3c7] bg-[#fffbeb]/95 text-black shadow-[0_10px_24px_-20px_rgba(180,83,9,0.2)] backdrop-blur'
       : 'relative sticky top-0 border-b border-[#90CAF9] bg-[#E3F2FD]/95 text-black shadow-[0_10px_24px_-20px_rgba(21,101,192,0.35)] backdrop-blur'
   );
   const navLinkClass =
     variant === 'overlay'
-      ? 'text-white transition hover:text-[#f4ba1a]'
-      : 'text-black transition hover:text-[#1565C0]';
-  const dropdownClass = variant === 'overlay' ? 'bg-white/95 text-slate-700' : 'bg-white text-black border border-[#90CAF9]';
+      ? 'font-bold text-white transition hover:text-[#f4ba1a]'
+      : variant === 'amber'
+      ? 'font-bold text-black transition hover:text-[#b45309]'
+      : 'font-bold text-black transition hover:text-[#1565C0]';
+  const dropdownClass =
+    variant === 'overlay'
+      ? 'bg-white/95 text-slate-700'
+      : variant === 'amber'
+      ? 'bg-[#fffbeb] text-[#334155] border border-[#fcd34d]'
+      : 'bg-white text-black border border-[#90CAF9]';
   const buttonBase =
     variant === 'overlay'
       ? 'bg-[#f06f4a] hover:bg-[#ff8a60]'
+      : variant === 'amber'
+      ? 'bg-[#b45309] hover:bg-[#92400e]'
       : 'bg-[#E65100] hover:bg-[#F57C00]';
 
   const brandTextClass =
     variant === 'overlay'
       ? 'text-white/80'
+      : variant === 'amber'
+      ? 'text-[#92400e]'
       : 'text-[#1565C0]';
 
   const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
@@ -91,15 +103,21 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const toggleButtonBase =
     variant === 'overlay'
       ? 'border-white/40 text-white hover:bg-white/10'
+      : variant === 'amber'
+      ? 'border-[#fcd34d] text-[#b45309] hover:bg-amber-50/80'
       : 'border-[#90CAF9] text-[#1565C0] hover:bg-white/80';
   const donateButtonClass =
     variant === 'overlay'
-      ? 'rounded-full bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-red-700 transition hover:bg-amber-100'
-      : 'rounded-full bg-[#E65100] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-[#F57C00]';
+      ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
+      : variant === 'amber'
+      ? 'text-xs font-semibold uppercase tracking-wide text-[#b45309] transition hover:text-[#92400e]'
+      : 'text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:text-[#1976D2]';
   const patronButtonClass =
     variant === 'overlay'
-      ? 'rounded-full border border-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10'
-      : 'rounded-full border border-[#1565C0] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:bg-blue-50';
+      ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
+      : variant === 'amber'
+      ? 'text-xs font-semibold uppercase tracking-wide text-[#b45309] transition hover:text-[#92400e]'
+      : 'text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:text-[#1976D2]';
 
   useEffect(() => {
     if (!mobileMenuOpen && !patronDialogOpen) {
@@ -154,7 +172,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
             </p>
           </Link>
 
-          <nav className="hidden flex-1 items-center justify-center gap-6 text-sm font-semibold md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-6 text-xs tracking-wide md:flex">
             {visibleNavLinks.map((item) => {
               if (item.children?.length) {
                 return (
@@ -269,14 +287,14 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
         <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0" onClick={closeMobileMenu} />
           <div className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col bg-white text-black shadow-2xl sm:max-w-sm">
-            <div className="flex items-center justify-between border-b border-[#90CAF9] px-6 py-4">
+            <div className={clsx("flex items-center justify-between border-b px-6 py-4", variant === 'amber' ? "border-[#fef3c7]" : "border-[#90CAF9]")}>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#1565C0]">Kakkalani Gramam</p>
+                <p className={clsx("text-xs font-semibold uppercase tracking-[0.3em]", variant === 'amber' ? "text-[#92400e]" : "text-[#1565C0]")}>Kakkalani Gramam</p>
               </div>
               <button
                 type="button"
                 onClick={closeMobileMenu}
-                className="rounded-full border border-[#90CAF9] p-2 text-[#1565C0] transition hover:bg-blue-50"
+                className={clsx("rounded-full border p-2 transition", variant === 'amber' ? "border-[#fcd34d] text-[#b45309] hover:bg-[#fef3c7]" : "border-[#90CAF9] text-[#1565C0] hover:bg-blue-50")}
                 aria-label="Close menu"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -300,8 +318,12 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                         className={clsx(
                           'block w-full rounded-xl border px-4 py-3 text-sm font-semibold text-black transition',
                           isNavItemActive(item)
-                            ? 'border-[#90CAF9] bg-blue-50 text-[#1565C0]'
-                            : 'border-blue-100 bg-white hover:border-[#90CAF9] hover:bg-blue-50/70'
+                            ? variant === 'amber'
+                              ? 'border-[#fcd34d] bg-[#fef3c7] text-[#b45309]'
+                              : 'border-[#90CAF9] bg-blue-50 text-[#1565C0]'
+                            : variant === 'amber'
+                              ? 'border-[#fef3c7] bg-white hover:border-[#fcd34d] hover:bg-[#fffbeb]'
+                              : 'border-blue-100 bg-white hover:border-[#90CAF9] hover:bg-blue-50/70'
                         )}
                         aria-current={isNavItemActive(item) ? 'page' : undefined}
                       >
@@ -335,7 +357,14 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={closeMobileMenu}
-                  className="block w-full rounded-full bg-[#E65100] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#F57C00]"
+                  className={clsx(
+                    "block w-full text-center text-sm font-semibold transition",
+                    variant === 'amber'
+                      ? "py-2 text-[#b45309] hover:text-[#92400e]"
+                      : variant === 'overlay'
+                      ? "py-2 text-white hover:text-white/80"
+                      : "py-2 text-[#1565C0] hover:text-[#1976D2]"
+                  )}
                 >
                   Donate Now
                 </a>
@@ -345,7 +374,14 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                     closeMobileMenu();
                     handlePatronContactClick();
                   }}
-                  className="block w-full rounded-full border border-[#1565C0] px-4 py-3 text-center text-sm font-semibold text-[#1565C0] transition hover:bg-blue-50"
+                  className={clsx(
+                    "block w-full text-center text-sm font-semibold transition",
+                    variant === 'amber'
+                      ? "py-2 text-[#b45309] hover:text-[#92400e]"
+                      : variant === 'overlay'
+                      ? "py-2 text-white hover:text-white/80"
+                      : "py-2 text-[#1565C0] hover:text-[#1976D2]"
+                  )}
                 >
                   Contact to Become a Patron
                 </button>
@@ -381,13 +417,26 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
           >
             <div className="flex min-h-full items-start justify-center sm:items-center">
               <div
-                className="relative w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl border border-[#90CAF9] bg-white p-5 shadow-[0_30px_80px_-30px_rgba(21,101,192,0.55)] sm:max-h-[calc(100dvh-5rem)]"
+                className={clsx(
+                  "relative w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl bg-white p-5 sm:max-h-[calc(100dvh-5rem)]",
+                  variant === 'amber'
+                    ? "border border-[#fcd34d] shadow-[0_30px_80px_-30px_rgba(180,83,9,0.35)]"
+                    : "border border-[#90CAF9] shadow-[0_30px_80px_-30px_rgba(21,101,192,0.55)]"
+                )}
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#1565C0] via-[#1976D2] to-[#1565C0]" />
+                <div className={clsx(
+                  "pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r rounded-t-2xl",
+                  variant === 'amber'
+                    ? "from-[#d97706] via-[#b45309] to-[#d97706]"
+                    : "from-[#1565C0] via-[#1976D2] to-[#1565C0]"
+                )} />
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.24em] text-[#1565C0]">
+                    <p className={clsx(
+                      "text-[0.62rem] font-semibold uppercase tracking-[0.24em]",
+                      variant === 'amber' ? "text-[#b45309]" : "text-[#1565C0]"
+                    )}>
                       Contact to Become a Patron
                     </p>
                     <h2 id="patron-contact-title" className="mt-1 text-xl font-semibold text-black">
@@ -419,7 +468,12 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                     <a
                       key={contact.phoneRaw}
                       href={`tel:${contact.phoneRaw}`}
-                      className="group flex items-center justify-between rounded-xl border border-blue-100 bg-white px-4 py-3 transition hover:border-[#90CAF9]"
+                      className={clsx(
+                        "group flex items-center justify-between rounded-xl bg-white px-4 py-3 transition",
+                        variant === 'amber'
+                          ? "border border-[#fef3c7] hover:border-[#fcd34d]"
+                          : "border border-blue-100 hover:border-[#90CAF9]"
+                      )}
                     >
                       <div>
                         <p className="text-sm font-semibold text-black">{contact.name}</p>

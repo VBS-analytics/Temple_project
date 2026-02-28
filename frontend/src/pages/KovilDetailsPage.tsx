@@ -542,7 +542,7 @@ const KovilDetailsPage = () => {
     <>
       <style>{CSS_STYLES}</style>
       <div className="kp">
-        <PublicSiteHeader />
+        <PublicSiteHeader variant="amber" />
 
         {/* ── Page Header ── */}
         <header className="kp-pg-hdr">

@@ -233,14 +233,17 @@ const LandingPage = () => {
         /* ── BLESSINGS: text left | images right ── */
         .bless-cols {
           display:grid;
-          grid-template-columns:1fr clamp(260px,32%,380px);
+          grid-template-columns:1fr clamp(220px,26%,320px);
           gap:2rem; align-items:start;
         }
-        @media(max-width:820px){ .bless-cols { grid-template-columns:1fr; } }
+        @media(max-width:820px){
+          .bless-cols { grid-template-columns:1fr; }
+          .bless-imgs { max-width:260px; }
+        }
 
         .bless-imgs { display:flex; flex-direction:column; gap:.9rem; }
         .bless-img-wrap {
-          border-radius:1.5rem; overflow:hidden; aspect-ratio:4/3; position:relative;
+          border-radius:1.5rem; overflow:hidden; aspect-ratio:4/3.06; position:relative;
           box-shadow:0 5px 22px rgba(0,0,0,.14); flex-shrink:0;
         }
         .bless-img-wrap img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .55s; }
@@ -265,7 +268,7 @@ const LandingPage = () => {
 
         /* ── HISTORY: snapshot left | text right ── */
         .hist-cols {
-          display:grid; grid-template-columns:300px 1fr;
+          display:grid; grid-template-columns:1fr 300px;
           gap:2.5rem; align-items:start;
         }
         @media(max-width:820px){ .hist-cols { grid-template-columns:1fr; } }
@@ -427,17 +430,18 @@ const LandingPage = () => {
         @media(max-width:640px){
           .stats-grid { grid-template-columns:1fr 1fr; }
           .bless-imgs { flex-direction:row; }
-          .bless-img-wrap { flex:1; aspect-ratio:4/5; }
+          .bless-img-wrap { flex:1; aspect-ratio:4/5.1; }
         }
         @media(max-width:420px){
           .stats-grid { grid-template-columns:1fr; }
           .bless-imgs { flex-direction:column; }
+          .bless-img-wrap { flex:none; width:38%; align-self:center; aspect-ratio:4/5.74; }
           .temple-img-grid { grid-template-columns:1fr 1fr; }
         }
       `}</style>
 
       <div className="lp">
-        <PublicSiteHeader variant="solid" />
+        <PublicSiteHeader variant="amber" />
 
         <main>
 
@@ -481,8 +485,100 @@ const LandingPage = () => {
                 <div className="orn-ln r" /><div className="orn-gm" /><div className="orn-gm" style={{ opacity:.45 }} /><div className="orn-gm" /><div className="orn-ln" />
               </div>
 
-              {/* ── 1. BLESSINGS & LEGACY — text left, images right ── */}
+              {/* ── 1. HISTORY & FOUNDATIONS — snapshot left, text right ── */}
               <div className="h-section lr ld1">
+                <div className="h-title-bar">
+                  <div className="h-icon">🏛️</div>
+                  <h3 className="h-sec-title">History & Foundations</h3>
+                </div>
+                <div className="h-rule" />
+
+                <div className="hist-cols">
+                  {/* LEFT — text */}
+                  <div>
+                    <p className="h-para">
+                      Kakkalani is a beautiful village located 10 km southeast of Thiruvarur, a town famous for the
+                      Thyagaraja Swamy temple that houses a Maragadam Shiva Lingam believed to have once been
+                      worshipped by Lord Indiran.
+                    </p>
+                    <p className="h-para">
+                      According to earlier generations, the Chozha king consecrated 48 Shiva temples around Thyagaraja
+                      Swamy temple during the mandalam period, and Kakkalani is home to one of those temples —
+                      Gnanambal Sametha Kalahastiswarar. Prior to our forefathers moving in four to five generations
+                      ago, Rayar families were said to have settled here.
+                    </p>
+                    <p className="h-para">
+                      Kakkalani Agraharam was laid out with the Kadugayar river (a branch of the Kaveri) running along
+                      the northern edge. On the riverbank, the Pillayar under the Peepal tree was later relocated into
+                      the Aathagarai Pillayar Koil inside the temple compound.
+                    </p>
+                  </div>
+
+                  {/* RIGHT — Village Snapshot card */}
+                  <div className="snapshot-card">
+                    <div className="snap-head">
+                      <div className="snap-head-icon">
+                        <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <span className="snap-title">Village Snapshot</span>
+                    </div>
+                    <p className="snap-desc">
+                      Kadugayar river, gopurams, snake holes, and community ponds are woven
+                      into day-to-day life. The village invites you to witness the temples,
+                      participate in upkeep, and carry the legacy forward.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── 2. TEMPLES & SACRED SITES — full width text + image grid ── */}
+              <div className="h-section lr ld2">
+                <div className="h-title-bar">
+                  <div className="h-icon">🕉️</div>
+                  <h3 className="h-sec-title">Temples & Sacred Sites</h3>
+                </div>
+                <div className="h-rule" />
+
+                {/* images LEFT, text RIGHT */}
+                <div className="temple-cols">
+                  {/* LEFT — 2×2 image grid */}
+                  <div className="temple-img-grid">
+                    {templeImages.map((t) => (
+                      <div key={t.src} className={`t-card ${t.contain ? "t-contain" : "t-cover"}`}>
+                        <img src={t.src} alt={t.name} loading="lazy" />
+                        <div className="t-card-overlay" />
+                        <div className="t-info">
+                          <div className="t-deity">{t.deity}</div>
+                          <div className="t-name">{t.name}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* RIGHT — text content */}
+                  <div>
+                    <p className="h-para">
+                      The western edge of the agraharam features the Lakshmi Narayanar Perumal Koil, anchored by a
+                      striking gopuram and aligned between two rows of houses so residents can witness deeparadhana
+                      from their doorsteps.
+                    </p>
+                    <p className="h-para">
+                      Inside the temple, Pambu Puttru (the snake hole) in the southwest corner still shelters snakes
+                      that villagers feed with milk, while a pond named Ayyan Kulam sits just northwest of the shrine.
+                    </p>
+                    <p className="h-para">
+                      On the eastern end stands the Gnanambika Samedha Kalahastiswarar Koil with the Poorna Pushkala
+                      Samedha Ayyanar Koil opposite. A short walk east reveals the well-maintained Mazhai Marriamman
+                      Koil, and about 1 km further on the village edge is the Damodara Pillayar Koil established by
+                      the Pannai family.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── 3. BLESSINGS & LEGACY — text left, images right ── */}
+              <div className="h-section lr ld3">
                 <div className="h-title-bar">
                   <div className="h-icon">🙏</div>
                   <h3 className="h-sec-title">Blessings & Legacy</h3>
@@ -536,98 +632,6 @@ const LandingPage = () => {
                       <img src="/images/kakkalani-001.jpg" alt="Ancestral Wisdom" loading="lazy" />
                       <div className="bless-img-cap"><span>Ancestral Wisdom</span></div>
                     </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── 2. HISTORY & FOUNDATIONS — snapshot left, text right ── */}
-              <div className="h-section lr ld2">
-                <div className="h-title-bar">
-                  <div className="h-icon">🏛️</div>
-                  <h3 className="h-sec-title">History & Foundations</h3>
-                </div>
-                <div className="h-rule" />
-
-                <div className="hist-cols">
-                  {/* LEFT — Village Snapshot card */}
-                  <div className="snapshot-card">
-                    <div className="snap-head">
-                      <div className="snap-head-icon">
-                        <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <span className="snap-title">Village Snapshot</span>
-                    </div>
-                    <p className="snap-desc">
-                      Kadugayar river, gopurams, snake holes, and community ponds are woven
-                      into day-to-day life. The village invites you to witness the temples,
-                      participate in upkeep, and carry the legacy forward.
-                    </p>
-                  </div>
-
-                  {/* RIGHT — text */}
-                  <div>
-                    <p className="h-para">
-                      Kakkalani is a beautiful village located 10 km southeast of Thiruvarur, a town famous for the
-                      Thyagaraja Swamy temple that houses a Maragadam Shiva Lingam believed to have once been
-                      worshipped by Lord Indiran.
-                    </p>
-                    <p className="h-para">
-                      According to earlier generations, the Chozha king consecrated 48 Shiva temples around Thyagaraja
-                      Swamy temple during the mandalam period, and Kakkalani is home to one of those temples —
-                      Gnanambal Sametha Kalahastiswarar. Prior to our forefathers moving in four to five generations
-                      ago, Rayar families were said to have settled here.
-                    </p>
-                    <p className="h-para">
-                      Kakkalani Agraharam was laid out with the Kadugayar river (a branch of the Kaveri) running along
-                      the northern edge. On the riverbank, the Pillayar under the Peepal tree was later relocated into
-                      the Aathagarai Pillayar Koil inside the temple compound.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── 3. TEMPLES & SACRED SITES — full width text + image grid ── */}
-              <div className="h-section lr ld3">
-                <div className="h-title-bar">
-                  <div className="h-icon">🕉️</div>
-                  <h3 className="h-sec-title">Temples & Sacred Sites</h3>
-                </div>
-                <div className="h-rule" />
-
-                {/* images LEFT, text RIGHT */}
-                <div className="temple-cols">
-                  {/* LEFT — 2×2 image grid */}
-                  <div className="temple-img-grid">
-                    {templeImages.map((t) => (
-                      <div key={t.src} className={`t-card ${t.contain ? "t-contain" : "t-cover"}`}>
-                        <img src={t.src} alt={t.name} loading="lazy" />
-                        <div className="t-card-overlay" />
-                        <div className="t-info">
-                          <div className="t-deity">{t.deity}</div>
-                          <div className="t-name">{t.name}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* RIGHT — text content */}
-                  <div>
-                    <p className="h-para">
-                      The western edge of the agraharam features the Lakshmi Narayanar Perumal Koil, anchored by a
-                      striking gopuram and aligned between two rows of houses so residents can witness deeparadhana
-                      from their doorsteps.
-                    </p>
-                    <p className="h-para">
-                      Inside the temple, Pambu Puttru (the snake hole) in the southwest corner still shelters snakes
-                      that villagers feed with milk, while a pond named Ayyan Kulam sits just northwest of the shrine.
-                    </p>
-                    <p className="h-para">
-                      On the eastern end stands the Gnanambika Samedha Kalahastiswarar Koil with the Poorna Pushkala
-                      Samedha Ayyanar Koil opposite. A short walk east reveals the well-maintained Mazhai Marriamman
-                      Koil, and about 1 km further on the village edge is the Damodara Pillayar Koil established by
-                      the Pannai family.
-                    </p>
                   </div>
                 </div>
               </div>

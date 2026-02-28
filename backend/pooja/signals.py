@@ -12,7 +12,7 @@ from .models import PoojaRegistration, UbhayamReport
 ANY_DAY_OPTION_LABEL = "Any day of the month"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
 ANY_DAY_OPTION_DESCRIPTIONS = {"any day of month", "any day of the month"}
-UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6"}
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6", "SP3"}
 UBHAYAM_EXCLUDED_POOJA_NAMES = {
     "till oil for lamps",
     "nitya neivedhyam",
@@ -22,6 +22,8 @@ UBHAYAM_EXCLUDED_POOJA_NAMES = {
     "saturday navagraha pooja",
     "2 pradosha pooja per month",
     "pradosha pooja",
+    "gen donation",
+    "gen donation pooja",
 }
 
 
