@@ -256,6 +256,10 @@ class UbhayamReportSyncTests(TestCase):
                 code="GP6",
                 defaults={"name": "Nitya Neivedhyam"},
             )[0],
+            PoojaOption.objects.get_or_create(
+                code="SP3",
+                defaults={"name": "Gen Donation"},
+            )[0],
         ]
 
     def test_excluded_special_poojas_are_not_mapped_to_ubhayam_report(self):

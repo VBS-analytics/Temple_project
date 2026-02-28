@@ -83,7 +83,8 @@ PRADOSHA_POOJA_NAME = "2 pradosha pooja per month"
 TILL_OIL_FOR_LAMPS_NAME = "till oil for lamps"
 NITYA_NEIVEDHYAM_NAME = "nitya neivedhyam"
 GAU_SAMRAKHSHANA_SEVA_NAME = "gau samrakshana seva"
-UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6"}
+GEN_DONATION_POOJA_NAME = "gen donation"
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6", "SP3"}
 UBHAYAM_EXCLUDED_POOJA_NAMES = {
     SATURDAY_NAVAGRAHA_POOJA_NAME,
     "saturday navagraha pooja",
@@ -93,6 +94,8 @@ UBHAYAM_EXCLUDED_POOJA_NAMES = {
     NITYA_NEIVEDHYAM_NAME,
     GAU_SAMRAKHSHANA_SEVA_NAME,
     "gau samrakhshana seva",
+    GEN_DONATION_POOJA_NAME,
+    "gen donation pooja",
 }
 POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = "Please contact Admin for the pooja registration"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
