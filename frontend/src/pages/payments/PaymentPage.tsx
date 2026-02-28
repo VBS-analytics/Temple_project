@@ -771,7 +771,7 @@ const PaymentPage = () => {
       
       {/* Error Notification */}
       {registrationError && (
-        <div className="fixed top-4 right-4 z-50 max-w-md rounded-lg bg-red-50 border-2 border-red-500 p-4 shadow-lg">
+        <div className="fixed top-4 left-4 right-4 z-50 max-w-full rounded-lg border-2 border-red-500 bg-red-50 p-4 shadow-lg sm:left-auto sm:right-4 sm:max-w-md">
           <div className="flex items-start gap-3">
             <svg className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -809,7 +809,7 @@ const PaymentPage = () => {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
             <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-slate-900">
               <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />

@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Temple Theme — 4 Alternative Directions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans:wght@400;700;900&family=Noto+Serif:wght@400;600;700&family=Tiro+Devanagari+Sanskrit:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans', sans-serif;
+      background: #0E0C08;
+      color: #f0e8d8;
+      min-height: 100vh;
+    }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      padding: 2.5rem 2rem 1.5rem;
+      text-align: center;
+      background: linear-gradient(180deg, #1a1409 0%, #0E0C08 100%);
+      border-bottom: 1px solid rgba(201,162,39,0.25);
+    }
+    .page-header h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #C9A227;
+      letter-spacing: 0.15em;
+    }
+    .page-header p {
+      font-size: 0.85rem;
+      color: rgba(240,232,216,0.55);
+      margin-top: 0.35rem;
+      letter-spacing: 0.05em;
+    }
+    .om-divider {
+      color: #C9A227;
+      opacity: 0.5;
+      margin-top: 0.5rem;
+      letter-spacing: 0.6em;
+      font-size: 1rem;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    /* ── GRID OF 4 OPTIONS ── */
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+    @media (max-width: 900px) {
+      .options-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── OPTION CARD ── */
+    .option-card {
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: default;
+    }
+    .option-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    .option-header {
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .option-num {
+      font-family: 'Cinzel', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      opacity: 0.35;
+      flex-shrink: 0;
+    }
+    .option-title-block {}
+    .option-name {
+      font-family: 'Cinzel', serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      line-height: 1.2;
+    }
+    .option-subtitle {
+      font-size: 0.72rem;
+      opacity: 0.6;
+      margin-top: 0.2rem;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── MINI DONOR UI PREVIEW ── */
+    .ui-preview {
+      margin: 0 1rem 1rem;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* ── PALETTE STRIP ── */
+    .palette-strip {
+      display: flex;
+      gap: 0;
+      height: 8px;
+    }
+    .palette-strip span {
+      flex: 1;
+    }
+
+    /* ── SWATCH ROW ── */
+    .swatches {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem 1.5rem 0.75rem;
+      flex-wrap: wrap;
+    }
+    .swatch-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .swatch-dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .swatch-label {
+      font-size: 0.58rem;
+      text-align: center;
+      opacity: 0.5;
+      letter-spacing: 0.03em;
+      max-width: 48px;
+      line-height: 1.3;
+    }
+
+    /* ── DESCRIPTION ── */
+    .option-desc {
+      padding: 0 1.5rem 1.25rem;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      opacity: 0.7;
+    }
+    .option-desc strong {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      opacity: 0.5;
+    }
+
+    /* ──────────────────────────── */
+    /* OPTION A — SAFFRON SUNRISE   */
+    /* ──────────────────────────── */
+    .opt-a { background: linear-gradient(160deg, #2D1B00 0%, #1C1100 100%); }
+    .opt-a .option-header { border-bottom: 1px solid rgba(217,119,6,0.2); }
+    .opt-a .option-num { color: #D97706; }
+    .opt-a .option-name { color: #FCD34D; }
+    .opt-a .option-subtitle { color: #FCD34D; }
+
+    .nav-a-top {
+      background: linear-gradient(90deg, #92400E, #B45309);
+      padding: 0.55rem 0.9rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-a-menu {
+      background: linear-gradient(90deg, #78350F, #92400E);
+      padding: 0 0.9rem;
+      display: flex; gap: 0.4rem;
+      border-bottom: 1px solid rgba(252,211,77,0.2);
+    }
+    .tab-a { padding: 0.45rem 0.65rem; font-size: 0.68rem; font-weight: 700; color: #FEF3C7; border-radius: 3px 3px 0 0; }
+    .tab-a.active { background: #D97706; color: #1C0F00; }
+    .body-a { background: #FFFBF0; padding: 0.75rem; }
+    .card-a { background: white; border: 1px solid #FDE68A; border-radius: 8px; padding: 0.65rem; margin-bottom: 0.55rem; box-shadow: 0 2px 8px rgba(146,64,14,0.08); }
+    .label-a { font-size: 0.6rem; font-weight: 800; color: #92400E; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.25rem; }
+    .value-a { font-size: 0.78rem; font-weight: 700; color: #1C0F00; }
+    .section-a { background: #FEF3C7; border-left: 3px solid #D97706; border-radius: 0 5px 5px 0; padding: 0.3rem 0.5rem; margin-top: 0.3rem; font-size: 0.7rem; font-weight: 700; color: #451A03; }
+    .btn-a { background: #B45309; color: white; border: none; border-radius: 20px; padding: 0.35rem 0.9rem; font-size: 0.68rem; font-weight: 700; }
+    .logo-a { display: flex; align-items: center; gap: 0.4rem; }
+    .logo-badge-a { background: #FCD34D; color: #451A03; font-weight: 900; font-size: 0.65rem; padding: 2px 5px; border-radius: 3px; }
+    .logo-text-a { color: #FEF3C7; font-weight: 700; font-size: 0.78rem; font-family: 'Cinzel', serif; }
+    .user-a { color: #FDE68A; font-size: 0.65rem; font-weight: 700; }
+
+    /* ────────────────────────── */
+    /* OPTION B — STONE & BRASS  */
+    /* ────────────────────────── */
+    .opt-b { background: linear-gradient(160deg, #1A1510 0%, #0F0D09 100%); }
+    .opt-b .option-header { border-bottom: 1px solid rgba(201,162,39,0.2); }
+    .opt-b .option-num { color: #C9A227; }
+    .opt-b .option-name { color: #E8D5A3; }
+    .opt-b .option-subtitle { color: #E8D5A3; }
+
+    .nav-b-top {
+      background: linear-gradient(90deg, #2D2416, #3C3121);
+      padding: 0.55rem 0.9rem;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 2px solid #C9A227;
+    }
+    .nav-b-menu {
+      background: #26200E;
+      padding: 0 0.9rem;
+      display: flex; gap: 0.4rem;
+    }
+    .tab-b { padding: 0.45rem 0.65rem; font-size: 0.68rem; font-weight: 700; color: #E8D5A3; border-radius: 3px 3px 0 0; }
+    .tab-b.active { background: #C9A227; color: #1A1209; }
+    .body-b { background: #F7F3ED; padding: 0.75rem; }
+    .card-b { background: #FDFAF5; border: 1px solid #D4C5A9; border-radius: 8px; padding: 0.65rem; margin-bottom: 0.55rem; box-shadow: 0 2px 10px rgba(61,48,28,0.1); }
+    .label-b { font-size: 0.6rem; font-weight: 800; color: #5C4A2A; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.25rem; }
+    .value-b { font-size: 0.78rem; font-weight: 700; color: #1A1209; }
+    .section-b { background: #EDE6D6; border-left: 3px solid #C9A227; border-radius: 0 5px 5px 0; padding: 0.3rem 0.5rem; margin-top: 0.3rem; font-size: 0.7rem; font-weight: 700; color: #3C3121; }
+    .btn-b { background: #8B6914; color: white; border: none; border-radius: 20px; padding: 0.35rem 0.9rem; font-size: 0.68rem; font-weight: 700; }
+    .logo-text-b { color: #E8D5A3; font-weight: 700; font-size: 0.78rem; font-family: 'Cinzel', serif; }
+    .logo-badge-b { background: #C9A227; color: #1A1209; font-weight: 900; font-size: 0.65rem; padding: 2px 5px; border-radius: 3px; }
+    .user-b { color: #D4C090; font-size: 0.65rem; font-weight: 700; }
+
+    /* ────────────────────────────── */
+    /* OPTION C — TEAK & OIL LAMP    */
+    /* ────────────────────────────── */
+    .opt-c { background: linear-gradient(160deg, #1A1008 0%, #120B05 100%); }
+    .opt-c .option-header { border-bottom: 1px solid rgba(184,115,51,0.25); }
+    .opt-c .option-num { color: #B87333; }
+    .opt-c .option-name { color: #F0C88A; }
+    .opt-c .option-subtitle { color: #F0C88A; }
+
+    .nav-c-top {
+      background: linear-gradient(90deg, #3E1F0A, #5C2D10);
+      padding: 0.55rem 0.9rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-c-menu {
+      background: linear-gradient(90deg, #4E2810, #6D3B18);
+      padding: 0 0.9rem;
+      display: flex; gap: 0.4rem;
+      border-bottom: 2px solid rgba(184,115,51,0.4);
+    }
+    .tab-c { padding: 0.45rem 0.65rem; font-size: 0.68rem; font-weight: 700; color: #F0C88A; border-radius: 3px 3px 0 0; }
+    .tab-c.active { background: #B87333; color: #1A0A02; }
+    .body-c { background: #FAF6F0; padding: 0.75rem; }
+    .card-c { background: #FFFDF9; border: 1px solid #D4B896; border-radius: 8px; padding: 0.65rem; margin-bottom: 0.55rem; box-shadow: 0 2px 10px rgba(110,60,24,0.1); }
+    .label-c { font-size: 0.6rem; font-weight: 800; color: #6D3B18; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.25rem; }
+    .value-c { font-size: 0.78rem; font-weight: 700; color: #1A0A02; }
+    .section-c { background: #F5EDE0; border-left: 3px solid #B87333; border-radius: 0 5px 5px 0; padding: 0.3rem 0.5rem; margin-top: 0.3rem; font-size: 0.7rem; font-weight: 700; color: #4E2810; }
+    .btn-c { background: #8B5E0A; color: white; border: none; border-radius: 20px; padding: 0.35rem 0.9rem; font-size: 0.68rem; font-weight: 700; }
+    .logo-text-c { color: #F0C88A; font-weight: 700; font-size: 0.78rem; font-family: 'Cinzel', serif; }
+    .logo-badge-c { background: #B87333; color: #1A0A02; font-weight: 900; font-size: 0.65rem; padding: 2px 5px; border-radius: 3px; }
+    .user-c { color: #D4A87A; font-size: 0.65rem; font-weight: 700; }
+
+    /* ─────────────────────────────── */
+    /* OPTION D — FOREST GROVE (GREEN) */
+    /* ─────────────────────────────── */
+    .opt-d { background: linear-gradient(160deg, #061408 0%, #030C05 100%); }
+    .opt-d .option-header { border-bottom: 1px solid rgba(52,168,83,0.2); }
+    .opt-d .option-num { color: #34A853; }
+    .opt-d .option-name { color: #A8D5B5; }
+    .opt-d .option-subtitle { color: #A8D5B5; }
+
+    .nav-d-top {
+      background: linear-gradient(90deg, #0D3320, #14472A);
+      padding: 0.55rem 0.9rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-d-menu {
+      background: linear-gradient(90deg, #0A2918, #0F3821);
+      padding: 0 0.9rem;
+      display: flex; gap: 0.4rem;
+    }
+    .tab-d { padding: 0.45rem 0.65rem; font-size: 0.68rem; font-weight: 700; color: #A8D5B5; border-radius: 3px 3px 0 0; }
+    .tab-d.active { background: #F59E0B; color: #0A1F0D; }
+    .body-d { background: #F2FAF4; padding: 0.75rem; }
+    .card-d { background: #FDFFFE; border: 1px solid #BBD9C4; border-radius: 8px; padding: 0.65rem; margin-bottom: 0.55rem; box-shadow: 0 2px 10px rgba(13,51,32,0.1); }
+    .label-d { font-size: 0.6rem; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.25rem; }
+    .value-d { font-size: 0.78rem; font-weight: 700; color: #052E16; }
+    .section-d { background: #DCFCE7; border-left: 3px solid #34A853; border-radius: 0 5px 5px 0; padding: 0.3rem 0.5rem; margin-top: 0.3rem; font-size: 0.7rem; font-weight: 700; color: #0D3320; }
+    .btn-d { background: #166534; color: white; border: none; border-radius: 20px; padding: 0.35rem 0.9rem; font-size: 0.68rem; font-weight: 700; }
+    .logo-text-d { color: #A8D5B5; font-weight: 700; font-size: 0.78rem; font-family: 'Cinzel', serif; }
+    .logo-badge-d { background: #F59E0B; color: #0A1F0D; font-weight: 900; font-size: 0.65rem; padding: 2px 5px; border-radius: 3px; }
+    .user-d { color: #86EFAC; font-size: 0.65rem; font-weight: 700; }
+
+    /* ── INSPIRATION LABEL ── */
+    .inspo-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      margin: 0 1.5rem 1rem;
+    }
+    .inspo-a { background: rgba(217,119,6,0.15); color: #FCD34D; border: 1px solid rgba(217,119,6,0.3); }
+    .inspo-b { background: rgba(201,162,39,0.12); color: #E8D5A3; border: 1px solid rgba(201,162,39,0.25); }
+    .inspo-c { background: rgba(184,115,51,0.15); color: #F0C88A; border: 1px solid rgba(184,115,51,0.3); }
+    .inspo-d { background: rgba(52,168,83,0.12); color: #A8D5B5; border: 1px solid rgba(52,168,83,0.25); }
+
+    /* ── PROS ── */
+    .pros-list {
+      list-style: none;
+      padding: 0 1.5rem 1.25rem;
+      font-size: 0.74rem;
+      line-height: 1.8;
+      opacity: 0.65;
+    }
+    .pros-list li::before { content: '✦ '; opacity: 0.5; }
+
+    /* ── RECOMMENDATION BADGE ── */
+    .rec-badge {
+      margin: 0 1.5rem 1rem;
+      padding: 0.5rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .rec-a { background: rgba(217,119,6,0.1); border: 1px solid rgba(252,211,77,0.2); color: #FCD34D; }
+    .rec-b { background: rgba(201,162,39,0.1); border: 1px solid rgba(201,162,39,0.25); color: #E8D5A3; }
+    .rec-c { background: rgba(184,115,51,0.1); border: 1px solid rgba(184,115,51,0.25); color: #F0C88A; }
+    .rec-d { background: rgba(52,168,83,0.1); border: 1px solid rgba(52,168,83,0.2); color: #A8D5B5; }
+
+    /* ── COLOR MAP TABLE ── */
+    .color-map {
+      margin: 0 1rem 1.25rem;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .color-map table { width: 100%; border-collapse: collapse; }
+    .color-map th {
+      padding: 0.35rem 0.65rem;
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      text-align: left;
+    }
+    .color-map td {
+      padding: 0.3rem 0.65rem;
+      font-size: 0.7rem;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      vertical-align: middle;
+    }
+    .cc { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .cd { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+    .ch { font-family: monospace; font-size: 0.68rem; opacity: 0.7; }
+    .cr { opacity: 0.45; font-size: 0.65rem; }
+
+    .th-a { background: rgba(146,64,14,0.4); color: #FDE68A; }
+    .th-b { background: rgba(44,36,22,0.8); color: #E8D5A3; }
+    .th-c { background: rgba(62,31,10,0.6); color: #F0C88A; }
+    .th-d { background: rgba(13,51,32,0.6); color: #A8D5B5; }
+
+    /* ── FOOTER ── */
+    .footer {
+      text-align: center;
+      padding: 2rem;
+      border-top: 1px solid rgba(201,162,39,0.15);
+      margin-top: 3rem;
+      font-family: 'Cinzel', serif;
+      font-size: 0.72rem;
+      color: rgba(201,162,39,0.35);
+      letter-spacing: 0.2em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <h1>4 Temple Theme Directions</h1>
+    <p>Alternative to maroon — each drawing from a different sacred aesthetic</p>
+    <div class="om-divider">ॐ ✦ ✦ ✦ ॐ</div>
+  </div>
+
+  <div class="container">
+    <div class="options-grid">
+
+      <!-- ══════════════════════════════ -->
+      <!-- OPTION A — SAFFRON SUNRISE     -->
+      <!-- ══════════════════════════════ -->
+      <div class="option-card opt-a">
+        <div class="option-header">
+          <span class="option-num">A</span>
+          <div class="option-title-block">
+            <div class="option-name">Saffron Sunrise</div>
+            <div class="option-subtitle">Amber · Turmeric · Morning Prayer</div>
+          </div>
+        </div>
+
+        <span class="inspo-tag inspo-a">🌅 Inspired by: Sunrise puja, marigold garlands, saffron robes</span>
+
+        <!-- Mini UI -->
+        <div class="ui-preview">
+          <div class="palette-strip">
+            <span style="background:#92400E"></span>
+            <span style="background:#B45309"></span>
+            <span style="background:#D97706"></span>
+            <span style="background:#FCD34D"></span>
+            <span style="background:#FFFBF0"></span>
+          </div>
+          <div class="nav-a-top">
+            <div class="logo-a">
+              <span class="logo-badge-a">🪔</span>
+              <span class="logo-text-a">Sri Kovil Temple</span>
+            </div>
+            <span class="user-a">Ramesh Kumar</span>
+          </div>
+          <div class="nav-a-menu">
+            <div class="tab-a active">Donor Profile</div>
+            <div class="tab-a">Pooja Seva</div>
+            <div class="tab-a">Payments</div>
+          </div>
+          <div class="body-a">
+            <div class="card-a">
+              <div class="label-a">Personal Information</div>
+              <div class="value-a">Ramesh Kumar · +91 98765 43210</div>
+              <div class="section-a">📍 Kakkalani Village, Tamil Nadu</div>
+            </div>
+            <div class="card-a">
+              <div class="label-a">Active Poojas</div>
+              <div class="value-a">Abhishekam · Monthly ₹500</div>
+              <div style="margin-top:0.4rem"><button class="btn-a">Register Pooja</button></div>
+            </div>
+            <div class="card-a" style="background:#FEF3C7;border-color:#FDE68A">
+              <div class="label-a">Account Balance</div>
+              <div class="value-a" style="font-size:1rem;color:#451A03">₹ 2,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Color map -->
+        <div class="color-map">
+          <table>
+            <thead><tr><th class="th-a" colspan="3">Color Values</th></tr></thead>
+            <tbody>
+              <tr><td class="cr">Nav top</td><td><span class="cc"><span class="cd" style="background:#92400E"></span><span class="ch">#92400E</span></span></td><td class="cr">Dark amber</td></tr>
+              <tr><td class="cr">Nav menu</td><td><span class="cc"><span class="cd" style="background:#78350F"></span><span class="ch">#78350F</span></span></td><td class="cr">Darker amber</td></tr>
+              <tr><td class="cr">Active tab</td><td><span class="cc"><span class="cd" style="background:#D97706"></span><span class="ch">#D97706</span></span></td><td class="cr">Warm amber</td></tr>
+              <tr><td class="cr">Page bg</td><td><span class="cc"><span class="cd" style="background:#FFFBF0;border-color:#ccc"></span><span class="ch">#FFFBF0</span></span></td><td class="cr">Warm cream</td></tr>
+              <tr><td class="cr">Section bg</td><td><span class="cc"><span class="cd" style="background:#FEF3C7;border-color:#ccc"></span><span class="ch">#FEF3C7</span></span></td><td class="cr">Saffron tint</td></tr>
+              <tr><td class="cr">Border</td><td><span class="cc"><span class="cd" style="background:#FDE68A"></span><span class="ch">#FDE68A</span></span></td><td class="cr">Light amber</td></tr>
+              <tr><td class="cr">Labels</td><td><span class="cc"><span class="cd" style="background:#92400E"></span><span class="ch">#92400E</span></span></td><td class="cr">Dark amber</td></tr>
+              <tr><td class="cr">Primary btn</td><td><span class="cc"><span class="cd" style="background:#B45309"></span><span class="ch">#B45309</span></span></td><td class="cr">Saffron button</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="pros-list">
+          <li>Closest to traditional saffron / kesari sacred color</li>
+          <li>Warm, energetic, morning-puja feel</li>
+          <li>Easy transition — saffron already exists in brand palette</li>
+          <li>High contrast: dark amber nav on warm cream body</li>
+          <li>Feels joyful and celebratory, not heavy</li>
+        </ul>
+
+        <div class="rec-badge rec-a">
+          🌟 <strong>Best for:</strong> Donors who want vibrant, festive energy. Closest to traditional Hindu sacred color usage.
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════ -->
+      <!-- OPTION B — STONE & BRASS       -->
+      <!-- ══════════════════════════════ -->
+      <div class="option-card opt-b">
+        <div class="option-header">
+          <span class="option-num">B</span>
+          <div class="option-title-block">
+            <div class="option-name">Stone & Brass</div>
+            <div class="option-subtitle">Ancient Granite · Brass Lamp · Warm Charcoal</div>
+          </div>
+        </div>
+
+        <span class="inspo-tag inspo-b">🏛️ Inspired by: Chola granite pillars, brass vilakku, ancient stone temples</span>
+
+        <!-- Mini UI -->
+        <div class="ui-preview">
+          <div class="palette-strip">
+            <span style="background:#2D2416"></span>
+            <span style="background:#3C3121"></span>
+            <span style="background:#C9A227"></span>
+            <span style="background:#EDE6D6"></span>
+            <span style="background:#F7F3ED"></span>
+          </div>
+          <div class="nav-b-top">
+            <div class="logo-a">
+              <span class="logo-badge-b">🪔</span>
+              <span class="logo-text-b">Sri Kovil Temple</span>
+            </div>
+            <span class="user-b">Ramesh Kumar</span>
+          </div>
+          <div class="nav-b-menu">
+            <div class="tab-b active">Donor Profile</div>
+            <div class="tab-b">Pooja Seva</div>
+            <div class="tab-b">Payments</div>
+          </div>
+          <div class="body-b">
+            <div class="card-b">
+              <div class="label-b">Personal Information</div>
+              <div class="value-b">Ramesh Kumar · +91 98765 43210</div>
+              <div class="section-b">📍 Kakkalani Village, Tamil Nadu</div>
+            </div>
+            <div class="card-b">
+              <div class="label-b">Active Poojas</div>
+              <div class="value-b">Abhishekam · Monthly ₹500</div>
+              <div style="margin-top:0.4rem"><button class="btn-b">Register Pooja</button></div>
+            </div>
+            <div class="card-b" style="background:#EDE6D6;border-color:#C9A227">
+              <div class="label-b">Account Balance</div>
+              <div class="value-b" style="font-size:1rem;color:#1A1209">₹ 2,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Color map -->
+        <div class="color-map">
+          <table>
+            <thead><tr><th class="th-b" colspan="3">Color Values</th></tr></thead>
+            <tbody>
+              <tr><td class="cr">Nav top</td><td><span class="cc"><span class="cd" style="background:#2D2416"></span><span class="ch">#2D2416</span></span></td><td class="cr">Dark stone</td></tr>
+              <tr><td class="cr">Nav menu</td><td><span class="cc"><span class="cd" style="background:#26200E"></span><span class="ch">#26200E</span></span></td><td class="cr">Darker stone</td></tr>
+              <tr><td class="cr">Active tab</td><td><span class="cc"><span class="cd" style="background:#C9A227"></span><span class="ch">#C9A227</span></span></td><td class="cr">Brass gold</td></tr>
+              <tr><td class="cr">Page bg</td><td><span class="cc"><span class="cd" style="background:#F7F3ED;border-color:#ccc"></span><span class="ch">#F7F3ED</span></span></td><td class="cr">Warm stone cream</td></tr>
+              <tr><td class="cr">Section bg</td><td><span class="cc"><span class="cd" style="background:#EDE6D6;border-color:#ccc"></span><span class="ch">#EDE6D6</span></span></td><td class="cr">Parchment</td></tr>
+              <tr><td class="cr">Border</td><td><span class="cc"><span class="cd" style="background:#D4C5A9"></span><span class="ch">#D4C5A9</span></span></td><td class="cr">Sandstone</td></tr>
+              <tr><td class="cr">Labels</td><td><span class="cc"><span class="cd" style="background:#5C4A2A"></span><span class="ch">#5C4A2A</span></span></td><td class="cr">Warm brown</td></tr>
+              <tr><td class="cr">Primary btn</td><td><span class="cc"><span class="cd" style="background:#8B6914"></span><span class="ch">#8B6914</span></span></td><td class="cr">Brass button</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="pros-list">
+          <li>Timeless, dignified, premium feel — like ancient carved temples</li>
+          <li>Dark charcoal nav with gold accents = very sophisticated</li>
+          <li>Page content very warm and readable (no blue anywhere)</li>
+          <li>Best for conveying heritage, trust, and permanence</li>
+          <li>Subtle and elegant — not loud or festive</li>
+        </ul>
+
+        <div class="rec-badge rec-b">
+          🏆 <strong>Best for:</strong> A premium, heritage-focused portal. Feels like carved temple stone and brass lamps — timeless authority.
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════ -->
+      <!-- OPTION C — TEAK & OIL LAMP     -->
+      <!-- ══════════════════════════════ -->
+      <div class="option-card opt-c">
+        <div class="option-header">
+          <span class="option-num">C</span>
+          <div class="option-title-block">
+            <div class="option-name">Teak & Oil Lamp</div>
+            <div class="option-subtitle">Kerala Wood · Copper · Warm Glow</div>
+          </div>
+        </div>
+
+        <span class="inspo-tag inspo-c">🪔 Inspired by: Kerala temple teak wood, copper oil lamps, carved doorframes</span>
+
+        <!-- Mini UI -->
+        <div class="ui-preview">
+          <div class="palette-strip">
+            <span style="background:#3E1F0A"></span>
+            <span style="background:#5C2D10"></span>
+            <span style="background:#B87333"></span>
+            <span style="background:#F5EDE0"></span>
+            <span style="background:#FAF6F0"></span>
+          </div>
+          <div class="nav-c-top">
+            <div class="logo-a">
+              <span class="logo-badge-c">🪔</span>
+              <span class="logo-text-c">Sri Kovil Temple</span>
+            </div>
+            <span class="user-c">Ramesh Kumar</span>
+          </div>
+          <div class="nav-c-menu">
+            <div class="tab-c active">Donor Profile</div>
+            <div class="tab-c">Pooja Seva</div>
+            <div class="tab-c">Payments</div>
+          </div>
+          <div class="body-c">
+            <div class="card-c">
+              <div class="label-c">Personal Information</div>
+              <div class="value-c">Ramesh Kumar · +91 98765 43210</div>
+              <div class="section-c">📍 Kakkalani Village, Tamil Nadu</div>
+            </div>
+            <div class="card-c">
+              <div class="label-c">Active Poojas</div>
+              <div class="value-c">Abhishekam · Monthly ₹500</div>
+              <div style="margin-top:0.4rem"><button class="btn-c">Register Pooja</button></div>
+            </div>
+            <div class="card-c" style="background:#F5EDE0;border-color:#C9A897">
+              <div class="label-c">Account Balance</div>
+              <div class="value-c" style="font-size:1rem;color:#1A0A02">₹ 2,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Color map -->
+        <div class="color-map">
+          <table>
+            <thead><tr><th class="th-c" colspan="3">Color Values</th></tr></thead>
+            <tbody>
+              <tr><td class="cr">Nav top</td><td><span class="cc"><span class="cd" style="background:#3E1F0A"></span><span class="ch">#3E1F0A</span></span></td><td class="cr">Dark teak</td></tr>
+              <tr><td class="cr">Nav menu</td><td><span class="cc"><span class="cd" style="background:#4E2810"></span><span class="ch">#4E2810</span></span></td><td class="cr">Medium teak</td></tr>
+              <tr><td class="cr">Active tab</td><td><span class="cc"><span class="cd" style="background:#B87333"></span><span class="ch">#B87333</span></span></td><td class="cr">Burnished copper</td></tr>
+              <tr><td class="cr">Page bg</td><td><span class="cc"><span class="cd" style="background:#FAF6F0;border-color:#ccc"></span><span class="ch">#FAF6F0</span></span></td><td class="cr">Light wood cream</td></tr>
+              <tr><td class="cr">Section bg</td><td><span class="cc"><span class="cd" style="background:#F5EDE0;border-color:#ccc"></span><span class="ch">#F5EDE0</span></span></td><td class="cr">Warm ivory</td></tr>
+              <tr><td class="cr">Border</td><td><span class="cc"><span class="cd" style="background:#D4B896"></span><span class="ch">#D4B896</span></span></td><td class="cr">Warm tan</td></tr>
+              <tr><td class="cr">Labels</td><td><span class="cc"><span class="cd" style="background:#6D3B18"></span><span class="ch">#6D3B18</span></span></td><td class="cr">Dark teak brown</td></tr>
+              <tr><td class="cr">Primary btn</td><td><span class="cc"><span class="cd" style="background:#8B5E0A"></span><span class="ch">#8B5E0A</span></span></td><td class="cr">Copper button</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="pros-list">
+          <li>Natural, organic warmth — like aged wood and flickering lamp</li>
+          <li>Copper/bronze accent gives sacred metal feeling</li>
+          <li>Softer than maroon, warmer than stone, different from saffron</li>
+          <li>Page backgrounds feel like fine aged paper / palm leaf</li>
+          <li>Unique: most temple apps don't use this copper-wood palette</li>
+        </ul>
+
+        <div class="rec-badge rec-c">
+          🌿 <strong>Best for:</strong> A natural, organic feel — like a Kerala temple's carved wood and copper deepam warmth. Very distinctive.
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════ -->
+      <!-- OPTION D — SACRED GROVE GREEN  -->
+      <!-- ══════════════════════════════ -->
+      <div class="option-card opt-d">
+        <div class="option-header">
+          <span class="option-num">D</span>
+          <div class="option-title-block">
+            <div class="option-name">Sacred Grove</div>
+            <div class="option-subtitle">Temple Forest · Neem Green · Marigold Gold</div>
+          </div>
+        </div>
+
+        <span class="inspo-tag inspo-d">🌿 Inspired by: Sacred grove temples, tulsi plants, neem trees, temple gardens</span>
+
+        <!-- Mini UI -->
+        <div class="ui-preview">
+          <div class="palette-strip">
+            <span style="background:#0D3320"></span>
+            <span style="background:#14472A"></span>
+            <span style="background:#F59E0B"></span>
+            <span style="background:#DCFCE7"></span>
+            <span style="background:#F2FAF4"></span>
+          </div>
+          <div class="nav-d-top">
+            <div class="logo-a">
+              <span class="logo-badge-d">🪔</span>
+              <span class="logo-text-d">Sri Kovil Temple</span>
+            </div>
+            <span class="user-d">Ramesh Kumar</span>
+          </div>
+          <div class="nav-d-menu">
+            <div class="tab-d active">Donor Profile</div>
+            <div class="tab-d">Pooja Seva</div>
+            <div class="tab-d">Payments</div>
+          </div>
+          <div class="body-d">
+            <div class="card-d">
+              <div class="label-d">Personal Information</div>
+              <div class="value-d">Ramesh Kumar · +91 98765 43210</div>
+              <div class="section-d">📍 Kakkalani Village, Tamil Nadu</div>
+            </div>
+            <div class="card-d">
+              <div class="label-d">Active Poojas</div>
+              <div class="value-d">Abhishekam · Monthly ₹500</div>
+              <div style="margin-top:0.4rem"><button class="btn-d">Register Pooja</button></div>
+            </div>
+            <div class="card-d" style="background:#DCFCE7;border-color:#86EFAC">
+              <div class="label-d">Account Balance</div>
+              <div class="value-d" style="font-size:1rem;color:#052E16">₹ 2,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Color map -->
+        <div class="color-map">
+          <table>
+            <thead><tr><th class="th-d" colspan="3">Color Values</th></tr></thead>
+            <tbody>
+              <tr><td class="cr">Nav top</td><td><span class="cc"><span class="cd" style="background:#0D3320"></span><span class="ch">#0D3320</span></span></td><td class="cr">Deep forest</td></tr>
+              <tr><td class="cr">Nav menu</td><td><span class="cc"><span class="cd" style="background:#0A2918"></span><span class="ch">#0A2918</span></span></td><td class="cr">Darker forest</td></tr>
+              <tr><td class="cr">Active tab</td><td><span class="cc"><span class="cd" style="background:#F59E0B"></span><span class="ch">#F59E0B</span></span></td><td class="cr">Marigold yellow</td></tr>
+              <tr><td class="cr">Page bg</td><td><span class="cc"><span class="cd" style="background:#F2FAF4;border-color:#ccc"></span><span class="ch">#F2FAF4</span></span></td><td class="cr">Light sage</td></tr>
+              <tr><td class="cr">Section bg</td><td><span class="cc"><span class="cd" style="background:#DCFCE7;border-color:#ccc"></span><span class="ch">#DCFCE7</span></span></td><td class="cr">Mint green</td></tr>
+              <tr><td class="cr">Border</td><td><span class="cc"><span class="cd" style="background:#BBD9C4"></span><span class="ch">#BBD9C4</span></span></td><td class="cr">Sage green</td></tr>
+              <tr><td class="cr">Labels</td><td><span class="cc"><span class="cd" style="background:#166534"></span><span class="ch">#166534</span></span></td><td class="cr">Dark forest</td></tr>
+              <tr><td class="cr">Primary btn</td><td><span class="cc"><span class="cd" style="background:#166534"></span><span class="ch">#166534</span></span></td><td class="cr">Forest green btn</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="pros-list">
+          <li>Cool and serene — unlike any other temple app</li>
+          <li>Green is auspicious in Hindu tradition (tulsi, neem, ashoka)</li>
+          <li>Marigold yellow tab pop against dark forest nav = high contrast</li>
+          <li>Page background feels fresh, natural, not heavy</li>
+          <li>Green + marigold = classic temple flower garland combination</li>
+        </ul>
+
+        <div class="rec-badge rec-d">
+          🌱 <strong>Best for:</strong> A fresh, serene, nature-connected temple feel. Auspicious green + marigold = temple garland colors.
+        </div>
+      </div>
+
+    </div><!-- end options-grid -->
+
+    <!-- COMPARISON SUMMARY -->
+    <div style="margin-top:2.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(201,162,39,0.2);border-radius:16px;padding:1.5rem">
+      <p style="font-family:'Cinzel',serif;font-size:0.85rem;color:#C9A227;letter-spacing:0.12em;margin-bottom:1rem">QUICK COMPARISON</p>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.1)">
+              <th style="padding:0.5rem 0.75rem;text-align:left;color:rgba(240,232,216,0.5);font-weight:700;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase">Theme</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;color:rgba(240,232,216,0.5);font-weight:700;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase">Mood</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;color:rgba(240,232,216,0.5);font-weight:700;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase">Nav Color</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;color:rgba(240,232,216,0.5);font-weight:700;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase">Page BG</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;color:rgba(240,232,216,0.5);font-weight:700;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase">Intensity</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+              <td style="padding:0.6rem 0.75rem;color:#FCD34D;font-weight:700">A — Saffron Sunrise</td>
+              <td style="padding:0.6rem 0.75rem;color:rgba(240,232,216,0.6)">Festive, warm, energetic</td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#92400E;color:white;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace">#92400E</span></td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#FFFBF0;color:#451A03;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace;border:1px solid #FDE68A">#FFFBF0</span></td>
+              <td style="padding:0.6rem 0.75rem;color:#FCD34D">🔥🔥🔥 Vibrant</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+              <td style="padding:0.6rem 0.75rem;color:#E8D5A3;font-weight:700">B — Stone & Brass</td>
+              <td style="padding:0.6rem 0.75rem;color:rgba(240,232,216,0.6)">Regal, heritage, quiet power</td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#2D2416;color:#E8D5A3;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace">#2D2416</span></td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#F7F3ED;color:#2D2416;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace;border:1px solid #D4C5A9">#F7F3ED</span></td>
+              <td style="padding:0.6rem 0.75rem;color:#E8D5A3">⚖️ Balanced</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+              <td style="padding:0.6rem 0.75rem;color:#F0C88A;font-weight:700">C — Teak & Oil Lamp</td>
+              <td style="padding:0.6rem 0.75rem;color:rgba(240,232,216,0.6)">Natural, warm, artisanal</td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#3E1F0A;color:#F0C88A;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace">#3E1F0A</span></td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#FAF6F0;color:#3E1F0A;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace;border:1px solid #D4B896">#FAF6F0</span></td>
+              <td style="padding:0.6rem 0.75rem;color:#F0C88A">🌿 Organic</td>
+            </tr>
+            <tr>
+              <td style="padding:0.6rem 0.75rem;color:#A8D5B5;font-weight:700">D — Sacred Grove</td>
+              <td style="padding:0.6rem 0.75rem;color:rgba(240,232,216,0.6)">Serene, nature, auspicious</td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#0D3320;color:#A8D5B5;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace">#0D3320</span></td>
+              <td style="padding:0.6rem 0.75rem"><span style="background:#F2FAF4;color:#0D3320;padding:2px 8px;border-radius:4px;font-size:0.68rem;font-family:monospace;border:1px solid #BBD9C4">#F2FAF4</span></td>
+              <td style="padding:0.6rem 0.75rem;color:#A8D5B5">🍃 Calm</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">ॐ &nbsp;&nbsp; CHOOSE A DIRECTION TO IMPLEMENT &nbsp;&nbsp; ॐ</div>
+
+</body>
+</html>

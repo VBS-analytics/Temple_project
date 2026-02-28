@@ -650,7 +650,7 @@ const CombinePaymentPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full min-h-0 bg-gradient-to-br from-slate-50 via-white to-orange-50/30 flex flex-col overflow-hidden">
+    <div className="flex flex-col bg-gradient-to-br from-slate-50 via-white to-orange-50/30 min-h-screen xl:h-full xl:min-h-0 xl:overflow-hidden">
       {/* Compact Header */}
       <header className="flex-shrink-0 px-3 pt-3 pb-2 sm:px-4">
         <div className="max-w-7xl mx-auto w-full px-1 py-2 sm:px-2">
@@ -690,11 +690,11 @@ const CombinePaymentPage: React.FC = () => {
       )}
 
       {/* Main Content - Split Layout */}
-      <main className="flex-1 min-h-0 overflow-hidden px-3 pb-3 sm:px-4 sm:pb-4">
-        <div className="h-full max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[minmax(20rem,0.95fr)_minmax(24rem,1.25fr)] gap-4 xl:gap-5">
+      <main className="flex-1 overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4 xl:min-h-0 xl:overflow-hidden">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 gap-4 xl:h-full xl:grid-cols-[minmax(20rem,0.95fr)_minmax(24rem,1.25fr)] xl:gap-5">
           
           {/* Left Panel - Donor Summary */}
-          <div className="w-full max-w-2xl mx-auto xl:max-w-none xl:w-full xl:mx-0 bg-white rounded-2xl shadow-[0_8px_30px_-22px_rgba(15,23,42,0.5)] border border-slate-200/90 overflow-hidden flex flex-col min-h-0 xl:self-start">
+          <div className="w-full max-w-2xl mx-auto xl:max-w-none xl:w-full xl:mx-0 bg-white rounded-2xl shadow-[0_8px_30px_-22px_rgba(15,23,42,0.5)] border border-slate-200/90 overflow-hidden flex flex-col xl:min-h-0 xl:self-start">
             {/* Main Donor Section */}
             <div className="bg-gradient-to-r from-blue-50 to-blue-100/90 px-4 py-2.5 border-b border-blue-200/80 flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -748,7 +748,7 @@ const CombinePaymentPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+                <div className="p-3 space-y-2 xl:flex-1 xl:overflow-y-auto xl:min-h-0">
                   {parentDonors.map((donor, donorIndex) => {
                     const donorKey = `parent-${donor.id ?? donor.phone ?? donorIndex}`;
                     const initials = donor.name

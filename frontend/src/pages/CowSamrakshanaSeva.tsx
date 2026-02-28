@@ -27,7 +27,7 @@ const CowSamrakshanaContent = () => {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">
               Divine Service
             </p>
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
+            <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
               Cow Samrakshana Seva
             </h2>
             <h3 className="mt-1 text-xl text-slate-600">
@@ -118,7 +118,7 @@ const CowSamrakshanaContent = () => {
               மருத்துவ பராமரிப்பு வழங்கி அவற்றின் இறுதி வரை பாதுகாப்பதாகும்.
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-3 mt-4">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 mt-4">
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-center">
               <div className="text-2xl mb-2">🏠</div>
               <h5 className="font-semibold text-blue-900 text-sm">Shelter</h5>
