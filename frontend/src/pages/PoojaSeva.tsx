@@ -27,7 +27,7 @@ const PoojaSevasContent = () => {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">
               Temple Services
             </p>
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
+            <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
               Sevas at Our Kakkalany Village Temples
             </h2>
           </div>
@@ -159,7 +159,7 @@ const PoojaSevasContent = () => {
           One Day Abishekam
         </h3>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4">
           <div className="rounded-lg bg-green-50 border border-green-200 p-4">
             <div className="flex items-start gap-3">
               <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />

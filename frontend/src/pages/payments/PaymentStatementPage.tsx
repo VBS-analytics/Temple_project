@@ -2806,7 +2806,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     <div className="space-y-6">
       <div className="p-1">
         <div className="flex flex-wrap items-end gap-6">
-          <div className="space-y-1 min-w-[220px] basis-[260px]">
+          <div className="space-y-1 min-w-0 basis-full sm:basis-[260px]">
             <h1 className="text-2xl font-semibold text-slate-800">Payment Statement</h1>
             <p className="text-sm text-slate-500">
               {summaryLabel} • {filteredRecords.length} record
@@ -2814,7 +2814,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
             </p>
           </div>
           {showDonorFilter && (
-            <div className="space-y-2 min-w-[200px] basis-[260px] max-w-[320px] grow-0">
+            <div className="space-y-2 min-w-0 basis-full sm:basis-[260px] sm:max-w-[320px] grow-0">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-0">
                   Filter by donor name
@@ -2850,7 +2850,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
             </div>
           )}
 
-          <div className="space-y-2 min-w-[180px] basis-[200px] max-w-[240px] grow-0">
+          <div className="space-y-2 min-w-0 basis-full sm:basis-[200px] sm:max-w-[240px] grow-0">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-0">
                 Filter by month
@@ -2885,7 +2885,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
           </div>
 
           {isAdminUser && (
-            <div className="flex-1 min-w-[220px] space-y-2">
+            <div className="flex-1 min-w-0 space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Filter by payment status
               </p>
@@ -2996,7 +2996,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
                   <div className="mt-3 space-y-3">
                     <div className="hidden md:block">
                       <div className="max-h-[520px] overflow-auto rounded-2xl">
-                        <table className="w-full min-w-full divide-y divide-slate-100 text-sm">
+                        <table className="w-full min-w-[640px] divide-y divide-slate-100 text-sm">
                           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                             <tr>
                               <th className="px-4 py-3 text-left font-semibold">S.no</th>

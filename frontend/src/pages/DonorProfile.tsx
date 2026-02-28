@@ -1014,18 +1014,18 @@ const DonorProfile = () => {
           {/* Sticky Header */}
           <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
             <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-orange-200 to-orange-300 text-xl font-bold text-orange-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-200 to-orange-300 text-base font-bold text-orange-700 sm:h-12 sm:w-12 sm:text-xl">
                     {getInitials(user.name)}
                   </div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-slate-800">{formatDonorDisplayName(user.name, profile.tamil_name)}</h1>
-                    <p className="text-sm text-slate-500">{profile.donor_id} • {user.phone_number}</p>
+                  <div className="min-w-0">
+                    <h1 className="truncate text-lg font-bold text-slate-800 sm:text-2xl">{formatDonorDisplayName(user.name, profile.tamil_name)}</h1>
+                    <p className="truncate text-xs text-slate-500 sm:text-sm">{profile.donor_id} • {user.phone_number}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-[#E8F5E9] px-3 py-1.5 text-sm font-semibold text-[#1B5E20] ring-1 ring-inset ring-[#2E7D32]/30">
+                <div className="flex flex-shrink-0 items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F5E9] px-2 py-1 text-xs font-semibold text-[#1B5E20] ring-1 ring-inset ring-[#2E7D32]/30 sm:px-3 sm:py-1.5 sm:text-sm">
                     <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
@@ -1077,7 +1077,7 @@ const DonorProfile = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-extrabold uppercase text-black">Family Members</p>
-                        <p className="mt-2 text-[32px] leading-none font-black text-black">{members.length}</p>
+                        <p className="mt-2 text-2xl leading-none font-black text-black sm:text-[32px]">{members.length}</p>
                       </div>
                       <div className="text-3xl">👨‍👩‍👧‍👦</div>
                     </div>
@@ -1086,7 +1086,7 @@ const DonorProfile = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-extrabold uppercase text-black">Registrations</p>
-                        <p className="mt-2 text-[32px] leading-none font-black text-black">{visibleRegistrations.length}</p>
+                        <p className="mt-2 text-2xl leading-none font-black text-black sm:text-[32px]">{visibleRegistrations.length}</p>
                       </div>
                       <div className="text-3xl">📋</div>
                     </div>
@@ -1095,7 +1095,7 @@ const DonorProfile = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-extrabold uppercase text-black">Active Plans</p>
-                        <p className="mt-2 text-[32px] leading-none font-black text-black">{recurringPlansToShow.length}</p>
+                        <p className="mt-2 text-2xl leading-none font-black text-black sm:text-[32px]">{recurringPlansToShow.length}</p>
                       </div>
                       <div className="text-3xl">🔄</div>
                     </div>
@@ -1104,7 +1104,7 @@ const DonorProfile = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-extrabold uppercase text-black">Monthly Contribution</p>
-                        <p className="mt-2 text-[32px] leading-none font-black text-black">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
+                        <p className="mt-2 text-2xl leading-none font-black text-black sm:text-[32px]">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
                       </div>
                       <div className="text-3xl">💰</div>
                     </div>
@@ -1186,14 +1186,14 @@ const DonorProfile = () => {
             {/* FAMILY MEMBERS TAB */}
             {activeTab === 'family' && (
               <div>
-                  <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Family Members</h2>
+                  <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">Family Members</h2>
                     <p className="text-sm text-slate-500">Manage your family members for pooja registrations</p>
                   </div>
                   <button
                     onClick={startAddingNew}
-                    className="inline-flex items-center gap-2 rounded-lg border-2 border-dashed border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                    className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-dashed border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -1413,14 +1413,14 @@ const DonorProfile = () => {
             {/* REGISTRATIONS TAB */}
             {activeTab === 'registrations' && (
               <div>
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">One-time Registrations</h2>
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">One-time Registrations</h2>
                     <p className="text-sm text-slate-500">View all your pooja registrations</p>
                   </div>
                   <button
                     onClick={handleManualPaymentRedirect}
-                    className="inline-flex items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                    className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1433,7 +1433,7 @@ const DonorProfile = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold uppercase text-slate-600">Total one-time contribution</p>
-                      <p className="mt-2 text-4xl font-bold text-slate-900">₹ {formatCurrency(registrationTotals.amount)}</p>
+                      <p className="mt-2 text-2xl font-bold text-slate-900 sm:text-4xl">₹ {formatCurrency(registrationTotals.amount)}</p>
                       <p className="mt-1 text-sm text-slate-600">
                         Across {registrationTotals.count} {registrationTotals.count === 1 ? 'pooja' : 'poojas'}
                       </p>
@@ -1622,12 +1622,12 @@ const DonorProfile = () => {
             {/* RECURRING PLANS TAB */}
             {activeTab === 'recurring' && (
               <div>
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Recurring Pooja Plans</h2>
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">Recurring Pooja Plans</h2>
                     <p className="text-sm text-slate-500">Manage your active recurring donations</p>
                   </div>
-                  <button onClick={handleViewRecurringPayments} disabled={!hasRecurringPaymentItems} className="inline-flex items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                  <button onClick={handleViewRecurringPayments} disabled={!hasRecurringPaymentItems} className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     Payments
                   </button>
@@ -1638,7 +1638,7 @@ const DonorProfile = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold uppercase text-emerald-600">Total Monthly Contribution</p>
-                      <p className="mt-2 text-4xl font-bold text-slate-900">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
+                      <p className="mt-2 text-2xl font-bold text-slate-900 sm:text-4xl">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
                       <p className="mt-1 text-sm text-slate-600">Across {recurringPlansToShow.length} active plan{recurringPlansToShow.length !== 1 ? 's' : ''}</p>
                       <p className="mt-1 text-sm font-semibold text-red-600">
                         {recurringPlansToShow.length} Recurring Pooja{recurringPlansToShow.length !== 1 ? 's' : ''}
@@ -1843,12 +1843,12 @@ const DonorProfile = () => {
             {/* CHRT POOJA TAB */}
             {activeTab === 'chrt_pooja' && (
               <div>
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Choose Your Preferred Date - CHRT Pooja</h2>
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">Choose Your Preferred Date - CHRT Pooja</h2>
                     <p className="text-sm text-slate-500">Manage your CHRT poojas with custom selected dates</p>
                   </div>
-                  <button onClick={handleViewRecurringPayments} disabled={chrtPoojaCount === 0} className="inline-flex items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                  <button onClick={handleViewRecurringPayments} disabled={chrtPoojaCount === 0} className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     Payments
                   </button>
@@ -1859,7 +1859,7 @@ const DonorProfile = () => {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-xs font-bold uppercase text-purple-600">Total CHRT Poojas</p>
-                      <p className="mt-2 text-4xl font-bold text-slate-900">{chrtPoojaCount}</p>
+                      <p className="mt-2 text-2xl font-bold text-slate-900 sm:text-4xl">{chrtPoojaCount}</p>
                       <p className="mt-1 text-sm text-slate-600">CHRT Pooja{chrtPoojaCount !== 1 ? 's' : ''} registered</p>
                     </div>
                     <div className="flex items-center gap-4">
