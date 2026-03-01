@@ -12,7 +12,8 @@ from .models import PoojaRegistration, UbhayamReport
 ANY_DAY_OPTION_LABEL = "Any day of the month"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
 ANY_DAY_OPTION_DESCRIPTIONS = {"any day of month", "any day of the month"}
-UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6", "SP3"}
+UBHAYAM_EXCLUDED_PARENT_CODES = {"SPECIAL"}
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6"}
 UBHAYAM_EXCLUDED_POOJA_NAMES = {
     "till oil for lamps",
     "nitya neivedhyam",
@@ -22,8 +23,14 @@ UBHAYAM_EXCLUDED_POOJA_NAMES = {
     "saturday navagraha pooja",
     "2 pradosha pooja per month",
     "pradosha pooja",
+    "sivan koil kumbabishekam",
+    "aarudhra darsanam pooja",
     "gen donation",
     "gen donation pooja",
+    "mahashivrathri",
+    "mahashivratri",
+    "navarathri for 1 day pooja",
+    "navaratri for 1 day pooja",
 }
 
 
@@ -74,6 +81,10 @@ def _is_ubhayam_excluded_pooja(option) -> bool:
     if option is None:
         return False
 
+    normalized_parent_code = (getattr(getattr(option, "parent", None), "code", None) or "").strip().upper()
+    if normalized_parent_code in UBHAYAM_EXCLUDED_PARENT_CODES:
+        return True
+
     normalized_code = (getattr(option, "code", None) or "").strip().upper()
     if normalized_code in UBHAYAM_EXCLUDED_POOJA_CODES:
         return True
@@ -95,7 +106,7 @@ def _collect_unique_day_options_for_donor(donor_id: int) -> list[str]:
     labels: set[str] = set()
     registrations = (
         PoojaRegistration.objects.filter(donor_id=donor_id)
-        .select_related("day_option", "pooja_option")
+        .select_related("day_option", "pooja_option", "pooja_option__parent")
     )
     for registration in registrations:
         if _is_ubhayam_excluded_pooja(getattr(registration, "pooja_option", None)):

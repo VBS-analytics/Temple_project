@@ -235,6 +235,10 @@ class UbhayamReportSyncTests(TestCase):
             code="AR99",
             defaults={"name": "Regular Archana"},
         )
+        self.special_header, _ = PoojaOption.objects.get_or_create(
+            code="SPECIAL",
+            defaults={"name": "Special Pooja", "is_group_header": True},
+        )
         self.excluded_options = [
             PoojaOption.objects.get_or_create(
                 code="GP1",
@@ -257,8 +261,24 @@ class UbhayamReportSyncTests(TestCase):
                 defaults={"name": "Nitya Neivedhyam"},
             )[0],
             PoojaOption.objects.get_or_create(
+                code="SP1",
+                defaults={"name": "Sivan Koil Kumbabishekam", "parent": self.special_header},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="SP2",
+                defaults={"name": "Aarudhra Darsanam Pooja", "parent": self.special_header},
+            )[0],
+            PoojaOption.objects.get_or_create(
                 code="SP3",
-                defaults={"name": "Gen Donation"},
+                defaults={"name": "Gen Donation", "parent": self.special_header},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="mahashiv-boh2",
+                defaults={"name": "Mahashivrathri", "parent": self.special_header},
+            )[0],
+            PoojaOption.objects.get_or_create(
+                code="navarath-0fg1",
+                defaults={"name": "Navarathri for 1 day pooja", "parent": self.special_header},
             )[0],
         ]
 
@@ -623,7 +643,14 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertEqual(snapshot_entry["donor_phones"], "9000000014")
 
     def test_ubhayam_calendar_excludes_first_day_special_poojas(self):
-        excluded_option = PoojaOption.objects.create(code="GP1", name="Till Oil for Lamps")
+        special_header, _ = PoojaOption.objects.get_or_create(
+            code="SPECIAL",
+            defaults={"name": "Special Pooja", "is_group_header": True},
+        )
+        excluded_option, _ = PoojaOption.objects.get_or_create(
+            code="mahashiv-boh2",
+            defaults={"name": "Mahashivrathri", "parent": special_header},
+        )
         included_donor = User.objects.create_user(
             phone_number="9000000016",
             name="Included Donor",
@@ -656,6 +683,14 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertNotIn("Excluded Donor", january_first["donor_names"])
 
     def test_ubhayam_calendar_excludes_first_day_special_snapshot_items(self):
+        special_header, _ = PoojaOption.objects.get_or_create(
+            code="SPECIAL",
+            defaults={"name": "Special Pooja", "is_group_header": True},
+        )
+        excluded_option, _ = PoojaOption.objects.get_or_create(
+            code="navarath-0fg1",
+            defaults={"name": "Navarathri for 1 day pooja", "parent": special_header},
+        )
         included_snapshot_donor = User.objects.create_user(
             phone_number="9000000018",
             name="Included Snapshot Donor",
@@ -683,8 +718,8 @@ class PoojaDonorCalendarViewTests(TestCase):
                 {
                     "cartId": "snapshot-excluded",
                     "bookingDate": "2025-01-01",
-                    "poojaCode": "GP6",
-                    "poojaName": "Nitya Neivedhyam",
+                    "poojaCode": excluded_option.code,
+                    "poojaName": excluded_option.name,
                 }
             ],
         )
@@ -702,7 +737,14 @@ class PoojaDonorCalendarViewTests(TestCase):
             description="Regular Day",
             category=DayOptionCategory.CODE,
         )
-        excluded_option = PoojaOption.objects.create(code="GP4", name="Gau Samrakshana Seva")
+        special_header, _ = PoojaOption.objects.get_or_create(
+            code="SPECIAL",
+            defaults={"name": "Special Pooja", "is_group_header": True},
+        )
+        excluded_option, _ = PoojaOption.objects.get_or_create(
+            code="SP2",
+            defaults={"name": "Aarudhra Darsanam Pooja", "parent": special_header},
+        )
         included_donor = User.objects.create_user(
             phone_number="9000000022",
             name="Included Plan Donor",

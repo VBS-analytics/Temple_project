@@ -464,6 +464,14 @@ const DonationPage = () => {
             </section>
           </div>
         </div>
+
+        {/* Footer */}
+        <footer style={{ textAlign: 'center', paddingTop: '1.5rem', paddingBottom: '2rem', borderTop: '1px solid #fef3c7', marginTop: '2rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
+            © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
+            <span style={{ color: '#ef4444' }}>❤</span> for the community.
+          </p>
+        </footer>
       </div>
     </>
   );

@@ -166,7 +166,7 @@ const LandingPage = () => {
         /* ═══════════════════════════════════════
            STATS
         ═══════════════════════════════════════ */
-        .stats { padding:4rem 0; }
+        .stats { padding:2rem 0 4rem; }
         .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:1.2rem; }
         .stat-card {
           background:var(--bg2); border:1px solid var(--bd); border-radius:1.1rem;
