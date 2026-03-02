@@ -607,6 +607,37 @@ class PoojaDonorCalendarViewTests(TestCase):
 
         self.assertEqual(observed_phones, set())
 
+    def test_any_day_with_explicit_start_date_is_excluded_from_dated_rows(self):
+        any_day_option = PoojaDayOption.objects.create(
+            code="AD",
+            description="Any Day of Month",
+            category=DayOptionCategory.CODE,
+        )
+        donor = User.objects.create_user(
+            phone_number="9000000026",
+            name="Any Day Explicit Date Donor",
+            password="secret",
+        )
+        self._create_registration(
+            donor,
+            timezone.make_aware(datetime(2025, 1, 3, 9, 0)),
+            start_date_value=date(2025, 1, 15),
+            day_option=any_day_option,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        observed_phones: set[str] = set()
+        for entry in payload["dates"]:
+            for donor_entry in entry["donors"]:
+                phone = donor_entry.get("phone_number")
+                if phone == donor.phone_number:
+                    observed_phones.add(phone)
+
+        self.assertEqual(observed_phones, set())
+
     def test_cart_snapshot_donors_are_included(self):
         snapshot_donor = User.objects.create_user(
             phone_number="9000000014",
@@ -908,7 +939,7 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertTrue(any(option.get("code") == "PRD" for option in feb_14["day_options"]))
         self.assertFalse(any(option.get("code") == "PRD" for option in feb_28["day_options"]))
 
-    def test_any_day_recurring_plan_without_next_occurrence_is_excluded_from_dated_rows(self):
+    def test_any_day_recurring_plan_with_next_occurrence_is_excluded_from_dated_rows(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
             description="Any Day of Month",
@@ -927,7 +958,7 @@ class PoojaDonorCalendarViewTests(TestCase):
             recurrence_kind=RecurrenceKind.RECURRING,
             recurrence_frequency=RecurrenceFrequency.MONTHLY,
             start_date=date(2026, 1, 21),
-            next_occurrence=None,
+            next_occurrence=date(2026, 3, 1),
             amount=Decimal("100.00"),
             is_active=True,
         )
