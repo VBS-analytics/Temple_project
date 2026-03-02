@@ -51,7 +51,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const location = useLocation();
   const showLoginCta = location.pathname !== '/login';
   const visibleNavLinks =
-    location.pathname === '/' ? navLinks.filter((item) => item.label !== 'Home') : navLinks;
+    location.pathname === '/' ? navLinks.filter((item) => !(item.type === 'anchor' && item.href === '#top')) : navLinks;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [patronDialogOpen, setPatronDialogOpen] = useState(false);
   const handlePatronContactClick = () => {
