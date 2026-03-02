@@ -161,6 +161,14 @@ const WhyVisitNativeVillage = () => (
       </div>
     </main>
 
+    {/* Footer */}
+    <footer className="text-center pt-6 pb-8 border-t border-amber-100 mt-8">
+      <p className="text-xs sm:text-sm text-slate-500 px-4">
+        © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
+        <span className="text-red-500">❤</span> for the community.
+      </p>
+    </footer>
+
     <style>{`
       .senior-readable-content :where(p, li, td) {
         font-weight: 500;

@@ -166,7 +166,7 @@ const CSS_STYLES = `
   .kp-pg-title em { color: #d97706; font-style: normal; }
   .kp-pg-desc {
     font-size: clamp(.9rem, 1.8vw, 1.05rem);
-    color: #475569; max-width: 600px; margin: 0 auto; line-height: 1.75;
+    color: #475569; max-width: 900px; margin: 0 auto; line-height: 1.75; white-space: nowrap;
   }
 
   /* ── TOGGLE — TOP RIGHT OF HEADER ── */
@@ -248,7 +248,7 @@ const CSS_STYLES = `
   /* ── TEMPLE HEADER BANNER ── */
   .kp-temple-hdr {
     background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-    border-radius: 1.25rem; padding: 2rem 2rem 2rem 2rem;
+    border-radius: 1.25rem; padding: 1.1rem 1.75rem;
     color: #fff; position: relative; overflow: hidden;
     margin-bottom: 1.5rem;
   }
@@ -256,28 +256,36 @@ const CSS_STYLES = `
     content: 'ॐ';
     position: absolute; right: 1rem; top: 50%;
     transform: translateY(-50%);
-    font-family: Georgia, serif; font-size: clamp(6rem, 14vw, 10rem);
+    font-family: Georgia, serif; font-size: clamp(4rem, 10vw, 7rem);
     color: rgba(255,255,255,.08); line-height: 1;
     pointer-events: none; user-select: none;
   }
   .kp-temple-type {
-    font-size: .63rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
-    color: rgba(255,255,255,.8); margin-bottom: .5rem; display: block;
+    font-size: .6rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
+    color: rgba(255,255,255,.8); margin-bottom: .3rem; display: block;
   }
   .kp-temple-name {
     font-family: Georgia, serif;
-    font-size: clamp(1.4rem, 3.5vw, 2.25rem);
-    font-weight: 700; color: #fff; margin: 0 0 .65rem; line-height: 1.2;
+    font-size: clamp(1.2rem, 2.8vw, 1.75rem);
+    font-weight: 700; color: #fff; margin: 0 0 .35rem; line-height: 1.2;
   }
   .kp-temple-desc {
-    font-size: clamp(.875rem, 1.8vw, 1rem);
-    color: rgba(255,255,255,.88); line-height: 1.75; margin: 0;
-    max-width: 72ch;
+    font-size: clamp(.8rem, 1.5vw, .9rem);
+    color: rgba(255,255,255,.88); line-height: 1.55; margin: 0;
+    white-space: nowrap;
   }
 
   /* ── IMAGE SLIDESHOW ── */
   .kp-slideshow {
     margin: 1.5rem 0;
+  }
+  /* contain variant — full image visible, no cropping */
+  .kp-gallery-contain .kp-slide-container img {
+    aspect-ratio: auto;
+    object-fit: contain;
+    max-height: 480px;
+    height: 480px;
+    background: #faf5eb;
   }
   .kp-slide-container {
     position: relative;
@@ -365,7 +373,7 @@ const CSS_STYLES = `
   }
   .kp-sec:last-child { margin-bottom: 0; }
   @media(max-width: 640px) { .kp-sec { padding: 1.25rem 1.1rem; } }
-  @media(max-width: 640px) { .kp-temple-hdr { padding: 1.5rem 1.25rem; } }
+  @media(max-width: 640px) { .kp-temple-hdr { padding: 0.9rem 1.1rem; } }
 
   /* section heading */
   .kp-sec-hdr { margin-bottom: 1.4rem; }
@@ -586,6 +594,14 @@ const KovilDetailsPage = () => {
             </div>
           </div>
         </main>
+
+        {/* Footer */}
+        <footer className="text-center pt-6 pb-8 border-t border-amber-100 mt-8">
+          <p className="text-xs sm:text-sm text-slate-500 px-4">
+            © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
+            <span className="text-red-500">❤</span> for the community.
+          </p>
+        </footer>
       </div>
     </>
   );
@@ -605,23 +621,6 @@ const LakshmiNarayanarContent = () => (
     </div>
 
     {/* Image Slideshow */}
-    <ImageSlideshow
-      images={[
-        { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png", alt: "Main deity — Lakshmi Narayanar", caption: "Main deity — Lakshmi Narayanar" },
-        { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-1.png", alt: "Gopuram and temple entrance — view 1", caption: "Gopuram and temple entrance — view 1" },
-        { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-2.png", alt: "Gopuram and temple entrance — view 2", caption: "Gopuram and temple entrance — view 2" },
-      ]}
-    />
-
-    {/* History in Progress */}
-    <div className="kp-sec">
-      <div className="kp-hl">
-        <div className="kp-hl-title">History in Progress</div>
-        <div className="kp-hl-text">
-          We are still in the process of collecting history about this temple.
-        </div>
-      </div>
-    </div>
 
     {/* Timeline */}
     <div className="kp-sec">
@@ -747,6 +746,17 @@ const LakshmiNarayanarContent = () => (
         </div>
       </div>
     </div>
+
+    {/* Temple Images */}
+    <div className="kp-gallery-contain">
+      <ImageSlideshow
+        images={[
+          { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png",   alt: "Lakshmi Narayanar Temple" },
+          { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-1.png", alt: "Lakshmi Narayanar Temple — View 2" },
+          { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-2.png", alt: "Lakshmi Narayanar Temple — View 3" },
+        ]}
+      />
+    </div>
   </section>
 );
 
@@ -764,13 +774,6 @@ const AathangaraiContent = () => (
     </div>
 
     {/* Image Slideshow */}
-    <ImageSlideshow
-      images={[
-        { src: "/images/kovi/pillayar/pillayar-hd.jpg", alt: "Aathangarai Pillayar Koil", caption: "Aathangarai Pillayar Koil" },
-        { src: "/images/kovi/pillayar/after-kumbabishekam1.png", alt: "After Kumbabishekam", caption: "After Kumbabishekam — view 1" },
-        { src: "/images/kovi/pillayar/after-kumbabishekam2.png", alt: "After Kumbabishekam view 2", caption: "After Kumbabishekam — view 2" },
-      ]}
-    />
 
     {/* Timeline */}
     <div className="kp-sec">
@@ -840,22 +843,6 @@ const AathangaraiContent = () => (
       </div>
     </div>
 
-    {/* Before & After */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Renovation</span>
-        <h3 className="kp-sec-title">Before & After Kumbabishekam</h3>
-        <div className="kp-rule" />
-      </div>
-      <ImageSlideshow
-        images={[
-          { src: "/images/kovi/pillayar/before-kumbabishekam1.png", alt: "Before Kumbabishekam", caption: "Before Kumbabishekam" },
-          { src: "/images/kovi/pillayar/before-kumbabishekam2.png", alt: "Before Kumbabishekam view 2", caption: "Before Kumbabishekam — view 2" },
-          { src: "/images/kovi/pillayar/after-kumbabishekam1.png", alt: "After Kumbabishekam", caption: "After Kumbabishekam" },
-          { src: "/images/kovi/pillayar/after-kumbabishekam2.png", alt: "After Kumbabishekam view 2", caption: "After Kumbabishekam — view 2" },
-        ]}
-      />
-    </div>
 
     {/* Infrastructure */}
     <div className="kp-sec">
@@ -873,15 +860,6 @@ const AathangaraiContent = () => (
         </div>
       </div>
 
-      <ImageSlideshow
-        images={[
-          { src: "/images/kovi/pillayar/before-project-1.png", alt: "Broken canal shutter gate", caption: "Broken Shutter Gate — Before" },
-          { src: "/images/kovi/pillayar/before-project-2.png", alt: "Broken canal gate view 2", caption: "Broken Shutter Gate — Before (view 2)" },
-          { src: "/images/kovi/pillayar/after-project-1.png", alt: "New GI bridge view 1", caption: "New GI Bridge — After" },
-          { src: "/images/kovi/pillayar/after-project-2.png", alt: "New GI bridge view 2", caption: "New GI Bridge — After (view 2)" },
-        ]}
-      />
-
       <div className="kp-alert kp-alert--info" style={{ marginTop: "1rem" }}>
         <div className="kp-alert-title">Temporary Solution (2022–2024)</div>
         <div className="kp-alert-text">
@@ -896,6 +874,39 @@ const AathangaraiContent = () => (
           <strong>permanent Galvanized Iron structure</strong>. This has helped local residents to visit
           daily river bank to take bath and on way back have darshan at Pillayar koil.
         </div>
+      </div>
+    </div>
+
+    {/* Infrastructure Images */}
+    <div className="kp-gallery-contain">
+      <ImageSlideshow
+        images={[
+          { src: "/images/kovi/pillayar/pillayar-hd.jpg",      alt: "Aathangarai Pillayar Koil" },
+          { src: "/images/kovi/pillayar/pillayar5.png",         alt: "Pillayar Koil — View 2" },
+          { src: "/images/kovi/pillayar/before-project-1.png",  alt: "Before Bridge Project — 1" },
+          { src: "/images/kovi/pillayar/before-project-2.png",  alt: "Before Bridge Project — 2" },
+          { src: "/images/kovi/pillayar/after-project-1.png",   alt: "After Bridge Project — 1" },
+          { src: "/images/kovi/pillayar/after-project-2.png",   alt: "After Bridge Project — 2" },
+        ]}
+      />
+    </div>
+
+    {/* Before & After */}
+    <div className="kp-sec">
+      <div className="kp-sec-hdr">
+        <span className="kp-sec-eyebrow">Renovation</span>
+        <h3 className="kp-sec-title">Before & After Kumbabishekam</h3>
+        <div className="kp-rule" />
+      </div>
+      <div className="kp-gallery-contain">
+        <ImageSlideshow
+          images={[
+            { src: "/images/kovi/pillayar/before-kumbabishekam1.png", alt: "Before Kumbabishekam — 1" },
+            { src: "/images/kovi/pillayar/before-kumbabishekam2.png", alt: "Before Kumbabishekam — 2" },
+            { src: "/images/kovi/pillayar/after-kumbabishekam1.png",  alt: "After Kumbabishekam — 1" },
+            { src: "/images/kovi/pillayar/after-kumbabishekam2.png",  alt: "After Kumbabishekam — 2" },
+          ]}
+        />
       </div>
     </div>
 
@@ -924,14 +935,6 @@ const GnanambalContent = () => (
     </div>
 
     {/* Image Slideshow */}
-    <ImageSlideshow
-      images={[
-        { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar Temple", caption: "Gnanambal Samedha Kalahasteeswarar Koil" },
-        { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-2.png", alt: "Temple entrance", caption: "Temple Entrance" },
-        { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-1.png", alt: "Side view with gopuram", caption: "Side View & Gopuram" },
-        { src: "/images/kovi/kalahasteeswarar/murugan-hd.png", alt: "Lord Subramanya (Murugan)", caption: "Lord Subramanya (Murugan)" },
-      ]}
-    />
 
     {/* Heritage */}
     <div className="kp-sec">
@@ -970,33 +973,28 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">1. Temple Entrance</div>
+          <div className="kp-deity-name">Temple Entrance</div>
           <div className="kp-deity-desc">
             On the top of the entrance, you can see idols of Lord Shiva & Goddess Parvathi along with
             Lord Murugan & Lord Ganapathy.
           </div>
-          <div className="kp-img-single">
-            <img src="/images/kovi/kalahasteeswarar/kalahasteeswarar-2.png" alt="Temple entrance" loading="lazy" />
-          </div>
         </div>
       </div>
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">2. Side View & Gopuram</div>
+          <div className="kp-deity-name">Side View & Gopuram</div>
           <div className="kp-deity-desc">
             The side view shows the gopuram above Lord Shiva. You can see the wall of Mandapam in front
             of Lord Shiva sannidhanam, and a small structure attached to the wall — the Lord Dakshinamoorthy Sannidhi.
           </div>
-          <div className="kp-img-single">
-            <img src="/images/kovi/kalahasteeswarar/kalahasteeswarar-1.png" alt="Side view with gopuram" loading="lazy" />
-          </div>
+
         </div>
       </div>
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">3. Gnanambal Sannidhi — Following Aagama Sasthram</div>
+          <div className="kp-deity-name">Gnanambal Sannidhi — Following Aagama Sasthram</div>
           <div className="kp-deity-desc">
             Right in front of the main entrance is Gnanambal Sannidhi. As per aagama sasthram, when
             you visit a Lord Shiva temple, first you should take darshan of Lord Ganapathy, then have
@@ -1014,21 +1012,13 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">4. Lord Ganapathy Sannadhi</div>
+          <div className="kp-deity-name">Lord Ganapathy Sannadhi</div>
           <div className="kp-deity-desc">
             Matching the aagama sasthram, this temple is built perfectly. Close to Lord Dakshinamoorthy
             Sannadhi, we have Lord Ganapathy Sannadhi. As soon as you enter the temple and look to your
             left, you can have darshan of Lord Ganapathy, climb steps & right in front you take darshan
             of Ambal, and when you turn to your left you take darshan of Lord Shiva. On your right you
             can have darshan of Nandi.
-          </div>
-          <div className="kp-img-single">
-            <img
-              src="/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png"
-              alt="Lord Ganapathy Sannadhi"
-              loading="lazy"
-              style={{ objectFit: "contain", background: "#faf5eb" }}
-            />
           </div>
         </div>
       </div>
@@ -1044,7 +1034,7 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">5. Lord Dakshinamoorthy</div>
+          <div className="kp-deity-name">Lord Dakshinamoorthy</div>
           <div className="kp-deity-desc">
             In outer praharam, when you visit Lord Ganapathy sannadhi, to your right you can have darshan of Lord Dakshinamoorthy.
           </div>
@@ -1053,7 +1043,7 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">6. Lord Kasi Viswanathar with Goddess Visalakshi</div>
+          <div className="kp-deity-name">Lord Kasi Viswanathar with Goddess Visalakshi</div>
           <div className="kp-deity-desc">
             Just behind Lord Shiva sannidhanam is Lord Kasi Viswanathar with Goddess Visalakshi.
             This idol was brought by Koorakattu family from Kasi and installed here.
@@ -1070,16 +1060,8 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">7. Lord Subramanya (Murugan)</div>
+          <div className="kp-deity-name">Lord Subramanya (Murugan)</div>
           <div className="kp-deity-desc">As you move further, you can have darshan of Lord Subramanya (Murugan).</div>
-          <div className="kp-img-single">
-            <img
-              src="/images/kovi/kalahasteeswarar/murugan-hd.png"
-              alt="Lord Subramanya (Murugan)"
-              loading="lazy"
-              style={{ objectFit: "contain", background: "#faf5eb", maxHeight: "320px" }}
-            />
-          </div>
           <div className="kp-hl" style={{ marginTop: ".65rem" }}>
             <div className="kp-hl-title">Speciality</div>
             <div className="kp-hl-text">
@@ -1092,14 +1074,14 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">8. Chandikeswarar</div>
+          <div className="kp-deity-name">Chandikeswarar</div>
           <div className="kp-deity-desc">Located just close to Dhara outlet from Lord Shiva sannidhanam.</div>
         </div>
       </div>
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">9. Temple Well</div>
+          <div className="kp-deity-name">Temple Well</div>
           <div className="kp-deity-desc">
             The well inside the temple from where water is used for temple activities.
             See the Sacred Story (Point 13) below to know more about this well and how this village got the name "Kakkalani".
@@ -1109,14 +1091,14 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">10. Navagraha Sannadhi</div>
+          <div className="kp-deity-name">Navagraha Sannadhi</div>
           <div className="kp-deity-desc">Located just in front of the temple well.</div>
         </div>
       </div>
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">11. Lord Suryan, Lord Saneeswaran and Lord Kalabhairavar</div>
+          <div className="kp-deity-name">Lord Suryan, Lord Saneeswaran and Lord Kalabhairavar</div>
           <div className="kp-deity-desc">
             Adjacent to Navagraha sannadhi, there are 3 idols — Lord Suryan, Lord Saneeswaran and Lord Kalabhairavar.
           </div>
@@ -1125,7 +1107,7 @@ const GnanambalContent = () => (
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">12. Vastu Alignment</div>
+          <div className="kp-deity-name">Vastu Alignment</div>
           <div className="kp-deity-desc">
             Both the well inside temple and Kadugayar river behind the temple are to the North East of
             main idol in temple. As per vastu, water flowing towards North East is always good.
@@ -1135,10 +1117,23 @@ const GnanambalContent = () => (
       </div>
     </div>
 
+    {/* Temple Images */}
+    <div className="kp-gallery-contain">
+      <ImageSlideshow
+        images={[
+          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar Koil" },
+          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-1.png",  alt: "Kalahasteeswarar Koil — View 2" },
+          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-2.png",  alt: "Kalahasteeswarar Koil — View 3" },
+          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-3.png",  alt: "Kalahasteeswarar Koil — View 4" },
+          { src: "/images/kovi/kalahasteeswarar/murugan-hd.png",          alt: "Lord Murugan Sannidhi" },
+        ]}
+      />
+    </div>
+
     {/* Sacred Story */}
     <div className="kp-sec">
       <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Point 13 · Sacred Story</span>
+        <span className="kp-sec-eyebrow">Sacred Story</span>
         <h3 className="kp-sec-title">How Kakkalani Got Its Name</h3>
         <div className="kp-rule" />
       </div>
@@ -1210,15 +1205,6 @@ const AyyanarContent = () => (
     </div>
 
     {/* Image Slideshow */}
-    <ImageSlideshow
-      images={[
-        { src: "/images/kovi/ayyanar/ayyanar.png", alt: "Mangala Azhagar Ayyanar", caption: "Mangala Azhagar Ayyanar Koil" },
-        { src: "/images/kovi/ayyanar/ayyanar-1.png", alt: "Temple exterior with surrounding trees", caption: "Temple exterior with surrounding trees" },
-        { src: "/images/kovi/ayyanar/ayyanar-2.png", alt: "Main entrance and gate", caption: "Main entrance and gate" },
-        { src: "/images/kovi/ayyanar/ayyanar-hd.jpg", alt: "Sacred Saptakanni with offerings", caption: "Sacred Saptakanni with offerings" },
-        { src: "/images/kovi/ayyanar/ayyanar-kovi-river.png", alt: "Temple pond visible from approach", caption: "Temple pond visible from approach" },
-      ]}
-    />
 
     {/* Location */}
     <div className="kp-sec">
@@ -1279,11 +1265,11 @@ const AyyanarContent = () => (
       </div>
     </div>
 
-    {/* Features */}
+    {/* Features & Poojas */}
     <div className="kp-sec">
       <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Temple Features</span>
-        <h3 className="kp-sec-title">Sacred Features</h3>
+        <span className="kp-sec-eyebrow">Sacred Features & Rituals</span>
+        <h3 className="kp-sec-title">Temple Features & Important Poojas</h3>
         <div className="kp-rule" />
       </div>
       <div className="kp-deity-row">
@@ -1296,32 +1282,33 @@ const AyyanarContent = () => (
           </div>
         </div>
       </div>
-    </div>
-
-    {/* Poojas */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Rituals</span>
-        <h3 className="kp-sec-title">Important Poojas & Rituals</h3>
-        <div className="kp-rule" />
-      </div>
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">1. Chandana Kappu for Ayyanar</div>
+          <div className="kp-deity-name">Chandana Kappu for Ayyanar</div>
           <div className="kp-deity-desc">One of the important poojas conducted at this temple.</div>
         </div>
       </div>
       <div className="kp-deity-row">
         <div className="kp-deity-dot" />
         <div>
-          <div className="kp-deity-name">2. Palayam (Special Pooja)</div>
+          <div className="kp-deity-name">Palayam (Special Pooja)</div>
           <div className="kp-deity-desc">
             The more important special pooja called <strong>"Palayam"</strong>. You can contact the temple
             management to know more about this sacred ritual.
           </div>
         </div>
       </div>
+    </div>
+
+    {/* Ayyanar Koil Images */}
+    <div className="kp-gallery-contain">
+      <ImageSlideshow images={[
+        { src: "/images/kovi/ayyanar/ayyanar-1.png",         alt: "Mangala Azhagar Ayyanar Koil" },
+        { src: "/images/kovi/ayyanar/ayyanar-2.png",         alt: "Ayyanar Koil — View 2" },
+        { src: "/images/kovi/ayyanar/ayyanar-hd.jpg",        alt: "Ayyanar Koil — View 3" },
+        { src: "/images/kovi/ayyanar/ayyanar-kovi-river.png", alt: "Ayyanar Koil — River View" },
+      ]} />
     </div>
 
     {/* Contact */}

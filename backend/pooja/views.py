@@ -84,7 +84,8 @@ TILL_OIL_FOR_LAMPS_NAME = "till oil for lamps"
 NITYA_NEIVEDHYAM_NAME = "nitya neivedhyam"
 GAU_SAMRAKHSHANA_SEVA_NAME = "gau samrakshana seva"
 GEN_DONATION_POOJA_NAME = "gen donation"
-UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6", "SP3"}
+UBHAYAM_EXCLUDED_PARENT_CODES = {"SPECIAL"}
+UBHAYAM_EXCLUDED_POOJA_CODES = {"GP1", "GP2", "GP3", "GP4", "GP6"}
 UBHAYAM_EXCLUDED_POOJA_NAMES = {
     SATURDAY_NAVAGRAHA_POOJA_NAME,
     "saturday navagraha pooja",
@@ -94,8 +95,14 @@ UBHAYAM_EXCLUDED_POOJA_NAMES = {
     NITYA_NEIVEDHYAM_NAME,
     GAU_SAMRAKHSHANA_SEVA_NAME,
     "gau samrakhshana seva",
+    "sivan koil kumbabishekam",
+    "aarudhra darsanam pooja",
     GEN_DONATION_POOJA_NAME,
     "gen donation pooja",
+    "mahashivrathri",
+    "mahashivratri",
+    "navarathri for 1 day pooja",
+    "navaratri for 1 day pooja",
 }
 POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE = "Please contact Admin for the pooja registration"
 ANY_DAY_OPTION_CODES = {"AD", "ANYDAY"}
@@ -1397,13 +1404,27 @@ class PoojaDonorCalendarView(APIView):
         _all_day_options = list(PoojaDayOption.objects.order_by("display_order", "id"))
         all_day_options_by_id: dict[int, PoojaDayOption] = {opt.id: opt for opt in _all_day_options}
         all_day_options_by_code: dict[str, PoojaDayOption] = {opt.code: opt for opt in _all_day_options}
+        normalized_excluded_parent_codes = {
+            code.strip().upper() for code in UBHAYAM_EXCLUDED_PARENT_CODES
+        }
         normalized_excluded_codes = {code.strip().upper() for code in UBHAYAM_EXCLUDED_POOJA_CODES}
         normalized_excluded_names = set(UBHAYAM_EXCLUDED_POOJA_NORMALIZED_NAMES)
         excluded_options_query = Q(code__in=normalized_excluded_codes)
         for excluded_name in UBHAYAM_EXCLUDED_POOJA_NAMES:
             excluded_options_query |= Q(name__iexact=excluded_name)
-        excluded_option_ids = set(
-            PoojaOption.objects.filter(excluded_options_query).values_list("id", flat=True)
+        for parent_code in normalized_excluded_parent_codes:
+            excluded_options_query |= Q(parent__code__iexact=parent_code)
+        excluded_option_rows = list(
+            PoojaOption.objects.filter(excluded_options_query).values("id", "code", "name")
+        )
+        excluded_option_ids = {row["id"] for row in excluded_option_rows}
+        normalized_excluded_codes.update(
+            (row.get("code") or "").strip().upper()
+            for row in excluded_option_rows
+            if row.get("code")
+        )
+        normalized_excluded_names.update(
+            _normalize_text(row.get("name")) for row in excluded_option_rows if row.get("name")
         )
 
         def is_ubhayam_excluded_pooja(

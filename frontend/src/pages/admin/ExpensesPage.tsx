@@ -321,7 +321,7 @@ const ExpenseForm = ({ onSave, isSaving }: { onSave: (payload: ExpenseFormPayloa
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex flex-wrap items-center gap-3 pt-2">
           <button
             type="submit"
             disabled={isSaving}
@@ -569,7 +569,7 @@ const MonthlyExpensesTracker = ({
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-6 text-white">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-2xl font-bold">Monthly Expense Tracker</h2>
           <button
             type="button"
