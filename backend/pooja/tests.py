@@ -570,7 +570,7 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertTrue(any(option["code"] == day_option.code for option in feb_entry["day_options"]))
         self.assertTrue(any(option["description"] == day_option.description for option in feb_entry["day_options"]))
 
-    def test_any_day_without_date_distributes_donors_across_any_day_rows(self):
+    def test_any_day_without_date_is_excluded_from_dated_rows(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
             description="Any Day of Month",
@@ -598,24 +598,14 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
 
-        date_to_count: dict[str, int] = {}
         observed_phones: set[str] = set()
-
         for entry in payload["dates"]:
-            matching_phones = [
-                donor["phone_number"]
-                for donor in entry["donors"]
-                if donor.get("phone_number") in expected_phones
-            ]
-            if not matching_phones:
-                continue
-            observed_phones.update(matching_phones)
-            date_to_count[entry["date"]] = len(matching_phones)
-            self.assertTrue(any(option.get("code") == "AD" for option in entry["day_options"]))
+            for donor in entry["donors"]:
+                phone = donor.get("phone_number")
+                if phone in expected_phones:
+                    observed_phones.add(phone)
 
-        self.assertEqual(observed_phones, expected_phones)
-        self.assertGreater(len(date_to_count), 1)
-        self.assertLessEqual(max(date_to_count.values()) - min(date_to_count.values()), 1)
+        self.assertEqual(observed_phones, set())
 
     def test_cart_snapshot_donors_are_included(self):
         snapshot_donor = User.objects.create_user(
@@ -917,6 +907,43 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertNotIn("Canonical Plan Donor", feb_28["donor_names"])
         self.assertTrue(any(option.get("code") == "PRD" for option in feb_14["day_options"]))
         self.assertFalse(any(option.get("code") == "PRD" for option in feb_28["day_options"]))
+
+    def test_any_day_recurring_plan_without_next_occurrence_is_excluded_from_dated_rows(self):
+        any_day_option = PoojaDayOption.objects.create(
+            code="AD",
+            description="Any Day of Month",
+            category=DayOptionCategory.CODE,
+        )
+        donor = User.objects.create_user(
+            phone_number="9000000025",
+            name="Unassigned Recurring Donor",
+            password="secret",
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            day_option=any_day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 21),
+            next_occurrence=None,
+            amount=Decimal("100.00"),
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "3"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        observed_phones: set[str] = set()
+        for entry in payload["dates"]:
+            for donor_entry in entry["donors"]:
+                phone = donor_entry.get("phone_number")
+                if phone == donor.phone_number:
+                    observed_phones.add(phone)
+
+        self.assertEqual(observed_phones, set())
 
 
 class CalendarCodeAliasTests(SimpleTestCase):

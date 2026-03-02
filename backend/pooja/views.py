@@ -1776,61 +1776,24 @@ class PoojaDonorCalendarView(APIView):
                 plan_day_option_payload,
             )
 
-        if unassigned_any_day_donors:
-            canonical_options: dict[str, list[PoojaDayOption]] = {}
-            for option in _all_day_options:
-                canonical = TempleCalendarService._canonicalize_code(option.code)
-                if canonical in CALENDAR_DAY_OPTION_CANONICAL_CODES:
-                    canonical_options.setdefault(canonical, []).append(option)
-
-            master_day_option_dates: set[date] = set()
-            for canonical in canonical_options:
-                occurrences = canonical_occurrences_cache.get(canonical)
-                if occurrences is None:
-                    occurrences = _collect_dates_for_canonical(service, canonical, first_day, last_day)
-                    canonical_occurrences_cache[canonical] = occurrences
-                for occurrence in occurrences:
-                    if first_day <= occurrence <= last_day:
-                        master_day_option_dates.add(occurrence)
-
-            candidate_dates: list[date] = []
-            cursor = first_day
-            while cursor <= last_day:
-                is_saturday = cursor.weekday() == 5
-                has_master_option = cursor in master_day_option_dates
-                has_explicit_day_option = len(day_options_by_date.get(cursor, {})) > 0
-                if not is_saturday and not has_master_option and not has_explicit_day_option:
-                    candidate_dates.append(cursor)
-                cursor += timedelta(days=1)
-
-            if not candidate_dates:
-                cursor = first_day
-                while cursor <= last_day:
-                    if cursor.weekday() != 5:
-                        candidate_dates.append(cursor)
-                    cursor += timedelta(days=1)
-
-            if not candidate_dates:
-                candidate_dates = [first_day]
-
-            for index, entry in enumerate(unassigned_any_day_donors):
-                target_date = candidate_dates[index % len(candidate_dates)]
-                add_donor_for_date(
-                    int(entry["donor_id"]),
-                    entry["donor_payload"],
-                    target_date,
-                    entry["day_option_payload"],
-                )
-
-            if debug_mode:
-                debug_info.append(
-                    {
-                        "any_day_distribution": {
-                            "queued": len(unassigned_any_day_donors),
-                            "candidate_dates": [candidate.isoformat() for candidate in candidate_dates],
-                        }
+        if unassigned_any_day_donors and debug_mode:
+            # Do not auto-distribute unassigned "Any Day of Month" entries into
+            # concrete dates. Injecting them into date rows causes incorrect donor
+            # attribution in the Ubhayam calendar/report output.
+            debug_info.append(
+                {
+                    "any_day_unassigned_skipped": {
+                        "queued": len(unassigned_any_day_donors),
+                        "sources": sorted(
+                            {
+                                str(entry.get("source"))
+                                for entry in unassigned_any_day_donors
+                                if entry.get("source")
+                            }
+                        ),
                     }
-                )
+                }
+            )
 
         payload_dates = []
         cursor = first_day
