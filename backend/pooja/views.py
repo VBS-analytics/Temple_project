@@ -1580,10 +1580,7 @@ class PoojaDonorCalendarView(APIView):
             registration_date = registration.start_date or (
                 registration.created_at.date() if registration.created_at else None
             )
-            if (
-                _is_any_day_option(getattr(day_option, "code", None), getattr(day_option, "description", None))
-                and registration.start_date is None
-            ):
+            if _is_any_day_option(getattr(day_option, "code", None), getattr(day_option, "description", None)):
                 queue_unassigned_any_day_donor(
                     donor.id,
                     donor_payload,
@@ -1658,15 +1655,16 @@ class PoojaDonorCalendarView(APIView):
                 ):
                     continue
                 snapshot_option_payload = build_snapshot_day_option_payload(item)
+                if is_any_day_payload(snapshot_option_payload):
+                    queue_unassigned_any_day_donor(
+                        donor.id,
+                        donor_payload,
+                        snapshot_option_payload,
+                        source="cart_snapshot",
+                    )
+                    continue
                 registration_date = _parse_iso_date(item.get("customDayDate") or item.get("bookingDate"))
                 if registration_date is None:
-                    if is_any_day_payload(snapshot_option_payload):
-                        queue_unassigned_any_day_donor(
-                            donor.id,
-                            donor_payload,
-                            snapshot_option_payload,
-                            source="cart_snapshot",
-                        )
                     continue
                 if not add_donor_for_date(donor.id, donor_payload, registration_date, snapshot_option_payload):
                     continue
@@ -1718,6 +1716,14 @@ class PoojaDonorCalendarView(APIView):
             }
             payload = getattr(plan, "cart_payload", {}) or {}
             plan_day_option_payload = build_day_option_payload(plan.day_option)
+            if is_any_day_payload(plan_day_option_payload):
+                queue_unassigned_any_day_donor(
+                    donor.id,
+                    donor_payload,
+                    plan_day_option_payload,
+                    source="recurring_plan",
+                )
+                continue
             canonical_code = (
                 TempleCalendarService._canonicalize_code(plan.day_option.code or "")
                 if plan.day_option
@@ -1761,13 +1767,6 @@ class PoojaDonorCalendarView(APIView):
                 continue
             target_date = plan.next_occurrence
             if target_date is None:
-                if is_any_day_payload(plan_day_option_payload):
-                    queue_unassigned_any_day_donor(
-                        donor.id,
-                        donor_payload,
-                        plan_day_option_payload,
-                        source="recurring_plan",
-                    )
                 continue
             add_donor_for_date(
                 donor.id,
