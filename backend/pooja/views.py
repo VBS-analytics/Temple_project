@@ -46,7 +46,7 @@ from .models import (
     RecurringPoojaPlan,
 )
 from .services.recurrence import create_plan_from_registration
-from .services.calendar import TempleCalendarService, get_calendar_service
+from .services.calendar import TempleCalendarService, get_calendar_service, resolve_nakshatra_index
 from .services.recurrence import (
     calculate_next_recurring_occurrence,
     find_due_registration,
@@ -1397,6 +1397,7 @@ class PoojaDonorCalendarView(APIView):
         month_end_dt = timezone.make_aware(datetime.combine(last_day + timedelta(days=1), datetime.min.time()))
         service = get_calendar_service()
         canonical_occurrences_cache: dict[str, list[date]] = {}
+        tamil_star_occurrences_cache: dict[int, list[date]] = {}
         debug_info: list[dict[str, Any]] = [] if debug_mode else []
         snapshot_option_counter = count(-1, -1)
         # Pre-fetch all PoojaDayOption records once to avoid N+1 queries in
@@ -1549,6 +1550,86 @@ class PoojaDonorCalendarView(APIView):
                 return
             entries = day_options_by_date[target_date]
             entries.setdefault(option_id, payload)
+
+        def _collect_dates_for_tamil_star_index(index: int) -> list[date]:
+            cached = tamil_star_occurrences_cache.get(index)
+            if cached is not None:
+                return cached
+            occurrences: list[date] = []
+            cursor = first_day
+            while cursor <= last_day:
+                if service.nakshatra_index_on(cursor) == index:
+                    occurrences.append(cursor)
+                cursor += timedelta(days=1)
+            tamil_star_occurrences_cache[index] = occurrences
+            return occurrences
+
+        def _extract_tamil_star_labels_from_payload(payload: dict[str, Any] | None) -> list[str]:
+            if not isinstance(payload, dict):
+                return []
+
+            labels: list[str] = []
+
+            def append_label(raw: Any):
+                if raw is None:
+                    return
+                if isinstance(raw, str):
+                    trimmed = raw.strip()
+                    if trimmed:
+                        labels.append(trimmed)
+                    if trimmed.isdigit():
+                        try:
+                            option = all_day_options_by_id.get(int(trimmed))
+                        except (TypeError, ValueError):
+                            option = None
+                        if option and option.category == DayOptionCategory.TAMIL_STAR:
+                            labels.append(option.description)
+                            labels.append(option.code)
+                    else:
+                        option = (
+                            all_day_options_by_code.get(trimmed)
+                            or all_day_options_by_code.get(trimmed.upper())
+                            or all_day_options_by_code.get(trimmed.lower())
+                        )
+                        if option and option.category == DayOptionCategory.TAMIL_STAR:
+                            labels.append(option.description)
+                            labels.append(option.code)
+                    return
+                if isinstance(raw, (int, float)):
+                    int_value = int(raw)
+                    labels.append(str(int_value))
+                    option = all_day_options_by_id.get(int_value)
+                    if option and option.category == DayOptionCategory.TAMIL_STAR:
+                        labels.append(option.description)
+                        labels.append(option.code)
+
+            for key in (
+                "selectedTamilStarLabel",
+                "selected_tamil_star_label",
+                "selectedTamilStarId",
+                "selected_tamil_star_id",
+                "selectedTamilStar",
+                "selected_tamil_star",
+            ):
+                append_label(payload.get(key))
+
+            members_payload = payload.get("members")
+            if isinstance(members_payload, list):
+                for member in members_payload:
+                    if not isinstance(member, dict):
+                        continue
+                    append_label(member.get("tamilStar"))
+                    append_label(member.get("tamil_star"))
+
+            deduped: list[str] = []
+            seen: set[str] = set()
+            for label in labels:
+                key = label.strip().lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                deduped.append(label)
+            return deduped
 
         def add_donor_for_date(
             donor_id: int,
@@ -1729,6 +1810,46 @@ class PoojaDonorCalendarView(APIView):
                 if plan.day_option
                 else None
             )
+            if canonical_code == "tamil_star":
+                star_labels = _extract_tamil_star_labels_from_payload(payload)
+                star_index = resolve_nakshatra_index(*star_labels) if star_labels else None
+                if star_index is not None:
+                    occurrences = _collect_dates_for_tamil_star_index(star_index)
+                    anchor_date = plan.start_date or first_day
+                    anchor_date = anchor_date if anchor_date >= first_day else first_day
+                    for occurrence_date in occurrences:
+                        if occurrence_date < anchor_date:
+                            continue
+                        add_donor_for_date(
+                            donor.id,
+                            donor_payload,
+                            occurrence_date,
+                            plan_day_option_payload,
+                        )
+                    if debug_mode:
+                        debug_info.append(
+                            {
+                                "recurring_tamil_star": {
+                                    "plan_id": plan.id,
+                                    "labels": star_labels,
+                                    "resolved_index": star_index,
+                                    "occurrences": [entry.isoformat() for entry in occurrences],
+                                    "anchor_date": anchor_date.isoformat(),
+                                }
+                            }
+                        )
+                    # For star-based recurring plans, do not trust stale
+                    # cart_payload dayOptionOccurrences/next_occurrence.
+                    continue
+                if debug_mode:
+                    debug_info.append(
+                        {
+                            "recurring_tamil_star_unresolved": {
+                                "plan_id": plan.id,
+                                "labels": star_labels,
+                            }
+                        }
+                    )
             is_canonical = bool(canonical_code and canonical_code in CALENDAR_DAY_OPTION_CANONICAL_CODES)
 
             if is_canonical:
