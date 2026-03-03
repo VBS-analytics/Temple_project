@@ -1817,13 +1817,16 @@ class PoojaDonorCalendarView(APIView):
                     occurrences = _collect_dates_for_tamil_star_index(star_index)
                     anchor_date = plan.start_date or first_day
                     anchor_date = anchor_date if anchor_date >= first_day else first_day
+                    selected_occurrence = None
                     for occurrence_date in occurrences:
-                        if occurrence_date < anchor_date:
-                            continue
+                        if occurrence_date >= anchor_date:
+                            selected_occurrence = occurrence_date
+                            break
+                    if selected_occurrence is not None:
                         add_donor_for_date(
                             donor.id,
                             donor_payload,
-                            occurrence_date,
+                            selected_occurrence,
                             plan_day_option_payload,
                         )
                     if debug_mode:
@@ -1834,6 +1837,7 @@ class PoojaDonorCalendarView(APIView):
                                     "labels": star_labels,
                                     "resolved_index": star_index,
                                     "occurrences": [entry.isoformat() for entry in occurrences],
+                                    "selected_occurrence": selected_occurrence.isoformat() if selected_occurrence else None,
                                     "anchor_date": anchor_date.isoformat(),
                                 }
                             }
