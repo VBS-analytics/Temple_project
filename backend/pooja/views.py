@@ -1773,6 +1773,7 @@ class PoojaDonorCalendarView(APIView):
                 "id",
                 "start_date",
                 "next_occurrence",
+                "one_time_date",
                 "cart_payload",
                 "day_option__id",
                 "day_option__code",
@@ -1810,6 +1811,45 @@ class PoojaDonorCalendarView(APIView):
                 if plan.day_option
                 else None
             )
+            payload_preferred_date = _parse_iso_date(
+                payload.get("recurrenceOneTimeDate")
+                or payload.get("recurrence_one_time_date")
+                or payload.get("customDayDate")
+                or payload.get("custom_day_date")
+            )
+            is_chrt_like_plan = canonical_code == "custom_date" or (
+                canonical_code is None and getattr(plan, "one_time_date", None) is not None
+            )
+            if is_chrt_like_plan:
+                preferred_date = getattr(plan, "one_time_date", None) or payload_preferred_date
+                if preferred_date is None:
+                    if debug_mode:
+                        debug_info.append(
+                            {
+                                "recurring_chrt_missing_preferred_date": {
+                                    "plan_id": plan.id,
+                                    "day_option_code": getattr(plan.day_option, "code", None),
+                                }
+                            }
+                        )
+                    continue
+                add_donor_for_date(
+                    donor.id,
+                    donor_payload,
+                    preferred_date,
+                    plan_day_option_payload,
+                )
+                if debug_mode:
+                    debug_info.append(
+                        {
+                            "recurring_chrt_preferred_date": {
+                                "plan_id": plan.id,
+                                "preferred_date": preferred_date.isoformat(),
+                                "source": "one_time_date" if getattr(plan, "one_time_date", None) else "cart_payload",
+                            }
+                        }
+                    )
+                continue
             if canonical_code == "tamil_star":
                 star_labels = _extract_tamil_star_labels_from_payload(payload)
                 star_index = resolve_nakshatra_index(*star_labels) if star_labels else None
