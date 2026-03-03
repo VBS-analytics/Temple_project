@@ -155,8 +155,6 @@ const PAUSE_REASON_OPTIONS = [
   "Continue the pooja with Samy's names",
 ];
 
-const PAUSE_MONTH_OPTIONS = Array.from({ length: 24 }, (_, index) => index + 1);
-
 const PLAN_FREQUENCY_OPTIONS = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
@@ -188,16 +186,7 @@ const formatPlanAmount = (value?: string | number | null) => {
   return String(value);
 };
 
-const addMonthsToIso = (iso: string, months: number) => {
-  if (months <= 0) return iso;
-  const date = new Date(iso);
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
-  const targetMonth = month + months;
-  const result = new Date(year, targetMonth, day);
-  return result.toISOString().split('T')[0];
-};
+const todayIso = () => new Date().toISOString().split('T')[0];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -249,7 +238,8 @@ const PoojaPauseCancelPage = () => {
   const [plans, setPlans] = useState<RecurringPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
-  const [pauseDurationSelection, setPauseDurationSelection] = useState<Record<number, number>>({});
+  const [pauseFromDates, setPauseFromDates] = useState<Record<number, string>>({});
+  const [pauseToDates, setPauseToDates] = useState<Record<number, string>>({});
   const [pauseReasonSelections, setPauseReasonSelections] = useState<Record<number, string>>({});
   const [activePausePlanId, setActivePausePlanId] = useState<number | null>(null);
   const [planActionState, setPlanActionState] = useState<Record<number, 'pause' | 'resume' | 'cancel' | null>>({});
@@ -320,9 +310,13 @@ const PoojaPauseCancelPage = () => {
       ...prev,
       [planId]: prev[planId] ?? PAUSE_REASON_OPTIONS[0],
     }));
-    setPauseDurationSelection((prev) => ({
+    setPauseFromDates((prev) => ({
       ...prev,
-      [planId]: prev[planId] ?? 1,
+      [planId]: prev[planId] ?? todayIso(),
+    }));
+    setPauseToDates((prev) => ({
+      ...prev,
+      [planId]: prev[planId] ?? '',
     }));
   };
 
@@ -378,25 +372,29 @@ const PoojaPauseCancelPage = () => {
     cancelPlanEditing();
   }, [selectedDonorId, cancelPlanEditing]);
 
-  const handlePausePlan = async (plan: RecurringPlan, reason: string) => {
-    const months = pauseDurationSelection[plan.id] ?? 1;
-    if (months <= 0) return;
+  const handlePausePlan = async (planId: number, reason: string, fromDate: string, toDate: string) => {
     if (!reason.trim()) return;
-    setPlanActionState((prev) => ({ ...prev, [plan.id]: 'pause' }));
+    if (!fromDate || !toDate) {
+      setPlansError('Select both effective from and effective to dates.');
+      return;
+    }
+    if (toDate <= fromDate) {
+      setPlansError('Effective to date must be after effective from date.');
+      return;
+    }
+    setPlanActionState((prev) => ({ ...prev, [planId]: 'pause' }));
+    setPlansError(null);
     try {
-      const start = new Date().toISOString().split('T')[0];
-      const end = addMonthsToIso(start, months);
-      await api.post(`pooja/recurrence/plans/${plan.id}/pause/`, {
-        pause_from: start,
-        pause_until: end,
+      await api.post(`pooja/recurrence/plans/${planId}/pause/`, {
+        pause_from: fromDate,
+        pause_until: toDate,
         pause_reason: reason,
-        pause_months: months,
       });
       await loadPlans();
     } catch (error) {
       setPlansError(extractErrorMessage(error));
     } finally {
-      setPlanActionState((prev) => ({ ...prev, [plan.id]: null }));
+      setPlanActionState((prev) => ({ ...prev, [planId]: null }));
     }
   };
 
@@ -424,11 +422,6 @@ const PoojaPauseCancelPage = () => {
       setPlanActionState((prev) => ({ ...prev, [planId]: null }));
     }
   };
-
-  const pauseDuration = useCallback(
-    (planId: number) => pauseDurationSelection[planId] ?? 1,
-    [pauseDurationSelection],
-  );
 
   const pauseReason = useCallback(
     (planId: number) => pauseReasonSelections[planId] ?? PAUSE_REASON_OPTIONS[0],
@@ -603,31 +596,46 @@ const PoojaPauseCancelPage = () => {
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-orange-900 mb-1">Duration (months)</label>
-                        <select
-                          value={pauseDuration(plan.id)}
-                          onChange={(event) =>
-                            setPauseDurationSelection((prev) => ({
-                              ...prev,
-                              [plan.id]: Number(event.target.value),
-                            }))
-                          }
-                          className="block w-full rounded-md border-orange-200 px-3 py-2 text-sm focus:border-orange-500 focus:ring-orange-500"
-                        >
-                          {PAUSE_MONTH_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option} month{option > 1 ? 's' : ''}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-orange-900 mb-1">Effective from</label>
+                          <input
+                            type="date"
+                            min={todayIso()}
+                            value={pauseFromDates[plan.id] ?? todayIso()}
+                            onChange={(event) =>
+                              setPauseFromDates((prev) => ({ ...prev, [plan.id]: event.target.value }))
+                            }
+                            className="block w-full rounded-md border border-orange-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-orange-900 mb-1">Effective to</label>
+                          <input
+                            type="date"
+                            min={pauseFromDates[plan.id] ? pauseFromDates[plan.id] : todayIso()}
+                            value={pauseToDates[plan.id] ?? ''}
+                            onChange={(event) =>
+                              setPauseToDates((prev) => ({ ...prev, [plan.id]: event.target.value }))
+                            }
+                            className="block w-full rounded-md border border-orange-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                        </div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => handlePausePlan(plan, pauseReason(plan.id))}
-                        className="w-full rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+                        onClick={() =>
+                          handlePausePlan(
+                            plan.id,
+                            pauseReason(plan.id),
+                            pauseFromDates[plan.id] ?? todayIso(),
+                            pauseToDates[plan.id] ?? '',
+                          )
+                        }
+                        disabled={planActionState[plan.id] === 'pause'}
+                        className="w-full rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Pause plan
+                        {planActionState[plan.id] === 'pause' ? 'Pausing…' : 'Pause plan'}
                       </button>
                     </div>
                   )}
