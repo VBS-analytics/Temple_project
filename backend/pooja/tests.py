@@ -994,6 +994,57 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertIn("Tamil Star Plan Donor", march_7["donor_names"])
         self.assertTrue(any(option.get("code") == "CS" for option in march_7["day_options"]))
 
+    @patch("pooja.views.get_calendar_service")
+    def test_tamil_star_recurring_plan_uses_only_first_star_occurrence_in_month(
+        self,
+        mock_service_factory,
+    ):
+        class DummyService:
+            def nakshatra_index_on(self, day):
+                if day in (date(2026, 3, 4), date(2026, 3, 31)):
+                    return 10  # பூரம்
+                return 0
+
+        mock_service_factory.return_value = DummyService()
+        donor = User.objects.create_user(
+            phone_number="9000000028",
+            name="Repeated Star Donor",
+            password="secret",
+        )
+        day_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CS",
+            defaults={
+                "description": "Choose Your Star",
+                "category": "code",
+            },
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 3, 4),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "selectedTamilStarLabel": "பூரம் — STR11",
+                "selectedTamilStarId": "STR11",
+            },
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "3"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        march_4 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-04")
+        march_31 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-31")
+
+        self.assertIn("Repeated Star Donor", march_4["donor_names"])
+        self.assertNotIn("Repeated Star Donor", march_31["donor_names"])
+        self.assertTrue(any(option.get("code") == "CS" for option in march_4["day_options"]))
+        self.assertFalse(any(option.get("code") == "CS" for option in march_31["day_options"]))
+
     def test_any_day_recurring_plan_with_next_occurrence_is_excluded_from_dated_rows(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
