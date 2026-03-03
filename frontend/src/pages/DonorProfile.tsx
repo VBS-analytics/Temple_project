@@ -460,9 +460,11 @@ const DonorProfile = () => {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [registrations, setRegistrations] = useState<PoojaRegistration[]>([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(true);
+  const [hasInitialRegistrationsLoaded, setHasInitialRegistrationsLoaded] = useState(false);
   const [registrationsError, setRegistrationsError] = useState<string | null>(null);
   const [recurrencePlans, setRecurrencePlans] = useState<RecurringPlan[]>([]);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
+  const [hasInitialRecurrenceLoaded, setHasInitialRecurrenceLoaded] = useState(false);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [planEditValues, setPlanEditValues] = useState<PlanEditFormState>(createInitialPlanEditState);
@@ -553,7 +555,10 @@ const DonorProfile = () => {
       setRegistrations([]);
       setRegistrationsError(extractErrorMessage(err));
     } finally {
-      if (isMountedRef.current) setRegistrationsLoading(false);
+      if (isMountedRef.current) {
+        setRegistrationsLoading(false);
+        setHasInitialRegistrationsLoaded(true);
+      }
     }
   }, []);
 
@@ -575,6 +580,7 @@ const DonorProfile = () => {
       } finally {
         if (isActive()) {
           setRecurrenceLoading(false);
+          setHasInitialRecurrenceLoaded(true);
         }
       }
     },
@@ -840,8 +846,8 @@ const DonorProfile = () => {
     return { count, amount };
   }, [visibleRegistrations]);
   const isChrtDataLoading =
-    (recurrenceLoading && chrtPlansToShow.length === 0) ||
-    (registrationsLoading && chrtRegistrations.length === 0);
+    (!hasInitialRecurrenceLoaded && recurrenceLoading) ||
+    (!hasInitialRegistrationsLoaded && registrationsLoading);
   const recurringPlansTotalAmount = useMemo(
     () => recurringPlansToShow.reduce((sum, plan) => sum + parseDecimalValue(plan.amount), 0),
     [recurringPlansToShow],

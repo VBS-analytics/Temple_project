@@ -1045,6 +1045,91 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertTrue(any(option.get("code") == "CS" for option in march_4["day_options"]))
         self.assertFalse(any(option.get("code") == "CS" for option in march_31["day_options"]))
 
+    def test_chrt_recurring_plan_uses_preferred_date_only(self):
+        donor = User.objects.create_user(
+            phone_number="9000000029",
+            name="CHRT Preferred Donor",
+            password="secret",
+        )
+        chrt_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CHRT",
+            defaults={
+                "description": "Choose your preferred date",
+                "category": "code",
+            },
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            day_option=chrt_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            one_time_date=date(2026, 3, 2),
+            next_occurrence=date(2026, 3, 28),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "recurrenceOneTimeDate": "2026-03-02",
+                "dayOptionOccurrences": [
+                    {"date": "2026-03-15", "label": "Sunday, 15 Mar 2026"},
+                    {"date": "2026-03-21", "label": "Saturday, 21 Mar 2026"},
+                ],
+            },
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "3"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        march_2 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-02")
+        march_15 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-15")
+        march_21 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-21")
+        march_28 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-28")
+
+        self.assertIn("CHRT Preferred Donor", march_2["donor_names"])
+        self.assertNotIn("CHRT Preferred Donor", march_15["donor_names"])
+        self.assertNotIn("CHRT Preferred Donor", march_21["donor_names"])
+        self.assertNotIn("CHRT Preferred Donor", march_28["donor_names"])
+        self.assertTrue(any(option.get("code") == "CHRT" for option in march_2["day_options"]))
+
+    def test_legacy_chrt_like_recurring_plan_uses_one_time_date(self):
+        donor = User.objects.create_user(
+            phone_number="9000000030",
+            name="Legacy CHRT Donor",
+            password="secret",
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            day_option=None,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            one_time_date=date(2026, 3, 5),
+            next_occurrence=date(2026, 3, 25),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "dayOptionCode": "CHRT",
+                "dayOptionDescription": "Choose your preferred date",
+                "recurrenceOneTimeDate": "2026-03-05",
+                "dayOptionOccurrences": [
+                    {"date": "2026-03-20", "label": "Friday, 20 Mar 2026"},
+                ],
+            },
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "3"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        march_5 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-05")
+        march_20 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-20")
+        march_25 = next(entry for entry in payload["dates"] if entry["date"] == "2026-03-25")
+
+        self.assertIn("Legacy CHRT Donor", march_5["donor_names"])
+        self.assertNotIn("Legacy CHRT Donor", march_20["donor_names"])
+        self.assertNotIn("Legacy CHRT Donor", march_25["donor_names"])
+
     def test_any_day_recurring_plan_with_next_occurrence_is_excluded_from_dated_rows(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
