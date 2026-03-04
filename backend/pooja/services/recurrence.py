@@ -413,17 +413,22 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
     now = today or timezone.localdate()
     current_month = now.replace(day=1)
     
-    # Find all active recurring plans (excluding CHRT poojas)
+    # Find all active recurring plans (excluding CHRT poojas).
+    # Also include plans that are paused but whose pause hasn't started yet
+    # (pause_from > current_month). These plans were set is_active=False when the
+    # pause was scheduled, but they are still valid for dues in months before the
+    # pause begins.
     active_plans = RecurringPoojaPlan.objects.filter(
-        is_active=True,
+        Q(is_active=True) | Q(is_active=False, pause_from__isnull=False, pause_from__gt=current_month),
         recurrence_kind=RecurrenceKind.RECURRING,
     ).select_related('day_option')
-    
+
     # Exclude CHRT poojas (including legacy rows where day_option was null) -
     # they are handled separately in _generate_due_payments_for_chrt_poojas.
     active_plans = active_plans.exclude(_chrt_plan_filter())
-    
-    # Exclude paused plans
+
+    # Exclude plans that are currently within their pause window.
+    # (is_active=True safety net — normally pause sets is_active=False, but guard anyway.)
     paused_now = Q(pause_from__lte=current_month, pause_until__gte=current_month)
     active_plans = active_plans.exclude(paused_now)
     
@@ -475,6 +480,12 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
             for plan in plans:
                 plan_date = _plan_due_anchor_date(plan)
                 if plan_date and plan_date.replace(day=1) <= month_start:
+                    # Skip this plan's amount if this specific month falls within its pause window
+                    if plan.pause_from and plan.pause_until:
+                        pause_start = plan.pause_from.replace(day=1)
+                        pause_end = plan.pause_until.replace(day=1)
+                        if pause_start <= month_start <= pause_end:
+                            continue
                     month_total += plan.amount or Decimal('0.00')
 
             if month_total <= 0:

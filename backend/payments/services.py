@@ -2,6 +2,7 @@
 Service for generating and managing passbook entries.
 """
 
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -42,6 +43,22 @@ def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
 def passbook_guard_active() -> bool:
     """Expose whether passbook regeneration is already running (used by signals to prevent recursion)."""
     return getattr(_thread_local, "passbook_in_progress", False)
+
+
+@contextmanager
+def passbook_regeneration_guard():
+    """
+    Temporarily mark passbook regeneration as active for the current thread.
+
+    Useful around bulk payment-record cleanups where post_save/post_delete signals
+    would otherwise trigger nested regeneration and increase lock contention.
+    """
+    previous = getattr(_thread_local, "passbook_in_progress", False)
+    _thread_local.passbook_in_progress = True
+    try:
+        yield
+    finally:
+        _thread_local.passbook_in_progress = previous
 
 
 def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
@@ -421,4 +438,3 @@ def regenerate_all_passbooks() -> None:
     for donor in donors:
         # Avoid re-running due generation per donor during bulk run
         regenerate_donor_passbook(donor.id, ensure_dues=False)
-

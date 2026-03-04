@@ -7,7 +7,7 @@ from io import BytesIO
 from typing import Iterable
 
 from django.http import FileResponse
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Max, Q, Sum
 from django.utils import timezone
 from django.db.models import Window, F
@@ -40,7 +40,12 @@ from .serializers import (
     PassbookEntrySerializer,
     PaymentRecordSerializer,
 )
-from .services import _plan_due_anchor_date, regenerate_all_passbooks, regenerate_donor_passbook
+from .services import (
+    _plan_due_anchor_date,
+    passbook_regeneration_guard,
+    regenerate_all_passbooks,
+    regenerate_donor_passbook,
+)
 from pooja.services.recurrence import _clean_stale_chrt_dues
 from openpyxl import Workbook
 
@@ -72,13 +77,42 @@ def _shift_month(dt: date, delta_months: int) -> date:
     return date(year, month, day)
 
 
+_CHRT_CLEANUP_LOCK_KEY = 9_821_547_336_145
+
+
+def _try_acquire_chrt_cleanup_lock() -> bool:
+    if connection.vendor != "postgresql":
+        return True
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [_CHRT_CLEANUP_LOCK_KEY])
+        row = cursor.fetchone()
+    return bool(row and row[0])
+
+
+def _release_chrt_cleanup_lock() -> None:
+    if connection.vendor != "postgresql":
+        return
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_unlock(%s)", [_CHRT_CLEANUP_LOCK_KEY])
+
+
 def _maybe_clean_stale_chrt_dues(*, force: bool = False) -> None:
     """Throttle expensive CHRT cleanup during normal read requests."""
     cache_key = "payments:stale_chrt_cleanup:last_run"
     if not force and cache.get(cache_key):
         return
-    _clean_stale_chrt_dues()
-    cache.set(cache_key, True, timeout=300)
+
+    if not _try_acquire_chrt_cleanup_lock():
+        return
+
+    try:
+        # CHRT cleanup updates/deletes PaymentRecord rows; suppress signal-based
+        # passbook regeneration during this maintenance pass to avoid lock churn.
+        with passbook_regeneration_guard():
+            _clean_stale_chrt_dues()
+        cache.set(cache_key, True, timeout=300)
+    finally:
+        _release_chrt_cleanup_lock()
 
 
 def _donor_passbook_needs_refresh(donor_id: int, current_month: date) -> bool:
@@ -383,7 +417,7 @@ class ExpenseRecordViewSet(viewsets.ModelViewSet):
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
-        queryset = ExpenseRecord.objects.all()
+        queryset = ExpenseRecord.objects.all().order_by("-transaction_date", "-id")
         if self.request.user.role != UserRole.ADMIN:
             queryset = queryset.filter(created_by=self.request.user)
 

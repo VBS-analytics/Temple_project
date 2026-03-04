@@ -12,7 +12,7 @@ from typing import Any
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Max, Prefetch, Q
+from django.db.models import Count, F, Max, Prefetch, Q, Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
@@ -531,6 +531,132 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
         results.sort(key=lambda item: (item["donor_name"] or "").lower())
         return Response({"count": len(results), "results": results})
+
+    @action(detail=False, methods=["get"], url_path="donors-by-option")
+    def donors_by_option(self, request):
+        """Return donors registered for pooja options matched by code or parent code. Admin only.
+
+        Params:
+          ?codes=GP1,GP2        – comma-separated option codes (exact)
+          ?parent_codes=ONE-DAY,ABISHEKAM  – comma-separated parent codes (all children)
+          Legacy: ?match=<substring>  – fallback name-icontains (kept for compatibility)
+        """
+        if request.user.role != UserRole.ADMIN:
+            raise PermissionDenied("Admin access required.")
+
+        codes = [c.strip() for c in (request.query_params.get("codes") or "").split(",") if c.strip()]
+        parent_codes = [c.strip() for c in (request.query_params.get("parent_codes") or "").split(",") if c.strip()]
+        match = (request.query_params.get("match") or "").strip()
+
+        if not codes and not parent_codes and not match:
+            return Response({"detail": "Provide ?codes=, ?parent_codes=, or ?match= query params."}, status=400)
+
+        filter_q = Q()
+        if codes:
+            filter_q |= Q(pooja_option__code__in=codes)
+        if parent_codes:
+            filter_q |= Q(pooja_option__parent__code__in=parent_codes)
+        if match and not codes and not parent_codes:
+            filter_q |= Q(pooja_option__name__icontains=match)
+
+        rows = (
+            PoojaRegistration.objects.filter(donor__isnull=False)
+            .filter(filter_q)
+            .select_related("donor", "pooja_option")
+            .order_by("donor__name", "id")
+        )
+
+        seen_donors: set[int] = set()
+        results = []
+        for reg in rows:
+            donor = reg.donor
+            if donor is None:
+                continue
+            donor_id = donor.id
+            entry = {
+                "donor_id": donor_id,
+                "donor_name": donor.name or "—",
+                "donor_phone": getattr(donor, "phone_number", "—") or "—",
+                "pooja_option_name": getattr(reg.pooja_option, "name", "") or "",
+                "total_amount": str(reg.total_amount or "0.00"),
+                "start_date": reg.start_date.isoformat() if reg.start_date else None,
+            }
+            results.append(entry)
+            seen_donors.add(donor_id)
+
+        return Response({"count": len(results), "unique_donors": len(seen_donors), "results": results})
+
+    @action(detail=False, methods=["get"], url_path="option-totals")
+    def option_totals(self, request):
+        """Return aggregated active recurring pooja plan totals for a given month. Admin only.
+
+        Recurring poojas carry forward each month from their start date until
+        paused or canceled.  Paused plans are excluded for their paused months.
+
+        Optional query param:
+            ?month=YYYY-MM  — the month to compute totals for (defaults to current month)
+        """
+        if request.user.role != UserRole.ADMIN:
+            raise PermissionDenied("Admin access required.")
+
+        # Parse month param; fall back to current month
+        month_param = (request.query_params.get("month") or "").strip()
+        try:
+            yr_str, mo_str = month_param.split("-")
+            year, mo = int(yr_str), int(mo_str)
+        except (ValueError, AttributeError):
+            today = date.today()
+            year, mo = today.year, today.month
+
+        first_day = date(year, mo, 1)
+        last_day = date(year, mo, calendar.monthrange(year, mo)[1])
+
+        # Active recurring plans for this month:
+        #   - started on or before the last day of the month
+        #   - not canceled (is_active=True)
+        #   - not paused during this month (pause period overlaps with month)
+        plans = (
+            RecurringPoojaPlan.objects.filter(
+                donor__isnull=False,
+                recurrence_kind=RecurrenceKind.RECURRING,
+                is_active=True,
+                start_date__lte=last_day,
+            )
+            .exclude(
+                Q(pause_from__lte=last_day)
+                & (Q(pause_until__gte=first_day) | Q(pause_until__isnull=True))
+            )
+        )
+
+        rows = (
+            plans
+            .values(
+                name=F("pooja_option__name"),
+                option_code=F("pooja_option__code"),
+                parent_code=F("pooja_option__parent__code"),
+                parent_name=F("pooja_option__parent__name"),
+            )
+            .annotate(
+                total=Sum("amount"),
+                count=Count("id"),
+            )
+            .order_by("parent_code", "option_code")
+        )
+
+        return Response(
+            [
+                {
+                    "pooja_option_name": row["name"] or "Unknown",
+                    "option_code": row["option_code"] or "",
+                    "parent_code": row["parent_code"] or "",
+                    "parent_name": row["parent_name"] or "",
+                    "total_amount": str(row["total"] or "0.00"),
+                    "registration_count": row["count"],
+                }
+                for row in rows
+                if row["name"]
+            ]
+        )
 
     @action(detail=False, methods=["get"], url_path="donor-directory")
     def donor_directory(self, request):
@@ -1405,6 +1531,14 @@ class PoojaDonorCalendarView(APIView):
         _all_day_options = list(PoojaDayOption.objects.order_by("display_order", "id"))
         all_day_options_by_id: dict[int, PoojaDayOption] = {opt.id: opt for opt in _all_day_options}
         all_day_options_by_code: dict[str, PoojaDayOption] = {opt.code: opt for opt in _all_day_options}
+        any_day_option_record = next(
+            (
+                opt
+                for opt in _all_day_options
+                if _is_any_day_option(opt.code, opt.description)
+            ),
+            None,
+        )
         normalized_excluded_parent_codes = {
             code.strip().upper() for code in UBHAYAM_EXCLUDED_PARENT_CODES
         }
@@ -1486,14 +1620,17 @@ class PoojaDonorCalendarView(APIView):
                 "display_order": option.display_order or 0,
             }
 
-        def build_any_day_fallback_payload() -> dict[str, Any]:
-            return {
-                "id": next(snapshot_option_counter),
+        any_day_payload_template = (
+            build_day_option_payload(any_day_option_record)
+            if any_day_option_record is not None
+            else {
+                "id": -1,
                 "code": "AD",
                 "description": "Any Day of Month",
                 "category": DayOptionCategory.CODE,
                 "display_order": 0,
             }
+        )
 
         def is_any_day_payload(payload: dict[str, Any] | None) -> bool:
             if payload is None:
@@ -1511,7 +1648,11 @@ class PoojaDonorCalendarView(APIView):
                 {
                     "donor_id": donor_id,
                     "donor_payload": donor_payload,
-                    "day_option_payload": day_option_payload or build_any_day_fallback_payload(),
+                    "day_option_payload": (
+                        any_day_payload_template
+                        if is_any_day_payload(day_option_payload)
+                        else (day_option_payload or any_day_payload_template)
+                    ),
                     "source": source,
                 }
             )
@@ -1940,24 +2081,108 @@ class PoojaDonorCalendarView(APIView):
                 plan_day_option_payload,
             )
 
-        if unassigned_any_day_donors and debug_mode:
-            # Do not auto-distribute unassigned "Any Day of Month" entries into
-            # concrete dates. Injecting them into date rows causes incorrect donor
-            # attribution in the Ubhayam calendar/report output.
-            debug_info.append(
-                {
-                    "any_day_unassigned_skipped": {
-                        "queued": len(unassigned_any_day_donors),
-                        "sources": sorted(
-                            {
-                                str(entry.get("source"))
-                                for entry in unassigned_any_day_donors
-                                if entry.get("source")
-                            }
-                        ),
-                    }
+        if unassigned_any_day_donors:
+            # Stage allocation for Any Day donors:
+            # Stage 5 -> add to 0-donor days, Stage 6 -> 1-donor days,
+            # Stage 7 -> 2-donor days, then continue similarly if donors remain.
+            # Use each donor at most once per month in this staged fill.
+            unique_any_day_donors: dict[int, dict[str, Any]] = {}
+            for entry in unassigned_any_day_donors:
+                donor_pk = entry.get("donor_id")
+                if not isinstance(donor_pk, int) or donor_pk in unique_any_day_donors:
+                    continue
+                unique_any_day_donors[donor_pk] = {
+                    "donor_id": donor_pk,
+                    "donor_payload": entry.get("donor_payload") or {},
+                    "day_option_payload": any_day_payload_template,
+                    "source": entry.get("source"),
                 }
-            )
+
+            def any_day_sort_key(entry: dict[str, Any]) -> tuple[int, int | str, int]:
+                donor_payload = entry.get("donor_payload") or {}
+                donor_label = str(donor_payload.get("donor_id") or "").strip()
+                donor_pk = int(entry.get("donor_id") or 0)
+                normalized = donor_label.upper()
+                if normalized.startswith("D") and normalized[1:].isdigit():
+                    return (0, int(normalized[1:]), donor_pk)
+                if donor_label.isdigit():
+                    return (1, int(donor_label), donor_pk)
+                return (2, donor_label.casefold(), donor_pk)
+
+            any_day_pool = sorted(unique_any_day_donors.values(), key=any_day_sort_key)
+            month_dates: list[date] = []
+            cursor = first_day
+            while cursor <= last_day:
+                month_dates.append(cursor)
+                cursor += timedelta(days=1)
+
+            target_existing_count = 0
+            while any_day_pool:
+                current_max = 0
+                for day in month_dates:
+                    day_count = len(donors_by_date.get(day, []))
+                    if day_count > current_max:
+                        current_max = day_count
+                if target_existing_count > current_max:
+                    break
+
+                eligible_dates = [
+                    day for day in month_dates if len(donors_by_date.get(day, [])) == target_existing_count
+                ]
+                allocated_in_stage = 0
+
+                for target_date in eligible_dates:
+                    if not any_day_pool:
+                        break
+
+                    selected_index = None
+                    for index, donor_entry in enumerate(any_day_pool):
+                        donor_pk = donor_entry.get("donor_id")
+                        if donor_pk in seen_donor_ids[target_date]:
+                            continue
+                        selected_index = index
+                        break
+
+                    if selected_index is None:
+                        continue
+
+                    donor_entry = any_day_pool.pop(selected_index)
+                    if add_donor_for_date(
+                        donor_entry["donor_id"],
+                        donor_entry["donor_payload"],
+                        target_date,
+                        donor_entry["day_option_payload"],
+                    ):
+                        allocated_in_stage += 1
+                    else:
+                        # Defensive: if allocation unexpectedly fails, keep donor in pool.
+                        any_day_pool.insert(selected_index, donor_entry)
+
+                if debug_mode:
+                    debug_info.append(
+                        {
+                            "any_day_stage_allocation": {
+                                "target_existing_count": target_existing_count,
+                                "eligible_dates": len(eligible_dates),
+                                "allocated": allocated_in_stage,
+                                "remaining": len(any_day_pool),
+                            }
+                        }
+                    )
+                target_existing_count += 1
+
+            if any_day_pool and debug_mode:
+                debug_info.append(
+                    {
+                        "any_day_unallocated": {
+                            "remaining": len(any_day_pool),
+                            "donors": [
+                                (entry.get("donor_payload") or {}).get("donor_id")
+                                for entry in any_day_pool[:25]
+                            ],
+                        }
+                    }
+                )
 
         payload_dates = []
         cursor = first_day
