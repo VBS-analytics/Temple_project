@@ -612,15 +612,22 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         last_day = date(year, mo, calendar.monthrange(year, mo)[1])
 
         # Active recurring plans for this month:
-        #   - started on or before the last day of the month
+        #   - "Registered On" date (origin_registration.start_date) is on or before last day of month
         #   - not canceled (is_active=True)
         #   - not paused during this month (pause period overlaps with month)
+        #
+        # We use origin_registration__start_date (the "Registered On" date shown in donor profile)
+        # rather than RecurringPoojaPlan.start_date, which may be set to system/backfill dates.
+        # For plans with no origin_registration, fall back to RecurringPoojaPlan.start_date.
         plans = (
             RecurringPoojaPlan.objects.filter(
                 donor__isnull=False,
                 recurrence_kind=RecurrenceKind.RECURRING,
                 is_active=True,
-                start_date__lte=last_day,
+            )
+            .filter(
+                Q(origin_registration__start_date__lte=last_day)
+                | Q(origin_registration__isnull=True, start_date__lte=last_day)
             )
             .exclude(
                 Q(pause_from__lte=last_day)
