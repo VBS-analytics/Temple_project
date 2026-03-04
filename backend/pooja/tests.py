@@ -570,7 +570,7 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertTrue(any(option["code"] == day_option.code for option in feb_entry["day_options"]))
         self.assertTrue(any(option["description"] == day_option.description for option in feb_entry["day_options"]))
 
-    def test_any_day_without_date_is_excluded_from_dated_rows(self):
+    def test_any_day_without_date_is_allocated_to_dated_rows(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
             description="Any Day of Month",
@@ -605,9 +605,9 @@ class PoojaDonorCalendarViewTests(TestCase):
                 if phone in expected_phones:
                     observed_phones.add(phone)
 
-        self.assertEqual(observed_phones, set())
+        self.assertEqual(observed_phones, expected_phones)
 
-    def test_any_day_with_explicit_start_date_is_excluded_from_dated_rows(self):
+    def test_any_day_with_explicit_start_date_uses_stage_allocation(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
             description="Any Day of Month",
@@ -629,14 +629,15 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
 
-        observed_phones: set[str] = set()
+        assigned_dates: list[str] = []
         for entry in payload["dates"]:
             for donor_entry in entry["donors"]:
                 phone = donor_entry.get("phone_number")
                 if phone == donor.phone_number:
-                    observed_phones.add(phone)
+                    assigned_dates.append(entry["date"])
 
-        self.assertEqual(observed_phones, set())
+        self.assertEqual(len(assigned_dates), 1)
+        self.assertEqual(assigned_dates[0], "2025-01-01")
 
     def test_cart_snapshot_donors_are_included(self):
         snapshot_donor = User.objects.create_user(
@@ -1130,7 +1131,7 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertNotIn("Legacy CHRT Donor", march_20["donor_names"])
         self.assertNotIn("Legacy CHRT Donor", march_25["donor_names"])
 
-    def test_any_day_recurring_plan_with_next_occurrence_is_excluded_from_dated_rows(self):
+    def test_any_day_recurring_plan_with_next_occurrence_is_stage_allocated(self):
         any_day_option = PoojaDayOption.objects.create(
             code="AD",
             description="Any Day of Month",
@@ -1158,14 +1159,104 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
 
-        observed_phones: set[str] = set()
+        assigned_dates: list[str] = []
         for entry in payload["dates"]:
             for donor_entry in entry["donors"]:
                 phone = donor_entry.get("phone_number")
                 if phone == donor.phone_number:
-                    observed_phones.add(phone)
+                    assigned_dates.append(entry["date"])
 
-        self.assertEqual(observed_phones, set())
+        self.assertEqual(len(assigned_dates), 1)
+        self.assertEqual(assigned_dates[0], "2026-03-01")
+
+    def test_any_day_allocator_moves_to_stage_two_when_no_blank_days(self):
+        regular_day_option = PoojaDayOption.objects.create(
+            code="REG",
+            description="Regular Day",
+            category=DayOptionCategory.CODE,
+        )
+        any_day_option = PoojaDayOption.objects.create(
+            code="AD",
+            description="Any Day of Month",
+            category=DayOptionCategory.CODE,
+        )
+
+        for day in range(1, 32):
+            donor = User.objects.create_user(
+                phone_number=f"90000006{day:02d}",
+                name=f"Seed Donor {day}",
+                password="secret",
+            )
+            self._create_registration(
+                donor,
+                timezone.make_aware(datetime(2025, 1, day, 8, 0)),
+                start_date_value=date(2025, 1, day),
+                day_option=regular_day_option,
+            )
+
+        any_day_donor = User.objects.create_user(
+            phone_number="9000000700",
+            name="Any Day Stage 2 Donor",
+            password="secret",
+        )
+        self._create_registration(
+            any_day_donor,
+            timezone.make_aware(datetime(2025, 1, 1, 18, 0)),
+            start_date_value=None,
+            day_option=any_day_option,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        jan_first = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-01")
+        self.assertIn("Any Day Stage 2 Donor", jan_first["donor_names"])
+
+    def test_any_day_allocator_moves_to_stage_three_when_day_counts_are_two(self):
+        regular_day_option = PoojaDayOption.objects.create(
+            code="REG2",
+            description="Regular Day 2",
+            category=DayOptionCategory.CODE,
+        )
+        any_day_option = PoojaDayOption.objects.create(
+            code="AD",
+            description="Any Day of Month",
+            category=DayOptionCategory.CODE,
+        )
+
+        for day in range(1, 32):
+            for donor_index in range(2):
+                donor = User.objects.create_user(
+                    phone_number=f"90000008{day:02d}{donor_index}",
+                    name=f"Seed Two Donor {day}-{donor_index}",
+                    password="secret",
+                )
+                self._create_registration(
+                    donor,
+                    timezone.make_aware(datetime(2025, 1, day, 9 + donor_index, 0)),
+                    start_date_value=date(2025, 1, day),
+                    day_option=regular_day_option,
+                )
+
+        any_day_donor = User.objects.create_user(
+            phone_number="9000000900",
+            name="Any Day Stage 3 Donor",
+            password="secret",
+        )
+        self._create_registration(
+            any_day_donor,
+            timezone.make_aware(datetime(2025, 1, 2, 18, 0)),
+            start_date_value=None,
+            day_option=any_day_option,
+        )
+
+        response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        jan_first = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-01")
+        self.assertIn("Any Day Stage 3 Donor", jan_first["donor_names"])
 
 
 class CalendarCodeAliasTests(SimpleTestCase):

@@ -47,9 +47,7 @@ const DonorSearchDropdown = ({
   );
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
     return () => {
@@ -59,9 +57,7 @@ const DonorSearchDropdown = ({
   }, [open, handleClickOutside, handleEscape]);
 
   useEffect(() => {
-    if (!open) {
-      setSearchTerm('');
-    }
+    if (!open) setSearchTerm('');
   }, [open]);
 
   const normalized = searchTerm.trim().toLowerCase();
@@ -79,46 +75,70 @@ const DonorSearchDropdown = ({
     <div ref={containerRef} className={`relative w-full min-w-0 ${className ?? ''}`}>
       <button
         type="button"
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:border-indigo-400 hover:text-slate-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
         onClick={() => setOpen((prev) => !prev)}
         disabled={options.length === 0}
+        className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition-all hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <span className="truncate">
+        {/* Search icon */}
+        <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
+        <span className={`flex-1 truncate text-sm ${selectedLabel ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>
           {selectedLabel ? `${selectedLabel.name} — ${selectedLabel.phone_number}` : placeholder}
         </span>
-        <span className="ml-2 text-slate-400">▾</span>
+        {selectedLabel && (
+          <span
+            role="button"
+            aria-label="Clear selection"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onSelectId(null); } }}
+            onClick={(e) => { e.stopPropagation(); onSelectId(null); }}
+            className="flex-shrink-0 rounded-full p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </span>
+        )}
+        <svg className={`w-4 h-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-          <div className="px-3 py-2">
+        <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-200/80">
+          <div className="p-2 border-b border-slate-100">
             <input
               type="search"
+              autoFocus
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search donor"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Type to search…"
+              className="w-full rounded-lg px-3 py-2 text-sm text-slate-700 placeholder-slate-400 focus:outline-none"
             />
           </div>
-          <div className="max-h-48 overflow-auto">
+          <div className="max-h-52 overflow-auto">
             {filtered.length > 0 ? (
-              <ul className="divide-y divide-slate-100">
+              <ul>
                 {filtered.map((donor) => (
                   <li key={`donor-option-${donor.id}`}>
                     <button
                       type="button"
-                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                      onClick={() => {
-                        onSelectId(donor.id);
-                        setOpen(false);
-                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-slate-50"
+                      onClick={() => { onSelectId(donor.id); setOpen(false); }}
                     >
-                      <span className="truncate">{`${donor.name} — ${donor.phone_number}`}</span>
+                      <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                        {donor.name.charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-800">{donor.name}</p>
+                        <p className="truncate text-xs text-slate-400">{donor.phone_number}</p>
+                      </div>
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="px-3 py-2 text-xs text-slate-500">No donors match your search.</p>
+              <p className="px-4 py-4 text-sm text-slate-400 text-center">No donors match your search.</p>
             )}
           </div>
         </div>
@@ -170,11 +190,7 @@ const formatDate = (value?: string | null) => {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '—';
-  return parsed.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 const formatPlanAmount = (value?: string | number | null) => {
@@ -203,20 +219,16 @@ const getPlanMemberNames = (metadata?: Record<string, unknown>) => {
 
 const formatPlanFrequencyLabel = (frequency?: string | null) => {
   if (!frequency) return 'Recurring';
-  const label = frequency === 'monthly' ? 'Monthly' : frequency === 'quarterly' ? 'Quarterly' : frequency;
+  const label = frequency === 'monthly' ? 'Monthly' : frequency === 'quarterly' ? 'Quarterly' : frequency === 'annually' ? 'Annually' : frequency;
   return `${label} recurring`;
 };
 
 const extractErrorMessage = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const responseData = error.response?.data;
-    if (typeof responseData === 'string') {
-      return responseData.trim();
-    }
+    if (typeof responseData === 'string') return responseData.trim();
     if (isRecord(responseData)) {
-      if ('detail' in responseData && typeof responseData.detail === 'string') {
-        return responseData.detail;
-      }
+      if ('detail' in responseData && typeof responseData.detail === 'string') return responseData.detail;
       const values = Object.values(responseData);
       if (values.length > 0) {
         const first = values[0];
@@ -230,6 +242,40 @@ const extractErrorMessage = (error: unknown) => {
   return 'Unexpected error';
 };
 
+/* ─── Status badge ─────────────────────────────────────────────────────── */
+const PlanStatusBadge = ({ plan }: { plan: RecurringPlan }) => {
+  if (!plan.is_active && !plan.pause_from && !plan.pause_until) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 px-2.5 py-0.5 text-xs font-semibold text-rose-600">
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+        Cancelled
+      </span>
+    );
+  }
+  if (plan.pause_from || plan.pause_until) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Paused
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-600">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      Active
+    </span>
+  );
+};
+
+/* ─── Frequency badge ───────────────────────────────────────────────────── */
+const FrequencyBadge = ({ frequency }: { frequency?: string | null }) => (
+  <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    {formatPlanFrequencyLabel(frequency)}
+  </span>
+);
+
+/* ─── Page ──────────────────────────────────────────────────────────────── */
 const PoojaPauseCancelPage = () => {
   const [donors, setDonors] = useState<DonorListEntry[]>([]);
   const [donorLoading, setDonorLoading] = useState(true);
@@ -289,9 +335,7 @@ const PoojaPauseCancelPage = () => {
         params: { page_size: 200, donor: selectedDonorId },
       });
       const allPlans = extractResults<RecurringPlan>(response.data);
-      // Filter to show only recurring plans, not one-time extra plans
-      const recurringPlans = allPlans.filter((plan) => plan.recurrence_kind === 'recurring');
-      setPlans(recurringPlans);
+      setPlans(allPlans.filter((plan) => plan.recurrence_kind === 'recurring'));
     } catch (error) {
       setPlans([]);
       setPlansError(extractErrorMessage(error));
@@ -300,24 +344,13 @@ const PoojaPauseCancelPage = () => {
     }
   }, [selectedDonorId]);
 
-  useEffect(() => {
-    loadPlans();
-  }, [loadPlans]);
+  useEffect(() => { loadPlans(); }, [loadPlans]);
 
   const togglePauseForm = (planId: number) => {
     setActivePausePlanId((prev) => (prev === planId ? null : planId));
-    setPauseReasonSelections((prev) => ({
-      ...prev,
-      [planId]: prev[planId] ?? PAUSE_REASON_OPTIONS[0],
-    }));
-    setPauseFromDates((prev) => ({
-      ...prev,
-      [planId]: prev[planId] ?? todayIso(),
-    }));
-    setPauseToDates((prev) => ({
-      ...prev,
-      [planId]: prev[planId] ?? '',
-    }));
+    setPauseReasonSelections((prev) => ({ ...prev, [planId]: prev[planId] ?? PAUSE_REASON_OPTIONS[0] }));
+    setPauseFromDates((prev) => ({ ...prev, [planId]: prev[planId] ?? todayIso() }));
+    setPauseToDates((prev) => ({ ...prev, [planId]: prev[planId] ?? '' }));
   };
 
   const startEditingPlan = (plan: RecurringPlan) => {
@@ -335,26 +368,16 @@ const PoojaPauseCancelPage = () => {
   }, []);
 
   const handlePlanEditChange = useCallback((field: keyof PlanEditFormState, value: string) => {
-    setPlanEditValues((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setPlanEditValues((prev) => ({ ...prev, [field]: value }));
   }, []);
 
   const handlePlanEditSave = useCallback(async () => {
     if (editingPlanId === null) return;
     const payload: Record<string, string> = {};
-    if (planEditValues.recurrence_frequency) {
-      payload.recurrence_frequency = planEditValues.recurrence_frequency;
-    }
+    if (planEditValues.recurrence_frequency) payload.recurrence_frequency = planEditValues.recurrence_frequency;
     const amountValue = planEditValues.amount.trim();
-    if (amountValue) {
-      payload.amount = amountValue;
-    }
-    if (Object.keys(payload).length === 0) {
-      setPlansError('Update at least one field.');
-      return;
-    }
+    if (amountValue) payload.amount = amountValue;
+    if (Object.keys(payload).length === 0) { setPlansError('Update at least one field.'); return; }
     setPlanEditSubmitting(true);
     setPlansError(null);
     try {
@@ -368,20 +391,12 @@ const PoojaPauseCancelPage = () => {
     }
   }, [cancelPlanEditing, editingPlanId, loadPlans, planEditValues]);
 
-  useEffect(() => {
-    cancelPlanEditing();
-  }, [selectedDonorId, cancelPlanEditing]);
+  useEffect(() => { cancelPlanEditing(); }, [selectedDonorId, cancelPlanEditing]);
 
   const handlePausePlan = async (planId: number, reason: string, fromDate: string, toDate: string) => {
     if (!reason.trim()) return;
-    if (!fromDate || !toDate) {
-      setPlansError('Select both effective from and effective to dates.');
-      return;
-    }
-    if (toDate <= fromDate) {
-      setPlansError('Effective to date must be after effective from date.');
-      return;
-    }
+    if (!fromDate || !toDate) { setPlansError('Select both effective from and effective to dates.'); return; }
+    if (toDate <= fromDate) { setPlansError('Effective to date must be after effective from date.'); return; }
     setPlanActionState((prev) => ({ ...prev, [planId]: 'pause' }));
     setPlansError(null);
     try {
@@ -428,223 +443,360 @@ const PoojaPauseCancelPage = () => {
     [pauseReasonSelections],
   );
 
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-slate-800">Pooja - Pause/Cancel</h1>
-        <p className="text-sm text-slate-500">
-          Select a donor to view their recurring plans and manage pause/cancel actions using the shared APIs.
-        </p>
-      </header>
+  const selectedDonor = donors.find((d) => d.id === selectedDonorId);
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Filter by donor name</label>
+  return (
+    <div className="space-y-8">
+
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">Pooja Plans</h1>
+        <p className="mt-1 text-sm text-slate-500">Pause or cancel a donor's recurring pooja subscriptions.</p>
+      </div>
+
+      {/* ── Donor Selector ───────────────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400">
+          Select Donor
+        </label>
         <DonorSearchDropdown
           options={donors}
           selectedId={selectedDonorId}
           onSelectId={(value) => setSelectedDonorId(value)}
-          className="max-w-sm"
+          className="max-w-md"
         />
-        {donorError && <p className="mt-3 text-xs text-rose-600">{donorError}</p>}
+        {donorLoading && (
+          <p className="text-xs text-slate-400">Loading donors…</p>
+        )}
+        {donorError && (
+          <p className="text-xs text-rose-500">{donorError}</p>
+        )}
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Recurring Plans</h2>
-          <span className="text-sm text-slate-500">{plans.length} plan{plans.length !== 1 ? 's' : ''}</span>
+      {/* ── Global Error ─────────────────────────────────────────────────── */}
+      {plansError && (
+        <div className="flex items-start gap-3 rounded-xl border border-rose-200 px-4 py-3">
+          <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <p className="text-sm text-rose-700">{plansError}</p>
+          <button
+            type="button"
+            className="ml-auto text-rose-400 hover:text-rose-600"
+            onClick={() => setPlansError(null)}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-        {plansError && <p className="mt-3 text-sm text-rose-600">{plansError}</p>}
-        {plansLoading ? (
-          <div className="mt-6 text-sm text-slate-500">Loading plans…</div>
-        ) : plans.length === 0 ? (
-          <div className="mt-6 text-sm text-slate-500">Select a donor to fetch their recurring plans.</div>
-        ) : (
-          <div className="mt-6 space-y-4">
+      )}
+
+      {/* ── Plans ────────────────────────────────────────────────────────── */}
+      {selectedDonorId === null ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <svg className="mb-3 h-10 w-10 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+          <p className="text-sm font-medium text-slate-400">Select a donor to view their plans</p>
+        </div>
+      ) : plansLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-slate-100 bg-slate-50" />
+          ))}
+        </div>
+      ) : plans.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <svg className="mb-3 h-10 w-10 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+          </svg>
+          <p className="text-sm font-medium text-slate-400">No recurring plans found for {selectedDonor?.name}</p>
+        </div>
+      ) : (
+        <div>
+          {/* Plans count header */}
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+              Recurring Plans
+            </p>
+            <span className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+              {plans.length} {plans.length === 1 ? 'plan' : 'plans'}
+            </span>
+          </div>
+
+          <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
             {plans.map((plan) => {
               const isPaused = Boolean(plan.pause_from || plan.pause_until);
               const isActive = plan.is_active;
+              const isCancelled = !isActive && !isPaused;
               const memberNames = getPlanMemberNames(plan.metadata);
+              const isPauseFormOpen = activePausePlanId === plan.id;
+              const isEditOpen = editingPlanId === plan.id;
+              const actionLoading = planActionState[plan.id];
+
+              /* left-border accent color by status */
+              const accentClass = isCancelled
+                ? 'border-l-rose-300'
+                : isPaused
+                  ? 'border-l-amber-400'
+                  : 'border-l-emerald-400';
+
               return (
-                <div key={plan.id} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold text-slate-900">
-                        {plan.pooja_option_name ?? 'Unnamed plan'}
-                      </h3>
-                      <p className="text-sm text-slate-500">{plan.day_option_description ?? '—'}</p>
+                <div key={plan.id} className={`border-l-[3px] px-5 py-4 transition-colors ${accentClass}`}>
+
+                  {/* ── Plan Header Row ──────────────────────────────────── */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                          {plan.pooja_option_name ?? 'Unnamed plan'}
+                        </h3>
+                        <FrequencyBadge frequency={plan.recurrence_frequency} />
+                      </div>
+                      {plan.day_option_description && (
+                        <p className="mt-0.5 text-xs text-slate-400">{plan.day_option_description}</p>
+                      )}
                     </div>
-                    <div className="flex flex-col items-end text-right text-sm text-slate-500">
-                      <span className="text-xs font-semibold uppercase text-emerald-600">
-                        {formatPlanFrequencyLabel(plan.recurrence_frequency)}
+                    <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                      <PlanStatusBadge plan={plan} />
+                      <span className="text-base font-bold tabular-nums text-slate-800">
+                        ₹&nbsp;{formatPlanAmount(plan.amount)}
                       </span>
-                      <span className="text-lg font-bold text-slate-900">₹ {formatPlanAmount(plan.amount)}</span>
                     </div>
                   </div>
-                  <div className="mt-3 text-xs uppercase tracking-wide text-slate-500">
-                    Members: {memberNames.length > 0 ? memberNames.join(', ') : '—'}
-                  </div>
-                  {(plan.pause_from || plan.pause_until) && (
-                    <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-medium text-amber-700">
-                      {plan.pause_from && plan.pause_until
-                        ? `Paused ${formatDate(plan.pause_from)} until ${formatDate(plan.pause_until)}`
-                        : plan.pause_until
-                          ? `Paused until ${formatDate(plan.pause_until)}`
-                          : `Pause scheduled from ${formatDate(plan.pause_from)}`}
+
+                  {/* ── Members ─────────────────────────────────────────── */}
+                  {memberNames.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {memberNames.map((name) => (
+                        <span
+                          key={name}
+                          className="inline-flex items-center rounded-md border border-slate-200 px-2 py-0.5 text-xs text-slate-500"
+                        >
+                          {name}
+                        </span>
+                      ))}
                     </div>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-2 text-sm">
+
+                  {/* ── Pause info strip ────────────────────────────────── */}
+                  {isPaused && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-amber-700">
+                      <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                      </svg>
+                      <span className="font-medium">
+                        {plan.pause_from && plan.pause_until
+                          ? `Paused ${formatDate(plan.pause_from)} — ${formatDate(plan.pause_until)}`
+                          : plan.pause_until
+                            ? `Paused until ${formatDate(plan.pause_until)}`
+                            : `Pause from ${formatDate(plan.pause_from)}`}
+                      </span>
+                      {(plan.metadata as any)?.pause_reason && (
+                        <span className="text-amber-500">· {(plan.metadata as any).pause_reason}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Action Buttons ───────────────────────────────────── */}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {/* Pause / Update pause */}
                     <button
                       type="button"
                       onClick={() => togglePauseForm(plan.id)}
-                      className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 font-semibold text-amber-700 hover:bg-amber-100"
-                      >
-                        {activePausePlanId === plan.id ? 'Hide pause options' : 'Pause / Update pause'}
-                      </button>
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        isPauseFormOpen
+                          ? 'border-amber-300 bg-amber-50 text-amber-700'
+                          : 'border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-700'
+                      }`}
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                      </svg>
+                      {isPauseFormOpen ? 'Hide pause' : isPaused ? 'Update pause' : 'Pause'}
+                    </button>
+
+                    {/* Edit — only for active plans */}
                     {isActive && (
                       <button
                         type="button"
-                        onClick={() => startEditingPlan(plan)}
+                        onClick={() => (isEditOpen ? cancelPlanEditing() : startEditingPlan(plan))}
                         disabled={planEditSubmitting && editingPlanId === plan.id}
-                        className="rounded-lg border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                          isEditOpen
+                            ? 'border-slate-400 bg-slate-100 text-slate-700'
+                            : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-800'
+                        }`}
                       >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                        </svg>
                         Edit
                       </button>
                     )}
+
+                    {/* Cancel / Resume */}
                     {isActive ? (
                       <button
                         type="button"
                         onClick={() => handleCancelPlan(plan.id)}
-                        className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 font-semibold text-rose-700 hover:bg-rose-100"
+                        disabled={actionLoading === 'cancel'}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Cancel plan
+                        {actionLoading === 'cancel' ? (
+                          <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )}
+                        {actionLoading === 'cancel' ? 'Cancelling…' : 'Cancel plan'}
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleResumePlan(plan.id)}
-                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 font-semibold text-emerald-700 hover:bg-emerald-100"
+                        disabled={actionLoading === 'resume'}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-emerald-300 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Resume
+                        {actionLoading === 'resume' ? (
+                          <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                          </svg>
+                        )}
+                        {actionLoading === 'resume' ? 'Resuming…' : 'Resume'}
                       </button>
                     )}
                   </div>
-                  {editingPlanId === plan.id && (
-                    <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                      <h4 className="text-sm font-semibold text-slate-800">Edit plan</h4>
+
+                  {/* ── Edit Form ────────────────────────────────────────── */}
+                  {isEditOpen && (
+                    <div className="mt-4 rounded-xl border border-slate-200 p-4">
+                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">Edit Plan</p>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Frequency</label>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-slate-600">Frequency</label>
                           <select
                             value={planEditValues.recurrence_frequency}
-                            onChange={(event) => handlePlanEditChange('recurrence_frequency', event.target.value)}
-                            className="block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            onChange={(e) => handlePlanEditChange('recurrence_frequency', e.target.value)}
+                            className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
                           >
-                            {PLAN_FREQUENCY_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
+                            {PLAN_FREQUENCY_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Amount (₹)</label>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-slate-600">Amount (₹)</label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
                             value={planEditValues.amount}
-                            onChange={(event) => handlePlanEditChange('amount', event.target.value)}
-                            className="block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            onChange={(e) => handlePlanEditChange('amount', e.target.value)}
+                            className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
                           />
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="mt-3 flex gap-2">
                         <button
                           type="button"
                           onClick={handlePlanEditSave}
                           disabled={planEditSubmitting}
-                          className="flex-1 rounded-lg border border-indigo-600 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+                          className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700 disabled:opacity-50"
                         >
-                          {planEditSubmitting ? 'Saving...' : 'Save'}
+                          {planEditSubmitting ? 'Saving…' : 'Save changes'}
                         </button>
                         <button
                           type="button"
                           onClick={cancelPlanEditing}
                           disabled={planEditSubmitting}
-                          className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
                         >
-                          Cancel
+                          Discard
                         </button>
                       </div>
                     </div>
                   )}
-                  {activePausePlanId === plan.id && (
-                    <div className="mt-4 space-y-3 rounded-lg border border-orange-200 bg-white p-4 shadow-sm">
-                      <div>
-                        <label className="block text-xs font-semibold text-orange-900 mb-1">Pause handling</label>
-                        <select
-                          value={pauseReason(plan.id)}
-                          onChange={(event) =>
-                            setPauseReasonSelections((prev) => ({ ...prev, [plan.id]: event.target.value }))
+
+                  {/* ── Pause Form ───────────────────────────────────────── */}
+                  {isPauseFormOpen && (
+                    <div className="mt-4 rounded-xl border border-amber-200 p-4">
+                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700">Pause Settings</p>
+                      <div className="space-y-3">
+                        {/* Reason */}
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-slate-600">Handling</label>
+                          <select
+                            value={pauseReason(plan.id)}
+                            onChange={(e) => setPauseReasonSelections((prev) => ({ ...prev, [plan.id]: e.target.value }))}
+                            className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-200"
+                          >
+                            {PAUSE_REASON_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Dates */}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <label className="block text-xs font-semibold text-slate-600">From</label>
+                            <input
+                              type="date"
+                              min={todayIso()}
+                              value={pauseFromDates[plan.id] ?? todayIso()}
+                              onChange={(e) => setPauseFromDates((prev) => ({ ...prev, [plan.id]: e.target.value }))}
+                              className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-200"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-xs font-semibold text-slate-600">Until</label>
+                            <input
+                              type="date"
+                              min={pauseFromDates[plan.id] ?? todayIso()}
+                              value={pauseToDates[plan.id] ?? ''}
+                              onChange={(e) => setPauseToDates((prev) => ({ ...prev, [plan.id]: e.target.value }))}
+                              className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-200"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Submit */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePausePlan(
+                              plan.id,
+                              pauseReason(plan.id),
+                              pauseFromDates[plan.id] ?? todayIso(),
+                              pauseToDates[plan.id] ?? '',
+                            )
                           }
-                          className="block w-full rounded-md border-orange-200 px-3 py-2 text-sm focus:border-orange-500 focus:ring-orange-500"
+                          disabled={actionLoading === 'pause'}
+                          className="w-full rounded-lg bg-amber-500 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {PAUSE_REASON_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                          {actionLoading === 'pause' ? 'Pausing…' : isPaused ? 'Update pause' : 'Confirm pause'}
+                        </button>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="block text-xs font-semibold text-orange-900 mb-1">Effective from</label>
-                          <input
-                            type="date"
-                            min={todayIso()}
-                            value={pauseFromDates[plan.id] ?? todayIso()}
-                            onChange={(event) =>
-                              setPauseFromDates((prev) => ({ ...prev, [plan.id]: event.target.value }))
-                            }
-                            className="block w-full rounded-md border border-orange-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-orange-900 mb-1">Effective to</label>
-                          <input
-                            type="date"
-                            min={pauseFromDates[plan.id] ? pauseFromDates[plan.id] : todayIso()}
-                            value={pauseToDates[plan.id] ?? ''}
-                            onChange={(event) =>
-                              setPauseToDates((prev) => ({ ...prev, [plan.id]: event.target.value }))
-                            }
-                            className="block w-full rounded-md border border-orange-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handlePausePlan(
-                            plan.id,
-                            pauseReason(plan.id),
-                            pauseFromDates[plan.id] ?? todayIso(),
-                            pauseToDates[plan.id] ?? '',
-                          )
-                        }
-                        disabled={planActionState[plan.id] === 'pause'}
-                        className="w-full rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {planActionState[plan.id] === 'pause' ? 'Pausing…' : 'Pause plan'}
-                      </button>
                     </div>
                   )}
+
                 </div>
               );
             })}
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 };

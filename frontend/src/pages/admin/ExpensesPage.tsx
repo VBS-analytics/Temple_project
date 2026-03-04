@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, useState, useCallback, useEffect, useMemo } from 'react';
+import { CSSProperties, FormEvent, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import api, { extractResults } from '../../lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -8,6 +8,15 @@ type ExpenseRecordResponse = {
   category: string;
   amount: string | number;
   notes?: string;
+};
+
+type PoojaOptionTotal = {
+  pooja_option_name: string;
+  option_code: string;
+  parent_code: string;
+  parent_name: string;
+  total_amount: string;
+  registration_count: number;
 };
 
 type ExpenseRecord = Omit<ExpenseRecordResponse, 'amount'> & { amount: number };
@@ -38,17 +47,40 @@ const EXPENSE_CATEGORY_GROUPS = [
 
 const MONTH_FORMATTER = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
 
+// Match by option name keyword (case-insensitive) or parent name keyword.
+// Uses name substrings because DB codes are auto-generated slugs, not fixed values.
+const POOJA_CARD_CONFIG: Array<{
+  nameContains: string[];        // match if pooja_option_name.toLowerCase() includes any of these
+  parentNameContains: string[];  // match if parent_name.toLowerCase() includes any of these
+  label: string;
+  icon: string;
+  accent: string;
+  iconBg: string;
+}> = [
+  { nameContains: ['till oil'],      parentNameContains: [],                    label: 'Till Oil',            icon: '🪔', accent: '#92400E', iconBg: '#FEF3C7' },
+  { nameContains: ['neivedhyam'],    parentNameContains: [],                    label: 'Neivedhyam',          icon: '🍚', accent: '#065F46', iconBg: '#ECFDF5' },
+  { nameContains: ['navagraha'],     parentNameContains: [],                    label: 'Navagraha Pooja',     icon: '⭐', accent: '#1D4ED8', iconBg: '#EFF6FF' },
+  { nameContains: ['pradosh'],       parentNameContains: [],                    label: 'Pradosham Pooja',     icon: '🌙', accent: '#5B21B6', iconBg: '#EDE9FE' },
+  // "Kalabhairavar archana" (General) + all One Day Archana + all One Day Abishekam
+  { nameContains: ['kalabhairavar'], parentNameContains: ['archana', 'abishekam'], label: 'Archana & Abishekam', icon: '🌸', accent: '#BE185D', iconBg: '#FCE7F3' },
+  { nameContains: [],                parentNameContains: ['special'],           label: 'Special Pooja',       icon: '✨', accent: '#B45309', iconBg: '#FFFBEB' },
+];
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 const buildMonthOptions = (): MonthOption[] => {
+  const start = new Date(2025, 11, 1); // December 2025 (month is 0-indexed)
   const today = new Date();
-  return Array.from({ length: 12 }).map((_, i) => {
-    const d = new Date(today);
-    d.setMonth(today.getMonth() - i);
-    return {
-      label: MONTH_FORMATTER.format(d),
-      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-    };
-  });
+  const end = new Date(today.getFullYear(), today.getMonth(), 1);
+  const options: MonthOption[] = [];
+  const cursor = new Date(end);
+  while (cursor >= start) {
+    options.push({
+      label: MONTH_FORMATTER.format(cursor),
+      value: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`,
+    });
+    cursor.setMonth(cursor.getMonth() - 1);
+  }
+  return options;
 };
 
 const normalizeExpenseRecords = (records: ExpenseRecordResponse[]): ExpenseRecord[] =>
@@ -64,6 +96,284 @@ const formatDisplayDate = (date: string) => {
   const [year, month, day] = date.split('-');
   if (!year || !month || !day) return date;
   return `${day}-${month}-${year}`;
+};
+
+// ── Pooja option totals hook (filtered by start_date month = "Registered On") ─
+const usePoojaOptionTotals = (month: string) => {
+  const [totals, setTotals] = useState<PoojaOptionTotal[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async (m: string) => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (m) params.month = m;
+      const { data } = await api.get('/pooja/registrations/option-totals/', { params });
+      setTotals(Array.isArray(data) ? data : []);
+    } catch {
+      setTotals([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(month); }, [fetch, month]);
+
+  return { totals, loading };
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+type DonorByOptionEntry = {
+  donor_id: number;
+  donor_name: string;
+  donor_phone: string;
+  pooja_option_name: string;
+  total_amount: string;
+  start_date: string | null;
+};
+
+// ── Donors popup modal ────────────────────────────────────────────────────────
+const DonorsByOptionModal = ({
+  cardLabel,
+  cardIcon,
+  codes,
+  parentCodes,
+  onClose,
+}: {
+  cardLabel: string;
+  cardIcon: string;
+  codes: string[];
+  parentCodes: string[];
+  onClose: () => void;
+}) => {
+  const [rows, setRows] = useState<DonorByOptionEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params: Record<string, string> = {};
+        if (codes.length) params.codes = codes.join(',');
+        if (parentCodes.length) params.parent_codes = parentCodes.join(',');
+        const { data } = await api.get('/pooja/registrations/donors-by-option/', { params });
+        setRows(Array.isArray(data?.results) ? data.results : []);
+      } catch {
+        setError('Unable to load registrations.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [codes.join(','), parentCodes.join(',')]);
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const total = useMemo(() => rows.reduce((s, r) => s + Number(r.total_amount), 0), [rows]);
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(15,23,42,0.45)',
+        backdropFilter: 'blur(3px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: 20, width: '100%', maxWidth: 560,
+        maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 24px 60px rgba(15,23,42,0.22)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '18px 22px', borderBottom: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: C.primaryGhost, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+            {cardIcon}
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink, margin: 0 }}>{cardLabel}</p>
+            <p style={{ fontFamily: C.fNunito, fontSize: 12, color: C.inkMuted, margin: 0 }}>Registered donors</p>
+          </div>
+          {!loading && rows.length > 0 && (
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontFamily: C.fMono, fontSize: 14, fontWeight: 700, color: C.primary, margin: 0 }}>{formatCurrency(total)}</p>
+              <p style={{ fontFamily: C.fNunito, fontSize: 11, color: C.inkMuted, margin: 0 }}>{rows.length} registration{rows.length !== 1 ? 's' : ''}</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          >
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.inkMuted} strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <div style={{ width: 32, height: 32, border: `3px solid ${C.border}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin .8s linear infinite', margin: '0 auto 12px' }} />
+              <p style={{ fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, margin: 0 }}>Loading…</p>
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </div>
+          ) : error ? (
+            <p style={{ padding: '32px 22px', textAlign: 'center', fontFamily: C.fNunito, fontSize: 13, color: '#991B1B', margin: 0 }}>{error}</p>
+          ) : rows.length === 0 ? (
+            <p style={{ padding: '40px 22px', textAlign: 'center', fontFamily: C.fNunito, fontSize: 14, color: C.inkMuted, margin: 0 }}>No registrations found.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: C.surfaceInset, position: 'sticky', top: 0 }}>
+                  {['#', 'Donor', 'Donor ID', 'Amount'].map((h, i) => (
+                    <th key={h} style={{ padding: '9px 16px', textAlign: i === 3 ? 'right' : 'left', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={`${row.donor_id}-${i}`} style={{ background: i % 2 === 0 ? '#fff' : C.surfaceInset }}>
+                    <td style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>{i + 1}</td>
+                    <td style={{ padding: '10px 16px', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.primaryGhost, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: C.fNunito, fontSize: 12, fontWeight: 800, color: C.primary, flexShrink: 0 }}>
+                          {(row.donor_name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ fontFamily: C.fNunito, fontSize: 13, fontWeight: 600, color: C.ink }}>{row.donor_name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>D{row.donor_id}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>{formatCurrency(Number(row.total_amount))}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: C.primaryGhost }}>
+                  <td colSpan={3} style={{ padding: '10px 16px', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Total — {rows.length} registration{rows.length !== 1 ? 's' : ''}
+                  </td>
+                  <td colSpan={1} style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 14, fontWeight: 700, color: C.primary, textAlign: 'right' }}>
+                    {formatCurrency(total)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Pooja Summary Cards ───────────────────────────────────────────────────────
+const PoojaSummaryCards = ({ totals, loading }: { totals: PoojaOptionTotal[]; loading: boolean }) => {
+  const [activeModal, setActiveModal] = useState<{ codes: string[]; parentCodes: string[]; label: string; icon: string } | null>(null);
+
+  // Match totals by option name / parent name keywords (DB codes are auto-generated slugs)
+  const cards = useMemo(() => {
+    return POOJA_CARD_CONFIG.map((cfg) => {
+      const matching = totals.filter((t) => {
+        const name = t.pooja_option_name.toLowerCase();
+        const parentName = (t.parent_name || '').toLowerCase();
+        return cfg.nameContains.some((kw) => name.includes(kw)) ||
+               cfg.parentNameContains.some((kw) => parentName.includes(kw));
+      });
+      const total = matching.reduce((s, t) => s + Number(t.total_amount), 0);
+      const count = matching.reduce((s, t) => s + t.registration_count, 0);
+      // Collect actual DB codes so the modal query works correctly
+      const matchCodes = matching.map((t) => t.option_code).filter(Boolean);
+      const matchParentCodes = [...new Set(matching.map((t) => t.parent_code).filter(Boolean))];
+      return { ...cfg, total, count, matchCodes, matchParentCodes };
+    });
+  }, [totals]);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+        {POOJA_CARD_CONFIG.map((c) => (
+          <div key={c.label} style={{ height: 96, borderRadius: 14, border: `1.5px solid ${C.border}`, background: C.surfaceInset, animation: 'pulse 1.4s ease-in-out infinite' }} />
+        ))}
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+        {cards.map((card) => (
+          <div
+            key={card.label}
+            style={{
+              borderRadius: 14,
+              border: `1.5px solid ${C.border}`,
+              background: C.surface,
+              padding: '14px 16px',
+              boxShadow: '0 1px 6px rgba(15,23,42,0.06)',
+            }}
+          >
+            {/* Icon + clickable count badge */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: card.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>
+                {card.icon}
+              </div>
+              <button
+                type="button"
+                disabled={card.count === 0}
+                onClick={() => card.count > 0 && setActiveModal({ codes: card.matchCodes, parentCodes: card.matchParentCodes, label: card.label, icon: card.icon })}
+                title={card.count > 0 ? `View ${card.count} registrations` : 'No registrations'}
+                style={{
+                  fontSize: 11, fontWeight: 700, color: card.count > 0 ? card.accent : C.inkMuted,
+                  background: card.count > 0 ? card.iconBg : C.surfaceInset,
+                  padding: '2px 8px', borderRadius: 20,
+                  border: 'none',
+                  cursor: card.count > 0 ? 'pointer' : 'default',
+                  transition: 'opacity 0.15s',
+                  textDecoration: card.count > 0 ? 'underline dotted' : 'none',
+                }}
+              >
+                {card.count} reg
+              </button>
+            </div>
+            {/* Amount */}
+            <p style={{ fontFamily: C.fMono, fontSize: 16, fontWeight: 700, color: C.ink, margin: '0 0 3px', lineHeight: 1.2 }}>
+              {formatCurrency(card.total)}
+            </p>
+            {/* Label */}
+            <p style={{ fontFamily: C.fNunito, fontSize: 11, fontWeight: 600, color: C.inkMuted, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {card.label}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {activeModal && (
+        <DonorsByOptionModal
+          cardLabel={activeModal.label}
+          cardIcon={activeModal.icon}
+          codes={activeModal.codes}
+          parentCodes={activeModal.parentCodes}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+    </>
+  );
 };
 
 // ── Custom Hook ───────────────────────────────────────────────────────────────
@@ -309,19 +619,17 @@ const RecordsPanel = ({ expenses, loading }: { expenses: ExpenseRecord[]; loadin
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
       </div>
-      <p style={{ fontFamily: C.fNunito, fontSize: 18, fontWeight: 800, color: C.inkMid, margin: '0 0 6px' }}>No records yet</p>
-      <p style={{ fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, margin: 0 }}>Save an expense using the form to get started.</p>
+      <p style={{ fontFamily: C.fNunito, fontSize: 18, fontWeight: 800, color: C.inkMid, margin: '0 0 6px' }}>No expenses this month</p>
+      <p style={{ fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, margin: 0 }}>No expenses recorded for this period.</p>
     </div>
   );
-
-  const shown = expenses.slice(0, 8);
 
   return (
     <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
 
       {/* Panel header */}
-      <div style={{ padding: '14px 20px', background: C.primaryGhost, borderBottom: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>Recent Transactions</span>
+      <div style={{ padding: '14px 20px', background: C.primaryGhost, borderBottom: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>Transactions</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.primary }}>{formatCurrency(total)}</span>
           <span style={{ fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, background: C.border, padding: '2px 8px', borderRadius: 20 }}>{expenses.length} entries</span>
@@ -330,11 +638,11 @@ const RecordsPanel = ({ expenses, loading }: { expenses: ExpenseRecord[]; loadin
 
       {/* Rows */}
       <div>
-        {shown.map((exp, i) => {
+        {expenses.map((exp, i) => {
           const g = getCategoryGroup(exp.category);
           const cat = getCat(g?.color ?? 'gray');
           return (
-            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < shown.length - 1 ? `1px solid ${C.surfaceInset}` : 'none', background: i % 2 === 0 ? C.surface : '#F8FAFC' }}>
+            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < expenses.length - 1 ? `1px solid ${C.surfaceInset}` : 'none', background: i % 2 === 0 ? C.surface : '#F8FAFC' }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: cat.bg, border: `1px solid ${cat.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
                 {g?.icon ?? '💰'}
               </div>
@@ -354,7 +662,7 @@ const RecordsPanel = ({ expenses, loading }: { expenses: ExpenseRecord[]; loadin
       {/* Footer total */}
       <div style={{ padding: '12px 20px', background: C.primaryGhost, borderTop: `1.5px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          {expenses.length > 8 ? `Showing 8 of ${expenses.length}` : 'Total'}
+          Total — {expenses.length} {expenses.length === 1 ? 'entry' : 'entries'}
         </span>
         <span style={{ fontFamily: C.fMono, fontSize: 15, fontWeight: 700, color: C.primary }}>{formatCurrency(total)}</span>
       </div>
@@ -478,7 +786,8 @@ const MonthlyTracker = ({
 const ExpensesPage = () => {
   const [activeTab, setActiveTab] = useState<'data' | 'tracking'>('data');
 
-  const { monthOptions, selectedMonth, setSelectedMonth, recordedExpenses, recordsLoading, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense } = useExpenses();
+  const { monthOptions, selectedMonth, setSelectedMonth, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense } = useExpenses();
+  const { totals: poojaOptionTotals, loading: poojaOptionLoading } = usePoojaOptionTotals(selectedMonth);
 
   const handleSave = async (payload: ExpenseFormPayload) => {
     const ok = await saveExpense(payload);
@@ -487,11 +796,10 @@ const ExpensesPage = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', fontFamily: C.fNunito }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px 60px' }}>
+    <div style={{ fontFamily: C.fNunito, paddingBottom: 40 }}>
 
         {/* Page header */}
-        <div style={{ marginBottom: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <h1 style={{ fontFamily: C.fNunito, fontSize: 28, fontWeight: 800, color: C.ink, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Expense Management</h1>
             <p style={{ fontFamily: C.fNunito, fontSize: 14, color: C.inkMuted, margin: 0 }}>Track and manage all temple expenses</p>
@@ -510,12 +818,41 @@ const ExpensesPage = () => {
           </div>
         </div>
 
-        {/* Data Entry: side-by-side */}
+        {/* Data Entry: month picker + summary cards + side-by-side form & records */}
         {activeTab === 'data' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20, alignItems: 'start' }}>
-            <EntryForm onSave={handleSave} isSaving={isSavingExpense} />
-            <RecordsPanel expenses={recordedExpenses} loading={recordsLoading} />
-          </div>
+          <>
+            {/* ── Month selector row ── */}
+            <div style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                Viewing Month
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                style={{ padding: '8px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.surface, fontFamily: C.fNunito, fontSize: 14, fontWeight: 700, color: C.ink, outline: 'none', cursor: 'pointer', boxShadow: '0 1px 4px rgba(15,23,42,0.06)' }}
+              >
+                {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* ── Pooja summary cards ── */}
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                Donor Registrations — Total by Pooja (Registered On)
+              </span>
+            </div>
+            <PoojaSummaryCards totals={poojaOptionTotals} loading={poojaOptionLoading} />
+
+            {/* ── Entry form + transactions ── */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
+              <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
+                <EntryForm onSave={handleSave} isSaving={isSavingExpense} />
+              </div>
+              <div style={{ flex: '1 1 400px', minWidth: 0 }}>
+                <RecordsPanel expenses={monthlyExpenses} loading={monthlyLoading} />
+              </div>
+            </div>
+          </>
         )}
 
         {/* Monthly Tracker */}
@@ -526,7 +863,6 @@ const ExpensesPage = () => {
             statusMessage={monthlyStatus} isLoading={monthlyLoading}
           />
         )}
-      </div>
     </div>
   );
 };
