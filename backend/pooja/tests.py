@@ -28,7 +28,7 @@ from .models import (
 from .serializers import RecurringPoojaPlanSerializer
 from .services.calendar import OccurrenceResult, TempleCalendarService
 from .services.recurrence import create_registration_from_plan, process_recurring_plans
-from .views import PAUSE_REASON_USE_FOR_TEMPLE
+from .views import PAUSE_REASON_NO_POJA_NO_PAYMENT, PAUSE_REASON_USE_FOR_TEMPLE
 
 
 SQLITE_DB_CONFIG = {
@@ -1545,6 +1545,62 @@ class RecurringPoojaPlanPauseTests(TestCase):
         self.assertEqual(response.status_code, 200)
         profile = DonorProfile.objects.get(user=self.user)
         self.assertEqual(profile.monthly_donation_amount, Decimal("0.00"))
+
+    def test_pause_no_pooja_no_payment_credits_custom_balance_when_paid(self):
+        plan = self._create_plan()
+        registration = self._create_due_registration(plan)
+        PaymentRecord.objects.create(
+            donor=self.user,
+            registration=registration,
+            amount=Decimal("300.00"),
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+        )
+
+        response = self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+
+        self.assertEqual(response.status_code, 200)
+        profile = DonorProfile.objects.get(user=self.user)
+        self.assertEqual(profile.custom_number, 300)
+
+    def test_pause_no_pooja_no_payment_is_idempotent_on_pause_update(self):
+        plan = self._create_plan()
+        registration = self._create_due_registration(plan)
+        PaymentRecord.objects.create(
+            donor=self.user,
+            registration=registration,
+            amount=Decimal("300.00"),
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+        )
+
+        first_response = self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+        second_response = self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        profile = DonorProfile.objects.get(user=self.user)
+        self.assertEqual(profile.custom_number, 300)
+
+    def test_resume_no_pooja_no_payment_reverses_credit_when_resumed_early(self):
+        plan = self._create_plan()
+        registration = self._create_due_registration(plan)
+        PaymentRecord.objects.create(
+            donor=self.user,
+            registration=registration,
+            amount=Decimal("300.00"),
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+        )
+        pause_response = self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+        self.assertEqual(pause_response.status_code, 200)
+
+        resume_url = reverse("pooja-recurrence-plans-resume", kwargs={"pk": plan.id})
+        resume_response = self.client.post(resume_url, {}, format="json")
+
+        self.assertEqual(resume_response.status_code, 200)
+        profile = DonorProfile.objects.get(user=self.user)
+        self.assertEqual(profile.custom_number, 0)
 
 
 class RecurringPoojaPlanDueInfoTests(TestCase):

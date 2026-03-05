@@ -1048,22 +1048,28 @@ class RecurringPoojaPlanViewSet(
             return Response({"detail": "Pause start must be today or later."}, status=status.HTTP_400_BAD_REQUEST)
         if pause_until <= pause_from:
             return Response({"detail": "Pause end must be after the pause start."}, status=status.HTTP_400_BAD_REQUEST)
+        was_paused = bool(plan.pause_from or plan.pause_until or not plan.is_active)
         metadata = dict(plan.metadata or {})
         due_registration = find_due_registration(plan, pause_from)
         paid_amount = sum_successful_payments(due_registration)
-        if pause_reason_value == PAUSE_REASON_NO_POJA_NO_PAYMENT:
+        if (
+            pause_reason_value == PAUSE_REASON_NO_POJA_NO_PAYMENT
+            and not was_paused
+            and paid_amount > Decimal("0.00")
+            and _is_registration_in_pause_window(due_registration, pause_from)
+        ):
             _credit_custom_balance(plan.donor, paid_amount)
+            metadata["pause_handling_amount"] = str(paid_amount)
         elif pause_reason_value == PAUSE_REASON_USE_FOR_TEMPLE:
             if paid_amount > Decimal("0.00") and _is_registration_in_pause_window(due_registration, pause_from):
                 _credit_monthly_donation(plan.donor, paid_amount)
+                metadata["pause_handling_amount"] = str(paid_amount)
         elif pause_reason_value == PAUSE_REASON_SAMY and paid_amount > Decimal("0.00"):
             metadata["handled_for_samy"] = True
         if pause_reason_value:
             metadata["pause_reason"] = pause_reason_value
         else:
             metadata.pop("pause_reason", None)
-        if paid_amount > Decimal("0.00"):
-            metadata["pause_handling_amount"] = str(paid_amount)
         plan.metadata = metadata
         plan.pause_from = pause_from
         plan.pause_until = pause_until
@@ -1080,23 +1086,30 @@ class RecurringPoojaPlanViewSet(
         pause_reason = pause_metadata.get("pause_reason")
         pause_handling_amount = pause_metadata.get("pause_handling_amount")
         pause_until = plan.pause_until
+        today = timezone.localdate()
         reactivated = self._reactivate_plan(
             plan,
             force=True,
             additional_metadata_keys=("canceled_at",),
         )
         if reactivated and was_paused:
-            _debit_custom_balance(plan.donor, plan.amount)
+            try:
+                amount_to_reverse = Decimal(pause_handling_amount) if pause_handling_amount else Decimal("0.00")
+            except (InvalidOperation, TypeError):
+                amount_to_reverse = Decimal("0.00")
+            if (
+                pause_reason == PAUSE_REASON_NO_POJA_NO_PAYMENT
+                and pause_until
+                and pause_until > today
+                and amount_to_reverse > Decimal("0.00")
+            ):
+                _debit_custom_balance(plan.donor, amount_to_reverse)
             if (
                 pause_reason == PAUSE_REASON_USE_FOR_TEMPLE
-                and pause_handling_amount
                 and pause_until
-                and pause_until > timezone.localdate()
+                and pause_until > today
+                and amount_to_reverse > Decimal("0.00")
             ):
-                try:
-                    amount_to_reverse = Decimal(pause_handling_amount)
-                except (InvalidOperation, TypeError):
-                    amount_to_reverse = Decimal("0.00")
                 _debit_monthly_donation(plan.donor, amount_to_reverse)
         serializer = self.get_serializer(plan)
         return Response(serializer.data)

@@ -756,6 +756,21 @@ const PoojaPauseCancelPage = () => {
                               min={todayIso()}
                               value={pauseFromDates[plan.id] ?? todayIso()}
                               onChange={(e) => setPauseFromDates((prev) => ({ ...prev, [plan.id]: e.target.value }))}
+                              onFocus={(e) => {
+                                const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                                input.showPicker?.();
+                              }}
+                              onClick={(e) => {
+                                const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                                input.showPicker?.();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key !== 'Tab') {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onPaste={(e) => e.preventDefault()}
+                              onDrop={(e) => e.preventDefault()}
                               className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-200"
                             />
                           </div>
@@ -766,6 +781,21 @@ const PoojaPauseCancelPage = () => {
                               min={pauseFromDates[plan.id] ?? todayIso()}
                               value={pauseToDates[plan.id] ?? ''}
                               onChange={(e) => setPauseToDates((prev) => ({ ...prev, [plan.id]: e.target.value }))}
+                              onFocus={(e) => {
+                                const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                                input.showPicker?.();
+                              }}
+                              onClick={(e) => {
+                                const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                                input.showPicker?.();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key !== 'Tab') {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onPaste={(e) => e.preventDefault()}
+                              onDrop={(e) => e.preventDefault()}
                               className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-200"
                             />
                           </div>
