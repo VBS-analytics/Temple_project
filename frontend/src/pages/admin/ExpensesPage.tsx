@@ -166,6 +166,7 @@ type DonorByOptionEntry = {
   pooja_option_name: string;
   total_amount: string;
   start_date: string | null;
+  registration_count?: number;
 };
 
 // ── Donors popup modal ────────────────────────────────────────────────────────
@@ -173,18 +174,17 @@ const DonorsByOptionModal = ({
   cardLabel,
   cardIcon,
   codes,
-  parentCodes,
   month,
   onClose,
 }: {
   cardLabel: string;
   cardIcon: string;
   codes: string[];
-  parentCodes: string[];
   month: string;
   onClose: () => void;
 }) => {
   const [rows, setRows] = useState<DonorByOptionEntry[]>([]);
+  const [registrationCount, setRegistrationCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -196,18 +196,24 @@ const DonorsByOptionModal = ({
       try {
         const params: Record<string, string> = {};
         if (codes.length) params.codes = codes.join(',');
-        if (parentCodes.length) params.parent_codes = parentCodes.join(',');
         if (month) params.month = month;
         const { data } = await api.get('/pooja/registrations/donors-by-option/', { params });
-        setRows(Array.isArray(data?.results) ? data.results : []);
+        const nextRows = Array.isArray(data?.results) ? data.results : [];
+        setRows(nextRows);
+        setRegistrationCount(
+          typeof data?.registration_count === 'number'
+            ? data.registration_count
+            : nextRows.length,
+        );
       } catch {
         setError('Unable to load registrations.');
+        setRegistrationCount(0);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [codes.join(','), parentCodes.join(','), month]);
+  }, [codes.join(','), month]);
 
   // Close on Escape
   useEffect(() => {
@@ -248,7 +254,9 @@ const DonorsByOptionModal = ({
           {!loading && rows.length > 0 && (
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontFamily: C.fMono, fontSize: 14, fontWeight: 700, color: C.primary, margin: 0 }}>{formatCurrency(total)}</p>
-              <p style={{ fontFamily: C.fNunito, fontSize: 11, color: C.inkMuted, margin: 0 }}>{rows.length} registration{rows.length !== 1 ? 's' : ''}</p>
+              <p style={{ fontFamily: C.fNunito, fontSize: 11, color: C.inkMuted, margin: 0 }}>
+                {registrationCount} registration{registrationCount !== 1 ? 's' : ''} · {rows.length} donor{rows.length !== 1 ? 's' : ''}
+              </p>
             </div>
           )}
           <button
@@ -287,7 +295,7 @@ const DonorsByOptionModal = ({
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={`${row.donor_id}-${i}`} style={{ background: i % 2 === 0 ? '#fff' : C.surfaceInset }}>
+                  <tr key={row.donor_id} style={{ background: i % 2 === 0 ? '#fff' : C.surfaceInset }}>
                     <td style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>{i + 1}</td>
                     <td style={{ padding: '10px 16px', borderBottom: `1px solid ${C.surfaceInset}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -305,7 +313,7 @@ const DonorsByOptionModal = ({
               <tfoot>
                 <tr style={{ background: C.primaryGhost }}>
                   <td colSpan={3} style={{ padding: '10px 16px', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Total — {rows.length} registration{rows.length !== 1 ? 's' : ''}
+                    Total — {registrationCount} registration{registrationCount !== 1 ? 's' : ''} · {rows.length} donor{rows.length !== 1 ? 's' : ''}
                   </td>
                   <td colSpan={1} style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 14, fontWeight: 700, color: C.primary, textAlign: 'right' }}>
                     {formatCurrency(total)}
@@ -330,7 +338,7 @@ const PoojaSummaryCards = ({
   loading: boolean;
   month: string;
 }) => {
-  const [activeModal, setActiveModal] = useState<{ codes: string[]; parentCodes: string[]; label: string; icon: string } | null>(null);
+  const [activeModal, setActiveModal] = useState<{ codes: string[]; label: string; icon: string } | null>(null);
 
   // Assign each option-total row to the first matching card to avoid cross-card double counting.
   const cards = useMemo(() => {
@@ -355,8 +363,7 @@ const PoojaSummaryCards = ({
       const total = matching.reduce((s, t) => s + Number(t.total_amount), 0);
       const count = matching.reduce((s, t) => s + t.registration_count, 0);
       const matchCodes = [...new Set(matching.map((t) => t.option_code).filter(Boolean))];
-      const matchParentCodes = [...new Set(matching.map((t) => t.parent_code).filter(Boolean))];
-      return { ...cfg, total, count, matchCodes, matchParentCodes };
+      return { ...cfg, total, count, matchCodes };
     });
   }, [totals]);
 
@@ -393,7 +400,7 @@ const PoojaSummaryCards = ({
               <button
                 type="button"
                 disabled={card.count === 0}
-                onClick={() => card.count > 0 && setActiveModal({ codes: card.matchCodes, parentCodes: card.matchParentCodes, label: card.label, icon: card.icon })}
+                onClick={() => card.count > 0 && setActiveModal({ codes: card.matchCodes, label: card.label, icon: card.icon })}
                 title={card.count > 0 ? `View ${card.count} registrations` : 'No registrations'}
                 style={{
                   fontSize: 11, fontWeight: 700, color: card.count > 0 ? card.accent : C.inkMuted,
@@ -425,7 +432,6 @@ const PoojaSummaryCards = ({
           cardLabel={activeModal.label}
           cardIcon={activeModal.icon}
           codes={activeModal.codes}
-          parentCodes={activeModal.parentCodes}
           month={month}
           onClose={() => setActiveModal(null)}
         />

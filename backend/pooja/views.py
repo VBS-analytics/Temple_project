@@ -608,33 +608,45 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         if match and not codes and not parent_codes:
             filter_q |= Q(pooja_option__name__icontains=match)
 
+        plan_rows = self._active_plan_queryset_for_month(request).filter(filter_q)
+        registration_count = plan_rows.count()
+
         rows = (
-            self._active_plan_queryset_for_month(request)
-            .filter(filter_q)
-            .select_related("donor", "pooja_option", "origin_registration")
-            .order_by("donor__name", "id")
+            plan_rows.values("donor_id")
+            .annotate(
+                donor_name=F("donor__name"),
+                donor_phone=F("donor__phone_number"),
+                total_amount=Sum("amount"),
+                donor_registration_count=Count("id"),
+            )
+            .order_by("donor_name", "donor_id")
         )
 
-        seen_donors: set[int] = set()
         results = []
-        for plan in rows:
-            donor = plan.donor
-            if donor is None:
+        for row in rows:
+            donor_id = row["donor_id"]
+            if donor_id is None:
                 continue
-            donor_id = donor.id
-            registered_on = getattr(plan, "registered_on", None)
-            entry = {
-                "donor_id": donor_id,
-                "donor_name": donor.name or "—",
-                "donor_phone": getattr(donor, "phone_number", "—") or "—",
-                "pooja_option_name": getattr(plan.pooja_option, "name", "") or "",
-                "total_amount": str(plan.amount or "0.00"),
-                "start_date": registered_on.isoformat() if registered_on else None,
-            }
-            results.append(entry)
-            seen_donors.add(donor_id)
+            results.append(
+                {
+                    "donor_id": donor_id,
+                    "donor_name": row["donor_name"] or "—",
+                    "donor_phone": row["donor_phone"] or "—",
+                    "pooja_option_name": "",
+                    "total_amount": str(row["total_amount"] or "0.00"),
+                    "start_date": None,
+                    "registration_count": row["donor_registration_count"] or 0,
+                }
+            )
 
-        return Response({"count": len(results), "unique_donors": len(seen_donors), "results": results})
+        return Response(
+            {
+                "count": len(results),
+                "unique_donors": len(results),
+                "registration_count": registration_count,
+                "results": results,
+            }
+        )
 
     @action(detail=False, methods=["get"], url_path="option-totals")
     def option_totals(self, request):

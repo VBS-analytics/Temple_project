@@ -436,7 +436,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have selected Post Prasadam yet.',
     errorMessage: 'Unable to download the Post Prasadam report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.postPrasadam,
-    includePoojaDateColumn: true,
+    includePoojaDateColumn: false,
   },
 };
 

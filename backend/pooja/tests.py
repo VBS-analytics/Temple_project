@@ -2078,9 +2078,9 @@ class PoojaOptionTotalsMonthFilterTests(TestCase):
         )
         self.assertEqual(donors_response.status_code, status.HTTP_200_OK)
         donors_payload = donors_response.json()
-        self.assertEqual(donors_payload["count"], 3)
-        self.assertEqual(len(donors_payload["results"]), 3)
-        self.assertTrue(all((entry["start_date"] or "").startswith("2026-01") for entry in donors_payload["results"]))
+        self.assertEqual(donors_payload["registration_count"], 3)
+        self.assertEqual(donors_payload["count"], 2)
+        self.assertEqual(len(donors_payload["results"]), 2)
         self.assertEqual(
             sum(Decimal(entry["total_amount"]) for entry in donors_payload["results"]),
             Decimal("350.00"),
