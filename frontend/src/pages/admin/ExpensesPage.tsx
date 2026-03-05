@@ -1,5 +1,6 @@
 import { CSSProperties, FormEvent, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import api, { extractResults } from '../../lib/api';
+import { isReadOnlyAdmin, useAuthStore } from '../../store/auth';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ExpenseRecordResponse = {
@@ -22,6 +23,7 @@ type PoojaOptionTotal = {
 type ExpenseRecord = Omit<ExpenseRecordResponse, 'amount'> & { amount: number };
 type MonthOption = { label: string; value: string };
 type ExpenseFormPayload = { transaction_date: string; category: string; amount: number };
+type SaveExpenseResult = { ok: boolean; error?: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORY_GROUPS = [
@@ -51,19 +53,39 @@ const MONTH_FORMATTER = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 
 // Uses name substrings because DB codes are auto-generated slugs, not fixed values.
 const POOJA_CARD_CONFIG: Array<{
   nameContains: string[];        // match if pooja_option_name.toLowerCase() includes any of these
+  optionCodeContains: string[];  // match if option_code.toLowerCase() includes any of these
+  parentCodeContains: string[];  // match if parent_code.toLowerCase() includes any of these
   parentNameContains: string[];  // match if parent_name.toLowerCase() includes any of these
   label: string;
   icon: string;
   accent: string;
   iconBg: string;
 }> = [
-  { nameContains: ['till oil'],      parentNameContains: [],                    label: 'Till Oil',            icon: '🪔', accent: '#92400E', iconBg: '#FEF3C7' },
-  { nameContains: ['neivedhyam'],    parentNameContains: [],                    label: 'Neivedhyam',          icon: '🍚', accent: '#065F46', iconBg: '#ECFDF5' },
-  { nameContains: ['navagraha'],     parentNameContains: [],                    label: 'Navagraha Pooja',     icon: '⭐', accent: '#1D4ED8', iconBg: '#EFF6FF' },
-  { nameContains: ['pradosh'],       parentNameContains: [],                    label: 'Pradosham Pooja',     icon: '🌙', accent: '#5B21B6', iconBg: '#EDE9FE' },
+  { nameContains: ['till oil', 'til oil', 'lamp'], optionCodeContains: ['gp1', 'till', 'til-oil'], parentCodeContains: [], parentNameContains: [], label: 'Till Oil', icon: '🪔', accent: '#92400E', iconBg: '#FEF3C7' },
+  { nameContains: ['neivedhyam', 'nivedhyam', 'nitya neivedhyam'], optionCodeContains: ['gp6', 'neivedhyam', 'nivedhyam'], parentCodeContains: [], parentNameContains: [], label: 'Neivedhyam', icon: '🍚', accent: '#065F46', iconBg: '#ECFDF5' },
+  { nameContains: ['navagraha'], optionCodeContains: ['gp3', 'navagraha'], parentCodeContains: [], parentNameContains: [], label: 'Navagraha Pooja', icon: '⭐', accent: '#1D4ED8', iconBg: '#EFF6FF' },
+  { nameContains: ['pradosh', 'pradosha', 'pradosham'], optionCodeContains: ['gp2', 'pradosh'], parentCodeContains: [], parentNameContains: [], label: 'Pradosham Pooja', icon: '🌙', accent: '#5B21B6', iconBg: '#EDE9FE' },
   // "Kalabhairavar archana" (General) + all One Day Archana + all One Day Abishekam
-  { nameContains: ['kalabhairavar'], parentNameContains: ['archana', 'abishekam'], label: 'Archana & Abishekam', icon: '🌸', accent: '#BE185D', iconBg: '#FCE7F3' },
-  { nameContains: [],                parentNameContains: ['special'],           label: 'Special Pooja',       icon: '✨', accent: '#B45309', iconBg: '#FFFBEB' },
+  {
+    nameContains: ['kalabhairavar', 'ayyanar koil', 'shivan koil', 'archana', 'abishekam', 'abhishekam'],
+    optionCodeContains: ['gp5', 'archana', 'abishekam', 'abhishekam'],
+    parentCodeContains: ['one-day', 'one_day', 'abishekam'],
+    parentNameContains: ['archana', 'abishekam', 'abhishekam'],
+    label: 'Archana & Abishekam',
+    icon: '🌸',
+    accent: '#BE185D',
+    iconBg: '#FCE7F3',
+  },
+  {
+    nameContains: ['mahashivratri', 'mahashivrathri', 'navaratri', 'navarathri', 'kumbabishekam', 'aarudhra', 'aarudra'],
+    optionCodeContains: ['special'],
+    parentCodeContains: ['special'],
+    parentNameContains: ['special'],
+    label: 'Special Pooja',
+    icon: '✨',
+    accent: '#B45309',
+    iconBg: '#FFFBEB',
+  },
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -98,7 +120,21 @@ const formatDisplayDate = (date: string) => {
   return `${day}-${month}-${year}`;
 };
 
-// ── Pooja option totals hook (filtered by start_date month = "Registered On") ─
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  const maybeError = error as {
+    response?: { data?: { detail?: string } | string };
+    message?: string;
+  };
+  const detail = maybeError?.response?.data;
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  if (detail && typeof detail === 'object' && typeof detail.detail === 'string' && detail.detail.trim()) {
+    return detail.detail.trim();
+  }
+  if (typeof maybeError?.message === 'string' && maybeError.message.trim()) return maybeError.message.trim();
+  return fallback;
+};
+
+// ── Pooja option totals hook (filtered by active recurring plans in selected month) ─
 const usePoojaOptionTotals = (month: string) => {
   const [totals, setTotals] = useState<PoojaOptionTotal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,12 +174,14 @@ const DonorsByOptionModal = ({
   cardIcon,
   codes,
   parentCodes,
+  month,
   onClose,
 }: {
   cardLabel: string;
   cardIcon: string;
   codes: string[];
   parentCodes: string[];
+  month: string;
   onClose: () => void;
 }) => {
   const [rows, setRows] = useState<DonorByOptionEntry[]>([]);
@@ -159,6 +197,7 @@ const DonorsByOptionModal = ({
         const params: Record<string, string> = {};
         if (codes.length) params.codes = codes.join(',');
         if (parentCodes.length) params.parent_codes = parentCodes.join(',');
+        if (month) params.month = month;
         const { data } = await api.get('/pooja/registrations/donors-by-option/', { params });
         setRows(Array.isArray(data?.results) ? data.results : []);
       } catch {
@@ -168,7 +207,7 @@ const DonorsByOptionModal = ({
       }
     };
     load();
-  }, [codes.join(','), parentCodes.join(',')]);
+  }, [codes.join(','), parentCodes.join(','), month]);
 
   // Close on Escape
   useEffect(() => {
@@ -282,22 +321,40 @@ const DonorsByOptionModal = ({
 };
 
 // ── Pooja Summary Cards ───────────────────────────────────────────────────────
-const PoojaSummaryCards = ({ totals, loading }: { totals: PoojaOptionTotal[]; loading: boolean }) => {
+const PoojaSummaryCards = ({
+  totals,
+  loading,
+  month,
+}: {
+  totals: PoojaOptionTotal[];
+  loading: boolean;
+  month: string;
+}) => {
   const [activeModal, setActiveModal] = useState<{ codes: string[]; parentCodes: string[]; label: string; icon: string } | null>(null);
 
-  // Match totals by option name / parent name keywords (DB codes are auto-generated slugs)
+  // Assign each option-total row to the first matching card to avoid cross-card double counting.
   const cards = useMemo(() => {
-    return POOJA_CARD_CONFIG.map((cfg) => {
-      const matching = totals.filter((t) => {
-        const name = t.pooja_option_name.toLowerCase();
-        const parentName = (t.parent_name || '').toLowerCase();
-        return cfg.nameContains.some((kw) => name.includes(kw)) ||
-               cfg.parentNameContains.some((kw) => parentName.includes(kw));
-      });
+    const buckets: PoojaOptionTotal[][] = POOJA_CARD_CONFIG.map(() => []);
+    for (const row of totals) {
+      const name = row.pooja_option_name.toLowerCase();
+      const optionCode = (row.option_code || '').toLowerCase();
+      const parentCode = (row.parent_code || '').toLowerCase();
+      const parentName = (row.parent_name || '').toLowerCase();
+      const idx = POOJA_CARD_CONFIG.findIndex(
+        (cfg) =>
+          cfg.nameContains.some((kw) => name.includes(kw)) ||
+          cfg.optionCodeContains.some((kw) => optionCode.includes(kw)) ||
+          cfg.parentCodeContains.some((kw) => parentCode.includes(kw)) ||
+          cfg.parentNameContains.some((kw) => parentName.includes(kw)),
+      );
+      if (idx >= 0) buckets[idx].push(row);
+    }
+
+    return POOJA_CARD_CONFIG.map((cfg, idx) => {
+      const matching = buckets[idx];
       const total = matching.reduce((s, t) => s + Number(t.total_amount), 0);
       const count = matching.reduce((s, t) => s + t.registration_count, 0);
-      // Collect actual DB codes so the modal query works correctly
-      const matchCodes = matching.map((t) => t.option_code).filter(Boolean);
+      const matchCodes = [...new Set(matching.map((t) => t.option_code).filter(Boolean))];
       const matchParentCodes = [...new Set(matching.map((t) => t.parent_code).filter(Boolean))];
       return { ...cfg, total, count, matchCodes, matchParentCodes };
     });
@@ -369,6 +426,7 @@ const PoojaSummaryCards = ({ totals, loading }: { totals: PoojaOptionTotal[]; lo
           cardIcon={activeModal.icon}
           codes={activeModal.codes}
           parentCodes={activeModal.parentCodes}
+          month={month}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -380,21 +438,10 @@ const PoojaSummaryCards = ({ totals, loading }: { totals: PoojaOptionTotal[]; lo
 const useExpenses = () => {
   const monthOptions = useMemo(buildMonthOptions, []);
   const [selectedMonth, setSelectedMonth] = useState(() => monthOptions[0]?.value ?? '');
-  const [recordedExpenses, setRecordedExpenses] = useState<ExpenseRecord[]>([]);
-  const [recordsLoading, setRecordsLoading] = useState(false);
   const [monthlyExpenses, setMonthlyExpenses] = useState<ExpenseRecord[]>([]);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const [monthlyStatus, setMonthlyStatus] = useState('');
   const [isSavingExpense, setIsSavingExpense] = useState(false);
-
-  const fetchRecordedExpenses = useCallback(async () => {
-    setRecordsLoading(true);
-    try {
-      const { data } = await api.get('/payments/expenses/');
-      setRecordedExpenses(normalizeExpenseRecords(extractResults<ExpenseRecordResponse>(data)));
-    } catch { setRecordedExpenses([]); }
-    finally { setRecordsLoading(false); }
-  }, []);
 
   const fetchMonthlyExpenses = useCallback(async (month: string) => {
     if (!month) { setMonthlyExpenses([]); setMonthlyStatus('Pick a month to load totals.'); return; }
@@ -414,21 +461,23 @@ const useExpenses = () => {
     finally { setMonthlyLoading(false); }
   }, [monthOptions]);
 
-  const saveExpense = useCallback(async (payload: ExpenseFormPayload) => {
+  const saveExpense = useCallback(async (payload: ExpenseFormPayload): Promise<SaveExpenseResult> => {
     setIsSavingExpense(true);
     try {
       await api.post('/payments/expenses/', payload);
-      await fetchRecordedExpenses();
       await fetchMonthlyExpenses(selectedMonth);
-      return true;
-    } catch { return false; }
+      return { ok: true };
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Unable to save expense.');
+      setMonthlyStatus(message);
+      return { ok: false, error: message };
+    }
     finally { setIsSavingExpense(false); }
-  }, [fetchRecordedExpenses, fetchMonthlyExpenses, selectedMonth]);
+  }, [fetchMonthlyExpenses, selectedMonth]);
 
-  useEffect(() => { fetchRecordedExpenses(); }, [fetchRecordedExpenses]);
   useEffect(() => { fetchMonthlyExpenses(selectedMonth); }, [selectedMonth, fetchMonthlyExpenses]);
 
-  return { monthOptions, selectedMonth, setSelectedMonth, recordedExpenses, recordsLoading, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense };
+  return { monthOptions, selectedMonth, setSelectedMonth, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense };
 };
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -474,10 +523,33 @@ const CatPill = ({ category }: { category: string }) => {
 };
 
 // ── Entry Form ────────────────────────────────────────────────────────────────
-const EntryForm = ({ onSave, isSaving }: { onSave: (p: ExpenseFormPayload) => Promise<boolean>; isSaving: boolean }) => {
+const EntryForm = ({
+  onSave,
+  isSaving,
+  isReadOnly,
+  selectedMonth,
+  selectedMonthLabel,
+}: {
+  onSave: (p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
+  isSaving: boolean;
+  isReadOnly: boolean;
+  selectedMonth: string;
+  selectedMonthLabel: string;
+}) => {
   const [vals, setVals] = useState({ date: '', category: '', amount: '' });
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const set = (k: keyof typeof vals, v: string) => setVals(p => ({ ...p, [k]: v }));
+  const formDisabled = isSaving || isReadOnly;
+  const selectedMonthMinDate = selectedMonth ? `${selectedMonth}-01` : undefined;
+  const selectedMonthMaxDate = useMemo(() => {
+    if (!selectedMonth) return undefined;
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return undefined;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+  }, [selectedMonth]);
 
   useEffect(() => {
     if (!status) return;
@@ -487,16 +559,24 @@ const EntryForm = ({ onSave, isSaving }: { onSave: (p: ExpenseFormPayload) => Pr
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      setStatus({ msg: 'This admin account has read-only access.', ok: false });
+      return;
+    }
     if (!vals.date || !vals.category || !vals.amount) {
       setStatus({ msg: 'Fill in all three fields to continue.', ok: false });
       return;
     }
-    const ok = await onSave({ transaction_date: vals.date, category: vals.category, amount: Number(vals.amount) });
-    if (ok) {
+    if (!vals.date.startsWith(`${selectedMonth}-`)) {
+      setStatus({ msg: `Transaction date must be within ${selectedMonthLabel}.`, ok: false });
+      return;
+    }
+    const result = await onSave({ transaction_date: vals.date, category: vals.category, amount: Number(vals.amount) });
+    if (result.ok) {
       setStatus({ msg: `Saved ${formatCurrency(Number(vals.amount))} for "${vals.category}"`, ok: true });
       setVals({ date: '', category: '', amount: '' });
     } else {
-      setStatus({ msg: 'Save failed. Please try again.', ok: false });
+      setStatus({ msg: result.error || 'Save failed. Please try again.', ok: false });
     }
   };
 
@@ -521,6 +601,11 @@ const EntryForm = ({ onSave, isSaving }: { onSave: (p: ExpenseFormPayload) => Pr
       </div>
 
       <form onSubmit={submit} style={{ padding: '20px' }}>
+        {isReadOnly && (
+          <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, background: C.surfaceInset, border: `1px solid ${C.border}`, fontFamily: C.fNunito, fontSize: 12, color: C.inkMuted }}>
+            This admin account has read-only access. Expense creation is disabled.
+          </div>
+        )}
 
         {/* Date */}
         <div style={{ marginBottom: 14 }}>
@@ -531,12 +616,14 @@ const EntryForm = ({ onSave, isSaving }: { onSave: (p: ExpenseFormPayload) => Pr
             type="date"
             value={vals.date}
             onChange={e => set('date', e.target.value)}
+            min={selectedMonthMinDate}
+            max={selectedMonthMaxDate}
             onKeyDown={e => {
               if (e.key !== 'Tab') e.preventDefault();
             }}
             onPaste={e => e.preventDefault()}
             onDrop={e => e.preventDefault()}
-            disabled={isSaving}
+            disabled={formDisabled}
             style={{ ...field, cursor: 'pointer' }}
           />
         </div>
@@ -546,7 +633,7 @@ const EntryForm = ({ onSave, isSaving }: { onSave: (p: ExpenseFormPayload) => Pr
           <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
             Category
           </label>
-          <select value={vals.category} onChange={e => set('category', e.target.value)} disabled={isSaving} style={{ ...field, appearance: 'none', cursor: 'pointer' }}>
+          <select value={vals.category} onChange={e => set('category', e.target.value)} disabled={formDisabled} style={{ ...field, appearance: 'none', cursor: 'pointer' }}>
             <option value="">Choose a category…</option>
             {EXPENSE_CATEGORY_GROUPS.map(g => (
               <optgroup key={g.title} label={`${g.icon}  ${g.title}`}>
@@ -577,15 +664,15 @@ const EntryForm = ({ onSave, isSaving }: { onSave: (p: ExpenseFormPayload) => Pr
               const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','.'];
               if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
             }}
-            disabled={isSaving}
+            disabled={formDisabled}
             placeholder="0.00"
             style={{ ...field, fontFamily: C.fMono, fontSize: 16, fontWeight: 500 }}
           />
         </div>
 
         {/* Save */}
-        <button type="submit" disabled={isSaving} style={{ width: '100%', padding: '12px', background: isSaving ? C.inkFaint : C.primary, color: '#fff', border: 'none', borderRadius: 10, fontFamily: C.fNunito, fontSize: 14, fontWeight: 800, cursor: isSaving ? 'not-allowed' : 'pointer', letterSpacing: '0.02em', transition: 'background 0.15s' }}>
-          {isSaving ? 'Saving…' : '✓  Save Expense'}
+        <button type="submit" disabled={formDisabled} style={{ width: '100%', padding: '12px', background: formDisabled ? C.inkFaint : C.primary, color: '#fff', border: 'none', borderRadius: 10, fontFamily: C.fNunito, fontSize: 14, fontWeight: 800, cursor: formDisabled ? 'not-allowed' : 'pointer', letterSpacing: '0.02em', transition: 'background 0.15s' }}>
+          {isReadOnly ? 'Read-only access' : isSaving ? 'Saving…' : '✓  Save Expense'}
         </button>
 
         {/* Status */}
@@ -785,14 +872,20 @@ const MonthlyTracker = ({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const ExpensesPage = () => {
   const [activeTab, setActiveTab] = useState<'data' | 'tracking'>('data');
+  const authUser = useAuthStore((state) => state.user);
+  const readOnlyAdmin = isReadOnlyAdmin(authUser);
 
   const { monthOptions, selectedMonth, setSelectedMonth, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense } = useExpenses();
   const { totals: poojaOptionTotals, loading: poojaOptionLoading } = usePoojaOptionTotals(selectedMonth);
+  const selectedMonthLabel = useMemo(
+    () => monthOptions.find((o) => o.value === selectedMonth)?.label ?? selectedMonth,
+    [monthOptions, selectedMonth],
+  );
 
   const handleSave = async (payload: ExpenseFormPayload) => {
-    const ok = await saveExpense(payload);
-    if (ok) setActiveTab('data');
-    return ok;
+    const result = await saveExpense(payload);
+    if (result.ok) setActiveTab('data');
+    return result;
   };
 
   return (
@@ -838,15 +931,21 @@ const ExpensesPage = () => {
             {/* ── Pooja summary cards ── */}
             <div style={{ marginBottom: 10 }}>
               <span style={{ fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                Donor Registrations — Total by Pooja (Registered On)
+                Donor Registrations — Total by Pooja (Active This Month)
               </span>
             </div>
-            <PoojaSummaryCards totals={poojaOptionTotals} loading={poojaOptionLoading} />
+            <PoojaSummaryCards totals={poojaOptionTotals} loading={poojaOptionLoading} month={selectedMonth} />
 
             {/* ── Entry form + transactions ── */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
               <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
-                <EntryForm onSave={handleSave} isSaving={isSavingExpense} />
+                <EntryForm
+                  onSave={handleSave}
+                  isSaving={isSavingExpense}
+                  isReadOnly={readOnlyAdmin}
+                  selectedMonth={selectedMonth}
+                  selectedMonthLabel={selectedMonthLabel}
+                />
               </div>
               <div style={{ flex: '1 1 400px', minWidth: 0 }}>
                 <RecordsPanel expenses={monthlyExpenses} loading={monthlyLoading} />

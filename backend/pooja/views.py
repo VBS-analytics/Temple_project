@@ -13,6 +13,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, F, Max, Prefetch, Q, Sum
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
@@ -476,6 +477,53 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied(POOJA_REGISTRATION_ACCESS_DENIED_MESSAGE)
         serializer.save(donor=self.request.user)
 
+    def _resolve_month_range(self, request) -> tuple[date, date]:
+        """Resolve month range from ?month=YYYY-MM or default to current month."""
+        month_param = (request.query_params.get("month") or "").strip()
+        today = timezone.localdate()
+        year, month = today.year, today.month
+        if month_param:
+            try:
+                year_str, month_str = month_param.split("-", 1)
+                parsed_year = int(year_str)
+                parsed_month = int(month_str)
+                if 1 <= parsed_month <= 12:
+                    year, month = parsed_year, parsed_month
+            except (ValueError, AttributeError):
+                pass
+
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
+        return first_day, last_day
+
+    def _active_plan_queryset_for_month(self, request):
+        """Active recurring plans for the selected month.
+
+        A plan contributes to a month when it is registered on/before month end,
+        is active, and not paused for that month.
+        """
+        first_day, last_day = self._resolve_month_range(request)
+        local_tz = timezone.get_current_timezone()
+        return (
+            RecurringPoojaPlan.objects.filter(
+                donor__isnull=False,
+                recurrence_kind=RecurrenceKind.RECURRING,
+                is_active=True,
+            )
+            .annotate(
+                registered_on=Coalesce(
+                    TruncDate("origin_registration__created_at", tzinfo=local_tz),
+                    TruncDate("created_at", tzinfo=local_tz),
+                    "start_date",
+                )
+            )
+            .filter(registered_on__lte=last_day)
+            .exclude(
+                Q(pause_from__lte=last_day)
+                & (Q(pause_until__gte=first_day) | Q(pause_until__isnull=True))
+            )
+        )
+
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
         queryset = self.get_queryset()
@@ -534,11 +582,12 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="donors-by-option")
     def donors_by_option(self, request):
-        """Return donors registered for pooja options matched by code or parent code. Admin only.
+        """Return active recurring-plan donors for the selected month. Admin only.
 
         Params:
           ?codes=GP1,GP2        – comma-separated option codes (exact)
           ?parent_codes=ONE-DAY,ABISHEKAM  – comma-separated parent codes (all children)
+          ?month=YYYY-MM        – target month for active-plan totals (defaults to current month)
           Legacy: ?match=<substring>  – fallback name-icontains (kept for compatibility)
         """
         if request.user.role != UserRole.ADMIN:
@@ -560,26 +609,27 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             filter_q |= Q(pooja_option__name__icontains=match)
 
         rows = (
-            PoojaRegistration.objects.filter(donor__isnull=False)
+            self._active_plan_queryset_for_month(request)
             .filter(filter_q)
-            .select_related("donor", "pooja_option")
+            .select_related("donor", "pooja_option", "origin_registration")
             .order_by("donor__name", "id")
         )
 
         seen_donors: set[int] = set()
         results = []
-        for reg in rows:
-            donor = reg.donor
+        for plan in rows:
+            donor = plan.donor
             if donor is None:
                 continue
             donor_id = donor.id
+            registered_on = getattr(plan, "registered_on", None)
             entry = {
                 "donor_id": donor_id,
                 "donor_name": donor.name or "—",
                 "donor_phone": getattr(donor, "phone_number", "—") or "—",
-                "pooja_option_name": getattr(reg.pooja_option, "name", "") or "",
-                "total_amount": str(reg.total_amount or "0.00"),
-                "start_date": reg.start_date.isoformat() if reg.start_date else None,
+                "pooja_option_name": getattr(plan.pooja_option, "name", "") or "",
+                "total_amount": str(plan.amount or "0.00"),
+                "start_date": registered_on.isoformat() if registered_on else None,
             }
             results.append(entry)
             seen_donors.add(donor_id)
@@ -588,55 +638,16 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="option-totals")
     def option_totals(self, request):
-        """Return aggregated active recurring pooja plan totals for a given month. Admin only.
-
-        Recurring poojas carry forward each month from their start date until
-        paused or canceled.  Paused plans are excluded for their paused months.
+        """Return aggregated active recurring-plan totals for the selected month.
 
         Optional query param:
-            ?month=YYYY-MM  — the month to compute totals for (defaults to current month)
+            ?month=YYYY-MM  — target month to compute active-plan totals for (defaults to current month)
         """
         if request.user.role != UserRole.ADMIN:
             raise PermissionDenied("Admin access required.")
 
-        # Parse month param; fall back to current month
-        month_param = (request.query_params.get("month") or "").strip()
-        try:
-            yr_str, mo_str = month_param.split("-")
-            year, mo = int(yr_str), int(mo_str)
-        except (ValueError, AttributeError):
-            today = date.today()
-            year, mo = today.year, today.month
-
-        first_day = date(year, mo, 1)
-        last_day = date(year, mo, calendar.monthrange(year, mo)[1])
-
-        # Active recurring plans for this month:
-        #   - "Registered On" date (origin_registration.start_date) is on or before last day of month
-        #   - not canceled (is_active=True)
-        #   - not paused during this month (pause period overlaps with month)
-        #
-        # We use origin_registration__start_date (the "Registered On" date shown in donor profile)
-        # rather than RecurringPoojaPlan.start_date, which may be set to system/backfill dates.
-        # For plans with no origin_registration, fall back to RecurringPoojaPlan.start_date.
-        plans = (
-            RecurringPoojaPlan.objects.filter(
-                donor__isnull=False,
-                recurrence_kind=RecurrenceKind.RECURRING,
-                is_active=True,
-            )
-            .filter(
-                Q(origin_registration__start_date__lte=last_day)
-                | Q(origin_registration__isnull=True, start_date__lte=last_day)
-            )
-            .exclude(
-                Q(pause_from__lte=last_day)
-                & (Q(pause_until__gte=first_day) | Q(pause_until__isnull=True))
-            )
-        )
-
         rows = (
-            plans
+            self._active_plan_queryset_for_month(request)
             .values(
                 name=F("pooja_option__name"),
                 option_code=F("pooja_option__code"),
@@ -835,23 +846,20 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
                 post_prasadam=True,
                 donor__isnull=False,
             )
-            .select_related("donor")
-            .order_by("start_date", "donor__name", "donor__id")
+            .values("donor_id", "donor__name", "donor__phone_number")
+            .annotate(pooja_date=Max("start_date"))
+            .order_by("donor__name", "donor_id")
         )
 
-        results = []
-        for registration in queryset:
-            donor = registration.donor
-            if donor is None:
-                continue
-            results.append(
-                {
-                    "donor_id": donor.id,
-                    "name": donor.name or "",
-                    "phone_number": donor.phone_number or "",
-                    "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
-                }
-            )
+        results = [
+            {
+                "donor_id": row["donor_id"],
+                "name": row["donor__name"] or "",
+                "phone_number": row["donor__phone_number"] or "",
+                "pooja_date": row["pooja_date"].isoformat() if row["pooja_date"] else "",
+            }
+            for row in queryset
+        ]
 
         return Response({"count": len(results), "results": results})
 

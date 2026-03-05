@@ -328,11 +328,21 @@ const POOJA_REPORT_HEADERS = [
   'Temple Donor ID',
   'Name',
   'Phone',
+] as const;
+
+const POOJA_REPORT_HEADERS_WITH_DATE = [
+  'S.no',
+  'Temple Donor ID',
+  'Name',
+  'Phone',
   'Pooja Date',
 ] as const;
 
-type PoojaReportHeader = (typeof POOJA_REPORT_HEADERS)[number];
-type PoojaReportRow = Record<PoojaReportHeader, string | number>;
+type BasePoojaReportHeader = (typeof POOJA_REPORT_HEADERS)[number];
+type PoojaReportHeader = (typeof POOJA_REPORT_HEADERS_WITH_DATE)[number];
+type PoojaReportRow = Record<BasePoojaReportHeader, string | number> & {
+  'Pooja Date'?: string | number;
+};
 type PoojaReportFormat = 'pdf' | 'excel';
 
 const POOJA_REPORT_KEYS = [
@@ -365,6 +375,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: string;
     errorMessage: string;
     poojaOptionName: string;
+    includePoojaDateColumn: boolean;
   }
 > = {
   saturdayNavagraha: {
@@ -375,6 +386,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have registered for the Saturday Navagraha Pooja yet.',
     errorMessage: 'Unable to download the Saturday Navagraha Pooja report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.saturdayNavagraha,
+    includePoojaDateColumn: false,
   },
   pradosha: {
     endpoint: 'pooja/registrations/pradosha-pooja-report/',
@@ -384,6 +396,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have registered for the Pradosha Pooja yet.',
     errorMessage: 'Unable to download the Pradosha Pooja report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.pradosha,
+    includePoojaDateColumn: false,
   },
   tillOil: {
     endpoint: 'pooja/registrations/till-oil-for-lamps-report/',
@@ -393,6 +406,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have registered for the Till Oil for Lamps pooja yet.',
     errorMessage: 'Unable to download the Till Oil for Lamps report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.tillOil,
+    includePoojaDateColumn: false,
   },
   nityaNeivedhyam: {
     endpoint: 'pooja/registrations/nitya-neivedhyam-report/',
@@ -402,6 +416,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have registered for the Nitya Neivedhyam pooja yet.',
     errorMessage: 'Unable to download the Nitya Neivedhyam report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.nityaNeivedhyam,
+    includePoojaDateColumn: false,
   },
   gauSamrakshana: {
     endpoint: 'pooja/registrations/gau-samrakshana-seva-report/',
@@ -411,6 +426,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have registered for the Gau Samrakshana Seva yet.',
     errorMessage: 'Unable to download the Gau Samrakshana report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.gauSamrakshana,
+    includePoojaDateColumn: false,
   },
   postPrasadam: {
     endpoint: 'pooja/registrations/post-prasadam-report/',
@@ -420,6 +436,7 @@ const POOJA_REPORTS: Record<
     emptyMessage: 'No donors have selected Post Prasadam yet.',
     errorMessage: 'Unable to download the Post Prasadam report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.postPrasadam,
+    includePoojaDateColumn: true,
   },
 };
 
@@ -549,6 +566,12 @@ const buildPoojaReportRows = (registrations: PoojaReportEntry[]): PoojaReportRow
     Phone: displayValue(registration.phone_number),
     'Pooja Date': displayValue(registration.pooja_date),
   }));
+
+const getPoojaReportHeaders = (includePoojaDateColumn: boolean): PoojaReportHeader[] =>
+  includePoojaDateColumn ? [...POOJA_REPORT_HEADERS_WITH_DATE] : [...POOJA_REPORT_HEADERS];
+
+const getPoojaPdfColumnWidths = (headers: PoojaReportHeader[]) =>
+  headers.includes('Pooja Date') ? ['auto', 'auto', '*', '*', 'auto'] : ['auto', 'auto', '*', '*'];
 
 const CART_SNAPSHOT_HEADERS: string[] = [
   'S.no',
@@ -938,6 +961,7 @@ const downloadPoojaReportPdf = async (
   rows: PoojaReportRow[],
   filenameBase: string,
   title: string,
+  headers: PoojaReportHeader[],
 ) => {
   if (typeof window === 'undefined') {
     console.error('PDF download is only available in the browser');
@@ -950,13 +974,13 @@ const downloadPoojaReportPdf = async (
   }
 
   const tableBody: TableCell[][] = [
-    POOJA_REPORT_HEADERS.map((header) => ({
+    headers.map((header) => ({
       text: header,
       style: 'tableHeader',
       font: PDF_TAMIL_FONT_NAME,
     })),
     ...rows.map((row) =>
-      POOJA_REPORT_HEADERS.map((key) => {
+      headers.map((key) => {
         const value = row[key];
         return {
           text: value === undefined || value === null || value === '' ? '—' : String(value),
@@ -1042,7 +1066,7 @@ const downloadPoojaReportPdf = async (
       {
         table: {
           headerRows: 1,
-          widths: ['auto', 'auto', '*', '*', 'auto'],
+          widths: getPoojaPdfColumnWidths(headers),
           body: tableBody,
         },
         layout: {
@@ -1718,7 +1742,7 @@ const ReportPage = () => {
           return;
         }
 
-        const headerKeys = [...POOJA_REPORT_HEADERS];
+        const headerKeys = getPoojaReportHeaders(report.includePoojaDateColumn);
         const filenameBase = `${report.filenamePrefix}-${formatFilenameDate(new Date())}`;
 
         if (format === 'excel') {
@@ -1729,7 +1753,7 @@ const ReportPage = () => {
           return;
         }
 
-        await downloadPoojaReportPdf(rows, filenameBase, report.label);
+        await downloadPoojaReportPdf(rows, filenameBase, report.label, headerKeys);
       } catch (error) {
         console.error(`Failed to download ${report.label} report`, error);
         setExportError(error instanceof Error ? error.message : report.errorMessage);

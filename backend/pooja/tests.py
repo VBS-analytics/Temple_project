@@ -88,6 +88,33 @@ class PoojaPostPrasadamReportTests(TestCase):
         self.assertEqual(payload["results"][0]["phone_number"], donor_yes.phone_number)
         self.assertEqual(payload["results"][0]["pooja_date"], "2026-02-17")
 
+    def test_post_prasadam_report_returns_unique_donor_with_latest_pooja_date(self):
+        donor = User.objects.create_user(phone_number="9000000105", name="Duplicate Donor", password="secret")
+
+        PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            start_date=date(2026, 2, 17),
+            post_prasadam=True,
+        )
+        PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=self.pooja_option,
+            start_date=date(2026, 3, 5),
+            post_prasadam=True,
+        )
+
+        response = self.client.get(reverse("pooja-registrations-post-prasadam-report"))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["donor_id"], donor.id)
+        self.assertEqual(payload["results"][0]["name"], donor.name)
+        self.assertEqual(payload["results"][0]["phone_number"], donor.phone_number)
+        self.assertEqual(payload["results"][0]["pooja_date"], "2026-03-05")
+
     def test_post_prasadam_report_is_admin_only(self):
         donor = User.objects.create_user(phone_number="9000000103", name="Donor", password="secret")
         PoojaRegistration.objects.create(
@@ -1944,3 +1971,130 @@ class RecurringMonthlyDueBackfillTests(TestCase):
             registration__isnull=True,
         )
         self.assertEqual(march_due.count(), 1, "March due should be created once registration month begins.")
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class PoojaOptionTotalsMonthFilterTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            phone_number="9000000990",
+            name="Totals Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.donor = User.objects.create_user(
+            phone_number="9000000991",
+            name="Totals Donor",
+            password="secret",
+        )
+        self.other_donor = User.objects.create_user(
+            phone_number="9000000992",
+            name="Totals Donor 2",
+            password="secret",
+        )
+        self.parent = PoojaOption.objects.create(code="SPECIAL", name="Special Pooja", is_group_header=True)
+        self.option = PoojaOption.objects.create(code="GP_NAV", name="Navagraha Pooja", parent=self.parent)
+        self.option_totals_url = reverse("pooja-registrations-option-totals")
+        self.donors_by_option_url = reverse("pooja-registrations-donors-by-option")
+
+    def _create_recurring_plan(
+        self,
+        *,
+        donor: User,
+        amount: Decimal,
+        registered_at: datetime,
+        start_date: date | None,
+    ) -> RecurringPoojaPlan:
+        origin = PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=self.option,
+            start_date=start_date,
+            total_amount=amount,
+        )
+        PoojaRegistration.objects.filter(pk=origin.pk).update(created_at=timezone.make_aware(registered_at))
+        origin.refresh_from_db()
+        return RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=self.option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=start_date,
+            amount=amount,
+            is_active=True,
+            origin_registration=origin,
+        )
+
+    def test_option_totals_and_donor_rows_align_for_selected_month(self):
+        jan_plan_one = self._create_recurring_plan(
+            donor=self.donor,
+            amount=Decimal("100.00"),
+            registered_at=datetime(2026, 1, 5, 10, 0),
+            start_date=None,
+        )
+        self._create_recurring_plan(
+            donor=self.other_donor,
+            amount=Decimal("200.00"),
+            registered_at=datetime(2026, 1, 14, 10, 0),
+            start_date=date(2026, 1, 14),
+        )
+        self._create_recurring_plan(
+            donor=self.donor,
+            amount=Decimal("300.00"),
+            registered_at=datetime(2026, 2, 10, 10, 0),
+            start_date=date(2026, 2, 10),
+        )
+        self._create_recurring_plan(
+            donor=self.donor,
+            amount=Decimal("50.00"),
+            registered_at=datetime(2026, 1, 20, 10, 0),
+            start_date=None,
+        )
+
+        # Non-plan registration rows (including generated dues) must not affect option totals.
+        create_registration_from_plan(jan_plan_one, due_date=date(2026, 2, 5))
+        standalone = PoojaRegistration.objects.create(
+            donor=self.donor,
+            pooja_option=self.option,
+            start_date=date(2026, 1, 25),
+            total_amount=Decimal("999.00"),
+        )
+        PoojaRegistration.objects.filter(pk=standalone.pk).update(created_at=timezone.make_aware(datetime(2026, 1, 25, 10, 0)))
+
+        self.client.force_authenticate(self.admin)
+
+        totals_response = self.client.get(self.option_totals_url, {"month": "2026-01"})
+        self.assertEqual(totals_response.status_code, status.HTTP_200_OK)
+        totals_payload = totals_response.json()
+        navagraha_row = next((row for row in totals_payload if row["option_code"] == "GP_NAV"), None)
+        self.assertIsNotNone(navagraha_row)
+        self.assertEqual(navagraha_row["registration_count"], 3)
+        self.assertEqual(Decimal(navagraha_row["total_amount"]), Decimal("350.00"))
+
+        donors_response = self.client.get(
+            self.donors_by_option_url,
+            {"month": "2026-01", "codes": "GP_NAV"},
+        )
+        self.assertEqual(donors_response.status_code, status.HTTP_200_OK)
+        donors_payload = donors_response.json()
+        self.assertEqual(donors_payload["count"], 3)
+        self.assertEqual(len(donors_payload["results"]), 3)
+        self.assertTrue(all((entry["start_date"] or "").startswith("2026-01") for entry in donors_payload["results"]))
+        self.assertEqual(
+            sum(Decimal(entry["total_amount"]) for entry in donors_payload["results"]),
+            Decimal("350.00"),
+        )
+
+        march_totals_response = self.client.get(self.option_totals_url, {"month": "2026-03"})
+        self.assertEqual(march_totals_response.status_code, status.HTTP_200_OK)
+        march_payload = march_totals_response.json()
+        march_row = next((row for row in march_payload if row["option_code"] == "GP_NAV"), None)
+        self.assertIsNotNone(march_row)
+        self.assertEqual(march_row["registration_count"], 4)
+        self.assertEqual(Decimal(march_row["total_amount"]), Decimal("650.00"))
+
+    def test_option_totals_is_admin_only(self):
+        self.client.force_authenticate(self.donor)
+        response = self.client.get(self.option_totals_url, {"month": "2026-01"})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -414,19 +414,20 @@ class DonationCreateView(APIView):
 
 class ExpenseRecordViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseRecordSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+    permission_classes = (IsAdminRole,)
+    pagination_class = None
 
     def get_queryset(self):
         queryset = ExpenseRecord.objects.all().order_by("-transaction_date", "-id")
-        if self.request.user.role != UserRole.ADMIN:
-            queryset = queryset.filter(created_by=self.request.user)
 
         month_param = self.request.query_params.get("month")
         if month_param:
             try:
                 year, month = map(int, month_param.split("-", 1))
+                if month < 1 or month > 12:
+                    raise ValueError
             except ValueError:
-                pass
+                queryset = queryset.none()
             else:
                 queryset = queryset.filter(transaction_date__year=year, transaction_date__month=month)
 
