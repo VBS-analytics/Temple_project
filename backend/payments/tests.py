@@ -22,7 +22,7 @@ from pooja.models import (
     RecurringPoojaPlan,
 )
 from payments.models import PassbookEntry
-from payments.models import Donation, PaymentRecord, PaymentStatus
+from payments.models import Donation, ExpenseRecord, PaymentRecord, PaymentStatus
 from payments.services import regenerate_donor_passbook
 from payments.views import _donor_passbook_needs_refresh
 
@@ -386,3 +386,72 @@ class PassbookOrderingTests(TestCase):
         self.assertEqual(jan_entries[0].closing_due, Decimal("1000.00"))
         self.assertEqual(jan_entries[1].entry_type, "paid")
         self.assertEqual(jan_entries[1].closing_due, Decimal("0.00"))
+
+
+class ExpenseRecordApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("expense-records-list")
+        self.admin = User.objects.create_user(
+            phone_number="+919100000001",
+            name="Expense Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.donor = User.objects.create_user(
+            phone_number="+919100000002",
+            name="Expense Donor",
+            password="secret",
+        )
+
+    def test_admin_can_create_expense_record(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            self.url,
+            {
+                "transaction_date": "2026-01-15",
+                "category": "Maintenance",
+                "amount": "1250.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = ExpenseRecord.objects.get(pk=response.json()["id"])
+        self.assertEqual(created.created_by_id, self.admin.id)
+        self.assertEqual(created.amount, Decimal("1250.00"))
+
+    def test_non_admin_cannot_list_or_create_expenses(self):
+        self.client.force_authenticate(self.donor)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        create_response = self.client.post(
+            self.url,
+            {
+                "transaction_date": "2026-01-15",
+                "category": "Maintenance",
+                "amount": "1250.00",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_monthly_list_returns_full_unpaginated_payload(self):
+        ExpenseRecord.objects.bulk_create(
+            [
+                ExpenseRecord(
+                    transaction_date=date(2026, 1, 15),
+                    category=f"Category {idx}",
+                    amount=Decimal("10.00"),
+                    created_by=self.admin,
+                )
+                for idx in range(25)
+            ]
+        )
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.url, {"month": "2026-01"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertIsInstance(payload, list)
+        self.assertEqual(len(payload), 25)
