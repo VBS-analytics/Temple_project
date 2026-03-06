@@ -596,6 +596,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         codes = [c.strip() for c in (request.query_params.get("codes") or "").split(",") if c.strip()]
         parent_codes = [c.strip() for c in (request.query_params.get("parent_codes") or "").split(",") if c.strip()]
         match = (request.query_params.get("match") or "").strip()
+        include_pooja_names = (request.query_params.get("include_pooja_names") or "").strip().lower() in {"1", "true", "yes"}
 
         if not codes and not parent_codes and not match:
             return Response({"detail": "Provide ?codes=, ?parent_codes=, or ?match= query params."}, status=400)
@@ -610,6 +611,27 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
 
         plan_rows = self._active_plan_queryset_for_month(request).filter(filter_q)
         registration_count = plan_rows.count()
+
+        donor_pooja_names: dict[int, str] = {}
+        if include_pooja_names:
+            pooja_name_rows = (
+                plan_rows.values("donor_id", "pooja_option__name")
+                .annotate(option_count=Count("id"))
+                .order_by("donor_id", "pooja_option__name")
+            )
+            grouped_names: dict[int, list[str]] = defaultdict(list)
+            for row in pooja_name_rows:
+                donor_id = row["donor_id"]
+                option_name = (row["pooja_option__name"] or "").strip()
+                if donor_id is None or not option_name:
+                    continue
+                option_count = row["option_count"] or 0
+                label = f"{option_name} x{option_count}" if option_count > 1 else option_name
+                grouped_names[donor_id].append(label)
+            donor_pooja_names = {
+                donor_id: ", ".join(names)
+                for donor_id, names in grouped_names.items()
+            }
 
         rows = (
             plan_rows.values("donor_id")
@@ -632,7 +654,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
                     "donor_id": donor_id,
                     "donor_name": row["donor_name"] or "—",
                     "donor_phone": row["donor_phone"] or "—",
-                    "pooja_option_name": "",
+                    "pooja_option_name": donor_pooja_names.get(donor_id, ""),
                     "total_amount": str(row["total_amount"] or "0.00"),
                     "start_date": None,
                     "registration_count": row["donor_registration_count"] or 0,
@@ -1424,7 +1446,7 @@ def _collect_dates_for_canonical(service: TempleCalendarService, canonical: str,
 
 @method_decorator(cache_page(60 * 60), name="dispatch")
 class PoojaDayOptionCalendarView(APIView):
-    permission_classes = (IsAdminRole,)
+    permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request):
         today = timezone.localdate()
@@ -1492,7 +1514,7 @@ class PoojaDayOptionCalendarView(APIView):
 
 @method_decorator(cache_page(60 * 60), name="dispatch")
 class TamilNakshatraCalendarView(APIView):
-    permission_classes = (IsAdminRole,)
+    permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request):
         today = timezone.localdate()
@@ -1527,7 +1549,7 @@ class TamilNakshatraCalendarView(APIView):
 
 
 class PoojaDonorCalendarView(APIView):
-    permission_classes = (IsAdminRole,)
+    permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request):
         today = timezone.localdate()
@@ -1547,8 +1569,11 @@ class PoojaDonorCalendarView(APIView):
             month = 12
 
         debug_mode = request.query_params.get("debug") == "1"
+        is_admin_request = request.user.role == UserRole.ADMIN
+        donor_scope_user_id = None if is_admin_request else request.user.id
         force_refresh = (request.query_params.get("refresh") or "").strip()
-        cache_key = f"pooja_donor_calendar:{year}:{month}"
+        cache_scope = "admin" if is_admin_request else f"donor:{donor_scope_user_id}"
+        cache_key = f"pooja_donor_calendar:{cache_scope}:{year}:{month}"
         cache_enabled = not RUNNING_TESTS and not debug_mode and not settings.DEBUG
         should_bypass_cache = force_refresh not in {"", "0", "false", "False"}
 
@@ -1616,7 +1641,7 @@ class PoojaDonorCalendarView(APIView):
             normalized_name = _normalize_text(pooja_name)
             return bool(normalized_name and normalized_name in normalized_excluded_names)
 
-        queryset = (
+        registration_filters = (
             PoojaRegistration.objects.filter(
                 donor__isnull=False,
                 status__in=(PoojaStatus.PENDING, PoojaStatus.CONFIRMED, PoojaStatus.COMPLETED),
@@ -1626,6 +1651,11 @@ class PoojaDonorCalendarView(APIView):
                 Q(start_date__range=(first_day, last_day))
                 | Q(start_date__isnull=True, created_at__gte=month_start_dt, created_at__lt=month_end_dt)
             )
+        )
+        if donor_scope_user_id is not None:
+            registration_filters = registration_filters.filter(donor_id=donor_scope_user_id)
+        queryset = (
+            registration_filters
             .select_related("donor", "donor__profile", "day_option")
             .only(
                 "id",
@@ -1888,8 +1918,11 @@ class PoojaDonorCalendarView(APIView):
                         }
                     )
 
+        cart_snapshot_filters = PoojaCartSnapshot.objects.all()
+        if donor_scope_user_id is not None:
+            cart_snapshot_filters = cart_snapshot_filters.filter(donor_id=donor_scope_user_id)
         cart_snapshots = (
-            PoojaCartSnapshot.objects.select_related("donor", "donor__profile")
+            cart_snapshot_filters.select_related("donor", "donor__profile")
             .only(
                 "id",
                 "items",
@@ -1942,14 +1975,18 @@ class PoojaDonorCalendarView(APIView):
                             snapshot_option_payload,
                         )
 
-        recurring_plans = (
+        recurring_plan_filters = (
             RecurringPoojaPlan.objects.filter(
                 is_active=True,
                 recurrence_kind=RecurrenceKind.RECURRING,
             )
             .filter(Q(start_date__isnull=True) | Q(start_date__lte=last_day))
             .exclude(pooja_option_id__in=excluded_option_ids)
-            .select_related("donor", "donor__profile", "day_option")
+        )
+        if donor_scope_user_id is not None:
+            recurring_plan_filters = recurring_plan_filters.filter(donor_id=donor_scope_user_id)
+        recurring_plans = (
+            recurring_plan_filters.select_related("donor", "donor__profile", "day_option")
             .only(
                 "id",
                 "start_date",

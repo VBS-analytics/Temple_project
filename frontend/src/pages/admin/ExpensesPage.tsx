@@ -174,12 +174,14 @@ const DonorsByOptionModal = ({
   cardLabel,
   cardIcon,
   codes,
+  showPoojaName,
   month,
   onClose,
 }: {
   cardLabel: string;
   cardIcon: string;
   codes: string[];
+  showPoojaName: boolean;
   month: string;
   onClose: () => void;
 }) => {
@@ -196,6 +198,7 @@ const DonorsByOptionModal = ({
       try {
         const params: Record<string, string> = {};
         if (codes.length) params.codes = codes.join(',');
+        if (showPoojaName) params.include_pooja_names = '1';
         if (month) params.month = month;
         const { data } = await api.get('/pooja/registrations/donors-by-option/', { params });
         const nextRows = Array.isArray(data?.results) ? data.results : [];
@@ -213,7 +216,7 @@ const DonorsByOptionModal = ({
       }
     };
     load();
-  }, [codes.join(','), month]);
+  }, [codes.join(','), showPoojaName, month]);
 
   // Close on Escape
   useEffect(() => {
@@ -237,7 +240,7 @@ const DonorsByOptionModal = ({
       }}
     >
       <div style={{
-        background: '#fff', borderRadius: 20, width: '100%', maxWidth: 560,
+        background: '#fff', borderRadius: 20, width: '100%', maxWidth: showPoojaName ? 760 : 560,
         maxHeight: '80vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 24px 60px rgba(15,23,42,0.22)',
         overflow: 'hidden',
@@ -286,8 +289,8 @@ const DonorsByOptionModal = ({
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: C.surfaceInset, position: 'sticky', top: 0 }}>
-                  {['#', 'Donor', 'Donor ID', 'Amount'].map((h, i) => (
-                    <th key={h} style={{ padding: '9px 16px', textAlign: i === 3 ? 'right' : 'left', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>
+                  {(showPoojaName ? ['#', 'Donor', 'Pooja Name', 'Donor ID', 'Amount'] : ['#', 'Donor', 'Donor ID', 'Amount']).map((h, i, arr) => (
+                    <th key={h} style={{ padding: '9px 16px', textAlign: i === arr.length - 1 ? 'right' : 'left', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
                   ))}
@@ -305,6 +308,13 @@ const DonorsByOptionModal = ({
                         <span style={{ fontFamily: C.fNunito, fontSize: 13, fontWeight: 600, color: C.ink }}>{row.donor_name}</span>
                       </div>
                     </td>
+                    {showPoojaName && (
+                      <td style={{ padding: '10px 16px', fontFamily: C.fNunito, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}`, maxWidth: 260 }}>
+                        <span style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {row.pooja_option_name || '—'}
+                        </span>
+                      </td>
+                    )}
                     <td style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>D{row.donor_id}</td>
                     <td style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>{formatCurrency(Number(row.total_amount))}</td>
                   </tr>
@@ -312,7 +322,7 @@ const DonorsByOptionModal = ({
               </tbody>
               <tfoot>
                 <tr style={{ background: C.primaryGhost }}>
-                  <td colSpan={3} style={{ padding: '10px 16px', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <td colSpan={showPoojaName ? 4 : 3} style={{ padding: '10px 16px', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     Total — {registrationCount} registration{registrationCount !== 1 ? 's' : ''} · {rows.length} donor{rows.length !== 1 ? 's' : ''}
                   </td>
                   <td colSpan={1} style={{ padding: '10px 16px', fontFamily: C.fMono, fontSize: 14, fontWeight: 700, color: C.primary, textAlign: 'right' }}>
@@ -338,7 +348,7 @@ const PoojaSummaryCards = ({
   loading: boolean;
   month: string;
 }) => {
-  const [activeModal, setActiveModal] = useState<{ codes: string[]; label: string; icon: string } | null>(null);
+  const [activeModal, setActiveModal] = useState<{ codes: string[]; label: string; icon: string; showPoojaName: boolean } | null>(null);
 
   // Assign each option-total row to the first matching card to avoid cross-card double counting.
   const cards = useMemo(() => {
@@ -400,7 +410,7 @@ const PoojaSummaryCards = ({
               <button
                 type="button"
                 disabled={card.count === 0}
-                onClick={() => card.count > 0 && setActiveModal({ codes: card.matchCodes, label: card.label, icon: card.icon })}
+                onClick={() => card.count > 0 && setActiveModal({ codes: card.matchCodes, label: card.label, icon: card.icon, showPoojaName: card.label === 'Special Pooja' })}
                 title={card.count > 0 ? `View ${card.count} registrations` : 'No registrations'}
                 style={{
                   fontSize: 11, fontWeight: 700, color: card.count > 0 ? card.accent : C.inkMuted,
@@ -432,6 +442,7 @@ const PoojaSummaryCards = ({
           cardLabel={activeModal.label}
           cardIcon={activeModal.icon}
           codes={activeModal.codes}
+          showPoojaName={activeModal.showPoojaName}
           month={month}
           onClose={() => setActiveModal(null)}
         />

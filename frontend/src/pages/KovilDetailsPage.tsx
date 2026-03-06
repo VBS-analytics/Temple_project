@@ -144,7 +144,7 @@ const CSS_STYLES = `
 
   /* ── PAGE HEADER ── */
   .kp-pg-hdr {
-    padding: 3rem 0 2rem;
+    padding: 1.25rem 0 1.5rem;
     text-align: center;
     border-bottom: 1px solid #fef3c7;
     position: relative;
@@ -167,6 +167,11 @@ const CSS_STYLES = `
   .kp-pg-desc {
     font-size: clamp(.9rem, 1.8vw, 1.05rem);
     color: #475569; max-width: 900px; margin: 0 auto; line-height: 1.75; white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .kp-pg-desc {
+      white-space: normal;
+    }
   }
 
   /* ── TOGGLE — TOP RIGHT OF HEADER ── */
@@ -195,8 +200,8 @@ const CSS_STYLES = `
     display: inline-flex; align-items: center; gap: .5rem;
     min-height: 44px; padding: .45rem 1rem .45rem .45rem;
     border-radius: 999px; cursor: pointer;
-    font-size: .82rem; font-weight: 600; line-height: 1.3;
-    border: 2px solid #fef3c7; background: #fff; color: #334155;
+    font-size: .82rem; font-weight: 700; line-height: 1.3;
+    border: 2px solid #fef3c7; background: #fff; color: #1f2937;
     transition: border-color .2s, background .2s, box-shadow .2s, color .2s;
     white-space: nowrap;
   }
@@ -283,8 +288,8 @@ const CSS_STYLES = `
   .kp-gallery-contain .kp-slide-container img {
     aspect-ratio: auto;
     object-fit: contain;
-    max-height: 480px;
-    height: 480px;
+    max-height: 500px;
+    height: 500px;
     background: #faf5eb;
   }
   .kp-slide-container {
@@ -359,6 +364,10 @@ const CSS_STYLES = `
     transform: scale(1.2);
   }
   @media(max-width: 640px) {
+    .kp-gallery-contain .kp-slide-container img {
+      height: clamp(220px, 70vw, 320px);
+      max-height: 320px;
+    }
     .kp-slide-arrow { width: 34px; height: 34px; }
     .kp-slide-arrow--left { left: .5rem; }
     .kp-slide-arrow--right { right: .5rem; }
@@ -374,6 +383,27 @@ const CSS_STYLES = `
   .kp-sec:last-child { margin-bottom: 0; }
   @media(max-width: 640px) { .kp-sec { padding: 1.25rem 1.1rem; } }
   @media(max-width: 640px) { .kp-temple-hdr { padding: 0.9rem 1.1rem; } }
+
+  /* ── LAKSHMI SPLIT LAYOUT ── */
+  .kp-lakshmi-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+    gap: 1.25rem;
+    align-items: start;
+    margin-bottom: 1.25rem;
+  }
+  .kp-lakshmi-split .kp-sec { margin-bottom: 0; }
+  .kp-lakshmi-gallery .kp-sec-hdr { margin-bottom: 1rem; }
+  .kp-lakshmi-gallery .kp-slideshow { margin: 0; }
+  .kp-lakshmi-gallery {
+    position: sticky;
+    top: 1.25rem;
+    align-self: start;
+  }
+  @media(max-width: 1024px) {
+    .kp-lakshmi-split { grid-template-columns: 1fr; }
+    .kp-lakshmi-gallery { position: static; top: auto; }
+  }
 
   /* section heading */
   .kp-sec-hdr { margin-bottom: 1.4rem; }
@@ -451,6 +481,7 @@ const CSS_STYLES = `
   .kp-tl-title { font-size: 1rem; font-weight: 700; color: #0f172a; margin-bottom: .3rem; }
   .kp-tl-text { font-size: .875rem; color: #334155; line-height: 1.7; }
   .kp-tl-text strong { color: #0f172a; }
+  .kp-timeline .kp-hl { padding: 1.25rem; }
 
   /* ── IMAGE GRID ── */
   .kp-img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; margin-top: 1rem; }
@@ -504,6 +535,50 @@ const CSS_STYLES = `
     transition: background .2s, transform .2s;
   }
   .kp-video-link:hover { background: #b45309; transform: translateY(-1px); }
+  .kp-video-preview {
+    position: relative;
+    display: block;
+    border-radius: .85rem;
+    overflow: hidden;
+    border: 1px solid #fcd34d;
+    box-shadow: 0 3px 12px rgba(0,0,0,.12);
+    text-decoration: none;
+    margin-bottom: .85rem;
+  }
+  .kp-video-preview img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+  }
+  .kp-video-preview-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: rgba(217,119,6,.9);
+    color: #fff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  }
+  .kp-video-preview-label {
+    position: absolute;
+    left: .65rem;
+    bottom: .65rem;
+    background: rgba(15,23,42,.72);
+    color: #fff;
+    font-size: .68rem;
+    font-weight: 600;
+    padding: .25rem .5rem;
+    border-radius: 999px;
+  }
 
   /* ── COMMUNITY IMPACT BANNER ── */
   .kp-community {
@@ -560,7 +635,7 @@ const KovilDetailsPage = () => {
               <EnglishTamilToggle />
             </div>
 
-            <h1 className="kp-pg-title">Sacred <em>Kovils</em></h1>
+            <h1 className="kp-pg-title">Kakkalani <em>Temples</em></h1>
             <p className="kp-pg-desc">
               Four ancient temples that have sheltered the faith, rituals, and stories of
               Kakkalani Agraharam across generations.
@@ -610,74 +685,82 @@ const KovilDetailsPage = () => {
 // ── LAKSHMI NARAYANAR ─────────────────────────────────────────────────────────
 const LakshmiNarayanarContent = () => (
   <section className="kp-temple-sections">
-    {/* Header Banner */}
-    <div className="kp-temple-hdr">
-      <span className="kp-temple-type">Vishnu Temple</span>
-      <h2 className="kp-temple-name">Lakshmi Narayanar Temple</h2>
-      <p className="kp-temple-desc">
-        Located at the west end of Agraharam — the road in front of the gopuram allows villagers
-        to see deeparadhanai (lamp ceremony) from their own doorstep.
-      </p>
-    </div>
-
-    {/* Image Slideshow */}
-
-    {/* Timeline */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">History</span>
-        <h3 className="kp-sec-title">Temple Timeline</h3>
-        <div className="kp-rule" />
+    <div className="kp-lakshmi-split">
+      {/* Timeline */}
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">History</span>
+          <h3 className="kp-sec-title">Temple Timeline</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-timeline">
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2018</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Last Kumbabishekam</div>
+              <div className="kp-tl-text">
+                The last Kumbabishekam was performed in the year <strong>2018</strong>.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2019</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Loss of Traditional Pattachari</div>
+              <div className="kp-tl-text">
+                For ages, <strong>Pattachari</strong> who lived in this village used to take care of pooja.
+                When he expired in the year <strong>2019</strong>, his younger generation left to the city.
+              </div>
+              <div className="kp-hl" style={{ marginTop: ".65rem" }}>
+                <div className="kp-hl-title">Challenge</div>
+                <div className="kp-hl-text">
+                  The temple faced a period without traditional caretakers after the Pattachari's passing.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2022</div>
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Revival Through Community</div>
+              <div className="kp-tl-text">
+                After this group started in <strong>2022</strong>, daily pooja is now being taken care of by the community.
+              </div>
+              <div className="kp-hl" style={{ marginTop: ".65rem" }}>
+                <div className="kp-hl-title">Community Effort</div>
+                <div className="kp-hl-text">
+                  The temple's daily rituals are now maintained through the collective efforts of devoted
+                  members, ensuring the continuation of sacred traditions.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="kp-timeline">
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">2018</div>
-            <div className="kp-tl-line" />
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">Last Kumbabishekam</div>
-            <div className="kp-tl-text">
-              The last Kumbabishekam was performed in the year <strong>2018</strong>.
-            </div>
-          </div>
+
+      {/* Temple Images */}
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Images</h3>
+          <div className="kp-rule" />
         </div>
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">2019</div>
-            <div className="kp-tl-line" />
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">Loss of Traditional Pattachari</div>
-            <div className="kp-tl-text">
-              For ages, <strong>Pattachari</strong> who lived in this village used to take care of pooja.
-              When he expired in the year <strong>2019</strong>, his younger generation left to the city.
-            </div>
-            <div className="kp-hl" style={{ marginTop: ".65rem" }}>
-              <div className="kp-hl-title">Challenge</div>
-              <div className="kp-hl-text">
-                The temple faced a period without traditional caretakers after the Pattachari's passing.
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">2022</div>
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">Revival Through Community</div>
-            <div className="kp-tl-text">
-              After this group started in <strong>2022</strong>, daily pooja is now being taken care of by the community.
-            </div>
-            <div className="kp-hl" style={{ marginTop: ".65rem" }}>
-              <div className="kp-hl-title">Community Effort</div>
-              <div className="kp-hl-text">
-                The temple's daily rituals are now maintained through the collective efforts of devoted
-                members, ensuring the continuation of sacred traditions.
-              </div>
-            </div>
-          </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png",   alt: "Lakshmi Narayanar Temple" },
+              { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-1.png", alt: "Lakshmi Narayanar Temple — View 2" },
+              { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-2.png", alt: "Lakshmi Narayanar Temple — View 3" },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -747,98 +830,104 @@ const LakshmiNarayanarContent = () => (
       </div>
     </div>
 
-    {/* Temple Images */}
-    <div className="kp-gallery-contain">
-      <ImageSlideshow
-        images={[
-          { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png",   alt: "Lakshmi Narayanar Temple" },
-          { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-1.png", alt: "Lakshmi Narayanar Temple — View 2" },
-          { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar-2.png", alt: "Lakshmi Narayanar Temple — View 3" },
-        ]}
-      />
-    </div>
   </section>
 );
 
 // ── AATHANGARAI PILLAYAR ──────────────────────────────────────────────────────
 const AathangaraiContent = () => (
   <section className="kp-temple-sections">
-    {/* Header Banner */}
-    <div className="kp-temple-hdr">
-      <span className="kp-temple-type">Riverside Temple</span>
-      <h2 className="kp-temple-name">Aathangarai Pillayar Koil</h2>
-      <p className="kp-temple-desc">
-        A beautiful Pillayar temple located on the banks of the Kaduvaiyaru river,
-        serving the devotees of Kakkalani village.
-      </p>
-    </div>
-
     {/* Image Slideshow */}
 
-    {/* Timeline */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">History</span>
-        <h3 className="kp-sec-title">Historical Timeline</h3>
-        <div className="kp-rule" />
-      </div>
-      <div className="kp-timeline">
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">1990s</div>
-            <div className="kp-tl-line" />
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">Origins Under Peepal Tree</div>
-            <div className="kp-tl-text">
-              In the 1990s, the Pillayar idol was situated under a Peepal Tree along the riverbank.
-            </div>
-          </div>
+    {/* History + Temple Images */}
+    <div className="kp-lakshmi-split">
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">History</span>
+          <h3 className="kp-sec-title">Historical Timeline</h3>
+          <div className="kp-rule" />
         </div>
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">95–98</div>
-            <div className="kp-tl-line" />
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">Temple Construction</div>
-            <div className="kp-tl-text">
-              Somewhere between 1995 to 1998, <strong>Shri Suppuni Anna</strong> from Pichu Iyer family
-              took initiative to build a small temple for this Pillayar on the banks of Kaduvaiyaru river.
+        <div className="kp-timeline">
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">1990s</div>
+              <div className="kp-tl-line" />
             </div>
-          </div>
-        </div>
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">2010</div>
-            <div className="kp-tl-line" />
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">First Kumbabishekam</div>
-            <div className="kp-tl-text">
-              In the year 2010, Kumbabishekam was done by <strong>Mr. Rajendran</strong>, with help of{" "}
-              <strong>Mr. Sivaraman Kurukkal</strong>.
-            </div>
-          </div>
-        </div>
-        <div className="kp-tl-item">
-          <div className="kp-tl-left">
-            <div className="kp-tl-year">2022</div>
-          </div>
-          <div className="kp-tl-body">
-            <div className="kp-tl-title">Grand Kumbabishekam & Renovation</div>
-            <div className="kp-tl-text">
-              In the year 2022, the next Kumbabishekam was due and the temple structure was due for major repair.
-            </div>
-            <div className="kp-hl" style={{ marginTop: ".65rem" }}>
-              <div className="kp-hl-title">Community Effort</div>
-              <div className="kp-hl-text">
-                This group just started their activity and this temple kumbabishekam was a big project.
-                Same was conducted in grand manner with support of all donors in this group.{" "}
-                <strong>Naga Bhagwan</strong> was also installed near this temple at the river bank.
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Origins Under Peepal Tree</div>
+              <div className="kp-tl-text">
+                In the 1990s, the Pillayar idol was situated under a Peepal Tree along the riverbank.
               </div>
             </div>
           </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">95–98</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Temple Construction</div>
+              <div className="kp-tl-text">
+                Somewhere between 1995 to 1998, <strong>Shri Suppuni Anna</strong> from Pichu Iyer family
+                took initiative to build a small temple for this Pillayar on the banks of Kaduvaiyaru river.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2010</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">First Kumbabishekam</div>
+              <div className="kp-tl-text">
+                In the year 2010, Kumbabishekam was done by <strong>Mr. Rajendran</strong>, with help of{" "}
+                <strong>Mr. Sivaraman Kurukkal</strong>.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2022</div>
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Grand Kumbabishekam & Renovation</div>
+              <div className="kp-tl-text">
+                In the year 2022, the next Kumbabishekam was due and the temple structure was due for major repair.
+              </div>
+              <div className="kp-hl" style={{ marginTop: ".65rem" }}>
+                <div className="kp-hl-title">Community Effort</div>
+                <div className="kp-hl-text">
+                  This group just started their activity and this temple kumbabishekam was a big project.
+                  Same was conducted in grand manner with support of all donors in this group.{" "}
+                  <strong>Naga Bhagwan</strong> was also installed near this temple at the river bank.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Images</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              {
+                src: "/images/kovi/pillayar/pillayar-hd.jpg",
+                alt: "Aathangarai Pillayar Koil",
+                caption: "Aathangarai Pillayar Koil — Main temple view",
+              },
+              {
+                src: "/images/kovi/pillayar/pillayar5.png",
+                alt: "Pillayar Koil — View 2",
+                caption: "Aathangarai Pillayar Koil — Side approach view",
+              },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -877,34 +966,56 @@ const AathangaraiContent = () => (
       </div>
     </div>
 
-    {/* Infrastructure Images */}
-    <div className="kp-gallery-contain">
-      <ImageSlideshow
-        images={[
-          { src: "/images/kovi/pillayar/pillayar-hd.jpg",      alt: "Aathangarai Pillayar Koil" },
-          { src: "/images/kovi/pillayar/pillayar5.png",         alt: "Pillayar Koil — View 2" },
-          { src: "/images/kovi/pillayar/before-project-1.png",  alt: "Before Bridge Project — 1" },
-          { src: "/images/kovi/pillayar/before-project-2.png",  alt: "Before Bridge Project — 2" },
-          { src: "/images/kovi/pillayar/after-project-1.png",   alt: "After Bridge Project — 1" },
-          { src: "/images/kovi/pillayar/after-project-2.png",   alt: "After Bridge Project — 2" },
-        ]}
-      />
-    </div>
-
     {/* Before & After */}
     <div className="kp-sec">
       <div className="kp-sec-hdr">
         <span className="kp-sec-eyebrow">Renovation</span>
-        <h3 className="kp-sec-title">Before & After Kumbabishekam</h3>
+        <h3 className="kp-sec-title">Before/After Kumbabishekam & Projects</h3>
         <div className="kp-rule" />
       </div>
       <div className="kp-gallery-contain">
         <ImageSlideshow
           images={[
-            { src: "/images/kovi/pillayar/before-kumbabishekam1.png", alt: "Before Kumbabishekam — 1" },
-            { src: "/images/kovi/pillayar/before-kumbabishekam2.png", alt: "Before Kumbabishekam — 2" },
-            { src: "/images/kovi/pillayar/after-kumbabishekam1.png",  alt: "After Kumbabishekam — 1" },
-            { src: "/images/kovi/pillayar/after-kumbabishekam2.png",  alt: "After Kumbabishekam — 2" },
+            {
+              src: "/images/kovi/pillayar/before-kumbabishekam1.png",
+              alt: "Before Kumbabishekam — 1",
+              caption: "Before Kumbabishekam — Temple structure condition",
+            },
+            {
+              src: "/images/kovi/pillayar/before-kumbabishekam2.png",
+              alt: "Before Kumbabishekam — 2",
+              caption: "Before Kumbabishekam — Old temple appearance",
+            },
+            {
+              src: "/images/kovi/pillayar/after-kumbabishekam1.png",
+              alt: "After Kumbabishekam — 1",
+              caption: "After Kumbabishekam — Renovated temple view",
+            },
+            {
+              src: "/images/kovi/pillayar/after-kumbabishekam2.png",
+              alt: "After Kumbabishekam — 2",
+              caption: "After Kumbabishekam — Restored sacred premises",
+            },
+            {
+              src: "/images/kovi/pillayar/before-project-1.png",
+              alt: "Before Bridge Project — 1",
+              caption: "Old shutter gate access — before bridge construction",
+            },
+            {
+              src: "/images/kovi/pillayar/before-project-2.png",
+              alt: "Before Bridge Project — 2",
+              caption: "Unsafe canal crossing — before bridge project",
+            },
+            {
+              src: "/images/kovi/pillayar/after-project-1.png",
+              alt: "After Bridge Project — 1",
+              caption: "After project — permanent galvanized bridge installed",
+            },
+            {
+              src: "/images/kovi/pillayar/after-project-2.png",
+              alt: "After Bridge Project — 2",
+              caption: "After project — safe access to river and temple",
+            },
           ]}
         />
       </div>
@@ -924,41 +1035,52 @@ const AathangaraiContent = () => (
 // ── GNANAMBAL SAMEDHA KALAHASTEESWARAR ───────────────────────────────────────
 const GnanambalContent = () => (
   <section className="kp-temple-sections">
-    {/* Header Banner */}
-    <div className="kp-temple-hdr">
-      <span className="kp-temple-type">Ancient Heritage Temple · 400+ Years Old</span>
-      <h2 className="kp-temple-name">Gnanambal Samedha Kalahasteeswarar Koil</h2>
-      <p className="kp-temple-desc">
-        Located at the Eastern end of Agraharam, on the way to Thevur via Retta madagadi.
-        One of 48 Shiva temples built by the Chozha Kings.
-      </p>
-    </div>
-
     {/* Image Slideshow */}
 
-    {/* Heritage */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Living Heritage</span>
-        <h3 className="kp-sec-title">Temple Heritage & History</h3>
-        <div className="kp-rule" />
-      </div>
-      <div className="kp-hl">
-        <div className="kp-hl-title">5th Generation Caretakers</div>
-        <div className="kp-hl-text">
-          Pooja activities are currently carried out by{" "}
-          <strong>Shri Manikandan Kurukkal (alias Sridhar)</strong>, who is from the 5th generation
-          in his family to take care of poojas here — placing this temple at{" "}
-          <strong>400+ years old</strong>.
+    {/* Living Heritage + Temple Images */}
+    <div className="kp-lakshmi-split">
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Living Heritage</span>
+          <h3 className="kp-sec-title">Temple Heritage & History</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-hl">
+          <div className="kp-hl-title">5th Generation Caretakers</div>
+          <div className="kp-hl-text">
+            Pooja activities are currently carried out by{" "}
+            <strong>Shri Manikandan Kurukkal (alias Sridhar)</strong>, who is from the 5th generation
+            in his family to take care of poojas here — placing this temple at{" "}
+            <strong>400+ years old</strong>.
+          </div>
+        </div>
+        <div className="kp-hl" style={{ marginTop: ".75rem" }}>
+          <div className="kp-hl-title">One of 48 Chozha Shiva Temples</div>
+          <div className="kp-hl-text">
+            This temple is one among <strong>48 Shiva temples</strong> built by the Chozha King.
+            Shri Manikandan Kurukkal conducted Kumbabishekam at Thiruvarur Thyagaraja Swamy temple.
+            Post kumbabishekam of Thiruvarur temple in mandala period of 48 days, every day kumbabishekam
+            to each of these 48 Shiva temples were conducted. This temple at our village is one among them.
+          </div>
         </div>
       </div>
-      <div className="kp-hl" style={{ marginTop: ".75rem" }}>
-        <div className="kp-hl-title">One of 48 Chozha Shiva Temples</div>
-        <div className="kp-hl-text">
-          This temple is one among <strong>48 Shiva temples</strong> built by the Chozha King.
-          Shri Manikandan Kurukkal conducted Kumbabishekam at Thiruvarur Thyagaraja Swamy temple.
-          Post kumbabishekam of Thiruvarur temple in mandala period of 48 days, every day kumbabishekam
-          to each of these 48 Shiva temples were conducted. This temple at our village is one among them.
+
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Images</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar Koil" },
+              { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-1.png",  alt: "Kalahasteeswarar Koil — View 2" },
+              { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-2.png",  alt: "Kalahasteeswarar Koil — View 3" },
+              { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-3.png",  alt: "Kalahasteeswarar Koil — View 4" },
+              { src: "/images/kovi/kalahasteeswarar/murugan-hd.png",          alt: "Lord Murugan Sannidhi" },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -1117,19 +1239,6 @@ const GnanambalContent = () => (
       </div>
     </div>
 
-    {/* Temple Images */}
-    <div className="kp-gallery-contain">
-      <ImageSlideshow
-        images={[
-          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar Koil" },
-          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-1.png",  alt: "Kalahasteeswarar Koil — View 2" },
-          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-2.png",  alt: "Kalahasteeswarar Koil — View 3" },
-          { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-3.png",  alt: "Kalahasteeswarar Koil — View 4" },
-          { src: "/images/kovi/kalahasteeswarar/murugan-hd.png",          alt: "Lord Murugan Sannidhi" },
-        ]}
-      />
-    </div>
-
     {/* Sacred Story */}
     <div className="kp-sec">
       <div className="kp-sec-hdr">
@@ -1137,54 +1246,85 @@ const GnanambalContent = () => (
         <h3 className="kp-sec-title">How Kakkalani Got Its Name</h3>
         <div className="kp-rule" />
       </div>
-      <div className="kp-sacred">
-        <div className="kp-sacred-title">The Divine Worship</div>
-        <div className="kp-sacred-text">
-          As advised by devas, the negatively afflicted (dosham petra) Rahu and Ketu worshiped Lord Shiva
-          at Srikalahasti and got salvation. Devas who worshiped Lord Shiva obtained nectar and wisdom, and
-          told Rahu and Ketu that if they worship Lord Shiva they would be granted the status of planets
-          and placed alongside the other seven planets to form Navagrahas.
+      <div className="kp-timeline">
+        <div className="kp-tl-item">
+          <div className="kp-tl-left">
+            <div className="kp-tl-year">01</div>
+            <div className="kp-tl-line" />
+          </div>
+          <div className="kp-tl-body">
+            <div className="kp-tl-title">The Divine Worship</div>
+            <div className="kp-tl-text">
+              As advised by devas, the negatively afflicted (dosham petra) Rahu and Ketu worshiped Lord Shiva
+              at Srikalahasti and got salvation. Devas who worshiped Lord Shiva obtained nectar and wisdom, and
+              told Rahu and Ketu that if they worship Lord Shiva they would be granted the status of planets
+              and placed alongside the other seven planets to form Navagrahas.
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="kp-sacred">
-        <div className="kp-sacred-title">Temple Significance</div>
-        <div className="kp-sacred-text">
-          As Rahu, Ketu and Sanishwara Bhagavan worshiped Lord Shiva in our village, Lord Shiva and Goddess
-          Parvati were sacredly named as{" "}
-          <strong>SriGnanambika Sameda SriKalahastheeswarar</strong> who is bestowing graces. Inside
-          prakaram, Sri Visalakshi Vishvanathar temple is also there.
+        <div className="kp-tl-item">
+          <div className="kp-tl-left">
+            <div className="kp-tl-year">02</div>
+            <div className="kp-tl-line" />
+          </div>
+          <div className="kp-tl-body">
+            <div className="kp-tl-title">Temple Significance</div>
+            <div className="kp-tl-text">
+              As Rahu, Ketu and Sanishwara Bhagavan worshiped Lord Shiva in our village, Lord Shiva and Goddess
+              Parvati were sacredly named as{" "}
+              <strong>SriGnanambika Sameda SriKalahastheeswarar</strong> who is bestowing graces. Inside
+              prakaram, Sri Visalakshi Vishvanathar temple is also there.
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="kp-sacred">
-        <div className="kp-sacred-title">The Divine Intervention</div>
-        <div className="kp-sacred-text">
-          While Rahu, Ketu and Sanishwara Bhagavan were worshiping Lord Shiva, Lord Shiva appeared before
-          them and told them to perform puja with Gangai water for redemption of sins and also free this
-          village from shortage of water.
+        <div className="kp-tl-item">
+          <div className="kp-tl-left">
+            <div className="kp-tl-year">03</div>
+            <div className="kp-tl-line" />
+          </div>
+          <div className="kp-tl-body">
+            <div className="kp-tl-title">The Divine Intervention</div>
+            <div className="kp-tl-text">
+              While Rahu, Ketu and Sanishwara Bhagavan were worshiping Lord Shiva, Lord Shiva appeared before
+              them and told them to perform puja with Gangai water for redemption of sins and also free this
+              village from shortage of water.
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="kp-sacred">
-        <div className="kp-sacred-title">Mazhai Mariamman's Help</div>
-        <div className="kp-sacred-text">
-          Even though there were lot of hurdles to bring Gangai water, Lord Surya with the help of our
-          village Goddess Mariamman Ambal brought Ganges water through the sky and poured Ganges water
-          into a well (Kenni) dug inside the temple and then pujas were performed.
+        <div className="kp-tl-item">
+          <div className="kp-tl-left">
+            <div className="kp-tl-year">04</div>
+            <div className="kp-tl-line" />
+          </div>
+          <div className="kp-tl-body">
+            <div className="kp-tl-title">Mazhai Mariamman's Help</div>
+            <div className="kp-tl-text">
+              Even though there were lot of hurdles to bring Gangai water, Lord Surya with the help of our
+              village Goddess Mariamman Ambal brought Ganges water through the sky and poured Ganges water
+              into a well (Kenni) dug inside the temple and then pujas were performed.
+            </div>
+          </div>
         </div>
-      </div>
-      <div
-        className="kp-hl"
-        style={{ borderColor: "#d97706", borderWidth: "2px", background: "linear-gradient(to right,#fffbeb,#fff7e6)", marginTop: ".75rem" }}
-      >
-        <div className="kp-hl-title" style={{ color: "#92400e", fontSize: "1rem" }}>
-          Origin of the Name "Kakkalani"
-        </div>
-        <div className="kp-hl-text">
-          As Gangai water was brought and filled into the well, this village was named as{" "}
-          <strong>Gangaikenni</strong> which over a period of time changed to <strong>Kakkazhani</strong>.
-        </div>
-        <div className="kp-hl-text" style={{ marginTop: ".5rem" }}>
-          As our village Goddess Sri Mariamman Ambal helped Lord Surya in bringing Ganges water, she is
-          named as <strong>Mazhai Mariamman</strong>, the deity of fertility and rain, guardian against evil energies.
+        <div className="kp-tl-item">
+          <div className="kp-tl-left">
+            <div className="kp-tl-year">05</div>
+          </div>
+          <div className="kp-tl-body">
+            <div className="kp-tl-title">Origin of the Name "Kakkalani"</div>
+            <div
+              className="kp-hl"
+              style={{ borderColor: "#d97706", borderWidth: "2px", background: "linear-gradient(to right,#fffbeb,#fff7e6)" }}
+            >
+              <div className="kp-hl-text">
+                As Gangai water was brought and filled into the well, this village was named as{" "}
+                <strong>Gangaikenni</strong> which over a period of time changed to <strong>Kakkazhani</strong>.
+              </div>
+              <div className="kp-hl-text" style={{ marginTop: ".5rem" }}>
+                As our village Goddess Sri Mariamman Ambal helped Lord Surya in bringing Ganges water, she is
+                named as <strong>Mazhai Mariamman</strong>, the deity of fertility and rain, guardian against evil energies.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1194,73 +1334,94 @@ const GnanambalContent = () => (
 // ── MANGALA AZHAGAR AYYANAR KOIL ──────────────────────────────────────────────
 const AyyanarContent = () => (
   <section className="kp-temple-sections">
-    {/* Header Banner */}
-    <div className="kp-temple-hdr">
-      <span className="kp-temple-type">Village Guardian Deity</span>
-      <h2 className="kp-temple-name">Mangala Azhagar Ayyanar Koil</h2>
-      <p className="kp-temple-desc">
-        Beautifully situated opposite to Gnanambal Samedha Kalahasteeswarar temple,
-        surrounded by beautiful trees and a serene pond.
-      </p>
-    </div>
-
     {/* Image Slideshow */}
 
-    {/* Location */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Location</span>
-        <h3 className="kp-sec-title">Temple Location & Surroundings</h3>
-        <div className="kp-rule" />
-      </div>
-      <div className="kp-deity-row">
-        <div className="kp-deity-dot" />
-        <div>
-          <div className="kp-deity-name">Natural Setting</div>
-          <div className="kp-deity-desc">
-            The temple is surrounded by <strong>beautiful trees</strong>, creating a serene and natural
-            atmosphere for worship.
+    {/* Location + Temple Images */}
+    <div className="kp-lakshmi-split">
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Location</span>
+          <h3 className="kp-sec-title">Temple Location & Surroundings</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-deity-row">
+          <div className="kp-deity-dot" />
+          <div>
+            <div className="kp-deity-name">Natural Setting</div>
+            <div className="kp-deity-desc">
+              The temple is surrounded by <strong>beautiful trees</strong>, creating a serene and natural
+              atmosphere for worship.
+            </div>
           </div>
         </div>
-      </div>
-      <div className="kp-deity-row">
-        <div className="kp-deity-dot" />
-        <div>
-          <div className="kp-deity-name">Water Tank / Pond</div>
-          <div className="kp-deity-desc">
-            When you go towards the temple, on your <strong>right</strong> you can see the{" "}
-            <strong>water tank / pond</strong>. This small pond is located in front of the temple.
+        <div className="kp-deity-row">
+          <div className="kp-deity-dot" />
+          <div>
+            <div className="kp-deity-name">Water Tank / Pond</div>
+            <div className="kp-deity-desc">
+              When you go towards the temple, on your <strong>right</strong> you can see the{" "}
+              <strong>water tank / pond</strong>. This small pond is located in front of the temple.
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    {/* Video */}
-    <div className="kp-sec">
-      <div className="kp-sec-hdr">
-        <span className="kp-sec-eyebrow">Video Documentation</span>
-        <h3 className="kp-sec-title">Detailed Temple Video</h3>
-        <div className="kp-rule" />
-      </div>
-      <div className="kp-hl">
-        <div className="kp-hl-title">JK33 Channel — Kakkalani Village Member</div>
-        <div className="kp-hl-text">
-          To see a live video, created by one of the <strong>Kakkalani village member</strong>, part of{" "}
-          <strong>JK33 channel</strong>. He has explained beautifully about this temple, which he says
-          is <strong>kuladeivam</strong> (family deity).
+        <div className="kp-sec-hdr" style={{ marginTop: "1.25rem", marginBottom: ".95rem" }}>
+          <span className="kp-sec-eyebrow">Video Documentation</span>
+          <h3 className="kp-sec-title">Detailed Temple Video</h3>
+          <div className="kp-rule" />
         </div>
-        <div style={{ marginTop: "1rem" }}>
+        <div className="kp-hl">
+          <div className="kp-hl-title">JK33 Channel — Kakkalani Village Member</div>
           <a
             href="https://youtu.be/p1KJxF3cvzg"
             target="_blank"
             rel="noopener noreferrer"
-            className="kp-video-link"
+            className="kp-video-preview"
+            aria-label="Watch Ayyanar temple video on YouTube"
           >
-            Watch Temple Video
+            <img
+              src="https://img.youtube.com/vi/p1KJxF3cvzg/hqdefault.jpg"
+              alt="JK33 Channel temple video thumbnail"
+              loading="lazy"
+            />
+            <span className="kp-video-preview-play">▶</span>
+            <span className="kp-video-preview-label">JK33 Channel Preview</span>
           </a>
+          <div className="kp-hl-text">
+            To see a live video, created by one of the <strong>Kakkalani village member</strong>, part of{" "}
+            <strong>JK33 channel</strong>. He has explained beautifully about this temple, which he says
+            is <strong>kuladeivam</strong> (family deity).
+          </div>
+          <div style={{ marginTop: "1rem" }}>
+            <a
+              href="https://youtu.be/p1KJxF3cvzg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="kp-video-link"
+            >
+              Watch Temple Video
+            </a>
+          </div>
+          <div className="kp-hl-text" style={{ marginTop: ".65rem", fontSize: ".8rem", color: "#78716c" }}>
+            Thanks to his effort & sharing the video documentation of this sacred temple.
+          </div>
         </div>
-        <div className="kp-hl-text" style={{ marginTop: ".65rem", fontSize: ".8rem", color: "#78716c" }}>
-          Thanks to his effort & sharing the video documentation of this sacred temple.
+      </div>
+
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Images</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              { src: "/images/kovi/ayyanar/ayyanar-hd.jpg",         alt: "Ayyanar Koil — View 3" },
+              { src: "/images/kovi/ayyanar/ayyanar-1.png",          alt: "Mangala Azhagar Ayyanar Koil" },
+              { src: "/images/kovi/ayyanar/ayyanar-2.png",          alt: "Ayyanar Koil — View 2" },              
+              { src: "/images/kovi/ayyanar/ayyanar-kovi-river.png", alt: "Ayyanar Koil — River View" },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -1299,16 +1460,6 @@ const AyyanarContent = () => (
           </div>
         </div>
       </div>
-    </div>
-
-    {/* Ayyanar Koil Images */}
-    <div className="kp-gallery-contain">
-      <ImageSlideshow images={[
-        { src: "/images/kovi/ayyanar/ayyanar-1.png",         alt: "Mangala Azhagar Ayyanar Koil" },
-        { src: "/images/kovi/ayyanar/ayyanar-2.png",         alt: "Ayyanar Koil — View 2" },
-        { src: "/images/kovi/ayyanar/ayyanar-hd.jpg",        alt: "Ayyanar Koil — View 3" },
-        { src: "/images/kovi/ayyanar/ayyanar-kovi-river.png", alt: "Ayyanar Koil — River View" },
-      ]} />
     </div>
 
     {/* Contact */}

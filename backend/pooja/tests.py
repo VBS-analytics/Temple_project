@@ -493,6 +493,23 @@ class PoojaDayOptionCalendarViewTests(TestCase):
         self.assertIn(option_sun.code, sunday_codes)
         self.assertTrue(any(option["code"] == option_prm.code for option in mapping["2025-01-25"]))
 
+    @patch("pooja.views.get_calendar_service")
+    def test_calendar_view_allows_authenticated_donor(self, mock_service_factory):
+        mock_service_factory.return_value = self.DummyCalendarService()
+        donor = User.objects.create_user(
+            phone_number="9000000006",
+            name="Calendar Donor",
+            password="secret",
+        )
+        donor_client = APIClient()
+        donor_client.force_authenticate(user=donor)
+
+        response = donor_client.get(reverse("pooja-calendar-day-options"), {"year": "2025", "month": "1"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["year"], 2025)
+        self.assertEqual(payload["month"], 1)
+
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
 class PoojaDonorCalendarViewTests(TestCase):
@@ -568,6 +585,42 @@ class PoojaDonorCalendarViewTests(TestCase):
         self.assertEqual(january_eleventh["donors"][0]["phone_number"], "9000000013")
         self.assertEqual(january_eleventh["donor_names"], "Other Donor")
         self.assertEqual(january_eleventh["donor_phones"], "9000000013")
+
+    def test_donor_scope_returns_only_authenticated_donor_rows(self):
+        donor_self = User.objects.create_user(
+            phone_number="9000000014",
+            name="Self Donor",
+            password="secret",
+        )
+        donor_other = User.objects.create_user(
+            phone_number="9000000015",
+            name="Other Donor",
+            password="secret",
+        )
+        self._create_registration(
+            donor_self,
+            timezone.make_aware(datetime(2025, 1, 10, 9, 0)),
+            start_date_value=date(2025, 1, 10),
+        )
+        self._create_registration(
+            donor_other,
+            timezone.make_aware(datetime(2025, 1, 10, 12, 0)),
+            start_date_value=date(2025, 1, 10),
+        )
+        donor_client = APIClient()
+        donor_client.force_authenticate(user=donor_self)
+
+        response = donor_client.get(
+            reverse("pooja-calendar-donor-registrations"),
+            {"year": "2025", "month": "1", "refresh": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        january_tenth = next(entry for entry in payload["dates"] if entry["date"] == "2025-01-10")
+
+        donor_names = [donor["name"] for donor in january_tenth["donors"]]
+        self.assertIn("Self Donor", donor_names)
+        self.assertNotIn("Other Donor", donor_names)
 
     def test_registration_day_option_is_exposed(self):
         donor = User.objects.create_user(
@@ -2140,6 +2193,20 @@ class PoojaOptionTotalsMonthFilterTests(TestCase):
         self.assertEqual(
             sum(Decimal(entry["total_amount"]) for entry in donors_payload["results"]),
             Decimal("350.00"),
+        )
+        self.assertTrue(all(entry["pooja_option_name"] == "" for entry in donors_payload["results"]))
+
+        donors_with_names_response = self.client.get(
+            self.donors_by_option_url,
+            {"month": "2026-01", "codes": "GP_NAV", "include_pooja_names": "1"},
+        )
+        self.assertEqual(donors_with_names_response.status_code, status.HTTP_200_OK)
+        donors_with_names_payload = donors_with_names_response.json()
+        self.assertTrue(
+            all(
+                "Navagraha Pooja" in (entry["pooja_option_name"] or "")
+                for entry in donors_with_names_payload["results"]
+            )
         )
 
         march_totals_response = self.client.get(self.option_totals_url, {"month": "2026-03"})

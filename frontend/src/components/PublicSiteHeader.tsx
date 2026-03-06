@@ -110,8 +110,8 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     variant === 'overlay'
       ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
       : variant === 'amber'
-      ? 'text-xs font-semibold uppercase tracking-wide text-[#b45309] transition hover:text-[#92400e]'
-      : 'text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:text-[#1976D2]';
+      ? 'text-xs font-semibold uppercase tracking-wide text-black transition hover:text-[#92400e]'
+      : 'text-xs font-semibold uppercase tracking-wide text-black transition hover:text-[#1976D2]';
   const patronButtonClass =
     variant === 'overlay'
       ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
@@ -233,14 +233,12 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                 </Link>
               );
             })}
-            <a
-              href="/donation"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/donation"
               className={donateButtonClass}
             >
               Donate Now
-            </a>
+            </Link>
             <button
               type="button"
               onClick={handlePatronContactClick}
@@ -352,22 +350,20 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                 })}
               </ul>
               <div className="mt-8 space-y-3">
-                <a
-                  href="/donation"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  to="/donation"
                   onClick={closeMobileMenu}
                   className={clsx(
                     "block w-full text-center text-sm font-semibold transition",
                     variant === 'amber'
-                      ? "py-2 text-[#b45309] hover:text-[#92400e]"
+                      ? "py-2 text-black hover:text-[#92400e]"
                       : variant === 'overlay'
                       ? "py-2 text-white hover:text-white/80"
-                      : "py-2 text-[#1565C0] hover:text-[#1976D2]"
+                      : "py-2 text-black hover:text-[#1976D2]"
                   )}
                 >
                   Donate Now
-                </a>
+                </Link>
                 <button
                   type="button"
                   onClick={() => {
