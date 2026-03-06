@@ -15,6 +15,7 @@ import DonorDetailsPage from "../pages/admin/DonorDetailsPage";
 import ExpensesPage from "../pages/admin/ExpensesPage";
 import PoojaDetailsPage from "../pages/admin/PoojaDetailsPage";
 import PoojaPauseCancelPage from "../pages/admin/PoojaPauseCancelPage";
+import DonorPoojaDetails from "../pages/admin/DonorPoojaDetails";
 import LandingPage from "../pages/LandingPage";
 import About from "../pages/About";
 import AboutKakkalaniVillage from "../pages/AboutKakkalaniVillage";
@@ -91,6 +92,7 @@ const App = () => (
         <Route path="/profile/family-tree" element={<FamilyTreePage />} />
         <Route path="/profile/cow-samrakshana-seva" element={<CowSamrakshanaSeva />} />
         <Route path="/profile/pooja-seva" element={<PoojaSeva />} />
+        <Route path="/profile/ubhayam-report" element={<PoojaDetailsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>
@@ -111,10 +113,8 @@ const App = () => (
         />
         <Route path="/reports" element={<ReportPage />} />
         <Route path="/admin/expenses" element={<ExpensesPage />} />
-        <Route
-          path="/admin/donor-pooja-registrations"
-          element={<Navigate to="/admin/donors" replace />}
-        />
+        <Route path="/admin/donor-pooja-details" element={<DonorPoojaDetails />} />
+        <Route path="/admin/donor-pooja-registrations" element={<DonorPoojaDetails />} />
       </Route>
     </Route>
     <Route path="/about" element={<About />} />

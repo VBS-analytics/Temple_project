@@ -67,9 +67,7 @@ const WhyVisitNativeVillage = () => (
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 012.828 2.828" />
                   </svg>
                   <span className="break-all">
-                    <span className="font-semibold text-slate-700">Audio reference:</span>{" "}
-                    <span className="font-mono">AUD-20240518-WA0003.ogx</span>
-                  </span>
+                    <span className="font-semibold text-slate-700">Audio Reference</span>{" "}                  </span>
                 </p>
                 <audio controls className="w-full" style={{ height: "36px" }}>
                   <source src="/audio/AUD-20240518-WA0003.ogx" type="audio/ogg" />

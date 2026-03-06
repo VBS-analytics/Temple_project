@@ -106,6 +106,11 @@ const AppLayout = () => {
       show: Boolean(user && isAdmin(user.role)),
     },
     {
+      to: "/admin/donor-pooja-details",
+      label: "Donor Pooja Details",
+      show: Boolean(user && isAdmin(user.role)),
+    },
+    {
       to: "/reports",
       label: "Reports",
       show: Boolean(user && isAdmin(user.role)),
@@ -143,6 +148,11 @@ const AppLayout = () => {
       to: "/profile/pooja-seva",
       label: "Pooja Seva",
       show: Boolean(user),
+    },
+    {
+      to: "/profile/ubhayam-report",
+      label: "Ubhayam Report",
+      show: Boolean(user && !isAdmin(user.role)),
     },
     { to: "/pooja/register", label: "Pooja Registration", show: !isAdminUser },
     {
