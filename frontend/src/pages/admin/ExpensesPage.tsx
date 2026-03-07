@@ -98,7 +98,15 @@ const POOJA_CARD_CONFIG: Array<{
   },
 ];
 type PoojaCardSummary = (typeof POOJA_CARD_CONFIG)[number] & { total: number; count: number; matchCodes: string[] };
-type StatementRow = PoojaCardSummary & { donorAmountReceived: number; difference: number };
+type StatementRow = {
+  key: string;
+  label: string;
+  total: number;
+  donorAmountReceived: number | null;
+  difference: number | null;
+  amountPaid: number | null;
+  dateLabel?: string;
+};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 const buildMonthOptions = (): MonthOption[] => {
@@ -513,14 +521,23 @@ const StatementTable = ({
     <div style={{ padding: '14px 20px', background: C.primaryGhost, borderBottom: `1.5px solid ${C.border}` }}>
       <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>Expense Statement</span>
     </div>
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+      <colgroup>
+        <col style={{ width: '6%' }} />
+        <col style={{ width: '12%' }} />
+        <col style={{ width: '22%' }} />
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '15%' }} />
+      </colgroup>
       <thead>
         <tr style={{ background: C.surfaceInset }}>
-          {['S.No', 'Date', 'Pooja Name', 'Pooja Amount Received', 'Donor Amount Received', 'Difference'].map((h, i) => (
+          {['S.No', 'Date', 'Pooja Name', 'Pooja Amount Received', 'Donor Amount Received', 'Difference', 'Amount Paid'].map((h, i) => (
             <th
               key={h}
               style={{
-                padding: '10px 16px',
+                padding: '9px 10px',
                 textAlign: i >= 3 ? 'right' : 'left',
                 fontFamily: C.fNunito,
                 fontSize: 11,
@@ -541,21 +558,32 @@ const StatementTable = ({
         {loading ? (
           <tr>
             <td
-              colSpan={6}
-              style={{ padding: '22px 16px', textAlign: 'center', fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}
+              colSpan={7}
+              style={{ padding: '20px 10px', textAlign: 'center', fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}
             >
               Loading statement rows...
             </td>
           </tr>
         ) : (
           rows.map((row, index) => (
-            <tr key={row.label} style={{ background: index % 2 === 0 ? C.surface : '#F8FAFC' }}>
-              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>{index + 1}</td>
-              <td style={{ padding: '12px 16px', fontFamily: C.fNunito, fontSize: 13, color: C.inkMid, borderBottom: `1px solid ${C.surfaceInset}` }}>{viewingMonthLabel}</td>
-              <td style={{ padding: '12px 16px', fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, borderBottom: `1px solid ${C.surfaceInset}` }}>{row.label}</td>
-              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(row.total)}</td>
-              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(row.donorAmountReceived)}</td>
-              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(row.difference)}</td>
+            <tr key={row.key} style={{ background: index % 2 === 0 ? C.surface : '#F8FAFC' }}>
+              <td style={{ padding: '11px 10px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>{index + 1}</td>
+              <td style={{ padding: '11px 10px', fontFamily: C.fNunito, fontSize: 13, color: C.inkMid, borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.dateLabel ?? viewingMonthLabel}</td>
+              <td style={{ padding: '11px 10px', fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, borderBottom: `1px solid ${C.surfaceInset}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {row.label}
+              </td>
+              <td style={{ padding: '11px 10px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                {row.amountPaid === null ? formatCurrency(row.total) : '-'}
+              </td>
+              <td style={{ padding: '11px 10px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                {row.donorAmountReceived === null ? '-' : formatCurrency(row.donorAmountReceived)}
+              </td>
+              <td style={{ padding: '11px 10px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                {row.difference === null ? '-' : formatCurrency(row.difference)}
+              </td>
+              <td style={{ padding: '11px 10px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                {row.amountPaid === null ? '-' : formatCurrency(row.amountPaid)}
+              </td>
             </tr>
           ))
         )}
@@ -1012,15 +1040,30 @@ const ExpensesPage = () => {
     const poojaRows = buildPoojaCardSummaries(poojaOptionTotals);
     const paidRows = buildPoojaPaidCardSummaries(poojaPaidOptionTotals);
     const paidByLabel = new Map(paidRows.map((row) => [row.label, row.total]));
-    return poojaRows.map((row) => {
+    const rows = poojaRows.map((row) => {
       const donorAmountReceived = paidByLabel.get(row.label) ?? 0;
       return {
-        ...row,
+        key: `pooja-${row.label}`,
+        label: row.label,
+        total: row.total,
         donorAmountReceived,
         difference: row.total - donorAmountReceived,
+        amountPaid: null,
       };
     });
-  }, [poojaOptionTotals, poojaPaidOptionTotals]);
+    rows.push(
+      ...monthlyExpenses.map((expense) => ({
+        key: `expense-${expense.id}`,
+        label: expense.category,
+        total: expense.amount,
+        donorAmountReceived: null,
+        difference: null,
+        amountPaid: expense.amount,
+        dateLabel: formatDisplayDate(expense.transaction_date),
+      })),
+    );
+    return rows;
+  }, [poojaOptionTotals, poojaPaidOptionTotals, monthlyExpenses]);
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((o) => o.value === selectedMonth)?.label ?? selectedMonth,
     [monthOptions, selectedMonth],
@@ -1077,13 +1120,26 @@ const ExpensesPage = () => {
               </span>
             </div>
             <PoojaSummaryCards totals={poojaOptionTotals} loading={poojaOptionLoading} month={selectedMonth} />
-            <StatementTable rows={statementRows} viewingMonthLabel={selectedMonthLabel} loading={poojaOptionLoading || poojaPaidOptionLoading} />
+            <StatementTable rows={statementRows} viewingMonthLabel={selectedMonthLabel} loading={poojaOptionLoading || poojaPaidOptionLoading || monthlyLoading} />
           </>
         )}
 
         {/* Data Entry: side-by-side form & records */}
         {activeTab === 'data' && (
           <>
+            <div style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                Viewing Month
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                style={{ padding: '8px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.surface, fontFamily: C.fNunito, fontSize: 14, fontWeight: 700, color: C.ink, outline: 'none', cursor: 'pointer', boxShadow: '0 1px 4px rgba(15,23,42,0.06)' }}
+              >
+                {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
             {/* ── Entry form + transactions ── */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
               <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
