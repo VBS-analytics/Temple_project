@@ -710,6 +710,128 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             ]
         )
 
+    @action(detail=False, methods=["get"], url_path="paid-totals-by-option")
+    def paid_totals_by_option(self, request):
+        """Return paid-by-option totals for donors who fully paid selected month dues.
+
+        Optional query params:
+          ?codes=GP1,GP2
+          ?parent_codes=ONE-DAY,ABISHEKAM
+          ?match=<substring> (fallback name-icontains when codes are not provided)
+          ?month=YYYY-MM
+        """
+        if request.user.role != UserRole.ADMIN:
+            raise PermissionDenied("Admin access required.")
+
+        codes = [c.strip() for c in (request.query_params.get("codes") or "").split(",") if c.strip()]
+        parent_codes = [c.strip() for c in (request.query_params.get("parent_codes") or "").split(",") if c.strip()]
+        match = (request.query_params.get("match") or "").strip()
+
+        first_day, last_day = self._resolve_month_range(request)
+
+        filter_q = Q()
+        if codes:
+            filter_q |= Q(pooja_option__code__in=codes)
+        if parent_codes:
+            filter_q |= Q(pooja_option__parent__code__in=parent_codes)
+        if match and not codes and not parent_codes:
+            filter_q |= Q(pooja_option__name__icontains=match)
+
+        all_active_plans = self._active_plan_queryset_for_month(request)
+        filtered_plans = all_active_plans.filter(filter_q) if filter_q else all_active_plans
+
+        # Donor considered as paid for the month only when successful payments for
+        # that month cover their full active recurring amount for the month.
+        donor_monthly_due_rows = (
+            all_active_plans.values("donor_id")
+            .annotate(total_due=Sum("amount"))
+            .order_by()
+        )
+        donor_due_map = {
+            row["donor_id"]: (row["total_due"] or Decimal("0.00"))
+            for row in donor_monthly_due_rows
+            if row["donor_id"] is not None
+        }
+
+        donor_option_rows = list(
+            filtered_plans.values(
+                "donor_id",
+                name=F("pooja_option__name"),
+                option_code=F("pooja_option__code"),
+                parent_code=F("pooja_option__parent__code"),
+                parent_name=F("pooja_option__parent__name"),
+            )
+            .annotate(option_amount=Sum("amount"))
+            .order_by("parent_code", "option_code", "donor_id")
+        )
+        donor_ids = [row["donor_id"] for row in donor_option_rows if row["donor_id"] is not None]
+
+        month_payment_q = Q(payment_month__gte=first_day, payment_month__lte=last_day) | (
+            Q(payment_month__isnull=True) & Q(created_at__date__gte=first_day, created_at__date__lte=last_day)
+        )
+        donor_paid_rows = (
+            PaymentRecord.objects.filter(
+                status=PaymentStatus.SUCCESS,
+                donor_id__in=donor_ids,
+            )
+            .filter(month_payment_q)
+            .values("donor_id")
+            .annotate(total_paid=Sum("amount"))
+            .order_by()
+        )
+        donor_paid_map = {
+            row["donor_id"]: (row["total_paid"] or Decimal("0.00"))
+            for row in donor_paid_rows
+            if row["donor_id"] is not None
+        }
+
+        option_totals: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+        for row in donor_option_rows:
+            donor_id = row["donor_id"]
+            if donor_id is None:
+                continue
+
+            donor_due = donor_due_map.get(donor_id, Decimal("0.00"))
+            donor_paid = donor_paid_map.get(donor_id, Decimal("0.00"))
+            is_fully_paid = donor_due > Decimal("0.00") and donor_paid >= donor_due
+            if not is_fully_paid:
+                continue
+
+            key = (
+                row["name"] or "Unknown",
+                row["option_code"] or "",
+                row["parent_code"] or "",
+                row["parent_name"] or "",
+            )
+            if key not in option_totals:
+                option_totals[key] = {
+                    "pooja_option_name": key[0],
+                    "option_code": key[1],
+                    "parent_code": key[2],
+                    "parent_name": key[3],
+                    "paid_total": Decimal("0.00"),
+                    "paid_donor_ids": set(),
+                }
+            option_totals[key]["paid_total"] = option_totals[key]["paid_total"] + (row["option_amount"] or Decimal("0.00"))
+            option_totals[key]["paid_donor_ids"].add(donor_id)
+
+        ordered_keys = sorted(option_totals.keys(), key=lambda item: (item[2], item[1], item[0]))
+
+        return Response(
+            [
+                {
+                    "pooja_option_name": option_totals[key]["pooja_option_name"],
+                    "option_code": option_totals[key]["option_code"],
+                    "parent_code": option_totals[key]["parent_code"],
+                    "parent_name": option_totals[key]["parent_name"],
+                    "paid_amount": str(option_totals[key]["paid_total"]),
+                    "paid_donor_count": len(option_totals[key]["paid_donor_ids"]),
+                    "payment_count": len(option_totals[key]["paid_donor_ids"]),
+                }
+                for key in ordered_keys
+            ]
+        )
+
     @action(detail=False, methods=["get"], url_path="donor-directory")
     def donor_directory(self, request):
         qs = User.objects.filter(role=UserRole.DONOR)

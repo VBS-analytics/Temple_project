@@ -2107,6 +2107,7 @@ class PoojaOptionTotalsMonthFilterTests(TestCase):
         self.option = PoojaOption.objects.create(code="GP_NAV", name="Navagraha Pooja", parent=self.parent)
         self.option_totals_url = reverse("pooja-registrations-option-totals")
         self.donors_by_option_url = reverse("pooja-registrations-donors-by-option")
+        self.paid_totals_url = reverse("pooja-registrations-paid-totals-by-option")
 
     def _create_recurring_plan(
         self,
@@ -2220,4 +2221,92 @@ class PoojaOptionTotalsMonthFilterTests(TestCase):
     def test_option_totals_is_admin_only(self):
         self.client.force_authenticate(self.donor)
         response = self.client.get(self.option_totals_url, {"month": "2026-01"})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_paid_totals_by_option_uses_successful_month_payments(self):
+        jan_plan_one = self._create_recurring_plan(
+            donor=self.donor,
+            amount=Decimal("100.00"),
+            registered_at=datetime(2026, 1, 5, 10, 0),
+            start_date=date(2026, 1, 5),
+        )
+        jan_plan_two = self._create_recurring_plan(
+            donor=self.other_donor,
+            amount=Decimal("200.00"),
+            registered_at=datetime(2026, 1, 6, 10, 0),
+            start_date=date(2026, 1, 6),
+        )
+
+        PaymentRecord.objects.create(
+            donor=self.donor,
+            registration=jan_plan_one.origin_registration,
+            amount=Decimal("70.00"),
+            currency="INR",
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.create(
+            donor=self.donor,
+            registration=jan_plan_one.origin_registration,
+            amount=Decimal("30.00"),
+            currency="INR",
+            mode=PaymentMode.CASH,
+            status=PaymentStatus.SUCCESS,
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.create(
+            donor=self.other_donor,
+            registration=jan_plan_two.origin_registration,
+            amount=Decimal("150.00"),
+            currency="INR",
+            mode=PaymentMode.NEFT,
+            status=PaymentStatus.SUCCESS,
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.create(
+            donor=self.other_donor,
+            registration=jan_plan_two.origin_registration,
+            amount=Decimal("999.00"),
+            currency="INR",
+            mode=PaymentMode.NEFT,
+            status=PaymentStatus.FAILED,
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.create(
+            donor=self.donor,
+            registration=jan_plan_one.origin_registration,
+            amount=Decimal("500.00"),
+            currency="INR",
+            mode=PaymentMode.UPI,
+            status=PaymentStatus.SUCCESS,
+            payment_month=date(2026, 2, 1),
+        )
+        no_month_payment = PaymentRecord.objects.create(
+            donor=self.donor,
+            registration=jan_plan_one.origin_registration,
+            amount=Decimal("25.00"),
+            currency="INR",
+            mode=PaymentMode.OTHER,
+            status=PaymentStatus.SUCCESS,
+            payment_month=None,
+        )
+        PaymentRecord.objects.filter(pk=no_month_payment.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 1, 22, 11, 30)),
+        )
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.paid_totals_url, {"month": "2026-01"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        payload = response.json()
+        navagraha_row = next((row for row in payload if row["option_code"] == "GP_NAV"), None)
+        self.assertIsNotNone(navagraha_row)
+        self.assertEqual(Decimal(navagraha_row["paid_amount"]), Decimal("100.00"))
+        self.assertEqual(navagraha_row["paid_donor_count"], 1)
+        self.assertEqual(navagraha_row["payment_count"], 1)
+
+    def test_paid_totals_is_admin_only(self):
+        self.client.force_authenticate(self.donor)
+        response = self.client.get(self.paid_totals_url, {"month": "2026-01"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
