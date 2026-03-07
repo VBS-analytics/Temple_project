@@ -20,6 +20,16 @@ type PoojaOptionTotal = {
   registration_count: number;
 };
 
+type PoojaOptionPaidTotal = {
+  pooja_option_name: string;
+  option_code: string;
+  parent_code: string;
+  parent_name: string;
+  paid_amount: string;
+  paid_donor_count: number;
+  payment_count: number;
+};
+
 type ExpenseRecord = Omit<ExpenseRecordResponse, 'amount'> & { amount: number };
 type MonthOption = { label: string; value: string };
 type ExpenseFormPayload = { transaction_date: string; category: string; amount: number };
@@ -87,6 +97,8 @@ const POOJA_CARD_CONFIG: Array<{
     iconBg: '#FFFBEB',
   },
 ];
+type PoojaCardSummary = (typeof POOJA_CARD_CONFIG)[number] & { total: number; count: number; matchCodes: string[] };
+type StatementRow = PoojaCardSummary & { donorAmountReceived: number; difference: number };
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 const buildMonthOptions = (): MonthOption[] => {
@@ -134,6 +146,44 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const buildPoojaCardSummaries = (totals: PoojaOptionTotal[]): PoojaCardSummary[] => {
+  const buckets: PoojaOptionTotal[][] = POOJA_CARD_CONFIG.map(() => []);
+  for (const row of totals) {
+    const name = row.pooja_option_name.toLowerCase();
+    const optionCode = (row.option_code || '').toLowerCase();
+    const parentCode = (row.parent_code || '').toLowerCase();
+    const parentName = (row.parent_name || '').toLowerCase();
+    const idx = POOJA_CARD_CONFIG.findIndex(
+      (cfg) =>
+        cfg.nameContains.some((kw) => name.includes(kw)) ||
+        cfg.optionCodeContains.some((kw) => optionCode.includes(kw)) ||
+        cfg.parentCodeContains.some((kw) => parentCode.includes(kw)) ||
+        cfg.parentNameContains.some((kw) => parentName.includes(kw)),
+    );
+    if (idx >= 0) buckets[idx].push(row);
+  }
+
+  return POOJA_CARD_CONFIG.map((cfg, idx) => {
+    const matching = buckets[idx];
+    const total = matching.reduce((sum, row) => sum + Number(row.total_amount), 0);
+    const count = matching.reduce((sum, row) => sum + row.registration_count, 0);
+    const matchCodes = [...new Set(matching.map((row) => row.option_code).filter(Boolean))];
+    return { ...cfg, total, count, matchCodes };
+  });
+};
+
+const buildPoojaPaidCardSummaries = (totals: PoojaOptionPaidTotal[]): PoojaCardSummary[] =>
+  buildPoojaCardSummaries(
+    totals.map((row) => ({
+      pooja_option_name: row.pooja_option_name,
+      option_code: row.option_code,
+      parent_code: row.parent_code,
+      parent_name: row.parent_name,
+      total_amount: row.paid_amount,
+      registration_count: row.paid_donor_count,
+    })),
+  );
+
 // ── Pooja option totals hook (filtered by active recurring plans in selected month) ─
 const usePoojaOptionTotals = (month: string) => {
   const [totals, setTotals] = useState<PoojaOptionTotal[]>([]);
@@ -145,6 +195,29 @@ const usePoojaOptionTotals = (month: string) => {
       const params: Record<string, string> = {};
       if (m) params.month = m;
       const { data } = await api.get('/pooja/registrations/option-totals/', { params });
+      setTotals(Array.isArray(data) ? data : []);
+    } catch {
+      setTotals([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(month); }, [fetch, month]);
+
+  return { totals, loading };
+};
+
+const usePoojaPaidOptionTotals = (month: string) => {
+  const [totals, setTotals] = useState<PoojaOptionPaidTotal[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async (m: string) => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (m) params.month = m;
+      const { data } = await api.get('/pooja/registrations/paid-totals-by-option/', { params });
       setTotals(Array.isArray(data) ? data : []);
     } catch {
       setTotals([]);
@@ -351,31 +424,7 @@ const PoojaSummaryCards = ({
   const [activeModal, setActiveModal] = useState<{ codes: string[]; label: string; icon: string; showPoojaName: boolean } | null>(null);
 
   // Assign each option-total row to the first matching card to avoid cross-card double counting.
-  const cards = useMemo(() => {
-    const buckets: PoojaOptionTotal[][] = POOJA_CARD_CONFIG.map(() => []);
-    for (const row of totals) {
-      const name = row.pooja_option_name.toLowerCase();
-      const optionCode = (row.option_code || '').toLowerCase();
-      const parentCode = (row.parent_code || '').toLowerCase();
-      const parentName = (row.parent_name || '').toLowerCase();
-      const idx = POOJA_CARD_CONFIG.findIndex(
-        (cfg) =>
-          cfg.nameContains.some((kw) => name.includes(kw)) ||
-          cfg.optionCodeContains.some((kw) => optionCode.includes(kw)) ||
-          cfg.parentCodeContains.some((kw) => parentCode.includes(kw)) ||
-          cfg.parentNameContains.some((kw) => parentName.includes(kw)),
-      );
-      if (idx >= 0) buckets[idx].push(row);
-    }
-
-    return POOJA_CARD_CONFIG.map((cfg, idx) => {
-      const matching = buckets[idx];
-      const total = matching.reduce((s, t) => s + Number(t.total_amount), 0);
-      const count = matching.reduce((s, t) => s + t.registration_count, 0);
-      const matchCodes = [...new Set(matching.map((t) => t.option_code).filter(Boolean))];
-      return { ...cfg, total, count, matchCodes };
-    });
-  }, [totals]);
+  const cards = useMemo(() => buildPoojaCardSummaries(totals), [totals]);
 
   if (loading) {
     return (
@@ -450,6 +499,70 @@ const PoojaSummaryCards = ({
     </>
   );
 };
+
+const StatementTable = ({
+  rows,
+  viewingMonthLabel,
+  loading,
+}: {
+  rows: StatementRow[];
+  viewingMonthLabel: string;
+  loading: boolean;
+}) => (
+  <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+    <div style={{ padding: '14px 20px', background: C.primaryGhost, borderBottom: `1.5px solid ${C.border}` }}>
+      <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>Expense Statement</span>
+    </div>
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <thead>
+        <tr style={{ background: C.surfaceInset }}>
+          {['S.No', 'Date', 'Pooja Name', 'Pooja Amount Received', 'Donor Amount Received', 'Difference'].map((h, i) => (
+            <th
+              key={h}
+              style={{
+                padding: '10px 16px',
+                textAlign: i >= 3 ? 'right' : 'left',
+                fontFamily: C.fNunito,
+                fontSize: 11,
+                fontWeight: 700,
+                color: C.inkMuted,
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                borderBottom: `1px solid ${C.border}`,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {loading ? (
+          <tr>
+            <td
+              colSpan={6}
+              style={{ padding: '22px 16px', textAlign: 'center', fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}
+            >
+              Loading statement rows...
+            </td>
+          </tr>
+        ) : (
+          rows.map((row, index) => (
+            <tr key={row.label} style={{ background: index % 2 === 0 ? C.surface : '#F8FAFC' }}>
+              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}` }}>{index + 1}</td>
+              <td style={{ padding: '12px 16px', fontFamily: C.fNunito, fontSize: 13, color: C.inkMid, borderBottom: `1px solid ${C.surfaceInset}` }}>{viewingMonthLabel}</td>
+              <td style={{ padding: '12px 16px', fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, borderBottom: `1px solid ${C.surfaceInset}` }}>{row.label}</td>
+              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(row.total)}</td>
+              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(row.donorAmountReceived)}</td>
+              <td style={{ padding: '12px 16px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(row.difference)}</td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+);
 
 // ── Custom Hook ───────────────────────────────────────────────────────────────
 const useExpenses = () => {
@@ -803,7 +916,7 @@ const MonthlyTracker = ({
 
         {/* Month selector card */}
         <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, padding: '18px 20px', flex: '1 1 240px', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>Select Month</label>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>Viewing Month</label>
           <select value={selectedMonth} onChange={e => onMonthChange(e.target.value)} style={{ width: '100%', padding: '10px 13px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.surfaceInset, fontFamily: C.fNunito, fontSize: 14, fontWeight: 600, color: C.ink, outline: 'none', appearance: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
             {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -888,12 +1001,26 @@ const MonthlyTracker = ({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const ExpensesPage = () => {
-  const [activeTab, setActiveTab] = useState<'data' | 'tracking'>('data');
+  const [activeTab, setActiveTab] = useState<'statement' | 'data' | 'tracking'>('statement');
   const authUser = useAuthStore((state) => state.user);
   const readOnlyAdmin = isReadOnlyAdmin(authUser);
 
   const { monthOptions, selectedMonth, setSelectedMonth, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense } = useExpenses();
   const { totals: poojaOptionTotals, loading: poojaOptionLoading } = usePoojaOptionTotals(selectedMonth);
+  const { totals: poojaPaidOptionTotals, loading: poojaPaidOptionLoading } = usePoojaPaidOptionTotals(selectedMonth);
+  const statementRows = useMemo(() => {
+    const poojaRows = buildPoojaCardSummaries(poojaOptionTotals);
+    const paidRows = buildPoojaPaidCardSummaries(poojaPaidOptionTotals);
+    const paidByLabel = new Map(paidRows.map((row) => [row.label, row.total]));
+    return poojaRows.map((row) => {
+      const donorAmountReceived = paidByLabel.get(row.label) ?? 0;
+      return {
+        ...row,
+        donorAmountReceived,
+        difference: row.total - donorAmountReceived,
+      };
+    });
+  }, [poojaOptionTotals, poojaPaidOptionTotals]);
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((o) => o.value === selectedMonth)?.label ?? selectedMonth,
     [monthOptions, selectedMonth],
@@ -916,10 +1043,10 @@ const ExpensesPage = () => {
           </div>
           {/* Pill tab switcher */}
           <div style={{ display: 'flex', background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 4, gap: 4, boxShadow: '0 1px 4px rgba(15,23,42,0.08)' }}>
-            {[{ key: 'data', label: '📋  Data Entry' }, { key: 'tracking', label: '📊  Monthly Tracker' }].map(({ key, label }) => {
+            {[{ key: 'statement', label: '🧾  Statement' }, { key: 'data', label: '📋  Data Entry' }, { key: 'tracking', label: '📊  Monthly Tracker' }].map(({ key, label }) => {
               const active = activeTab === key;
               return (
-                <button key={key} type="button" onClick={() => setActiveTab(key as 'data' | 'tracking')}
+                <button key={key} type="button" onClick={() => setActiveTab(key as 'statement' | 'data' | 'tracking')}
                   style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: active ? C.primary : 'transparent', color: active ? '#fff' : C.inkMuted, fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', boxShadow: active ? '0 2px 8px rgba(230,81,0,0.25)' : 'none' }}>
                   {label}
                 </button>
@@ -928,10 +1055,9 @@ const ExpensesPage = () => {
           </div>
         </div>
 
-        {/* Data Entry: month picker + summary cards + side-by-side form & records */}
-        {activeTab === 'data' && (
+        {/* Statement: month picker + donor summary cards */}
+        {activeTab === 'statement' && (
           <>
-            {/* ── Month selector row ── */}
             <div style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
               <label style={{ fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                 Viewing Month
@@ -945,14 +1071,19 @@ const ExpensesPage = () => {
               </select>
             </div>
 
-            {/* ── Pooja summary cards ── */}
             <div style={{ marginBottom: 10 }}>
               <span style={{ fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
                 Donor Registrations — Total by Pooja (Active This Month)
               </span>
             </div>
             <PoojaSummaryCards totals={poojaOptionTotals} loading={poojaOptionLoading} month={selectedMonth} />
+            <StatementTable rows={statementRows} viewingMonthLabel={selectedMonthLabel} loading={poojaOptionLoading || poojaPaidOptionLoading} />
+          </>
+        )}
 
+        {/* Data Entry: side-by-side form & records */}
+        {activeTab === 'data' && (
+          <>
             {/* ── Entry form + transactions ── */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
               <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
