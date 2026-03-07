@@ -15,7 +15,7 @@ from accounts.access import (
     EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE,
     REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
 )
-from accounts.models import User, UserRole
+from accounts.models import DonorProfile, User, UserRole
 from pooja.models import (
     DayOptionCategory,
     PoojaDayOption,
@@ -25,7 +25,7 @@ from pooja.models import (
     RecurringPoojaPlan,
 )
 from payments.models import PassbookEntry
-from payments.models import Donation, ExpenseRecord, PaymentRecord, PaymentStatus
+from payments.models import CombinePaymentMapping, Donation, ExpenseRecord, PaymentRecord, PaymentStatus
 from payments.services import regenerate_donor_passbook
 from payments.views import _donor_passbook_needs_refresh
 
@@ -503,3 +503,124 @@ class ExpenseRecordApiTests(TestCase):
         payload = response.json()
         self.assertIsInstance(payload, list)
         self.assertEqual(len(payload), 25)
+
+
+class PaymentRecordDeleteAccessTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.donor = User.objects.create_user(
+            phone_number="+919200000001",
+            name="Delete Donor",
+            password="secret",
+        )
+        self.other_donor = User.objects.create_user(
+            phone_number="+919200000002",
+            name="Other Donor",
+            password="secret",
+        )
+        self.admin = User.objects.create_user(
+            phone_number="+919200000003",
+            name="Delete Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+
+        self.success_payment = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("250.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="DEL-TXN-1",
+            payment_month=date(2026, 2, 1),
+        )
+        self.pending_due = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("400.00"),
+            mode="cash",
+            status=PaymentStatus.PENDING,
+            payment_month=date(2026, 2, 1),
+        )
+        self.other_payment = PaymentRecord.objects.create(
+            donor=self.other_donor,
+            amount=Decimal("300.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="DEL-TXN-2",
+            payment_month=date(2026, 2, 1),
+        )
+        CombinePaymentMapping.objects.create(
+            main_donor=self.donor,
+            parent_donor=self.other_donor,
+            effective_from=timezone.localdate().replace(day=1),
+        )
+
+    def _detail_url(self, payment_id: int) -> str:
+        return reverse("payment-records-detail", args=[payment_id])
+
+    def test_donor_without_access_cannot_delete_payment(self):
+        profile = DonorProfile.objects.get(user=self.donor)
+        profile.payment_delete_access = False
+        profile.save(update_fields=["payment_delete_access"])
+        self.client.force_authenticate(self.donor)
+
+        response = self.client.delete(self._detail_url(self.success_payment.id))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json()["detail"],
+            "Please contact Admin for payment delete access.",
+        )
+        self.assertTrue(PaymentRecord.objects.filter(id=self.success_payment.id).exists())
+
+    def test_donor_with_access_can_delete_own_success_payment(self):
+        profile = DonorProfile.objects.get(user=self.donor)
+        profile.payment_delete_access = True
+        profile.save(update_fields=["payment_delete_access"])
+        self.client.force_authenticate(self.donor)
+
+        response = self.client.delete(self._detail_url(self.success_payment.id))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(PaymentRecord.objects.filter(id=self.success_payment.id).exists())
+
+    def test_donor_with_access_cannot_delete_other_donor_payment(self):
+        profile = DonorProfile.objects.get(user=self.donor)
+        profile.payment_delete_access = True
+        profile.save(update_fields=["payment_delete_access"])
+        self.client.force_authenticate(self.donor)
+
+        response = self.client.delete(self._detail_url(self.other_payment.id))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json()["detail"],
+            "You can delete only your own payment records.",
+        )
+        self.assertTrue(PaymentRecord.objects.filter(id=self.other_payment.id).exists())
+
+    def test_donor_with_access_cannot_delete_pending_due_record(self):
+        profile = DonorProfile.objects.get(user=self.donor)
+        profile.payment_delete_access = True
+        profile.save(update_fields=["payment_delete_access"])
+        self.client.force_authenticate(self.donor)
+
+        response = self.client.delete(self._detail_url(self.pending_due.id))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json()["detail"],
+            "Only received payment records can be deleted.",
+        )
+        self.assertTrue(PaymentRecord.objects.filter(id=self.pending_due.id).exists())
+
+    def test_admin_can_delete_payment_without_donor_access(self):
+        profile = DonorProfile.objects.get(user=self.donor)
+        profile.payment_delete_access = False
+        profile.save(update_fields=["payment_delete_access"])
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.delete(self._detail_url(self.success_payment.id))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(PaymentRecord.objects.filter(id=self.success_payment.id).exists())

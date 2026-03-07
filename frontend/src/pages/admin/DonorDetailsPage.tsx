@@ -23,6 +23,7 @@ interface DonorProfile {
   gender?: string;
   notes?: string | null;
   pooja_registration_access?: boolean;
+  payment_delete_access?: boolean;
   custom_number?: number | null;
   current_month_due?: string | number | null;
   current_month_payments?: string | number | null;
@@ -66,6 +67,7 @@ type DonorEditFormState = {
   family_name: string;
   notes: string;
   pooja_registration_access: 'yes' | 'no';
+  payment_delete_access: 'yes' | 'no';
   address_line1: string;
   address_line2: string;
   address_line3: string;
@@ -86,6 +88,7 @@ const createEmptyDonorEditForm = (): DonorEditFormState => ({
   family_name: '',
   notes: '',
   pooja_registration_access: 'no',
+  payment_delete_access: 'no',
   address_line1: '',
   address_line2: '',
   address_line3: '',
@@ -355,6 +358,8 @@ const DonorDetailsPage = () => {
   const [customNumberErrors, setCustomNumberErrors] = useState<Record<number, string>>({});
   const [poojaAccessSavingIds, setPoojaAccessSavingIds] = useState<Set<number>>(() => new Set());
   const [poojaAccessErrors, setPoojaAccessErrors] = useState<Record<number, string>>({});
+  const [paymentDeleteSavingIds, setPaymentDeleteSavingIds] = useState<Set<number>>(() => new Set());
+  const [paymentDeleteErrors, setPaymentDeleteErrors] = useState<Record<number, string>>({});
   const readOnlyAdmin = isReadOnlyAdmin(authUser);
   const gothraOptions = useMasterDataStore((state) => state.gothraOptions);
   const loadGothraOptions = useMasterDataStore((state) => state.loadGothraOptions);
@@ -404,6 +409,7 @@ const DonorDetailsPage = () => {
       family_name: record.profile.family_name ?? '',
       notes: record.profile.notes ?? '',
       pooja_registration_access: record.profile.pooja_registration_access ? 'yes' : 'no',
+      payment_delete_access: record.profile.payment_delete_access ? 'yes' : 'no',
       address_line1: record.profile.address_line1 ?? '',
       address_line2: record.profile.address_line2 ?? '',
       address_line3: record.profile.address_line3 ?? '',
@@ -470,6 +476,7 @@ const DonorDetailsPage = () => {
         family_name: donorEditForm.family_name,
         notes: donorEditForm.notes,
         pooja_registration_access: donorEditForm.pooja_registration_access === 'yes',
+        payment_delete_access: donorEditForm.payment_delete_access === 'yes',
         address_line1: donorEditForm.address_line1,
         address_line2: donorEditForm.address_line2,
         address_line3: donorEditForm.address_line3,
@@ -707,6 +714,105 @@ const DonorDetailsPage = () => {
       }));
     } finally {
       setPoojaAccessSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(donorId);
+        return next;
+      });
+    }
+  };
+
+  const handlePaymentDeleteAccessChange = async (donor: DonorRecord, nextValue: boolean) => {
+    const donorId = donor.user.id;
+    if (readOnlyAdmin || paymentDeleteSavingIds.has(donorId)) {
+      return;
+    }
+    const currentValue = Boolean(donor.profile.payment_delete_access);
+    if (currentValue === nextValue) {
+      return;
+    }
+
+    setDonors((prev) =>
+      prev.map((record) =>
+        record.user.id === donorId
+          ? {
+              ...record,
+              profile: {
+                ...record.profile,
+                payment_delete_access: nextValue,
+              },
+            }
+          : record,
+      ),
+    );
+
+    setPaymentDeleteErrors((prev) => {
+      if (!prev[donorId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[donorId];
+      return next;
+    });
+
+    setPaymentDeleteSavingIds((prev) => {
+      const next = new Set(prev);
+      next.add(donorId);
+      return next;
+    });
+
+    try {
+      const response = await api.put(`auth/donors/${donorId}/`, {
+        profile: {
+          payment_delete_access: nextValue,
+        },
+      });
+      const updatedUser = response.data?.user;
+      const updatedProfile = response.data?.profile;
+      if (updatedUser || updatedProfile) {
+        setDonors((prev) =>
+          prev.map((record) =>
+            record.user.id === donorId
+              ? {
+                  ...record,
+                  user: updatedUser ?? record.user,
+                  profile: updatedProfile ?? record.profile,
+                }
+              : record,
+          ),
+        );
+      }
+      if (editingDonorId === donorId) {
+        setDonorEditForm((prev) => ({
+          ...prev,
+          payment_delete_access: nextValue ? 'yes' : 'no',
+        }));
+      }
+    } catch (err: any) {
+      setDonors((prev) =>
+        prev.map((record) =>
+          record.user.id === donorId
+            ? {
+                ...record,
+                profile: {
+                  ...record.profile,
+                  payment_delete_access: currentValue,
+                },
+              }
+            : record,
+        ),
+      );
+      const detail =
+        err?.response?.data?.detail ??
+        err?.response?.data?.message ??
+        err?.message ??
+        'Unable to update payment delete access';
+      setPaymentDeleteErrors((prev) => ({
+        ...prev,
+        [donorId]:
+          typeof detail === 'string' ? detail : 'Unable to update payment delete access',
+      }));
+    } finally {
+      setPaymentDeleteSavingIds((prev) => {
         const next = new Set(prev);
         next.delete(donorId);
         return next;
@@ -1218,6 +1324,9 @@ const DonorDetailsPage = () => {
             const hasPoojaAccess = Boolean(profile.pooja_registration_access);
             const isPoojaAccessSaving = poojaAccessSavingIds.has(user.id);
             const poojaAccessError = poojaAccessErrors[user.id];
+            const hasPaymentDeleteAccess = Boolean(profile.payment_delete_access);
+            const isPaymentDeleteSaving = paymentDeleteSavingIds.has(user.id);
+            const paymentDeleteError = paymentDeleteErrors[user.id];
 
             const basicDetails = [
               {
@@ -1385,40 +1494,75 @@ const DonorDetailsPage = () => {
                           <h2 className="text-lg sm:text-xl font-bold text-slate-800">
                             {formatDonorDisplayName(user.name, profile.tamil_name)}
                           </h2>
-                          <div className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
-                            <span className="font-semibold text-slate-700">Pooja Access</span>
-                            <label className="inline-flex items-center gap-1.5 text-slate-700">
-                              <input
-                                type="radio"
-                                name={`pooja-access-${user.id}`}
-                                checked={hasPoojaAccess}
-                                onChange={() => handlePoojaAccessChange(donor, true)}
-                                disabled={readOnlyAdmin || isPoojaAccessSaving}
-                                className="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500"
-                              />
-                              <span className={hasPoojaAccess ? 'font-semibold text-emerald-700' : 'text-slate-500'}>
-                                Yes
-                              </span>
-                            </label>
-                            <label className="inline-flex items-center gap-1.5 text-slate-700">
-                              <input
-                                type="radio"
-                                name={`pooja-access-${user.id}`}
-                                checked={!hasPoojaAccess}
-                                onChange={() => handlePoojaAccessChange(donor, false)}
-                                disabled={readOnlyAdmin || isPoojaAccessSaving}
-                                className="h-3.5 w-3.5 text-slate-600 focus:ring-slate-500"
-                              />
-                              <span className={!hasPoojaAccess ? 'font-semibold text-slate-700' : 'text-slate-500'}>
-                                No
-                              </span>
-                            </label>
-                            {isPoojaAccessSaving && (
-                              <span className="text-[10px] font-medium text-slate-500">Saving...</span>
-                            )}
+                          <div className="inline-flex flex-wrap items-center gap-4 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+                            <div className="inline-flex items-center gap-2">
+                              <span className="font-semibold text-slate-700">Pooja Access</span>
+                              <label className="inline-flex items-center gap-1.5 text-slate-700">
+                                <input
+                                  type="radio"
+                                  name={`pooja-access-${user.id}`}
+                                  checked={hasPoojaAccess}
+                                  onChange={() => handlePoojaAccessChange(donor, true)}
+                                  disabled={readOnlyAdmin || isPoojaAccessSaving}
+                                  className="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span className={hasPoojaAccess ? 'font-semibold text-emerald-700' : 'text-slate-500'}>
+                                  Yes
+                                </span>
+                              </label>
+                              <label className="inline-flex items-center gap-1.5 text-slate-700">
+                                <input
+                                  type="radio"
+                                  name={`pooja-access-${user.id}`}
+                                  checked={!hasPoojaAccess}
+                                  onChange={() => handlePoojaAccessChange(donor, false)}
+                                  disabled={readOnlyAdmin || isPoojaAccessSaving}
+                                  className="h-3.5 w-3.5 text-slate-600 focus:ring-slate-500"
+                                />
+                                <span className={!hasPoojaAccess ? 'font-semibold text-slate-700' : 'text-slate-500'}>
+                                  No
+                                </span>
+                              </label>
+                              {isPoojaAccessSaving && (
+                                <span className="text-[10px] font-medium text-slate-500">Saving...</span>
+                              )}
+                            </div>
+                            <div className="inline-flex items-center gap-2">
+                              <span className="font-semibold text-slate-700">Payment Delete</span>
+                              <label className="inline-flex items-center gap-1.5 text-slate-700">
+                                <input
+                                  type="radio"
+                                  name={`payment-delete-access-${user.id}`}
+                                  checked={hasPaymentDeleteAccess}
+                                  onChange={() => handlePaymentDeleteAccessChange(donor, true)}
+                                  disabled={readOnlyAdmin || isPaymentDeleteSaving}
+                                  className="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span className={hasPaymentDeleteAccess ? 'font-semibold text-emerald-700' : 'text-slate-500'}>
+                                  Yes
+                                </span>
+                              </label>
+                              <label className="inline-flex items-center gap-1.5 text-slate-700">
+                                <input
+                                  type="radio"
+                                  name={`payment-delete-access-${user.id}`}
+                                  checked={!hasPaymentDeleteAccess}
+                                  onChange={() => handlePaymentDeleteAccessChange(donor, false)}
+                                  disabled={readOnlyAdmin || isPaymentDeleteSaving}
+                                  className="h-3.5 w-3.5 text-slate-600 focus:ring-slate-500"
+                                />
+                                <span className={!hasPaymentDeleteAccess ? 'font-semibold text-slate-700' : 'text-slate-500'}>
+                                  No
+                                </span>
+                              </label>
+                              {isPaymentDeleteSaving && (
+                                <span className="text-[10px] font-medium text-slate-500">Saving...</span>
+                              )}
+                            </div>
                           </div>
-                          {poojaAccessError && (
-                            <span className="text-[11px] text-red-600">{poojaAccessError}</span>
+                          {poojaAccessError && <span className="text-[11px] text-red-600">{poojaAccessError}</span>}
+                          {paymentDeleteError && (
+                            <span className="text-[11px] text-red-600">{paymentDeleteError}</span>
                           )}
                         </div>
                         
@@ -1686,6 +1830,37 @@ const DonorDetailsPage = () => {
                                           value="no"
                                           className="h-4 w-4 text-orange-600 focus:ring-orange-500"
                                           checked={donorEditForm.pooja_registration_access === 'no'}
+                                          onChange={handleDonorEditChange}
+                                          disabled={donorEditSubmitting}
+                                        />
+                                        No
+                                      </label>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                                      Payment Delete Access
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-4">
+                                      <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                        <input
+                                          type="radio"
+                                          name="payment_delete_access"
+                                          value="yes"
+                                          className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                          checked={donorEditForm.payment_delete_access === 'yes'}
+                                          onChange={handleDonorEditChange}
+                                          disabled={donorEditSubmitting}
+                                        />
+                                        Yes
+                                      </label>
+                                      <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                        <input
+                                          type="radio"
+                                          name="payment_delete_access"
+                                          value="no"
+                                          className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                                          checked={donorEditForm.payment_delete_access === 'no'}
                                           onChange={handleDonorEditChange}
                                           disabled={donorEditSubmitting}
                                         />

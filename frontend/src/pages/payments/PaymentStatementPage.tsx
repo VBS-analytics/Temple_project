@@ -59,6 +59,7 @@ interface PaymentRecordEntry {
   id: number | string;
   donor: number | null;
   donor_name?: string | null;
+  payment_record_id?: number | null;
   pooja_option?: string | null;
   registration?: number | null;
   registration_start_date?: string | null;
@@ -411,6 +412,7 @@ type ApiPassbookEntryRaw = {
   id: number;
   donor: number;
   donor_name: string;
+  payment_record?: number | null;
   entry_date: string;
   entry_type: 'balance' | 'due' | 'paid';
   opening_balance?: number | string | null;
@@ -424,6 +426,7 @@ type ApiPassbookEntry = {
   id: number;
   donor: number;
   donor_name: string;
+  payment_record?: number | null;
   entry_date: string;
   entry_type: 'balance' | 'due' | 'paid';
   opening_balance?: number | string | null;
@@ -438,6 +441,12 @@ type AdminDonorPassbookGroup = {
   donorId: number | null;
   label: string;
   entries: PassbookEntry[];
+};
+
+type ProfileAccessPayload = {
+  profile?: {
+    payment_delete_access?: boolean | null;
+  };
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -905,6 +914,7 @@ const resolveBookedByLabel = (record: PaymentRecordEntry) => record.donor_name |
 // ============================================================================
 const PaymentStatementPage = () => {
   const [records, setRecords] = useState<PaymentRecordEntry[]>([]);
+  const [recordsRefreshToken, setRecordsRefreshToken] = useState(0);
   const [registrations, setRegistrations] = useState<PoojaRegistrationEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -920,6 +930,11 @@ const PaymentStatementPage = () => {
   const [apiPassbookEntries, setApiPassbookEntries] = useState<ApiPassbookEntry[]>([]);
   const [apiPassbookLoading, setApiPassbookLoading] = useState(true);
   const [passbookRefreshToken, setPassbookRefreshToken] = useState(0);
+  const [canDeletePaymentRecords, setCanDeletePaymentRecords] = useState(false);
+  const [deletingPaymentRecordIds, setDeletingPaymentRecordIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [paymentDeleteError, setPaymentDeleteError] = useState('');
   const [donorOpeningBalances, setDonorOpeningBalances] = useState<Record<number, number>>({});
   const [donorPhones, setDonorPhones] = useState<Record<number, string>>({});
   const [activeParentDonorIdsByMain, setActiveParentDonorIdsByMain] = useState<
@@ -974,6 +989,40 @@ const PaymentStatementPage = () => {
       fetchCombineAccess();
     }
   }, [combineRole, combineLoading, combineError, fetchCombineAccess]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (isAdminUser) {
+      setCanDeletePaymentRecords(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const loadPaymentDeleteAccess = async () => {
+      try {
+        const response = await api.get<ProfileAccessPayload>('auth/profile/');
+        if (!isMounted) {
+          return;
+        }
+        setCanDeletePaymentRecords(
+          Boolean(response.data?.profile?.payment_delete_access),
+        );
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+        setCanDeletePaymentRecords(false);
+        console.error('Unable to load payment delete access', err);
+      }
+    };
+
+    loadPaymentDeleteAccess();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdminUser, user?.id]);
 
   // Fetch parent donor's opening balance when activeDonorId changes to a parent donor
   useEffect(() => {
@@ -1087,7 +1136,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [recordsRefreshToken]);
 
   // Fetch passbook entries directly (authoritative combined view)
   useEffect(() => {
@@ -2356,6 +2405,7 @@ const PaymentStatementPage = () => {
           id: `passbook-${entry.id}`,
           donor: entry.donor,
           donor_name: entry.donor_name,
+          payment_record_id: entry.payment_record ?? null,
           created_at: entry.entry_date,
           payment_month: entry.entry_date,
           transaction_reference: entry.transaction_details ?? undefined,
@@ -2434,6 +2484,7 @@ const PaymentStatementPage = () => {
               id: entry.id,
               donor: entry.donor,
               donor_name: entry.donor_name,
+              payment_record_id: entry.payment_record ?? null,
               created_at: entry.entry_date,
               payment_month: entry.entry_date,
               transaction_reference: entry.transaction_details ?? undefined,
@@ -2564,6 +2615,80 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
   const getEntryAmountLabel = (entry: PassbookEntry, amount: number) =>
     entry.isCurrentBalanceEntry ? '-' : formatCurrency(amount);
 
+  const canRenderDeleteActions = !isAdminUser && canDeletePaymentRecords;
+
+  const getEntryPaymentRecordId = (entry: PassbookEntry): number | null => {
+    const value = entry.record.payment_record_id;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+    return value;
+  };
+
+  const canDeletePassbookEntry = (entry: PassbookEntry): boolean => {
+    if (!canRenderDeleteActions) {
+      return false;
+    }
+    if (entry.isCurrentBalanceEntry) {
+      return false;
+    }
+    if (entry.entryType !== 'paid') {
+      return false;
+    }
+    if (entry.record.donor !== user?.id) {
+      return false;
+    }
+    return getEntryPaymentRecordId(entry) !== null;
+  };
+
+  const isDeletingPaymentRecord = (entry: PassbookEntry): boolean => {
+    const paymentRecordId = getEntryPaymentRecordId(entry);
+    return paymentRecordId !== null && deletingPaymentRecordIds.has(paymentRecordId);
+  };
+
+  const handleDeletePaymentRecord = async (entry: PassbookEntry) => {
+    const paymentRecordId = getEntryPaymentRecordId(entry);
+    if (paymentRecordId === null || deletingPaymentRecordIds.has(paymentRecordId)) {
+      return;
+    }
+
+    const transactionLabel = getEntryTransactionDetailsLabel(entry, filteredRecords);
+    const confirmed = window.confirm(
+      `Delete this payment record (${transactionLabel})? This will recalculate the statement.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setPaymentDeleteError('');
+    setDeletingPaymentRecordIds((prev) => {
+      const next = new Set(prev);
+      next.add(paymentRecordId);
+      return next;
+    });
+
+    try {
+      await api.delete(`payments/records/${paymentRecordId}/`);
+      setRecordsRefreshToken((prev) => prev + 1);
+      setPassbookRefreshToken((prev) => prev + 1);
+    } catch (err: any) {
+      const detail =
+        err?.response?.data?.detail ??
+        err?.response?.data?.message ??
+        err?.message ??
+        'Unable to delete payment record.';
+      setPaymentDeleteError(
+        typeof detail === 'string' ? detail : 'Unable to delete payment record.',
+      );
+    } finally {
+      setDeletingPaymentRecordIds((prev) => {
+        const next = new Set(prev);
+        next.delete(paymentRecordId);
+        return next;
+      });
+    }
+  };
+
   const adminPassbookGroups = useMemo<AdminDonorPassbookGroup[]>(() => {
     if (!isAdminUser || apiPassbookLoading || apiPassbookEntries.length === 0) {
       return [];
@@ -2635,6 +2760,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
           id: entry.id,
           donor: donorId,
           donor_name: entry.donor_name,
+          payment_record_id: entry.payment_record ?? null,
           created_at: entry.entry_date,
           payment_month: entry.entry_date,
           transaction_reference: entry.transaction_details ?? undefined,
@@ -2966,6 +3092,9 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
           </div>
           <p className="text-xs text-slate-500">{passbookSummaryText}</p>
         </div>
+        {paymentDeleteError && (
+          <div className="px-4 py-3 text-sm text-rose-600">{paymentDeleteError}</div>
+        )}
         {isStatementLoading ? (
           <div className="px-4 py-5 text-sm text-slate-500">Loading payment records…</div>
         ) : isPassbookRefreshing ? (
@@ -3094,6 +3223,9 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
                       <th className="px-4 py-3 text-right font-semibold">Due for current month</th>
                       <th className="px-4 py-3 text-right font-semibold">Amount received</th>
                       <th className="px-4 py-3 text-right font-semibold">Closing due for current month</th>
+                      {canRenderDeleteActions && (
+                        <th className="px-4 py-3 text-center font-semibold">Action</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -3114,6 +3246,22 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
                         <td className="px-4 py-3 text-right font-semibold text-slate-800">
                           {formatCurrency(entry.closingDue)}
                         </td>
+                        {canRenderDeleteActions && (
+                          <td className="px-4 py-3 text-center">
+                            {canDeletePassbookEntry(entry) ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePaymentRecord(entry)}
+                                disabled={isDeletingPaymentRecord(entry)}
+                                className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                              >
+                                {isDeletingPaymentRecord(entry) ? 'Deleting...' : 'Delete'}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -3155,6 +3303,22 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
                       <span className="font-semibold text-slate-600">Closing due for current month</span>
                       <span>{formatCurrency(entry.closingDue)}</span>
                     </div>
+                    {canRenderDeleteActions && (
+                      <div className="pt-1">
+                        {canDeletePassbookEntry(entry) ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePaymentRecord(entry)}
+                            disabled={isDeletingPaymentRecord(entry)}
+                            className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                          >
+                            {isDeletingPaymentRecord(entry) ? 'Deleting...' : 'Delete payment'}
+                          </button>
+                        ) : (
+                          <p className="text-xs text-slate-400">Delete not available for this row.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
