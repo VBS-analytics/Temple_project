@@ -110,6 +110,21 @@ const normalizeFamilyMembers = (members?: DonorPoojaMember[]) => {
   return names.length > 0 ? names.join(', ') : EMPTY_VALUE;
 };
 
+const compareDonorIdAscending = (left: string, right: string) => {
+  const leftMissing = left === EMPTY_VALUE;
+  const rightMissing = right === EMPTY_VALUE;
+  if (leftMissing && rightMissing) {
+    return 0;
+  }
+  if (leftMissing) {
+    return 1;
+  }
+  if (rightMissing) {
+    return -1;
+  }
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 const DonorPoojaDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -154,29 +169,37 @@ const DonorPoojaDetails = () => {
   }, []);
 
   const rows = useMemo<DonorPoojaDetailRow[]>(() => {
-    return records.map((record) => {
-      const profile = record.profile;
-      const donorId = normalizeText(profile?.donor_id);
-      const donorName = normalizeText(record.user?.name);
-      const donorHeaderText = normalizeText(profile?.notes);
-      const gothram = normalizeText(profile?.gothra);
-      const rasi = normalizeText(profile?.rasi);
-      const tamilStar = normalizeText(profile?.tamil_star);
-      const familyMembers = normalizeFamilyMembers(record.members);
-      const address = normalizeAddress(profile);
+    return records
+      .map((record) => {
+        const profile = record.profile;
+        const donorId = normalizeText(profile?.donor_id);
+        const donorName = normalizeText(record.user?.name);
+        const donorHeaderText = normalizeText(profile?.notes);
+        const gothram = normalizeText(profile?.gothra);
+        const rasi = normalizeText(profile?.rasi);
+        const tamilStar = normalizeText(profile?.tamil_star);
+        const familyMembers = normalizeFamilyMembers(record.members);
+        const address = normalizeAddress(profile);
 
-      return {
-        id: record.user.id,
-        donorId,
-        donorName,
-        donorHeaderText,
-        gothram,
-        rasi,
-        tamilStar,
-        familyMembers,
-        address,
-      };
-    });
+        return {
+          id: record.user.id,
+          donorId,
+          donorName,
+          donorHeaderText,
+          gothram,
+          rasi,
+          tamilStar,
+          familyMembers,
+          address,
+        };
+      })
+      .sort((first, second) => {
+        const donorIdOrder = compareDonorIdAscending(first.donorId, second.donorId);
+        if (donorIdOrder !== 0) {
+          return donorIdOrder;
+        }
+        return first.id - second.id;
+      });
   }, [records]);
 
   const filteredRows = useMemo(() => {

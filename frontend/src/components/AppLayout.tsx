@@ -6,7 +6,13 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import useCartSync from "../hooks/useCartSync";
 import useSessionTimeout from "../hooks/useSessionTimeout";
 import SessionExpiryPrompt from "./SessionExpiryPrompt";
-import { canViewPaymentStatement, isAdmin, isReadOnlyAdmin, useAuthStore } from "../store/auth";
+import {
+  canViewExpenseTracker,
+  canViewPaymentStatement,
+  isAdmin,
+  isReadOnlyAdmin,
+  useAuthStore,
+} from "../store/auth";
 import { useCombineAccessStore } from "../store/combineAccess";
 
 type NavItem = {
@@ -118,7 +124,7 @@ const AppLayout = () => {
     {
       to: "/admin/expenses",
       label: "Expense Tracker",
-      show: Boolean(user && isAdmin(user.role)),
+      show: canViewExpenseTracker(user),
     },
     {
       to: "/payments/statement",

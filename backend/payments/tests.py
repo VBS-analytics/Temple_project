@@ -11,8 +11,11 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from accounts.access import REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
-from accounts.models import User
+from accounts.access import (
+    EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE,
+    REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
+)
+from accounts.models import User, UserRole
 from pooja.models import (
     DayOptionCategory,
     PoojaDayOption,
@@ -404,6 +407,16 @@ class ExpenseRecordApiTests(TestCase):
             name="Expense Donor",
             password="secret",
         )
+        self.read_only_admin = User.objects.create_superuser(
+            phone_number="+91 9999999998",
+            name="Read Only Expense Admin",
+            password="adminpass1",
+        )
+        self.hidden_expense_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Hidden Expense Admin",
+            password="adminpass2",
+        )
 
     def test_admin_can_create_expense_record(self):
         self.client.force_authenticate(self.admin)
@@ -436,6 +449,41 @@ class ExpenseRecordApiTests(TestCase):
             format="json",
         )
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_hidden_expense_admin_cannot_list_or_create_expenses(self):
+        self.client.force_authenticate(self.hidden_expense_admin)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            list_response.json()["detail"],
+            EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE,
+        )
+
+        create_response = self.client.post(
+            self.url,
+            {
+                "transaction_date": "2026-01-15",
+                "category": "Maintenance",
+                "amount": "1250.00",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            create_response.json()["detail"],
+            EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE,
+        )
+
+    def test_read_only_admin_can_list_expenses(self):
+        ExpenseRecord.objects.create(
+            transaction_date=date(2026, 1, 10),
+            category="Maintenance",
+            amount=Decimal("200.00"),
+            created_by=self.admin,
+        )
+        self.client.force_authenticate(self.read_only_admin)
+        response = self.client.get(self.url, {"month": "2026-01"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_monthly_list_returns_full_unpaginated_payload(self):
         ExpenseRecord.objects.bulk_create(
