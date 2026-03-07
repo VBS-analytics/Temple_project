@@ -167,6 +167,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "family_name",
             "notes",
             "pooja_registration_access",
+            "payment_delete_access",
             "custom_number",
             "monthly_donation_amount",
             "opening_balance",
@@ -188,6 +189,7 @@ class DonorProfileSerializer(serializers.ModelSerializer):
             "gender": {"required": False, "allow_blank": True},
             "rasi": {"required": False, "allow_blank": True},
             "pooja_registration_access": {"required": False},
+            "payment_delete_access": {"required": False},
         }
 
     def get_donor_id(self, obj):

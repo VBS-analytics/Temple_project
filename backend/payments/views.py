@@ -25,7 +25,7 @@ from accounts.access import (
     EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE,
     REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
 )
-from accounts.models import User, UserRole
+from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import (
@@ -80,6 +80,9 @@ def _shift_month(dt: date, delta_months: int) -> date:
 
 
 _CHRT_CLEANUP_LOCK_KEY = 9_821_547_336_145
+PAYMENT_RECORD_DELETE_ACCESS_DENIED_MESSAGE = "Please contact Admin for payment delete access."
+PAYMENT_RECORD_DELETE_OWN_ONLY_MESSAGE = "You can delete only your own payment records."
+PAYMENT_RECORD_DELETE_SUCCESS_ONLY_MESSAGE = "Only received payment records can be deleted."
 
 
 def _try_acquire_chrt_cleanup_lock() -> bool:
@@ -402,6 +405,22 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
         # The closing due for the current month is calculated as:
         # closing_balance = opening_balance + current_month_due - current_month_payments
         # This is computed dynamically in the serializer and on the Payment Statement page.
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = request.user
+
+        if user.role != UserRole.ADMIN:
+            donor_profile, _ = DonorProfile.objects.get_or_create(user=user)
+            if not donor_profile.payment_delete_access:
+                raise PermissionDenied(PAYMENT_RECORD_DELETE_ACCESS_DENIED_MESSAGE)
+            if instance.donor_id != user.id:
+                raise PermissionDenied(PAYMENT_RECORD_DELETE_OWN_ONLY_MESSAGE)
+            if instance.status != PaymentStatus.SUCCESS:
+                raise PermissionDenied(PAYMENT_RECORD_DELETE_SUCCESS_ONLY_MESSAGE)
+
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DonationCreateView(APIView):

@@ -133,6 +133,10 @@ class DonorProfile(models.Model):
         default=False,
         help_text="Controls whether donor can add/save pooja registrations.",
     )
+    payment_delete_access = models.BooleanField(
+        default=False,
+        help_text="Controls whether donor can delete payment records from payment statement.",
+    )
     custom_number = models.IntegerField(blank=True, null=True)
     monthly_donation_amount = models.DecimalField(
         max_digits=12,
