@@ -25,6 +25,7 @@ from .models import (
 )
 from .access import (
     can_download_reports,
+    can_view_expense_tracker,
     can_view_payment_statement,
     is_read_only_admin,
     REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
@@ -267,10 +268,13 @@ class AdminAccessPolicyTests(TestCase):
             password="adminpass2",
         )
         self.assertTrue(is_read_only_admin(read_only_admin))
+        self.assertTrue(can_view_expense_tracker(read_only_admin))
         self.assertFalse(can_view_payment_statement(hidden_statement_admin))
+        self.assertFalse(can_view_expense_tracker(hidden_statement_admin))
         self.assertFalse(can_download_reports(hidden_statement_admin))
         self.assertFalse(is_read_only_admin(full_admin))
         self.assertTrue(can_view_payment_statement(full_admin))
+        self.assertTrue(can_view_expense_tracker(full_admin))
         self.assertTrue(can_download_reports(full_admin))
 
 

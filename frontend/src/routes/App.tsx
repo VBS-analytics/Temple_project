@@ -30,7 +30,7 @@ import DonationPage from "../pages/payments/DonationPage";
 import ReportPage from "../pages/ReportPage";
 import WhyVisitNativeVillage from "../pages/WhyVisitNativeVillage";
 import History from "../pages/History";
-import { canViewPaymentStatement, isAdmin, useAuthStore } from "../store/auth";
+import { canViewExpenseTracker, canViewPaymentStatement, isAdmin, useAuthStore } from "../store/auth";
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
@@ -50,6 +50,20 @@ const PaymentStatementRoute = () => {
     return <Navigate to={fallback} replace />;
   }
   return <PaymentStatementPage />;
+};
+
+const ExpenseTrackerRoute = () => {
+  const user = useAuthStore((state) => state.user);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!isAdmin(user.role)) {
+    return <Navigate to="/profile" replace />;
+  }
+  if (!canViewExpenseTracker(user)) {
+    return <Navigate to="/admin/master" replace />;
+  }
+  return <ExpensesPage />;
 };
 
 const App = () => (
@@ -112,7 +126,7 @@ const App = () => (
           element={<PoojaPauseCancelPage />}
         />
         <Route path="/reports" element={<ReportPage />} />
-        <Route path="/admin/expenses" element={<ExpensesPage />} />
+        <Route path="/admin/expenses" element={<ExpenseTrackerRoute />} />
         <Route path="/admin/donor-pooja-details" element={<DonorPoojaDetails />} />
         <Route path="/admin/donor-pooja-registrations" element={<DonorPoojaDetails />} />
       </Route>

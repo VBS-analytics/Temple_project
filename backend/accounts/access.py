@@ -19,8 +19,16 @@ REPORT_DOWNLOAD_RESTRICTED_ADMIN_PHONES = {
     "9999999997",
 }
 
+EXPENSE_TRACKER_HIDDEN_ADMIN_PHONES = {
+    "9999999997",
+}
+
 REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE = (
     "You don't have access for downloading the reports, contact other admins."
+)
+
+EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE = (
+    "You don't have access for Expense Tracker, contact other admins."
 )
 
 
@@ -66,3 +74,11 @@ def can_download_reports(user: User | None) -> bool:
     if user.role != UserRole.ADMIN:
         return False
     return not _matches_phone_set(user.phone_number, REPORT_DOWNLOAD_RESTRICTED_ADMIN_PHONES)
+
+
+def can_view_expense_tracker(user: User | None) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    if user.role != UserRole.ADMIN:
+        return False
+    return not _matches_phone_set(user.phone_number, EXPENSE_TRACKER_HIDDEN_ADMIN_PHONES)

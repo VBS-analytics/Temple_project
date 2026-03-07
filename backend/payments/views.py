@@ -14,13 +14,15 @@ from django.db.models import Window, F
 from django.db.models.functions import RowNumber
 from django.core.cache import cache
 from rest_framework import permissions, status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.access import (
     can_download_reports,
+    can_view_expense_tracker,
     can_view_payment_statement,
+    EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE,
     REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE,
 )
 from accounts.models import User, UserRole
@@ -416,6 +418,11 @@ class ExpenseRecordViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseRecordSerializer
     permission_classes = (IsAdminRole,)
     pagination_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not can_view_expense_tracker(request.user):
+            raise PermissionDenied(EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
 
     def get_queryset(self):
         queryset = ExpenseRecord.objects.all().order_by("-transaction_date", "-id")
