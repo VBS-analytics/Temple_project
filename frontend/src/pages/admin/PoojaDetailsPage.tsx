@@ -5,6 +5,7 @@ import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../../lib/pdf
 import api, { extractResults } from '../../lib/api';
 import { FALLBACK_DAILY_HEADERS } from '../../data/dailyHeaderText';
 import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
+import { isAdmin, useAuthStore } from '../../store/auth';
 
 const TABLE_COLUMNS = [
   'Date',
@@ -236,6 +237,8 @@ const MobileDayCard = ({ data }: MobileDayCardProps) => {
 };
 
 const PoojaDetailsPage = () => {
+  const user = useAuthStore((state) => state.user);
+  const isAdminUser = Boolean(user && isAdmin(user.role));
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMonthSelector, setShowMobileMonthSelector] = useState(false);
 
@@ -246,7 +249,18 @@ const PoojaDetailsPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const monthTabs = useMemo(() => buildMonthTabs(), []);
+  const monthTabs = useMemo(() => {
+    const tabs = buildMonthTabs();
+    if (isAdminUser) {
+      return tabs;
+    }
+    const today = new Date();
+    return tabs.filter(
+      (tab) =>
+        tab.year < today.getFullYear()
+        || (tab.year === today.getFullYear() && tab.monthIndex <= today.getMonth()),
+    );
+  }, [isAdminUser]);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(() => {
     const today = new Date();
     const currentMonthIndex = monthTabs.findIndex(
