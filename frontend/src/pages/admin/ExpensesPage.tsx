@@ -8,6 +8,9 @@ type ExpenseRecordResponse = {
   transaction_date: string;
   category: string;
   amount: string | number;
+  transaction_no?: string;
+  comments?: string;
+  remarks?: string;
   notes?: string;
 };
 
@@ -32,7 +35,14 @@ type PoojaOptionPaidTotal = {
 
 type ExpenseRecord = Omit<ExpenseRecordResponse, 'amount'> & { amount: number };
 type MonthOption = { label: string; value: string };
-type ExpenseFormPayload = { transaction_date: string; category: string; amount: number };
+type ExpenseFormPayload = {
+  transaction_date: string;
+  category: string;
+  amount: number;
+  transaction_no?: string;
+  comments?: string;
+  remarks?: string;
+};
 type SaveExpenseResult = { ok: boolean; error?: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -633,9 +643,49 @@ const useExpenses = () => {
     finally { setIsSavingExpense(false); }
   }, [fetchMonthlyExpenses, selectedMonth]);
 
+  const updateExpense = useCallback(async (expenseId: number, payload: ExpenseFormPayload): Promise<SaveExpenseResult> => {
+    setIsSavingExpense(true);
+    try {
+      await api.patch(`/payments/expenses/${expenseId}/`, payload);
+      await fetchMonthlyExpenses(selectedMonth);
+      return { ok: true };
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Unable to update expense.');
+      setMonthlyStatus(message);
+      return { ok: false, error: message };
+    }
+    finally { setIsSavingExpense(false); }
+  }, [fetchMonthlyExpenses, selectedMonth]);
+
+  const deleteExpense = useCallback(async (expenseId: number): Promise<SaveExpenseResult> => {
+    setIsSavingExpense(true);
+    try {
+      await api.delete(`/payments/expenses/${expenseId}/`);
+      await fetchMonthlyExpenses(selectedMonth);
+      return { ok: true };
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Unable to delete expense.');
+      setMonthlyStatus(message);
+      return { ok: false, error: message };
+    }
+    finally { setIsSavingExpense(false); }
+  }, [fetchMonthlyExpenses, selectedMonth]);
+
   useEffect(() => { fetchMonthlyExpenses(selectedMonth); }, [selectedMonth, fetchMonthlyExpenses]);
 
-  return { monthOptions, selectedMonth, setSelectedMonth, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense };
+  return {
+    monthOptions,
+    selectedMonth,
+    setSelectedMonth,
+    monthlyExpenses,
+    monthlyLoading,
+    monthlyStatus,
+    isSavingExpense,
+    fetchMonthlyExpenses,
+    saveExpense,
+    updateExpense,
+    deleteExpense,
+  };
 };
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -682,19 +732,32 @@ const CatPill = ({ category }: { category: string }) => {
 
 // ── Entry Form ────────────────────────────────────────────────────────────────
 const EntryForm = ({
-  onSave,
+  onCreate,
+  onUpdate,
+  editingExpense,
+  onCancelEdit,
   isSaving,
   isReadOnly,
   selectedMonth,
   selectedMonthLabel,
 }: {
-  onSave: (p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
+  onCreate: (p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
+  onUpdate: (expenseId: number, p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
+  editingExpense: ExpenseRecord | null;
+  onCancelEdit: () => void;
   isSaving: boolean;
   isReadOnly: boolean;
   selectedMonth: string;
   selectedMonthLabel: string;
 }) => {
-  const [vals, setVals] = useState({ date: '', category: '', amount: '' });
+  const [vals, setVals] = useState({
+    date: '',
+    category: '',
+    amount: '',
+    transactionNo: '',
+    comments: '',
+    remarks: '',
+  });
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const set = (k: keyof typeof vals, v: string) => setVals(p => ({ ...p, [k]: v }));
   const formDisabled = isSaving || isReadOnly;
@@ -715,6 +778,21 @@ const EntryForm = ({
     return () => window.clearTimeout(timerId);
   }, [status]);
 
+  useEffect(() => {
+    if (!editingExpense) {
+      setVals({ date: '', category: '', amount: '', transactionNo: '', comments: '', remarks: '' });
+      return;
+    }
+    setVals({
+      date: editingExpense.transaction_date ?? '',
+      category: editingExpense.category ?? '',
+      amount: editingExpense.amount != null ? String(editingExpense.amount) : '',
+      transactionNo: editingExpense.transaction_no ?? '',
+      comments: editingExpense.comments ?? '',
+      remarks: editingExpense.remarks ?? '',
+    });
+  }, [editingExpense]);
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (isReadOnly) {
@@ -729,10 +807,19 @@ const EntryForm = ({
       setStatus({ msg: `Transaction date must be within ${selectedMonthLabel}.`, ok: false });
       return;
     }
-    const result = await onSave({ transaction_date: vals.date, category: vals.category, amount: Number(vals.amount) });
+    const payload: ExpenseFormPayload = {
+      transaction_date: vals.date,
+      category: vals.category,
+      amount: Number(vals.amount),
+      transaction_no: vals.transactionNo.trim(),
+      comments: vals.comments.trim(),
+      remarks: vals.remarks.trim(),
+    };
+    const result = editingExpense ? await onUpdate(editingExpense.id, payload) : await onCreate(payload);
     if (result.ok) {
-      setStatus({ msg: `Saved ${formatCurrency(Number(vals.amount))} for "${vals.category}"`, ok: true });
-      setVals({ date: '', category: '', amount: '' });
+      setStatus({ msg: `${editingExpense ? 'Updated' : 'Saved'} ${formatCurrency(Number(vals.amount))} for "${vals.category}"`, ok: true });
+      setVals({ date: '', category: '', amount: '', transactionNo: '', comments: '', remarks: '' });
+      if (editingExpense) onCancelEdit();
     } else {
       setStatus({ msg: result.error || 'Save failed. Please try again.', ok: false });
     }
@@ -755,7 +842,9 @@ const EntryForm = ({
         <div style={{ width: 32, height: 32, borderRadius: 8, background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
         </div>
-        <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>New Entry</span>
+        <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>
+          {editingExpense ? `Edit Entry #${editingExpense.id}` : 'New Entry'}
+        </span>
       </div>
 
       <form onSubmit={submit} style={{ padding: '20px' }}>
@@ -828,10 +917,78 @@ const EntryForm = ({
           />
         </div>
 
+        {/* Transaction No */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Transaction No
+          </label>
+          <input
+            type="text"
+            value={vals.transactionNo}
+            onChange={e => set('transactionNo', e.target.value)}
+            disabled={formDisabled}
+            placeholder="Enter transaction number"
+            style={field}
+          />
+        </div>
+
+        {/* Comments */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Comments
+          </label>
+          <textarea
+            value={vals.comments}
+            onChange={e => set('comments', e.target.value)}
+            disabled={formDisabled}
+            placeholder="Add comments"
+            rows={2}
+            style={{ ...field, resize: 'vertical' }}
+          />
+        </div>
+
+        {/* Remarks */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Remarks
+          </label>
+          <textarea
+            value={vals.remarks}
+            onChange={e => set('remarks', e.target.value)}
+            disabled={formDisabled}
+            placeholder="Add remarks"
+            rows={2}
+            style={{ ...field, resize: 'vertical' }}
+          />
+        </div>
+
         {/* Save */}
         <button type="submit" disabled={formDisabled} style={{ width: '100%', padding: '12px', background: formDisabled ? C.inkFaint : C.primary, color: '#fff', border: 'none', borderRadius: 10, fontFamily: C.fNunito, fontSize: 14, fontWeight: 800, cursor: formDisabled ? 'not-allowed' : 'pointer', letterSpacing: '0.02em', transition: 'background 0.15s' }}>
-          {isReadOnly ? 'Read-only access' : isSaving ? 'Saving…' : '✓  Save Expense'}
+          {isReadOnly ? 'Read-only access' : isSaving ? (editingExpense ? 'Updating…' : 'Saving…') : (editingExpense ? '✓  Update Expense' : '✓  Save Expense')}
         </button>
+
+        {editingExpense && (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            disabled={formDisabled}
+            style={{
+              width: '100%',
+              marginTop: 8,
+              padding: '10px',
+              background: 'transparent',
+              color: C.inkMid,
+              border: `1.5px solid ${C.borderStrong}`,
+              borderRadius: 10,
+              fontFamily: C.fNunito,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: formDisabled ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Cancel Edit
+          </button>
+        )}
 
         {/* Status */}
         {status && (
@@ -846,7 +1003,23 @@ const EntryForm = ({
 };
 
 // ── Records panel ─────────────────────────────────────────────────────────────
-const RecordsPanel = ({ expenses, loading }: { expenses: ExpenseRecord[]; loading: boolean }) => {
+const RecordsPanel = ({
+  expenses,
+  loading,
+  readOnly,
+  editingExpenseId,
+  deletingExpenseId,
+  onEdit,
+  onDelete,
+}: {
+  expenses: ExpenseRecord[];
+  loading: boolean;
+  readOnly: boolean;
+  editingExpenseId: number | null;
+  deletingExpenseId: number | null;
+  onEdit: (expense: ExpenseRecord) => void;
+  onDelete: (expense: ExpenseRecord) => void;
+}) => {
   const total = useMemo(() => expenses.reduce((s, r) => s + r.amount, 0), [expenses]);
 
   if (loading) return (
@@ -886,19 +1059,67 @@ const RecordsPanel = ({ expenses, loading }: { expenses: ExpenseRecord[]; loadin
         {expenses.map((exp, i) => {
           const g = getCategoryGroup(exp.category);
           const cat = getCat(g?.color ?? 'gray');
+          const isEditingRow = editingExpenseId === exp.id;
+          const isDeletingRow = deletingExpenseId === exp.id;
           return (
-            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < expenses.length - 1 ? `1px solid ${C.surfaceInset}` : 'none', background: i % 2 === 0 ? C.surface : '#F8FAFC' }}>
+            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < expenses.length - 1 ? `1px solid ${C.surfaceInset}` : 'none', background: isEditingRow ? '#FFF7ED' : i % 2 === 0 ? C.surface : '#F8FAFC' }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: cat.bg, border: `1px solid ${cat.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
                 {g?.icon ?? '💰'}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{exp.category}</p>
                 <p style={{ fontFamily: C.fNunito, fontSize: 11, color: C.inkMuted, margin: 0 }}>{g?.title ?? '—'}</p>
+                {exp.transaction_no && (
+                  <p style={{ fontFamily: C.fMono, fontSize: 10, color: C.inkMuted, margin: '2px 0 0' }}>
+                    Txn: {exp.transaction_no}
+                  </p>
+                )}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <p style={{ fontFamily: C.fMono, fontSize: 14, fontWeight: 600, color: C.ink, margin: '0 0 2px' }}>{formatCurrency(exp.amount)}</p>
                 <p style={{ fontFamily: C.fMono, fontSize: 11, color: C.inkMuted, margin: 0 }}>{formatDisplayDate(exp.transaction_date)}</p>
               </div>
+              {!readOnly && (
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(exp)}
+                    disabled={isDeletingRow}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      border: `1px solid ${C.borderStrong}`,
+                      background: isEditingRow ? C.primaryGhost : '#fff',
+                      color: isEditingRow ? C.primary : C.inkMid,
+                      fontFamily: C.fNunito,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: isDeletingRow ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(exp)}
+                    disabled={isDeletingRow}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      border: '1px solid #FCA5A5',
+                      background: '#FEF2F2',
+                      color: '#B91C1C',
+                      fontFamily: C.fNunito,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: isDeletingRow ? 'not-allowed' : 'pointer',
+                      opacity: isDeletingRow ? 0.7 : 1,
+                    }}
+                  >
+                    {isDeletingRow ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1030,10 +1251,24 @@ const MonthlyTracker = ({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const ExpensesPage = () => {
   const [activeTab, setActiveTab] = useState<'statement' | 'data' | 'tracking'>('statement');
+  const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
   const authUser = useAuthStore((state) => state.user);
   const readOnlyAdmin = isReadOnlyAdmin(authUser);
 
-  const { monthOptions, selectedMonth, setSelectedMonth, monthlyExpenses, monthlyLoading, monthlyStatus, isSavingExpense, fetchMonthlyExpenses, saveExpense } = useExpenses();
+  const {
+    monthOptions,
+    selectedMonth,
+    setSelectedMonth,
+    monthlyExpenses,
+    monthlyLoading,
+    monthlyStatus,
+    isSavingExpense,
+    fetchMonthlyExpenses,
+    saveExpense,
+    updateExpense,
+    deleteExpense,
+  } = useExpenses();
   const { totals: poojaOptionTotals, loading: poojaOptionLoading } = usePoojaOptionTotals(selectedMonth);
   const { totals: poojaPaidOptionTotals, loading: poojaPaidOptionLoading } = usePoojaPaidOptionTotals(selectedMonth);
   const statementRows = useMemo(() => {
@@ -1069,10 +1304,40 @@ const ExpensesPage = () => {
     [monthOptions, selectedMonth],
   );
 
-  const handleSave = async (payload: ExpenseFormPayload) => {
+  useEffect(() => {
+    if (!editingExpense) return;
+    if (!monthlyExpenses.some((expense) => expense.id === editingExpense.id)) {
+      setEditingExpense(null);
+    }
+  }, [monthlyExpenses, editingExpense]);
+
+  const handleCreate = async (payload: ExpenseFormPayload) => {
     const result = await saveExpense(payload);
     if (result.ok) setActiveTab('data');
     return result;
+  };
+
+  const handleUpdate = async (expenseId: number, payload: ExpenseFormPayload) => {
+    const result = await updateExpense(expenseId, payload);
+    if (result.ok) {
+      setActiveTab('data');
+      setEditingExpense(null);
+    }
+    return result;
+  };
+
+  const handleDelete = async (expense: ExpenseRecord) => {
+    if (readOnlyAdmin) return;
+    const confirmDelete = window.confirm(
+      `Delete expense "${expense.category}" (${formatCurrency(expense.amount)}) on ${formatDisplayDate(expense.transaction_date)}?`,
+    );
+    if (!confirmDelete) return;
+    setDeletingExpenseId(expense.id);
+    const result = await deleteExpense(expense.id);
+    if (result.ok && editingExpense?.id === expense.id) {
+      setEditingExpense(null);
+    }
+    setDeletingExpenseId(null);
   };
 
   return (
@@ -1144,7 +1409,10 @@ const ExpensesPage = () => {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
               <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
                 <EntryForm
-                  onSave={handleSave}
+                  onCreate={handleCreate}
+                  onUpdate={handleUpdate}
+                  editingExpense={editingExpense}
+                  onCancelEdit={() => setEditingExpense(null)}
                   isSaving={isSavingExpense}
                   isReadOnly={readOnlyAdmin}
                   selectedMonth={selectedMonth}
@@ -1152,7 +1420,15 @@ const ExpensesPage = () => {
                 />
               </div>
               <div style={{ flex: '1 1 400px', minWidth: 0 }}>
-                <RecordsPanel expenses={monthlyExpenses} loading={monthlyLoading} />
+                <RecordsPanel
+                  expenses={monthlyExpenses}
+                  loading={monthlyLoading}
+                  readOnly={readOnlyAdmin}
+                  editingExpenseId={editingExpense?.id ?? null}
+                  deletingExpenseId={deletingExpenseId}
+                  onEdit={(expense) => setEditingExpense(expense)}
+                  onDelete={handleDelete}
+                />
               </div>
             </div>
           </>

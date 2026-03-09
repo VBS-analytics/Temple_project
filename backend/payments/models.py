@@ -197,6 +197,9 @@ class ExpenseRecord(models.Model):
     transaction_date = models.DateField()
     category = models.CharField(max_length=128)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_no = models.CharField(max_length=128, blank=True)
+    comments = models.TextField(blank=True)
+    remarks = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

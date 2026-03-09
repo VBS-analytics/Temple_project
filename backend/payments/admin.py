@@ -14,9 +14,9 @@ class PaymentRecordAdmin(admin.ModelAdmin):
 
 @admin.register(ExpenseRecord)
 class ExpenseRecordAdmin(admin.ModelAdmin):
-    list_display = ("id", "category", "amount", "transaction_date", "created_by", "created_at")
+    list_display = ("id", "transaction_no", "category", "amount", "transaction_date", "created_by", "created_at")
     list_filter = ("category", "transaction_date")
-    search_fields = ("category", "created_by__name", "created_by__phone_number")
+    search_fields = ("transaction_no", "category", "comments", "remarks", "created_by__name", "created_by__phone_number")
 
 
 @admin.register(PassbookEntry)
