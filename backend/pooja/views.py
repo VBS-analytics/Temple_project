@@ -1033,7 +1033,15 @@ class RecurringPoojaPlanViewSet(
 
     def list(self, request, *args, **kwargs):
         self._auto_resume_expired_pauses()
-        self._backfill_missing_chrt_plans()
+        # Do not auto-backfill CHRT plans during regular profile loads.
+        # This previously converted one-time CHRT registrations into
+        # recurring monthly plans unintentionally.
+        should_backfill = (
+            request.user.role == UserRole.ADMIN
+            and (request.query_params.get("backfill_chrt") or "").strip().lower() in {"1", "true", "yes"}
+        )
+        if should_backfill:
+            self._backfill_missing_chrt_plans()
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
