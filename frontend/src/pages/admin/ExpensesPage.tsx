@@ -759,6 +759,7 @@ const EntryForm = ({
     remarks: '',
   });
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [showNotes, setShowNotes] = useState(false);
   const set = (k: keyof typeof vals, v: string) => setVals(p => ({ ...p, [k]: v }));
   const formDisabled = isSaving || isReadOnly;
   const selectedMonthMinDate = selectedMonth ? `${selectedMonth}-01` : undefined;
@@ -781,6 +782,7 @@ const EntryForm = ({
   useEffect(() => {
     if (!editingExpense) {
       setVals({ date: '', category: '', amount: '', transactionNo: '', comments: '', remarks: '' });
+      setShowNotes(false);
       return;
     }
     setVals({
@@ -791,6 +793,7 @@ const EntryForm = ({
       comments: editingExpense.comments ?? '',
       remarks: editingExpense.remarks ?? '',
     });
+    if (editingExpense.comments || editingExpense.remarks) setShowNotes(true);
   }, [editingExpense]);
 
   const submit = async (e: FormEvent) => {
@@ -854,30 +857,55 @@ const EntryForm = ({
           </div>
         )}
 
-        {/* Date */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-            Transaction Date
-          </label>
-          <input
-            type="date"
-            value={vals.date}
-            onChange={e => set('date', e.target.value)}
-            min={selectedMonthMinDate}
-            max={selectedMonthMaxDate}
-            onKeyDown={e => {
-              if (e.key !== 'Tab') e.preventDefault();
-            }}
-            onPaste={e => e.preventDefault()}
-            onDrop={e => e.preventDefault()}
-            disabled={formDisabled}
-            style={{ ...field, cursor: 'pointer' }}
-          />
+        {/* Section label: Required */}
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontFamily: C.fNunito, fontSize: 10, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>Required</span>
+        </div>
+
+        {/* Date + Amount — two columns */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+              Date
+            </label>
+            <input
+              type="date"
+              value={vals.date}
+              onChange={e => set('date', e.target.value)}
+              min={selectedMonthMinDate}
+              max={selectedMonthMaxDate}
+              onKeyDown={e => { if (e.key !== 'Tab') e.preventDefault(); }}
+              onPaste={e => e.preventDefault()}
+              onDrop={e => e.preventDefault()}
+              disabled={formDisabled}
+              style={{ ...field, cursor: 'pointer', fontSize: 13 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+              Amount (₹)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={vals.amount}
+              onChange={e => set('amount', e.target.value)}
+              onKeyDown={e => {
+                const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','.'];
+                if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+              }}
+              disabled={formDisabled}
+              placeholder="0.00"
+              style={{ ...field, fontFamily: C.fMono, fontSize: 15, fontWeight: 500 }}
+            />
+          </div>
         </div>
 
         {/* Category */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
             Category
           </label>
           <select value={vals.category} onChange={e => set('category', e.target.value)} disabled={formDisabled} style={{ ...field, appearance: 'none', cursor: 'pointer' }}>
@@ -895,31 +923,17 @@ const EntryForm = ({
           )}
         </div>
 
-        {/* Amount */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-            Amount (₹)
-          </label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={vals.amount}
-            onChange={e => set('amount', e.target.value)}
-            onKeyDown={e => {
-              const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','.'];
-              if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
-            }}
-            disabled={formDisabled}
-            placeholder="0.00"
-            style={{ ...field, fontFamily: C.fMono, fontSize: 16, fontWeight: 500 }}
-          />
+        {/* Divider */}
+        <div style={{ height: 1, background: C.border, margin: '0 0 14px' }} />
+
+        {/* Section label: Optional */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ fontFamily: C.fNunito, fontSize: 10, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>Optional</span>
         </div>
 
         {/* Transaction No */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
             Transaction No
           </label>
           <input
@@ -932,34 +946,49 @@ const EntryForm = ({
           />
         </div>
 
-        {/* Comments */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-            Comments
-          </label>
-          <textarea
-            value={vals.comments}
-            onChange={e => set('comments', e.target.value)}
-            disabled={formDisabled}
-            placeholder="Add comments"
-            rows={2}
-            style={{ ...field, resize: 'vertical' }}
-          />
-        </div>
+        {/* Notes toggle (Comments + Remarks) */}
+        <div style={{ marginBottom: 18 }}>
+          <button
+            type="button"
+            onClick={() => setShowNotes(p => !p)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: showNotes ? C.primary : C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase' }}
+          >
+            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ transform: showNotes ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            {showNotes ? 'Hide Notes' : 'Add Notes (comments & remarks)'}
+          </button>
 
-        {/* Remarks */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-            Remarks
-          </label>
-          <textarea
-            value={vals.remarks}
-            onChange={e => set('remarks', e.target.value)}
-            disabled={formDisabled}
-            placeholder="Add remarks"
-            rows={2}
-            style={{ ...field, resize: 'vertical' }}
-          />
+          {showNotes && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Comments
+                </label>
+                <textarea
+                  value={vals.comments}
+                  onChange={e => set('comments', e.target.value)}
+                  disabled={formDisabled}
+                  placeholder="Add comments"
+                  rows={2}
+                  style={{ ...field, resize: 'vertical' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Remarks
+                </label>
+                <textarea
+                  value={vals.remarks}
+                  onChange={e => set('remarks', e.target.value)}
+                  disabled={formDisabled}
+                  placeholder="Add remarks"
+                  rows={2}
+                  style={{ ...field, resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Save */}
@@ -972,19 +1001,7 @@ const EntryForm = ({
             type="button"
             onClick={onCancelEdit}
             disabled={formDisabled}
-            style={{
-              width: '100%',
-              marginTop: 8,
-              padding: '10px',
-              background: 'transparent',
-              color: C.inkMid,
-              border: `1.5px solid ${C.borderStrong}`,
-              borderRadius: 10,
-              fontFamily: C.fNunito,
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: formDisabled ? 'not-allowed' : 'pointer',
-            }}
+            style={{ width: '100%', marginTop: 8, padding: '10px', background: 'transparent', color: C.inkMid, border: `1.5px solid ${C.borderStrong}`, borderRadius: 10, fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, cursor: formDisabled ? 'not-allowed' : 'pointer' }}
           >
             Cancel Edit
           </button>
@@ -1054,83 +1071,83 @@ const RecordsPanel = ({
         </div>
       </div>
 
-      {/* Rows */}
-      <div>
-        {expenses.map((exp, i) => {
-          const g = getCategoryGroup(exp.category);
-          const cat = getCat(g?.color ?? 'gray');
-          const isEditingRow = editingExpenseId === exp.id;
-          const isDeletingRow = deletingExpenseId === exp.id;
-          return (
-            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < expenses.length - 1 ? `1px solid ${C.surfaceInset}` : 'none', background: isEditingRow ? '#FFF7ED' : i % 2 === 0 ? C.surface : '#F8FAFC' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: cat.bg, border: `1px solid ${cat.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                {g?.icon ?? '💰'}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{exp.category}</p>
-                <p style={{ fontFamily: C.fNunito, fontSize: 11, color: C.inkMuted, margin: 0 }}>{g?.title ?? '—'}</p>
-                {exp.transaction_no && (
-                  <p style={{ fontFamily: C.fMono, fontSize: 10, color: C.inkMuted, margin: '2px 0 0' }}>
-                    Txn: {exp.transaction_no}
-                  </p>
-                )}
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontFamily: C.fMono, fontSize: 14, fontWeight: 600, color: C.ink, margin: '0 0 2px' }}>{formatCurrency(exp.amount)}</p>
-                <p style={{ fontFamily: C.fMono, fontSize: 11, color: C.inkMuted, margin: 0 }}>{formatDisplayDate(exp.transaction_date)}</p>
-              </div>
-              {!readOnly && (
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(exp)}
-                    disabled={isDeletingRow}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 8,
-                      border: `1px solid ${C.borderStrong}`,
-                      background: isEditingRow ? C.primaryGhost : '#fff',
-                      color: isEditingRow ? C.primary : C.inkMid,
-                      fontFamily: C.fNunito,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: isDeletingRow ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(exp)}
-                    disabled={isDeletingRow}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 8,
-                      border: '1px solid #FCA5A5',
-                      background: '#FEF2F2',
-                      color: '#B91C1C',
-                      fontFamily: C.fNunito,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: isDeletingRow ? 'not-allowed' : 'pointer',
-                      opacity: isDeletingRow ? 0.7 : 1,
-                    }}
-                  >
-                    {isDeletingRow ? 'Deleting…' : 'Delete'}
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Footer total */}
-      <div style={{ padding: '12px 20px', background: C.primaryGhost, borderTop: `1.5px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Total — {expenses.length} {expenses.length === 1 ? 'entry' : 'entries'}
-        </span>
-        <span style={{ fontFamily: C.fMono, fontSize: 15, fontWeight: 700, color: C.primary }}>{formatCurrency(total)}</span>
+      {/* Table */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: C.surfaceInset }}>
+              {['#', 'Date', 'Category', 'Txn No', 'Amount', ''].map((h, i) => (
+                <th key={i} style={{ padding: '9px 14px', textAlign: i === 4 ? 'right' : 'left', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {expenses.map((exp, i) => {
+              const g = getCategoryGroup(exp.category);
+              const cat = getCat(g?.color ?? 'gray');
+              const isEditingRow = editingExpenseId === exp.id;
+              const isDeletingRow = deletingExpenseId === exp.id;
+              return (
+                <tr key={exp.id} style={{ background: isEditingRow ? '#FFF7ED' : i % 2 === 0 ? C.surface : '#F8FAFC' }}>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}`, width: 36 }}>{i + 1}</td>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 12, color: C.inkMid, borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>{formatDisplayDate(exp.transaction_date)}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: cat.bg, border: `1px solid ${cat.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
+                        {g?.icon ?? '💰'}
+                      </div>
+                      <div>
+                        <p style={{ fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, margin: 0, whiteSpace: 'nowrap' }}>{exp.category}</p>
+                        <p style={{ fontFamily: C.fNunito, fontSize: 10, color: C.inkMuted, margin: 0 }}>{g?.title ?? '—'}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>
+                    {exp.transaction_no || '—'}
+                  </td>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>
+                    {formatCurrency(exp.amount)}
+                  </td>
+                  <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>
+                    {!readOnly && (
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(exp)}
+                          disabled={isDeletingRow}
+                          style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.borderStrong}`, background: isEditingRow ? C.primaryGhost : '#fff', color: isEditingRow ? C.primary : C.inkMid, fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, cursor: isDeletingRow ? 'not-allowed' : 'pointer' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(exp)}
+                          disabled={isDeletingRow}
+                          style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, cursor: isDeletingRow ? 'not-allowed' : 'pointer', opacity: isDeletingRow ? 0.7 : 1 }}
+                        >
+                          {isDeletingRow ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: C.primaryGhost }}>
+              <td colSpan={4} style={{ padding: '11px 14px', fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Total — {expenses.length} {expenses.length === 1 ? 'entry' : 'entries'}
+              </td>
+              <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 15, fontWeight: 700, color: C.primary, textAlign: 'right' }}>
+                {formatCurrency(total)}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   );
