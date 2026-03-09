@@ -7,6 +7,7 @@ from .views import (
     CombinePaymentAccessView,
     CombinePaymentMappingView,
     DonationCreateView,
+    ExpenseCategoryViewSet,
     ExpenseRecordViewSet,
     GeneralDonationExportView,
     PaymentDetailsExportView,
@@ -17,6 +18,7 @@ from .views import (
 router = DefaultRouter()
 router.register('records', PaymentRecordViewSet, basename='payment-records')
 router.register('expenses', ExpenseRecordViewSet, basename='expense-records')
+router.register('expense-categories', ExpenseCategoryViewSet, basename='expense-categories')
 router.register('passbook-entries', PassbookEntryViewSet, basename='passbook-entries')
 
 urlpatterns = router.urls

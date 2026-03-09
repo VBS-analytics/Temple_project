@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from .models import Donation, ExpenseRecord, PaymentRecord, PassbookEntry
+from .models import Donation, ExpenseCategory, ExpenseRecord, PaymentRecord, PassbookEntry
 from pooja.services.calendar import get_calendar_service
 
 
@@ -193,6 +193,24 @@ class ExpenseRecordSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_by", "created_by_name", "created_at", "updated_at")
+
+
+class ExpenseCategorySerializer(serializers.ModelSerializer):
+    group_label = serializers.CharField(source="get_group_key_display", read_only=True)
+
+    class Meta:
+        model = ExpenseCategory
+        fields = (
+            "id",
+            "name",
+            "group_key",
+            "group_label",
+            "display_order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at", "group_label")
 
 
 class PassbookEntrySerializer(serializers.ModelSerializer):

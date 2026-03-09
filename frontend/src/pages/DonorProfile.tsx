@@ -757,10 +757,6 @@ const DonorProfile = () => {
     },
     [editingRegistrationId, fetchRegistrations, resetRegistrationEditState],
   );
-  const handleManualPaymentRedirect = useCallback(() => {
-    navigate('/payments/general?tab=summary');
-  }, [navigate]);
-
   const handleStartRegistration = useCallback(() => {
     navigate('/pooja/register');
   }, [navigate]);
@@ -852,16 +848,6 @@ const DonorProfile = () => {
     () => recurringPlansToShow.reduce((sum, plan) => sum + parseDecimalValue(plan.amount), 0),
     [recurringPlansToShow],
   );
-  const hasRecurringPaymentItems = useMemo(
-    () => recurringPlansToShow.length > 0 || chrtPlansToShow.length > 0 || chrtRegistrations.length > 0,
-    [recurringPlansToShow, chrtPlansToShow, chrtRegistrations],
-  );
-
-  const handleViewRecurringPayments = useCallback(() => {
-    if (!hasRecurringPaymentItems) return;
-    navigate('/payments/general');
-  }, [hasRecurringPaymentItems, navigate]);
-
   const getInitials = (name?: string | null) => {
     if (!name) return 'U';
     return name.charAt(0).toUpperCase();
@@ -1424,15 +1410,6 @@ const DonorProfile = () => {
                     <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">One-time Registrations</h2>
                     <p className="text-sm text-slate-500">View all your pooja registrations</p>
                   </div>
-                  <button
-                    onClick={handleManualPaymentRedirect}
-                    className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Payments
-                  </button>
                 </div>
 
                 <div className="mb-6 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 p-6 ring-1 ring-slate-200">
@@ -1633,10 +1610,6 @@ const DonorProfile = () => {
                     <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">Recurring Pooja Plans</h2>
                     <p className="text-sm text-slate-500">Manage your active recurring donations</p>
                   </div>
-                  <button onClick={handleViewRecurringPayments} disabled={!hasRecurringPaymentItems} className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                    Payments
-                  </button>
                 </div>
 
                 {/* Summary Banner */}
@@ -1854,10 +1827,6 @@ const DonorProfile = () => {
                     <h2 className="text-xl font-bold text-slate-800 sm:text-2xl">Choose Your Preferred Date - CHRT Pooja</h2>
                     <p className="text-sm text-slate-500">Manage your CHRT poojas with custom selected dates</p>
                   </div>
-                  <button onClick={handleViewRecurringPayments} disabled={chrtPoojaCount === 0} className="inline-flex flex-shrink-0 items-center gap-2 rounded-lg border-2 border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                    Payments
-                  </button>
                 </div>
 
                 {/* Summary Banner */}

@@ -31,6 +31,7 @@ from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import (
     CombinePaymentMapping,
     Donation,
+    ExpenseCategory,
     ExpenseRecord,
     PaymentRecord,
     PassbookEntry,
@@ -38,6 +39,7 @@ from .models import (
 )
 from .serializers import (
     DonationSerializer,
+    ExpenseCategorySerializer,
     ExpenseRecordSerializer,
     PassbookEntrySerializer,
     PaymentRecordSerializer,
@@ -461,6 +463,24 @@ class ExpenseRecordViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+
+class ExpenseCategoryViewSet(viewsets.ModelViewSet):
+    serializer_class = ExpenseCategorySerializer
+    permission_classes = (IsAdminRole,)
+    pagination_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not can_view_expense_tracker(request.user):
+            raise PermissionDenied(EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
+
+    def get_queryset(self):
+        queryset = ExpenseCategory.objects.all().order_by("group_key", "display_order", "name", "id")
+        active_param = self.request.query_params.get("active")
+        if active_param and active_param.strip().lower() in {"1", "true", "yes"}:
+            queryset = queryset.filter(is_active=True)
+        return queryset
 
 
 class CombinePaymentMappingView(APIView):

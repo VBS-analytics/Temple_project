@@ -25,7 +25,14 @@ from pooja.models import (
     RecurringPoojaPlan,
 )
 from payments.models import PassbookEntry
-from payments.models import CombinePaymentMapping, Donation, ExpenseRecord, PaymentRecord, PaymentStatus
+from payments.models import (
+    CombinePaymentMapping,
+    Donation,
+    ExpenseCategory,
+    ExpenseRecord,
+    PaymentRecord,
+    PaymentStatus,
+)
 from payments.services import regenerate_donor_passbook
 from payments.views import _donor_passbook_needs_refresh
 
@@ -583,6 +590,82 @@ class ExpenseRecordApiTests(TestCase):
         delete_response = self.client.delete(detail_url)
         self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(ExpenseRecord.objects.filter(id=expense.id).exists())
+
+
+class ExpenseCategoryApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("expense-categories-list")
+        self.admin = User.objects.create_user(
+            phone_number="+919100000101",
+            name="Expense Category Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.read_only_admin = User.objects.create_superuser(
+            phone_number="+91 9999999998",
+            name="Read Only Expense Category Admin",
+            password="adminpass1",
+        )
+        self.hidden_expense_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Hidden Expense Category Admin",
+            password="adminpass2",
+        )
+
+    def test_admin_can_create_and_filter_active_categories(self):
+        self.client.force_authenticate(self.admin)
+        create_response = self.client.post(
+            self.url,
+            {
+                "name": "Electricity",
+                "group_key": "coordinator",
+                "display_order": 10,
+                "is_active": True,
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        ExpenseCategory.objects.create(
+            name="Retired Item",
+            group_key="other",
+            display_order=99,
+            is_active=False,
+        )
+        list_response = self.client.get(self.url, {"active": "true"})
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        payload = list_response.json()
+        names = {item["name"] for item in payload}
+        self.assertIn("Electricity", names)
+        self.assertNotIn("Retired Item", names)
+
+    def test_read_only_admin_can_list_but_cannot_modify(self):
+        category = ExpenseCategory.objects.create(name="Test Cat", group_key="other")
+        detail_url = reverse("expense-categories-detail", args=[category.id])
+        self.client.force_authenticate(self.read_only_admin)
+
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        create_response = self.client.post(
+            self.url,
+            {"name": "Blocked Cat", "group_key": "other"},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        update_response = self.client.patch(detail_url, {"name": "Blocked Update"}, format="json")
+        self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_hidden_admin_cannot_access_expense_category_master(self):
+        self.client.force_authenticate(self.hidden_expense_admin)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(list_response.json()["detail"], EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
 
 
 class PaymentRecordDeleteAccessTests(TestCase):

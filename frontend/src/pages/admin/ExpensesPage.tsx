@@ -35,6 +35,22 @@ type PoojaOptionPaidTotal = {
 
 type ExpenseRecord = Omit<ExpenseRecordResponse, 'amount'> & { amount: number };
 type MonthOption = { label: string; value: string };
+type ExpenseCategoryGroupKey = 'poojari' | 'coordinator' | 'bank' | 'other';
+type ExpenseCategoryGroup = {
+  key: ExpenseCategoryGroupKey;
+  title: string;
+  items: string[];
+  color: 'purple' | 'blue' | 'green' | 'gray';
+  icon: string;
+};
+type ExpenseCategoryMaster = {
+  id: number;
+  name: string;
+  group_key: string;
+  group_label?: string;
+  display_order?: number;
+  is_active: boolean;
+};
 type ExpenseFormPayload = {
   transaction_date: string;
   category: string;
@@ -46,26 +62,36 @@ type ExpenseFormPayload = {
 type SaveExpenseResult = { ok: boolean; error?: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const EXPENSE_CATEGORY_GROUPS = [
+const EXPENSE_CATEGORY_GROUPS: ExpenseCategoryGroup[] = [
   {
+    key: 'poojari',
     title: 'We pay to poojari for',
     items: ['Archana & Abishekam', 'For Til oil', 'For Neivedhyam', 'For Navagraha pooja', 'For Pradosham', 'For spl pooja'],
     color: 'purple',
     icon: '🙏',
   },
   {
+    key: 'coordinator',
     title: 'We pay to co ordinator',
     items: ['Post expenses', 'Salary for 2 ladies', 'Repair & maintenance work in temple'],
     color: 'blue',
     icon: '👥',
   },
   {
+    key: 'bank',
     title: 'We remit to bank',
     items: ['For FD'],
     color: 'green',
     icon: '🏦',
   },
 ];
+
+const EXPENSE_CATEGORY_GROUP_META: Record<ExpenseCategoryGroupKey, Omit<ExpenseCategoryGroup, 'key' | 'items'>> = {
+  poojari: { title: 'We pay to poojari for', color: 'purple', icon: '🙏' },
+  coordinator: { title: 'We pay to co ordinator', color: 'blue', icon: '👥' },
+  bank: { title: 'We remit to bank', color: 'green', icon: '🏦' },
+  other: { title: 'Other', color: 'gray', icon: '🧾' },
+};
 
 const MONTH_FORMATTER = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
 
@@ -138,8 +164,36 @@ const buildMonthOptions = (): MonthOption[] => {
 const normalizeExpenseRecords = (records: ExpenseRecordResponse[]): ExpenseRecord[] =>
   records.map((r) => ({ ...r, amount: Number(r.amount) }));
 
-const getCategoryGroup = (category: string) =>
-  EXPENSE_CATEGORY_GROUPS.find((g) => g.items.includes(category)) ?? null;
+const normalizeExpenseCategoryGroupKey = (value: string | undefined): ExpenseCategoryGroupKey => {
+  if (!value) return 'other';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'poojari' || normalized === 'coordinator' || normalized === 'bank' || normalized === 'other') {
+    return normalized;
+  }
+  return 'other';
+};
+
+const buildExpenseCategoryGroups = (categories: ExpenseCategoryMaster[]): ExpenseCategoryGroup[] => {
+  if (!categories.length) return [];
+  const grouped = new Map<ExpenseCategoryGroupKey, string[]>();
+  for (const category of categories) {
+    if (!category.is_active) continue;
+    const key = normalizeExpenseCategoryGroupKey(category.group_key);
+    const items = grouped.get(key) ?? [];
+    if (!items.includes(category.name)) items.push(category.name);
+    grouped.set(key, items);
+  }
+  return (Object.keys(EXPENSE_CATEGORY_GROUP_META) as ExpenseCategoryGroupKey[])
+    .map((key) => ({
+      key,
+      ...EXPENSE_CATEGORY_GROUP_META[key],
+      items: grouped.get(key) ?? [],
+    }))
+    .filter((group) => group.items.length > 0);
+};
+
+const getCategoryGroup = (category: string, groups: ExpenseCategoryGroup[] = EXPENSE_CATEGORY_GROUPS) =>
+  groups.find((g) => g.items.includes(category)) ?? EXPENSE_CATEGORY_GROUPS.find((g) => g.items.includes(category)) ?? null;
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -247,6 +301,30 @@ const usePoojaPaidOptionTotals = (month: string) => {
   useEffect(() => { fetch(month); }, [fetch, month]);
 
   return { totals, loading };
+};
+
+const useExpenseCategories = () => {
+  const [categories, setCategories] = useState<ExpenseCategoryMaster[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/payments/expense-categories/', {
+        params: { active: 'true', ordering: 'group_key,display_order,name' },
+      });
+      const rows = extractResults<ExpenseCategoryMaster>(data);
+      setCategories(Array.isArray(rows) ? rows : []);
+    } catch {
+      setCategories([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { categories, loading, refresh: fetch };
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -719,8 +797,8 @@ const Dot = ({ color }: { color: string }) => (
   <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
 );
 
-const CatPill = ({ category }: { category: string }) => {
-  const g = getCategoryGroup(category);
+const CatPill = ({ category, categoryGroups }: { category: string; categoryGroups?: ExpenseCategoryGroup[] }) => {
+  const g = getCategoryGroup(category, categoryGroups);
   const cat = getCat(g?.color ?? 'gray');
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 20, background: cat.bg, border: `1px solid ${cat.border}`, color: cat.text, fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -740,6 +818,7 @@ const EntryForm = ({
   isReadOnly,
   selectedMonth,
   selectedMonthLabel,
+  categoryGroups,
 }: {
   onCreate: (p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
   onUpdate: (expenseId: number, p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
@@ -749,6 +828,7 @@ const EntryForm = ({
   isReadOnly: boolean;
   selectedMonth: string;
   selectedMonthLabel: string;
+  categoryGroups: ExpenseCategoryGroup[];
 }) => {
   const [vals, setVals] = useState({
     date: '',
@@ -828,7 +908,7 @@ const EntryForm = ({
     }
   };
 
-  const selectedGroup = vals.category ? getCategoryGroup(vals.category) : null;
+  const selectedGroup = vals.category ? getCategoryGroup(vals.category, categoryGroups) : null;
   const selectedCat = getCat(selectedGroup?.color ?? 'gray');
 
   const field: CSSProperties = {
@@ -910,7 +990,7 @@ const EntryForm = ({
           </label>
           <select value={vals.category} onChange={e => set('category', e.target.value)} disabled={formDisabled} style={{ ...field, appearance: 'none', cursor: 'pointer' }}>
             <option value="">Choose a category…</option>
-            {EXPENSE_CATEGORY_GROUPS.map(g => (
+            {categoryGroups.map(g => (
               <optgroup key={g.title} label={`${g.icon}  ${g.title}`}>
                 {g.items.map(item => <option key={item} value={item}>{item}</option>)}
               </optgroup>
@@ -1028,6 +1108,7 @@ const RecordsPanel = ({
   deletingExpenseId,
   onEdit,
   onDelete,
+  categoryGroups,
 }: {
   expenses: ExpenseRecord[];
   loading: boolean;
@@ -1036,6 +1117,7 @@ const RecordsPanel = ({
   deletingExpenseId: number | null;
   onEdit: (expense: ExpenseRecord) => void;
   onDelete: (expense: ExpenseRecord) => void;
+  categoryGroups: ExpenseCategoryGroup[];
 }) => {
   const total = useMemo(() => expenses.reduce((s, r) => s + r.amount, 0), [expenses]);
 
@@ -1085,7 +1167,7 @@ const RecordsPanel = ({
           </thead>
           <tbody>
             {expenses.map((exp, i) => {
-              const g = getCategoryGroup(exp.category);
+          const g = getCategoryGroup(exp.category, categoryGroups);
               const cat = getCat(g?.color ?? 'gray');
               const isEditingRow = editingExpenseId === exp.id;
               const isDeletingRow = deletingExpenseId === exp.id;
@@ -1155,17 +1237,18 @@ const RecordsPanel = ({
 
 // ── Monthly Tracker ───────────────────────────────────────────────────────────
 const MonthlyTracker = ({
-  expenses, monthOptions, selectedMonth, onMonthChange, onRefresh, statusMessage, isLoading,
+  expenses, monthOptions, selectedMonth, onMonthChange, onRefresh, statusMessage, isLoading, categoryGroups,
 }: {
   expenses: ExpenseRecord[]; monthOptions: MonthOption[]; selectedMonth: string;
   onMonthChange: (v: string) => void; onRefresh: () => void; statusMessage: string; isLoading: boolean;
+  categoryGroups: ExpenseCategoryGroup[];
 }) => {
   const total = useMemo(() => expenses.reduce((s, r) => s + r.amount, 0), [expenses]);
 
   const groups = useMemo(() => {
     const map: Record<string, { title: string; icon: string; color: string; total: number; count: number }> = {};
     for (const exp of expenses) {
-      const g = getCategoryGroup(exp.category);
+      const g = getCategoryGroup(exp.category, categoryGroups);
       const key = g?.title ?? 'Other';
       if (!map[key]) map[key] = { title: key, icon: g?.icon ?? '💰', color: g?.color ?? 'gray', total: 0, count: 0 };
       map[key].total += exp.amount;
@@ -1242,7 +1325,7 @@ const MonthlyTracker = ({
               {expenses.map((exp, i) => (
                 <tr key={exp.id} style={{ background: i % 2 === 0 ? C.surface : '#F8FAFC' }}>
                   <td style={{ padding: '12px 20px', fontFamily: C.fMono, fontSize: 13, color: C.inkMid, borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>{formatDisplayDate(exp.transaction_date)}</td>
-                  <td style={{ padding: '12px 20px', borderBottom: `1px solid ${C.surfaceInset}` }}><CatPill category={exp.category} /></td>
+                  <td style={{ padding: '12px 20px', borderBottom: `1px solid ${C.surfaceInset}` }}><CatPill category={exp.category} categoryGroups={categoryGroups} /></td>
                   <td style={{ padding: '12px 20px', fontFamily: C.fMono, fontSize: 14, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}` }}>{formatCurrency(exp.amount)}</td>
                 </tr>
               ))}
@@ -1286,8 +1369,13 @@ const ExpensesPage = () => {
     updateExpense,
     deleteExpense,
   } = useExpenses();
+  const { categories: expenseCategories } = useExpenseCategories();
   const { totals: poojaOptionTotals, loading: poojaOptionLoading } = usePoojaOptionTotals(selectedMonth);
   const { totals: poojaPaidOptionTotals, loading: poojaPaidOptionLoading } = usePoojaPaidOptionTotals(selectedMonth);
+  const expenseCategoryGroups = useMemo(() => {
+    const dynamicGroups = buildExpenseCategoryGroups(expenseCategories);
+    return dynamicGroups.length ? dynamicGroups : EXPENSE_CATEGORY_GROUPS;
+  }, [expenseCategories]);
   const statementRows = useMemo(() => {
     const poojaRows = buildPoojaCardSummaries(poojaOptionTotals);
     const paidRows = buildPoojaPaidCardSummaries(poojaPaidOptionTotals);
@@ -1434,6 +1522,7 @@ const ExpensesPage = () => {
                   isReadOnly={readOnlyAdmin}
                   selectedMonth={selectedMonth}
                   selectedMonthLabel={selectedMonthLabel}
+                  categoryGroups={expenseCategoryGroups}
                 />
               </div>
               <div style={{ flex: '1 1 400px', minWidth: 0 }}>
@@ -1445,6 +1534,7 @@ const ExpensesPage = () => {
                   deletingExpenseId={deletingExpenseId}
                   onEdit={(expense) => setEditingExpense(expense)}
                   onDelete={handleDelete}
+                  categoryGroups={expenseCategoryGroups}
                 />
               </div>
             </div>
@@ -1456,7 +1546,7 @@ const ExpensesPage = () => {
           <MonthlyTracker
             expenses={monthlyExpenses} monthOptions={monthOptions} selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth} onRefresh={() => fetchMonthlyExpenses(selectedMonth)}
-            statusMessage={monthlyStatus} isLoading={monthlyLoading}
+            statusMessage={monthlyStatus} isLoading={monthlyLoading} categoryGroups={expenseCategoryGroups}
           />
         )}
     </div>

@@ -82,6 +82,15 @@ interface SpecialAnnouncementEntry {
   description: string;
 }
 
+interface ExpenseCategoryEntry {
+  id: number;
+  name: string;
+  group_key: 'poojari' | 'coordinator' | 'bank' | 'other';
+  group_label: string;
+  display_order: number;
+  is_active: boolean;
+}
+
 type DayOptionFormValues = {
   code: string;
   description: string;
@@ -126,6 +135,13 @@ const categoryDisplayNames: Record<string, string> = {
   code: 'Template Code',
 };
 
+const expenseCategoryGroupOptions: Array<{ value: ExpenseCategoryEntry['group_key']; label: string }> = [
+  { value: 'poojari', label: 'We pay to poojari for' },
+  { value: 'coordinator', label: 'We pay to co ordinator' },
+  { value: 'bank', label: 'We remit to bank' },
+  { value: 'other', label: 'Other' },
+];
+
 const AdminMasterPage = () => {
   const [dayOptions, setDayOptions] = useState<DayOption[]>([]);
   const [poojaOptions, setPoojaOptions] = useState<PoojaOption[]>([]);
@@ -141,7 +157,7 @@ const AdminMasterPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily'>('pooja');
+  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily' | 'expense'>('pooja');
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -159,6 +175,13 @@ const AdminMasterPage = () => {
   const [newGothraName, setNewGothraName] = useState('');
   const [editingGothraId, setEditingGothraId] = useState<number | null>(null);
   const [editingGothraName, setEditingGothraName] = useState('');
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryEntry[]>([]);
+  const [newExpenseCategoryName, setNewExpenseCategoryName] = useState('');
+  const [newExpenseCategoryGroup, setNewExpenseCategoryGroup] = useState<ExpenseCategoryEntry['group_key']>('poojari');
+  const [editingExpenseCategoryId, setEditingExpenseCategoryId] = useState<number | null>(null);
+  const [editingExpenseCategoryName, setEditingExpenseCategoryName] = useState('');
+  const [editingExpenseCategoryGroup, setEditingExpenseCategoryGroup] = useState<ExpenseCategoryEntry['group_key']>('poojari');
+  const [isExpenseCategorySaving, setIsExpenseCategorySaving] = useState(false);
   const [isDailyLoading, setIsDailyLoading] = useState(false);
   const [dailyError, setDailyError] = useState('');
   const [dailySchedule, setDailySchedule] = useState(STATIC_DAILY_HEADER_TEXT);
@@ -547,6 +570,105 @@ const AdminMasterPage = () => {
     }
   };
 
+  const startEditingExpenseCategory = (entry: ExpenseCategoryEntry) => {
+    setEditingExpenseCategoryId(entry.id);
+    setEditingExpenseCategoryName(entry.name);
+    setEditingExpenseCategoryGroup(entry.group_key);
+  };
+
+  const cancelEditingExpenseCategory = () => {
+    setEditingExpenseCategoryId(null);
+    setEditingExpenseCategoryName('');
+    setEditingExpenseCategoryGroup('poojari');
+  };
+
+  const handleAddExpenseCategory = async () => {
+    const trimmed = newExpenseCategoryName.trim();
+    if (!trimmed) {
+      setNotice('Enter an expense category name before saving.');
+      return;
+    }
+    setIsExpenseCategorySaving(true);
+    try {
+      await api.post('/payments/expense-categories/', {
+        name: trimmed,
+        group_key: newExpenseCategoryGroup,
+        is_active: true,
+      });
+      setNewExpenseCategoryName('');
+      setNewExpenseCategoryGroup('poojari');
+      setNotice(`Expense category ${trimmed} added successfully.`);
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error adding expense category: ${errorMessage}`);
+    } finally {
+      setIsExpenseCategorySaving(false);
+    }
+  };
+
+  const handleUpdateExpenseCategory = async (entry: ExpenseCategoryEntry) => {
+    const trimmed = editingExpenseCategoryName.trim();
+    if (!trimmed) {
+      setNotice('Enter an expense category name before saving.');
+      return;
+    }
+    if (trimmed === entry.name && editingExpenseCategoryGroup === entry.group_key) {
+      cancelEditingExpenseCategory();
+      return;
+    }
+    setIsExpenseCategorySaving(true);
+    try {
+      await api.patch(`/payments/expense-categories/${entry.id}/`, {
+        name: trimmed,
+        group_key: editingExpenseCategoryGroup,
+      });
+      setNotice(`Expense category ${trimmed} updated successfully.`);
+      cancelEditingExpenseCategory();
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating expense category: ${errorMessage}`);
+    } finally {
+      setIsExpenseCategorySaving(false);
+    }
+  };
+
+  const handleToggleExpenseCategoryActive = async (entry: ExpenseCategoryEntry) => {
+    setIsExpenseCategorySaving(true);
+    try {
+      await api.patch(`/payments/expense-categories/${entry.id}/`, {
+        is_active: !entry.is_active,
+      });
+      setNotice(`Expense category ${entry.name} ${entry.is_active ? 'disabled' : 'enabled'} successfully.`);
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating expense category status: ${errorMessage}`);
+    } finally {
+      setIsExpenseCategorySaving(false);
+    }
+  };
+
+  const handleDeleteExpenseCategory = async (entry: ExpenseCategoryEntry) => {
+    const confirmDelete = window.confirm(`Delete expense category "${entry.name}"?`);
+    if (!confirmDelete) return;
+    setIsExpenseCategorySaving(true);
+    try {
+      await api.delete(`/payments/expense-categories/${entry.id}/`);
+      setNotice(`Expense category ${entry.name} deleted successfully.`);
+      if (editingExpenseCategoryId === entry.id) {
+        cancelEditingExpenseCategory();
+      }
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error deleting expense category: ${errorMessage}`);
+    } finally {
+      setIsExpenseCategorySaving(false);
+    }
+  };
+
   const fetchAllPages = async <T,>(initialUrl: string): Promise<T[]> => {
     const results: T[] = [];
     let nextUrl: string | null = initialUrl;
@@ -591,9 +713,10 @@ const AdminMasterPage = () => {
     
     setIsSyncing(true);
     try {
-      const [newPoojaOptions, rawDayOptions] = await Promise.all([
+      const [newPoojaOptions, rawDayOptions, rawExpenseCategories] = await Promise.all([
         fetchAllPages<PoojaOption>('/pooja/options/?page_size=200'),
         fetchAllPages<DayOption>('/pooja/day-options/?page_size=200'),
+        fetchAllPages<ExpenseCategoryEntry>('/payments/expense-categories/?page_size=200').catch(() => []),
       ]);
       
       // Clear editing states if items don't exist in new data
@@ -609,6 +732,17 @@ const AdminMasterPage = () => {
         rawDayOptions
           .slice()
           .sort((a, b) => a.display_order - b.display_order || a.code.localeCompare(b.code)),
+      );
+      setExpenseCategories(
+        rawExpenseCategories
+          .slice()
+          .sort((a, b) => {
+            const groupDiff = a.group_key.localeCompare(b.group_key);
+            if (groupDiff !== 0) return groupDiff;
+            const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            return a.name.localeCompare(b.name);
+          }),
       );
       
       setLastRefreshTime(now);
@@ -643,6 +777,14 @@ const AdminMasterPage = () => {
       setEditingGothraName('');
     }
   }, [editingGothraId, gothraOptionEntries]);
+
+  useEffect(() => {
+    if (editingExpenseCategoryId && !expenseCategories.some((entry) => entry.id === editingExpenseCategoryId)) {
+      setEditingExpenseCategoryId(null);
+      setEditingExpenseCategoryName('');
+      setEditingExpenseCategoryGroup('poojari');
+    }
+  }, [editingExpenseCategoryId, expenseCategories]);
 
   const resetEnglishDayForm = () => {
     dayForm.reset({ code: '', description: '', category: 'weekday' });
@@ -1314,6 +1456,21 @@ const AdminMasterPage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     List of Gothram
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('expense')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'expense'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Expense Categories
                   </div>
                 </button>
               </nav>
@@ -2227,6 +2384,157 @@ const AdminMasterPage = () => {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </div>
+          )}
+          {activeTab === 'expense' && (
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-900">Expense Categories</h2>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>{expenseCategories.length} entries</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.5fr,1fr,auto]">
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="Enter new expense category name"
+                    value={newExpenseCategoryName}
+                    onChange={(event) => setNewExpenseCategoryName(event.target.value)}
+                  />
+                  <select
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    value={newExpenseCategoryGroup}
+                    onChange={(event) => setNewExpenseCategoryGroup(event.target.value as ExpenseCategoryEntry['group_key'])}
+                  >
+                    {expenseCategoryGroupOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddExpenseCategory}
+                    disabled={isExpenseCategorySaving}
+                    className="flex items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isExpenseCategorySaving ? 'Saving...' : 'Add Category'}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <p>These categories are used in Expense Tracker Data Entry dropdown.</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Group</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {expenseCategories.map((entry) => {
+                        const isEditing = editingExpenseCategoryId === entry.id;
+                        return (
+                          <tr key={entry.id}>
+                            <td className="px-4 py-3">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                                  value={editingExpenseCategoryName}
+                                  onChange={(event) => setEditingExpenseCategoryName(event.target.value)}
+                                />
+                              ) : (
+                                <span className="font-medium text-slate-900">{entry.name}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isEditing ? (
+                                <select
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                                  value={editingExpenseCategoryGroup}
+                                  onChange={(event) => setEditingExpenseCategoryGroup(event.target.value as ExpenseCategoryEntry['group_key'])}
+                                >
+                                  {expenseCategoryGroupOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="text-slate-600">{entry.group_label || expenseCategoryGroupOptions.find((option) => option.value === entry.group_key)?.label || entry.group_key}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleExpenseCategoryActive(entry)}
+                                disabled={isExpenseCategorySaving}
+                                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                  entry.is_active
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                              >
+                                {entry.is_active ? 'Active' : 'Inactive'}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-3">
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateExpenseCategory(entry)}
+                                      disabled={isExpenseCategorySaving}
+                                      className="text-xs font-semibold text-orange-600 transition hover:text-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditingExpenseCategory}
+                                      disabled={isExpenseCategorySaving}
+                                      className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingExpenseCategory(entry)}
+                                    disabled={isExpenseCategorySaving}
+                                    className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteExpenseCategory(entry)}
+                                  disabled={isExpenseCategorySaving}
+                                  className="text-xs font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-40"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

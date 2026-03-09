@@ -193,6 +193,32 @@ class CombinePaymentMapping(models.Model):
         return True
 
 
+class ExpenseCategoryGroup(models.TextChoices):
+    POOJARI = "poojari", "We pay to poojari for"
+    COORDINATOR = "coordinator", "We pay to co ordinator"
+    BANK = "bank", "We remit to bank"
+    OTHER = "other", "Other"
+
+
+class ExpenseCategory(models.Model):
+    name = models.CharField(max_length=128, unique=True)
+    group_key = models.CharField(
+        max_length=24,
+        choices=ExpenseCategoryGroup.choices,
+        default=ExpenseCategoryGroup.OTHER,
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("group_key", "display_order", "name", "id")
+
+    def __str__(self):
+        return self.name
+
+
 class ExpenseRecord(models.Model):
     transaction_date = models.DateField()
     category = models.CharField(max_length=128)
