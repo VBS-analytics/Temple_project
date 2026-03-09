@@ -426,6 +426,9 @@ class ExpenseRecordApiTests(TestCase):
                 "transaction_date": "2026-01-15",
                 "category": "Maintenance",
                 "amount": "1250.00",
+                "transaction_no": "TXN-EXP-001",
+                "comments": "Paid via bank transfer",
+                "remarks": "Verified by admin",
             },
             format="json",
         )
@@ -433,6 +436,9 @@ class ExpenseRecordApiTests(TestCase):
         created = ExpenseRecord.objects.get(pk=response.json()["id"])
         self.assertEqual(created.created_by_id, self.admin.id)
         self.assertEqual(created.amount, Decimal("1250.00"))
+        self.assertEqual(created.transaction_no, "TXN-EXP-001")
+        self.assertEqual(created.comments, "Paid via bank transfer")
+        self.assertEqual(created.remarks, "Verified by admin")
 
     def test_non_admin_cannot_list_or_create_expenses(self):
         self.client.force_authenticate(self.donor)
@@ -486,6 +492,15 @@ class ExpenseRecordApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_monthly_list_returns_full_unpaginated_payload(self):
+        ExpenseRecord.objects.create(
+            transaction_date=date(2026, 1, 15),
+            category="Category with metadata",
+            amount=Decimal("10.00"),
+            transaction_no="TXN-LIST-001",
+            comments="List comments",
+            remarks="List remarks",
+            created_by=self.admin,
+        )
         ExpenseRecord.objects.bulk_create(
             [
                 ExpenseRecord(
@@ -494,7 +509,7 @@ class ExpenseRecordApiTests(TestCase):
                     amount=Decimal("10.00"),
                     created_by=self.admin,
                 )
-                for idx in range(25)
+                for idx in range(24)
             ]
         )
         self.client.force_authenticate(self.admin)
@@ -503,6 +518,71 @@ class ExpenseRecordApiTests(TestCase):
         payload = response.json()
         self.assertIsInstance(payload, list)
         self.assertEqual(len(payload), 25)
+        metadata_row = next((item for item in payload if item["transaction_no"] == "TXN-LIST-001"), None)
+        self.assertIsNotNone(metadata_row)
+        self.assertEqual(metadata_row["comments"], "List comments")
+        self.assertEqual(metadata_row["remarks"], "List remarks")
+
+    def test_admin_can_update_expense_record(self):
+        self.client.force_authenticate(self.admin)
+        expense = ExpenseRecord.objects.create(
+            transaction_date=date(2026, 1, 15),
+            category="Maintenance",
+            amount=Decimal("1250.00"),
+            transaction_no="TXN-EXP-OLD",
+            comments="old comment",
+            remarks="old remark",
+            created_by=self.admin,
+        )
+        detail_url = reverse("expense-records-detail", args=[expense.id])
+        response = self.client.patch(
+            detail_url,
+            {
+                "category": "Updated Maintenance",
+                "amount": "1500.00",
+                "transaction_no": "TXN-EXP-NEW",
+                "comments": "updated comment",
+                "remarks": "updated remark",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expense.refresh_from_db()
+        self.assertEqual(expense.category, "Updated Maintenance")
+        self.assertEqual(expense.amount, Decimal("1500.00"))
+        self.assertEqual(expense.transaction_no, "TXN-EXP-NEW")
+        self.assertEqual(expense.comments, "updated comment")
+        self.assertEqual(expense.remarks, "updated remark")
+
+    def test_admin_can_delete_expense_record(self):
+        self.client.force_authenticate(self.admin)
+        expense = ExpenseRecord.objects.create(
+            transaction_date=date(2026, 1, 15),
+            category="Maintenance",
+            amount=Decimal("1250.00"),
+            created_by=self.admin,
+        )
+        detail_url = reverse("expense-records-detail", args=[expense.id])
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ExpenseRecord.objects.filter(id=expense.id).exists())
+
+    def test_read_only_admin_cannot_update_or_delete_expense(self):
+        expense = ExpenseRecord.objects.create(
+            transaction_date=date(2026, 1, 15),
+            category="Maintenance",
+            amount=Decimal("1250.00"),
+            created_by=self.admin,
+        )
+        detail_url = reverse("expense-records-detail", args=[expense.id])
+        self.client.force_authenticate(self.read_only_admin)
+
+        update_response = self.client.patch(detail_url, {"category": "Blocked"}, format="json")
+        self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(ExpenseRecord.objects.filter(id=expense.id).exists())
 
 
 class PaymentRecordDeleteAccessTests(TestCase):
