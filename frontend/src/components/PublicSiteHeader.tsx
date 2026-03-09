@@ -14,7 +14,7 @@ type NavLinkItem = {
 };
 
 const navLinks: NavLinkItem[] = [
-  { label: 'HOME', href: '#top', type: 'anchor' },
+  { label: 'HOME', href: '/', type: 'route' },
   {
     label: 'ABOUT US',
     href: '/about',
@@ -51,7 +51,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
   const location = useLocation();
   const showLoginCta = location.pathname !== '/login';
   const visibleNavLinks =
-    location.pathname === '/' ? navLinks.filter((item) => !(item.type === 'anchor' && item.href === '#top')) : navLinks;
+    location.pathname === '/' ? navLinks.filter((item) => !(item.type === 'route' && item.href === '/')) : navLinks;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [patronDialogOpen, setPatronDialogOpen] = useState(false);
   const handlePatronContactClick = () => {
