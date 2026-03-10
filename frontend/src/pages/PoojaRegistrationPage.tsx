@@ -517,6 +517,7 @@ const toCurrencyLabel = (value?: string | null) => {
 };
 
 const CHART_DAY_OPTION_CODE = 'CHRT';
+const CHRT_MIN_SELECTABLE_DATE = '2026-01-01';
 const VARIABLE_AMOUNT_STEP = 1;
 const EXCLUSIVE_DAY_OPTION_CODES = new Set(['AST', 'PRD']);
 const ANY_DAY_OF_MONTH_CODE = 'AD';
@@ -3459,7 +3460,7 @@ const PoojaRegistrationPage = () => {
                 <label className="block text-xs font-medium text-gray-700">Preferred Date</label>
                 <input
                   type="date"
-                  min={todayIso}
+                  min={CHRT_MIN_SELECTABLE_DATE}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                   value={group.date}
                   onKeyDown={(event) => {
