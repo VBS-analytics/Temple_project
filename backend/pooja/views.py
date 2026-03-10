@@ -52,6 +52,7 @@ from .services.recurrence import (
     calculate_next_recurring_occurrence,
     find_due_registration,
     prepare_recurring_registration,
+    rerun_due_payments_for_donor,
     sum_successful_payments,
 )
 from .serializers import (
@@ -1052,6 +1053,10 @@ class RecurringPoojaPlanViewSet(
             "origin_registration",
             "due_registration",
         )
+        paused_only_raw = (self.request.query_params.get("paused_only") or "").strip().lower()
+        paused_only = paused_only_raw in {"1", "true", "yes"}
+        recurring_only_raw = (self.request.query_params.get("recurring_only") or "").strip().lower()
+        recurring_only = recurring_only_raw in {"1", "true", "yes"}
         if self.request.user.role == UserRole.ADMIN:
             # Allow admin to filter by donor if donor parameter is provided
             donor_id = self.request.query_params.get('donor')
@@ -1060,8 +1065,17 @@ class RecurringPoojaPlanViewSet(
                     qs = qs.filter(donor_id=int(donor_id))
                 except (ValueError, TypeError):
                     pass
+            if recurring_only:
+                qs = qs.filter(recurrence_kind=RecurrenceKind.RECURRING)
+            if paused_only:
+                qs = qs.filter(Q(pause_from__isnull=False) | Q(pause_until__isnull=False))
             return qs.order_by("donor__name", "-next_occurrence", "-created_at")
-        return qs.filter(donor=self.request.user).order_by("-next_occurrence", "-created_at")
+        qs = qs.filter(donor=self.request.user)
+        if recurring_only:
+            qs = qs.filter(recurrence_kind=RecurrenceKind.RECURRING)
+        if paused_only:
+            qs = qs.filter(Q(pause_from__isnull=False) | Q(pause_until__isnull=False))
+        return qs.order_by("-next_occurrence", "-created_at")
 
     def get_serializer_class(self):
         if self.action in ('partial_update', 'update'):
@@ -1265,6 +1279,32 @@ class RecurringPoojaPlanViewSet(
                 _debit_monthly_donation(plan.donor, amount_to_reverse)
         serializer = self.get_serializer(plan)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="rerun-due")
+    def rerun_due(self, request, pk=None):
+        plan = self.get_object()
+        if plan.recurrence_kind != RecurrenceKind.RECURRING:
+            return Response(
+                {"detail": "Only recurring plans are eligible for due re-run."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        today = timezone.localdate()
+        if plan.pause_until and plan.pause_until >= today:
+            return Response(
+                {"detail": "Pause is still active. Re-run is allowed only after pause end date."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = rerun_due_payments_for_donor(plan.donor_id, today=today)
+        # Refresh only this donor's passbook; avoid global due generation.
+        from payments.services import regenerate_donor_passbook
+
+        regenerate_donor_passbook(plan.donor_id, ensure_dues=False)
+        return Response(
+            {
+                "detail": "Due re-run completed for donor.",
+                **result,
+            }
+        )
 
     @action(detail=True, methods=["post"], url_path="prepare-payment")
     def prepare_payment(self, request, pk=None):

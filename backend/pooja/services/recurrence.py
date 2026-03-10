@@ -402,7 +402,7 @@ def _create_due_payment_record(
     return payment_record if created else None
 
 
-def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> int:
+def _generate_due_payments_for_recurring_plans(today: Optional[date] = None, donor_id: Optional[int] = None) -> int:
     """Generate due payment records for the 1st of each month for all active recurring plans.
     
     Creates ONE combined due per donor per month for all their active recurring plans.
@@ -426,6 +426,8 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
     # Exclude CHRT poojas (including legacy rows where day_option was null) -
     # they are handled separately in _generate_due_payments_for_chrt_poojas.
     active_plans = active_plans.exclude(_chrt_plan_filter())
+    if donor_id is not None:
+        active_plans = active_plans.filter(donor_id=donor_id)
 
     # Exclude plans that are currently within their pause window.
     # (is_active=True safety net — normally pause sets is_active=False, but guard anyway.)
@@ -537,6 +539,27 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None) -> 
                 LOGGER.exception("Unable to create due payment record for donor %s", donor_id)
     
     return created_count
+
+
+def rerun_due_payments_for_donor(donor_id: int, today: Optional[date] = None) -> Dict[str, Any]:
+    """Re-run recurring due generation for one donor only."""
+    now = today or timezone.localdate()
+    # Align with monthly processor behavior: once pause end date has passed,
+    # mark plans active again before evaluating due generation.
+    expired_pause_query = RecurringPoojaPlan.objects.filter(
+        donor_id=donor_id,
+        pause_until__isnull=False,
+        pause_until__lt=now,
+    )
+    resumed_plan_count = expired_pause_query.count()
+    if resumed_plan_count:
+        expired_pause_query.update(pause_from=None, pause_until=None, is_active=True)
+    due_payments_created = _generate_due_payments_for_recurring_plans(now, donor_id=donor_id)
+    return {
+        "donor_id": donor_id,
+        "resumed_plans": resumed_plan_count,
+        "due_payments_created": due_payments_created,
+    }
 
 
 def _chrt_plan_filter() -> Q:
@@ -1008,4 +1031,3 @@ def process_recurring_plans(
         "due_payments_created": due_payments_created,
         "chrt_due_payments_created": chrt_due_payments_created,
     }
-

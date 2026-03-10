@@ -1655,6 +1655,38 @@ class RecurringPoojaPlanPauseTests(TestCase):
         profile = DonorProfile.objects.get(user=self.user)
         self.assertEqual(profile.custom_number, 0)
 
+    def test_rerun_due_rejects_when_pause_is_still_active(self):
+        plan = self._create_plan()
+        self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+
+        rerun_url = reverse("pooja-recurrence-plans-rerun-due", kwargs={"pk": plan.id})
+        response = self.client.post(rerun_url, {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Pause is still active", response.data.get("detail", ""))
+
+    def test_rerun_due_generates_pending_due_for_single_donor_after_pause_end(self):
+        plan = self._create_plan()
+        pause_from = timezone.localdate() - timedelta(days=40)
+        pause_until = timezone.localdate() - timedelta(days=5)
+        plan.pause_from = pause_from
+        plan.pause_until = pause_until
+        plan.is_active = False
+        plan.start_date = timezone.localdate() - timedelta(days=70)
+        plan.save(update_fields=["pause_from", "pause_until", "is_active", "start_date"])
+
+        rerun_url = reverse("pooja-recurrence-plans-rerun-due", kwargs={"pk": plan.id})
+        response = self.client.post(rerun_url, {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            PaymentRecord.objects.filter(
+                donor=self.user,
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+            ).exists()
+        )
+
 
 class RecurringPoojaPlanDueInfoTests(TestCase):
     def setUp(self):
