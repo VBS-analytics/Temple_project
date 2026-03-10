@@ -2343,23 +2343,7 @@ const PaymentStatementPage = () => {
         parentMonthTotals.set(monthKey, existing);
       });
 
-      const parentAggregateEntries: PassbookEntry[] = [
-        {
-          record: {
-            id: `${CURRENT_BALANCE_ENTRY_ID}-aggregate-parent`,
-            donor: PARENT_AGGREGATE_DONOR_ID,
-            donor_name: ALL_PARENT_DONORS_LABEL,
-            created_at: CURRENT_BALANCE_ENTRY_DATE,
-            payment_month: CURRENT_BALANCE_ENTRY_DATE,
-          },
-          dueAmount: 0,
-          paidAmount: 0,
-          openingBalance: parentOpeningBalanceTotal,
-          closingDue: parentOpeningBalanceTotal,
-          displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
-          isCurrentBalanceEntry: true,
-        },
-      ];
+      const parentAggregateEntries: PassbookEntry[] = [];
 
       const mainOpeningEntry: PassbookEntry = {
         record: {
@@ -2371,8 +2355,10 @@ const PaymentStatementPage = () => {
         },
         dueAmount: 0,
         paidAmount: 0,
-        openingBalance: mainOpeningBalance,
-        closingDue: mainOpeningBalance,
+        // Show one opening-balance row for combined main donor view:
+        // main donor opening + subordinate donor openings.
+        openingBalance: mainOpeningBalance + parentOpeningBalanceTotal,
+        closingDue: mainOpeningBalance + parentOpeningBalanceTotal,
         displayDate: CURRENT_BALANCE_ENTRY_DISPLAY_DATE,
         isCurrentBalanceEntry: true,
       };
@@ -2444,12 +2430,12 @@ const PaymentStatementPage = () => {
         if (entry.isCurrentBalanceEntry) {
           // Opening rows carry starting balances (main + aggregate parent balances).
           const openingBalance = runningBalance;
-          const closingDue = openingBalance + parseNumeric(entry.closingDue);
+          const closingDue = Math.max(0, openingBalance + parseNumeric(entry.closingDue));
           runningBalance = closingDue;
           return { ...entry, openingBalance, closingDue };
         }
         const openingBalance = runningBalance;
-        const closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
+        const closingDue = Math.max(0, openingBalance + entry.dueAmount - entry.paidAmount);
         runningBalance = closingDue;
         return { ...entry, openingBalance, closingDue };
       });
