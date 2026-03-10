@@ -169,6 +169,7 @@ const RECURRENCE_FREQUENCY_OPTIONS: { value: RecurrenceFrequency; label: string 
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'annually', label: 'Annually' },
 ];
+const CHRT_MIN_SELECTABLE_DATE = '2026-01-01';
 
 const createInitialPlanEditState = (): PlanEditFormState => ({
   recurrence_frequency: 'monthly',
@@ -2106,6 +2107,7 @@ const DonorProfile = () => {
                                     <input
                                       id={startDateInputId}
                                       type="date"
+                                      min={CHRT_MIN_SELECTABLE_DATE}
                                       value={registrationEditValues.start_date}
                                       onChange={(event) => handleRegistrationEditChange('start_date', event.target.value)}
                                       className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
