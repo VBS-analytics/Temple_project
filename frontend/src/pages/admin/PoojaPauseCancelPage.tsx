@@ -149,6 +149,7 @@ const DonorSearchDropdown = ({
 
 interface RecurringPlan {
   id: number;
+  donor_name?: string | null;
   pooja_option_name?: string | null;
   pooja_option_code?: string | null;
   day_option_description?: string | null;
@@ -288,7 +289,7 @@ const PoojaPauseCancelPage = () => {
   const [pauseToDates, setPauseToDates] = useState<Record<number, string>>({});
   const [pauseReasonSelections, setPauseReasonSelections] = useState<Record<number, string>>({});
   const [activePausePlanId, setActivePausePlanId] = useState<number | null>(null);
-  const [planActionState, setPlanActionState] = useState<Record<number, 'pause' | 'resume' | 'cancel' | null>>({});
+  const [planActionState, setPlanActionState] = useState<Record<number, 'pause' | 'resume' | 'cancel' | 'rerun' | null>>({});
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [planEditValues, setPlanEditValues] = useState<PlanEditFormState>(createInitialPlanEditState);
   const [planEditSubmitting, setPlanEditSubmitting] = useState(false);
@@ -324,18 +325,22 @@ const PoojaPauseCancelPage = () => {
   }, []);
 
   const loadPlans = useCallback(async () => {
-    if (selectedDonorId === null) {
-      setPlans([]);
-      return;
-    }
+    const showingAllPaused = selectedDonorId === null;
     setPlansLoading(true);
     setPlansError(null);
     try {
       const response = await api.get('pooja/recurrence/plans/', {
-        params: { page_size: 200, donor: selectedDonorId },
+        params: showingAllPaused
+          ? { page_size: 1000, paused_only: true, recurring_only: true }
+          : { page_size: 1000, donor: selectedDonorId, recurring_only: true },
       });
       const allPlans = extractResults<RecurringPlan>(response.data);
-      setPlans(allPlans.filter((plan) => plan.recurrence_kind === 'recurring'));
+      const recurringPlans = allPlans.filter((plan) => plan.recurrence_kind === 'recurring');
+      setPlans(
+        showingAllPaused
+          ? recurringPlans.filter((plan) => Boolean(plan.pause_from || plan.pause_until))
+          : recurringPlans,
+      );
     } catch (error) {
       setPlans([]);
       setPlansError(extractErrorMessage(error));
@@ -438,12 +443,27 @@ const PoojaPauseCancelPage = () => {
     }
   };
 
+  const handleRerunDonorDue = async (planId: number) => {
+    if (!window.confirm('Re-run due generation only for this donor?')) return;
+    setPlanActionState((prev) => ({ ...prev, [planId]: 'rerun' }));
+    setPlansError(null);
+    try {
+      await api.post(`pooja/recurrence/plans/${planId}/rerun-due/`);
+      await loadPlans();
+    } catch (error) {
+      setPlansError(extractErrorMessage(error));
+    } finally {
+      setPlanActionState((prev) => ({ ...prev, [planId]: null }));
+    }
+  };
+
   const pauseReason = useCallback(
     (planId: number) => pauseReasonSelections[planId] ?? PAUSE_REASON_OPTIONS[0],
     [pauseReasonSelections],
   );
 
   const selectedDonor = donors.find((d) => d.id === selectedDonorId);
+  const isShowingAllPaused = selectedDonorId === null;
 
   return (
     <div className="space-y-8">
@@ -493,14 +513,7 @@ const PoojaPauseCancelPage = () => {
       )}
 
       {/* ── Plans ────────────────────────────────────────────────────────── */}
-      {selectedDonorId === null ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <svg className="mb-3 h-10 w-10 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-          </svg>
-          <p className="text-sm font-medium text-slate-400">Select a donor to view their plans</p>
-        </div>
-      ) : plansLoading ? (
+      {plansLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-24 animate-pulse rounded-xl border border-slate-100 bg-slate-50" />
@@ -511,14 +524,18 @@ const PoojaPauseCancelPage = () => {
           <svg className="mb-3 h-10 w-10 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
           </svg>
-          <p className="text-sm font-medium text-slate-400">No recurring plans found for {selectedDonor?.name}</p>
+          <p className="text-sm font-medium text-slate-400">
+            {isShowingAllPaused
+              ? 'No paused recurring plans found.'
+              : `No recurring plans found for ${selectedDonor?.name}`}
+          </p>
         </div>
       ) : (
         <div>
           {/* Plans count header */}
           <div className="mb-4 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-              Recurring Plans
+              {isShowingAllPaused ? 'All Paused Recurring Plans' : 'Recurring Plans'}
             </p>
             <span className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
               {plans.length} {plans.length === 1 ? 'plan' : 'plans'}
@@ -534,6 +551,8 @@ const PoojaPauseCancelPage = () => {
               const isPauseFormOpen = activePausePlanId === plan.id;
               const isEditOpen = editingPlanId === plan.id;
               const actionLoading = planActionState[plan.id];
+              const pauseStillActive = Boolean(plan.pause_until && plan.pause_until >= todayIso());
+              const rerunLabelDonorName = (plan.donor_name ?? '').trim() || 'this donor';
 
               /* left-border accent color by status */
               const accentClass = isCancelled
@@ -556,6 +575,9 @@ const PoojaPauseCancelPage = () => {
                       </div>
                       {plan.day_option_description && (
                         <p className="mt-0.5 text-xs text-slate-400">{plan.day_option_description}</p>
+                      )}
+                      {isShowingAllPaused && plan.donor_name && (
+                        <p className="mt-1 text-xs font-semibold text-slate-500">Donor: {plan.donor_name}</p>
                       )}
                     </div>
                     <div className="flex flex-shrink-0 flex-col items-end gap-1">
@@ -637,7 +659,7 @@ const PoojaPauseCancelPage = () => {
                     )}
 
                     {/* Cancel / Resume */}
-                    {isActive ? (
+                    {!isPaused && isActive ? (
                       <button
                         type="button"
                         onClick={() => handleCancelPlan(plan.id)}
@@ -676,6 +698,29 @@ const PoojaPauseCancelPage = () => {
                         {actionLoading === 'resume' ? 'Resuming…' : 'Resume'}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleRerunDonorDue(plan.id)}
+                      disabled={actionLoading === 'rerun' || pauseStillActive}
+                      title={pauseStillActive ? 'Re-run is available only after pause end date.' : undefined}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {actionLoading === 'rerun' ? (
+                        <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 1114.11 3.401M19.5 12v4.5m0 0H15" />
+                        </svg>
+                      )}
+                      {actionLoading === 'rerun'
+                        ? `Re-running for ${rerunLabelDonorName}…`
+                        : pauseStillActive
+                          ? `Re-run for ${rerunLabelDonorName} after pause end`
+                          : `Re-run due for ${rerunLabelDonorName}`}
+                    </button>
                   </div>
 
                   {/* ── Edit Form ────────────────────────────────────────── */}
@@ -753,7 +798,6 @@ const PoojaPauseCancelPage = () => {
                             <label className="block text-xs font-semibold text-slate-600">From</label>
                             <input
                               type="date"
-                              min={todayIso()}
                               value={pauseFromDates[plan.id] ?? todayIso()}
                               onChange={(e) => setPauseFromDates((prev) => ({ ...prev, [plan.id]: e.target.value }))}
                               onFocus={(e) => {

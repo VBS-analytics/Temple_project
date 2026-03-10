@@ -1521,9 +1521,18 @@ class PradoshamHelperTests(SimpleTestCase):
 class RecurringPoojaPlanPauseTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(phone_number="9000000001", name="Pause Donor", password="secret")
+        self.admin = User.objects.create_user(
+            phone_number="9000000099",
+            name="Pause Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
         DonorProfile.objects.create(user=self.user)
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(user=self.admin)
         self.pooja_option = PoojaOption.objects.create(code="RP1", name="Recurring Pooja")
         self.day_option = PoojaDayOption.objects.create(
             code="RDAY",
@@ -1572,7 +1581,19 @@ class RecurringPoojaPlanPauseTests(TestCase):
             format="json",
         )
 
-    def test_pause_use_for_temple_credits_monthly_donation_when_paid(self):
+    def _pause_plan_as_admin(self, plan: RecurringPoojaPlan, *, pause_from: date, pause_until: date, reason: str):
+        url = reverse("pooja-recurrence-plans-pause", kwargs={"pk": plan.id})
+        return self.admin_client.post(
+            url,
+            {
+                "pause_from": pause_from.isoformat(),
+                "pause_until": pause_until.isoformat(),
+                "pause_reason": reason,
+            },
+            format="json",
+        )
+
+    def test_pause_use_for_temple_does_not_credit_monthly_donation_when_paid(self):
         plan = self._create_plan()
         registration = self._create_due_registration(plan)
         PaymentRecord.objects.create(
@@ -1587,7 +1608,7 @@ class RecurringPoojaPlanPauseTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         profile = DonorProfile.objects.get(user=self.user)
-        self.assertEqual(profile.monthly_donation_amount, Decimal("300.00"))
+        self.assertEqual(profile.monthly_donation_amount, Decimal("0.00"))
 
     def test_pause_use_for_temple_does_not_credit_monthly_donation_when_unpaid(self):
         plan = self._create_plan()
@@ -1654,6 +1675,263 @@ class RecurringPoojaPlanPauseTests(TestCase):
         self.assertEqual(resume_response.status_code, 200)
         profile = DonorProfile.objects.get(user=self.user)
         self.assertEqual(profile.custom_number, 0)
+
+    def test_rerun_due_rejects_when_pause_is_still_active(self):
+        plan = self._create_plan()
+        self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+
+        rerun_url = reverse("pooja-recurrence-plans-rerun-due", kwargs={"pk": plan.id})
+        response = self.client.post(rerun_url, {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Pause is still active", response.data.get("detail", ""))
+
+    def test_rerun_due_generates_pending_due_for_single_donor_after_pause_end(self):
+        plan = self._create_plan()
+        pause_from = timezone.localdate() - timedelta(days=40)
+        pause_until = timezone.localdate() - timedelta(days=5)
+        plan.pause_from = pause_from
+        plan.pause_until = pause_until
+        plan.is_active = False
+        plan.start_date = timezone.localdate() - timedelta(days=70)
+        plan.save(update_fields=["pause_from", "pause_until", "is_active", "start_date"])
+
+        rerun_url = reverse("pooja-recurrence-plans-rerun-due", kwargs={"pk": plan.id})
+        response = self.client.post(rerun_url, {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            PaymentRecord.objects.filter(
+                donor=self.user,
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+            ).exists()
+        )
+
+    def test_admin_can_backdate_pause(self):
+        plan = self._create_plan()
+        backdated_from = timezone.localdate() - timedelta(days=20)
+        backdated_to = timezone.localdate() + timedelta(days=20)
+
+        response = self._pause_plan_as_admin(
+            plan,
+            pause_from=backdated_from,
+            pause_until=backdated_to,
+            reason=PAUSE_REASON_NO_POJA_NO_PAYMENT,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        plan.refresh_from_db()
+        self.assertEqual(plan.pause_from, backdated_from)
+        self.assertEqual(plan.pause_until, backdated_to)
+
+    def test_backdated_pause_recalculates_pending_due_for_partial_month(self):
+        plan_day_one = RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=timezone.localdate().replace(day=1),
+            amount=Decimal("100.00"),
+            is_active=True,
+        )
+        day_15_option = PoojaDayOption.objects.create(
+            code="MIDM",
+            description="15th day",
+            category=DayOptionCategory.CODE,
+        )
+        plan_day_fifteen = RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=day_15_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=timezone.localdate().replace(day=15),
+            amount=Decimal("100.00"),
+            is_active=True,
+        )
+        month_start = timezone.localdate().replace(day=1)
+        pending_due = PaymentRecord.objects.create(
+            donor=self.user,
+            registration=None,
+            amount=Decimal("200.00"),
+            currency="INR",
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=month_start,
+            notes="Monthly recurring pooja contribution due",
+        )
+        pause_from = month_start.replace(day=10)
+        pause_until = month_start + timedelta(days=40)
+
+        response = self._pause_plan_as_admin(
+            plan_day_fifteen,
+            pause_from=pause_from,
+            pause_until=pause_until,
+            reason=PAUSE_REASON_NO_POJA_NO_PAYMENT,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pending_due.refresh_from_db()
+        self.assertEqual(pending_due.amount, Decimal("100.00"))
+        plan_day_one.refresh_from_db()
+        plan_day_fifteen.refresh_from_db()
+        self.assertTrue(plan_day_one.is_active)
+        self.assertFalse(plan_day_fifteen.is_active)
+
+    def test_backdated_pause_removes_pending_due_for_fully_paused_month(self):
+        plan = self._create_plan()
+        month_start = timezone.localdate().replace(day=1)
+        due = PaymentRecord.objects.create(
+            donor=self.user,
+            registration=None,
+            amount=Decimal("250.00"),
+            currency="INR",
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=month_start,
+            notes="Monthly recurring pooja contribution due",
+        )
+        pause_from = month_start
+        pause_until = month_start + timedelta(days=60)
+
+        response = self._pause_plan_as_admin(
+            plan,
+            pause_from=pause_from,
+            pause_until=pause_until,
+            reason=PAUSE_REASON_NO_POJA_NO_PAYMENT,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PaymentRecord.objects.filter(pk=due.pk).exists())
+
+    def test_pause_clears_due_registration_within_pause_window_when_unpaid(self):
+        plan = self._create_plan()
+        due_registration = PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=timezone.localdate() + timedelta(days=5),
+            total_amount=plan.amount,
+        )
+        plan.due_registration = due_registration
+        plan.save(update_fields=["due_registration"])
+
+        response = self._pause_plan(plan, PAUSE_REASON_NO_POJA_NO_PAYMENT)
+
+        self.assertEqual(response.status_code, 200)
+        plan.refresh_from_db()
+        self.assertIsNone(plan.due_registration)
+        self.assertFalse(PoojaRegistration.objects.filter(pk=due_registration.pk).exists())
+
+    def test_registration_list_excludes_entries_inside_paused_window(self):
+        plan = self._create_plan()
+        month_start = timezone.localdate().replace(day=1)
+        pause_from = month_start.replace(day=10)
+        pause_until = month_start + timedelta(days=40)
+        self._pause_plan_as_admin(
+            plan,
+            pause_from=pause_from,
+            pause_until=pause_until,
+            reason=PAUSE_REASON_NO_POJA_NO_PAYMENT,
+        )
+        paused_registration = PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=month_start.replace(day=15),
+            total_amount=Decimal("250.00"),
+        )
+
+        response = self.admin_client.get(
+            reverse("pooja-registrations-list"),
+            {"donor_id": self.user.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        results = payload.get("results", payload if isinstance(payload, list) else [])
+        returned_ids = {row.get("id") for row in results if isinstance(row, dict)}
+        self.assertNotIn(paused_registration.id, returned_ids)
+
+    def test_use_for_temple_keeps_registration_visible_with_replaced_name(self):
+        plan = self._create_plan()
+        month_start = timezone.localdate().replace(day=1)
+        pause_from = month_start
+        pause_until = month_start + timedelta(days=30)
+        response = self._pause_plan_as_admin(
+            plan,
+            pause_from=pause_from,
+            pause_until=pause_until,
+            reason="No Pooja and use money for temple purpose",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        paused_registration = PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=month_start + timedelta(days=5),
+            total_amount=Decimal("250.00"),
+        )
+        list_response = self.admin_client.get(reverse("pooja-registrations-list"), {"donor_id": self.user.id})
+        self.assertEqual(list_response.status_code, 200)
+        payload = list_response.json()
+        results = payload.get("results", payload if isinstance(payload, list) else [])
+        matching = [row for row in results if row.get("id") == paused_registration.id]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].get("donor_name"), "temple purpose")
+
+    def test_samy_reason_keeps_registration_visible_with_replaced_name(self):
+        plan = self._create_plan()
+        month_start = timezone.localdate().replace(day=1)
+        pause_from = month_start
+        pause_until = month_start + timedelta(days=30)
+        response = self._pause_plan_as_admin(
+            plan,
+            pause_from=pause_from,
+            pause_until=pause_until,
+            reason="Continue the pooja with Samy's names",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        paused_registration = PoojaRegistration.objects.create(
+            donor=self.user,
+            pooja_option=self.pooja_option,
+            day_option=self.day_option,
+            start_date=month_start + timedelta(days=6),
+            total_amount=Decimal("250.00"),
+        )
+        list_response = self.admin_client.get(reverse("pooja-registrations-list"), {"donor_id": self.user.id})
+        self.assertEqual(list_response.status_code, 200)
+        payload = list_response.json()
+        results = payload.get("results", payload if isinstance(payload, list) else [])
+        matching = [row for row in results if row.get("id") == paused_registration.id]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].get("donor_name"), "Samy's names")
+
+    def test_use_for_temple_does_not_remove_existing_pending_due(self):
+        plan = self._create_plan()
+        month_start = timezone.localdate().replace(day=1)
+        pending_due = PaymentRecord.objects.create(
+            donor=self.user,
+            registration=None,
+            amount=Decimal("250.00"),
+            currency="INR",
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=month_start,
+            notes="Monthly recurring pooja contribution due",
+        )
+        response = self._pause_plan_as_admin(
+            plan,
+            pause_from=month_start,
+            pause_until=month_start + timedelta(days=30),
+            reason="No Pooja and use money for temple purpose",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(PaymentRecord.objects.filter(pk=pending_due.pk).exists())
 
 
 class RecurringPoojaPlanDueInfoTests(TestCase):
