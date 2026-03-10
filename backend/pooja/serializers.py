@@ -30,6 +30,14 @@ ANY_DAY_OPTION_DESCRIPTIONS = {
     "any day of month",
     "any day of the month",
 }
+TEMPLE_PURPOSE_REASON_VALUES = {
+    "No Pooja and use money for temple purpose",
+    "No Pooja and use the money for temple purpose",
+}
+SAMY_REASON_VALUES = {
+    "Continue the pooja with Samy's names",
+    "Continue the pooja with the Swamy's names",
+}
 
 
 def _is_any_day_option(option: PoojaDayOption | None) -> bool:
@@ -400,6 +408,28 @@ class PublicTodayPoojaRegistrationSerializer(serializers.ModelSerializer):
         donor = getattr(obj, "donor", None)
         if donor is None:
             return "Temple Admin"
+        start_date = getattr(obj, "start_date", None)
+        if start_date is not None:
+            pause_plan = (
+                RecurringPoojaPlan.objects.filter(
+                    donor_id=obj.donor_id,
+                    pooja_option_id=obj.pooja_option_id,
+                    day_option_id=obj.day_option_id,
+                    recurrence_kind=RecurrenceKind.RECURRING,
+                    pause_from__isnull=False,
+                    pause_until__isnull=False,
+                    pause_from__lte=start_date,
+                    pause_until__gte=start_date,
+                )
+                .order_by("-updated_at")
+                .first()
+            )
+            if pause_plan:
+                pause_reason = (pause_plan.metadata or {}).get("pause_reason")
+                if pause_reason in TEMPLE_PURPOSE_REASON_VALUES:
+                    return "temple purpose"
+                if pause_reason in SAMY_REASON_VALUES:
+                    return "Samy's names"
         name = getattr(donor, "name", "") or ""
         if name.strip():
             return name.strip()

@@ -28,6 +28,29 @@ FREQUENCY_MONTHS: Dict[RecurrenceFrequency, int] = {
     RecurrenceFrequency.QUARTERLY: 3,
     RecurrenceFrequency.ANNUALLY: 12,
 }
+CONTINUE_DUE_PAUSE_REASON_VALUES = (
+    "No Pooja and use money for temple purpose",
+    "No Pooja and use the money for temple purpose",
+    "Continue the pooja with Samy's names",
+    "Continue the pooja with the Swamy's names",
+)
+
+
+def _normalize_pause_reason_tokens(value: str | None) -> list[str]:
+    return " ".join(ch.lower() if ch.isalnum() else " " for ch in (value or "")).split()
+
+
+def _pause_reason_normalized(value: str | None) -> str:
+    return " ".join(_normalize_pause_reason_tokens(value))
+
+
+CONTINUE_DUE_PAUSE_REASON_NORMALIZED = {
+    _pause_reason_normalized(item) for item in CONTINUE_DUE_PAUSE_REASON_VALUES
+}
+
+
+def _is_continue_due_pause_reason(value: str | None) -> bool:
+    return _pause_reason_normalized(value) in CONTINUE_DUE_PAUSE_REASON_NORMALIZED
 
 
 def _month_range(start_month: date, end_month: date) -> Iterable[date]:
@@ -37,6 +60,10 @@ def _month_range(start_month: date, end_month: date) -> Iterable[date]:
     while current <= end:
         yield current
         current = _add_months(current, 1)
+
+
+def _month_end(value: date) -> date:
+    return date(value.year, value.month, calendar.monthrange(value.year, value.month)[1])
 
 
 def _add_months(value: date, months: int) -> date:
@@ -64,6 +91,178 @@ def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
         if anchor is None or origin_created_date > anchor:
             anchor = origin_created_date
     return anchor
+
+
+def _extract_tamil_star_labels(plan: RecurringPoojaPlan) -> list[str]:
+    labels: list[str] = []
+    metadata = plan.metadata or {}
+    members = metadata.get("members")
+    if isinstance(members, list):
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            star = (member.get("tamil_star") or "").strip()
+            if star:
+                labels.append(star)
+    cart_payload = plan.cart_payload or {}
+    if isinstance(cart_payload, dict):
+        selected_label = (cart_payload.get("selectedTamilStarLabel") or cart_payload.get("selected_tamil_star_label") or "").strip()
+        if selected_label:
+            labels.append(selected_label)
+    # keep order, remove duplicates
+    deduped: list[str] = []
+    seen = set()
+    for label in labels:
+        key = label.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(label)
+    return deduped
+
+
+def _resolve_plan_occurrence_date_in_month(plan: RecurringPoojaPlan, month_start: date) -> date:
+    if plan.day_option and plan.day_option.code:
+        try:
+            from .calendar import get_calendar_service
+
+            service = get_calendar_service()
+            occurrence = service.next_occurrence(
+                plan.day_option.code,
+                month_start,
+                tamil_star_labels=_extract_tamil_star_labels(plan),
+            )
+            if occurrence.date.year == month_start.year and occurrence.date.month == month_start.month:
+                return occurrence.date
+        except Exception:
+            pass
+    anchor = _plan_due_anchor_date(plan) or month_start
+    day = min(max(anchor.day, 1), calendar.monthrange(month_start.year, month_start.month)[1])
+    return date(month_start.year, month_start.month, day)
+
+
+def _plan_is_eligible_for_month(plan: RecurringPoojaPlan, month_start: date) -> bool:
+    if plan.recurrence_kind != RecurrenceKind.RECURRING:
+        return False
+    if plan.day_option and plan.day_option.code == "CHRT":
+        return False
+    anchor = _plan_due_anchor_date(plan)
+    if not anchor or anchor.replace(day=1) > month_start:
+        return False
+    if plan.is_active:
+        return True
+    if not plan.pause_from:
+        return False
+    pause_start_month = plan.pause_from.replace(day=1)
+    # Paused plans still contribute in months before pause start.
+    if pause_start_month > month_start:
+        return True
+    # Mid-month pause can still contribute for the same month before pause_from day.
+    if pause_start_month == month_start and plan.pause_from.day > 1:
+        return True
+    return False
+
+
+def _plan_is_paused_for_month(plan: RecurringPoojaPlan, month_start: date) -> bool:
+    reason = (plan.metadata or {}).get("pause_reason")
+    if isinstance(reason, str) and _is_continue_due_pause_reason(reason):
+        return False
+    if not plan.pause_from or not plan.pause_until:
+        return False
+    pause_start_month = plan.pause_from.replace(day=1)
+    pause_end_month = plan.pause_until.replace(day=1)
+    return pause_start_month <= month_start <= pause_end_month
+
+
+def _plan_contributes_amount_for_month(plan: RecurringPoojaPlan, month_start: date) -> bool:
+    if not _plan_is_eligible_for_month(plan, month_start):
+        return False
+    if not _plan_is_paused_for_month(plan, month_start):
+        return True
+    # If pause begins mid-month, include only occurrences strictly before pause_from.
+    if plan.pause_from and plan.pause_from.year == month_start.year and plan.pause_from.month == month_start.month:
+        if plan.pause_from.day <= 1:
+            return False
+        occurrence_date = _resolve_plan_occurrence_date_in_month(plan, month_start)
+        return occurrence_date < plan.pause_from
+    return False
+
+
+def _calculate_recurring_month_total_for_donor(donor_id: int, month_start: date) -> Decimal:
+    plans = RecurringPoojaPlan.objects.filter(
+        donor_id=donor_id,
+        recurrence_kind=RecurrenceKind.RECURRING,
+    ).select_related("day_option", "origin_registration")
+    month_total = Decimal("0.00")
+    for plan in plans:
+        if _plan_contributes_amount_for_month(plan, month_start):
+            month_total += plan.amount or Decimal("0.00")
+    return month_total
+
+
+def recalculate_pending_dues_for_donor_window(
+    donor_id: int,
+    window_start: date,
+    window_end: date,
+    *,
+    today: Optional[date] = None,
+) -> Dict[str, int]:
+    """Recalculate donor pending monthly dues in a month window.
+
+    - Only touches registration-null PENDING dues.
+    - Never modifies SUCCESS dues.
+    - Updates/deletes/creates due rows month-wise for the affected window.
+    """
+    now = today or timezone.localdate()
+    current_month = now.replace(day=1)
+    start_month = window_start.replace(day=1)
+    end_month = min(window_end.replace(day=1), current_month)
+    if start_month > end_month:
+        return {"months_processed": 0, "due_updated": 0, "due_deleted": 0, "due_created": 0}
+
+    stats = {"months_processed": 0, "due_updated": 0, "due_deleted": 0, "due_created": 0}
+    for month_start in _month_range(start_month, end_month):
+        stats["months_processed"] += 1
+        if PaymentRecord.objects.filter(
+            donor_id=donor_id,
+            payment_month=month_start,
+            status=PaymentStatus.SUCCESS,
+        ).exists():
+            continue
+
+        month_total = _calculate_recurring_month_total_for_donor(donor_id, month_start)
+        pending_qs = PaymentRecord.objects.filter(
+            donor_id=donor_id,
+            registration__isnull=True,
+            payment_month=month_start,
+            status=PaymentStatus.PENDING,
+        ).order_by("created_at", "id")
+        pending_rows = list(pending_qs)
+
+        if month_total <= Decimal("0.00"):
+            if pending_rows:
+                deleted, _ = PaymentRecord.objects.filter(pk__in=[row.pk for row in pending_rows]).delete()
+                stats["due_deleted"] += deleted
+            continue
+
+        if pending_rows:
+            keeper = pending_rows[0]
+            duplicates = pending_rows[1:]
+            if keeper.amount != month_total or not keeper.notes:
+                keeper.amount = month_total
+                if not keeper.notes:
+                    keeper.notes = "Monthly recurring pooja contribution due"
+                keeper.save(update_fields=["amount", "notes", "updated_at"])
+                stats["due_updated"] += 1
+            if duplicates:
+                deleted, _ = PaymentRecord.objects.filter(pk__in=[row.pk for row in duplicates]).delete()
+                stats["due_deleted"] += deleted
+            continue
+
+        created = _create_due_payment_record(donor_id, month_total, month_start)
+        if created:
+            stats["due_created"] += 1
+    return stats
 
 
 def _calculate_next_occurrence(base_date: date, frequency: RecurrenceFrequency) -> date:
@@ -419,7 +618,9 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None, don
     # pause was scheduled, but they are still valid for dues in months before the
     # pause begins.
     active_plans = RecurringPoojaPlan.objects.filter(
-        Q(is_active=True) | Q(is_active=False, pause_from__isnull=False, pause_from__gt=current_month),
+        Q(is_active=True)
+        | Q(is_active=False, pause_from__isnull=False, pause_from__gt=current_month)
+        | Q(is_active=False, metadata__pause_reason__in=CONTINUE_DUE_PAUSE_REASON_VALUES),
         recurrence_kind=RecurrenceKind.RECURRING,
     ).select_related('day_option')
 
@@ -431,7 +632,10 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None, don
 
     # Exclude plans that are currently within their pause window.
     # (is_active=True safety net — normally pause sets is_active=False, but guard anyway.)
-    paused_now = Q(pause_from__lte=current_month, pause_until__gte=current_month)
+    paused_now = (
+        Q(pause_from__lte=current_month, pause_until__gte=current_month)
+        & ~Q(metadata__pause_reason__in=CONTINUE_DUE_PAUSE_REASON_VALUES)
+    )
     active_plans = active_plans.exclude(paused_now)
     
     # Group plans by donor to create ONE due per donor per month
@@ -484,6 +688,10 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None, don
                 if plan_date and plan_date.replace(day=1) <= month_start:
                     # Skip this plan's amount if this specific month falls within its pause window
                     if plan.pause_from and plan.pause_until:
+                        reason = (plan.metadata or {}).get("pause_reason")
+                        if isinstance(reason, str) and _is_continue_due_pause_reason(reason):
+                            month_total += plan.amount or Decimal('0.00')
+                            continue
                         pause_start = plan.pause_from.replace(day=1)
                         pause_end = plan.pause_until.replace(day=1)
                         if pause_start <= month_start <= pause_end:

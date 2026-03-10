@@ -12,7 +12,7 @@ from typing import Any
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, F, Max, Prefetch, Q, Sum
+from django.db.models import Count, Exists, F, Max, OuterRef, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -52,6 +52,7 @@ from .services.recurrence import (
     calculate_next_recurring_occurrence,
     find_due_registration,
     prepare_recurring_registration,
+    recalculate_pending_dues_for_donor_window,
     rerun_due_payments_for_donor,
     sum_successful_payments,
 )
@@ -77,8 +78,37 @@ class LargePagePagination(PageNumberPagination):
     max_page_size = 1000
 
 PAUSE_REASON_NO_POJA_NO_PAYMENT = "No Pooja and No Payment"
-PAUSE_REASON_USE_FOR_TEMPLE = "No Pooja and use the money for temple purpose"
-PAUSE_REASON_SAMY = "Continue the pooja with the Swamy's names"
+PAUSE_REASON_USE_FOR_TEMPLE = "No Pooja and use money for temple purpose"
+PAUSE_REASON_SAMY = "Continue the pooja with Samy's names"
+PAUSE_REASON_USE_FOR_TEMPLE_LEGACY = "No Pooja and use the money for temple purpose"
+PAUSE_REASON_SAMY_LEGACY = "Continue the pooja with the Swamy's names"
+NO_PAYMENT_PAUSE_REASON_VALUES = (PAUSE_REASON_NO_POJA_NO_PAYMENT,)
+TEMPLE_PURPOSE_PAUSE_REASON_VALUES = (PAUSE_REASON_USE_FOR_TEMPLE, PAUSE_REASON_USE_FOR_TEMPLE_LEGACY)
+SAMY_PAUSE_REASON_VALUES = (PAUSE_REASON_SAMY, PAUSE_REASON_SAMY_LEGACY)
+
+
+def _canonicalize_pause_reason(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = _normalize_text(value)
+    if normalized == _normalize_text(PAUSE_REASON_NO_POJA_NO_PAYMENT):
+        return PAUSE_REASON_NO_POJA_NO_PAYMENT
+    if normalized in {_normalize_text(reason) for reason in TEMPLE_PURPOSE_PAUSE_REASON_VALUES}:
+        return PAUSE_REASON_USE_FOR_TEMPLE
+    if normalized in {_normalize_text(reason) for reason in SAMY_PAUSE_REASON_VALUES}:
+        return PAUSE_REASON_SAMY
+    return value.strip()
+
+
+def _pause_reason_report_label(reason: str | None) -> str | None:
+    if not reason:
+        return None
+    normalized = _normalize_text(reason)
+    if normalized in {_normalize_text(item) for item in TEMPLE_PURPOSE_PAUSE_REASON_VALUES}:
+        return "temple purpose"
+    if normalized in {_normalize_text(item) for item in SAMY_PAUSE_REASON_VALUES}:
+        return "Samy's names"
+    return None
 
 SATURDAY_NAVAGRAHA_POOJA_NAME = "4 saturday navagraha pooja per month"
 PRADOSHA_POOJA_NAME = "2 pradosha pooja per month"
@@ -469,7 +499,48 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
         if has_filters:
             queryset = queryset.filter(filters)
 
+        queryset = self._exclude_paused_window_registrations(queryset)
         return queryset.prefetch_related("members")
+
+    def _exclude_paused_window_registrations(self, queryset):
+        paused_plan_match = RecurringPoojaPlan.objects.filter(
+            donor_id=OuterRef("donor_id"),
+            pooja_option_id=OuterRef("pooja_option_id"),
+            recurrence_kind=RecurrenceKind.RECURRING,
+            pause_from__isnull=False,
+            pause_until__isnull=False,
+            pause_from__lte=OuterRef("start_date"),
+            pause_until__gte=OuterRef("start_date"),
+            metadata__pause_reason__in=NO_PAYMENT_PAUSE_REASON_VALUES,
+        ).filter(day_option_id=OuterRef("day_option_id"))
+        return queryset.annotate(is_paused_registration=Exists(paused_plan_match)).exclude(is_paused_registration=True)
+
+    def _report_name_for_registration(self, registration: PoojaRegistration) -> str:
+        donor = getattr(registration, "donor", None)
+        if donor is None:
+            return ""
+        start_date = getattr(registration, "start_date", None)
+        if start_date is None:
+            return donor.name or ""
+        pause_plan = (
+            RecurringPoojaPlan.objects.filter(
+                donor_id=registration.donor_id,
+                pooja_option_id=registration.pooja_option_id,
+                day_option_id=registration.day_option_id,
+                recurrence_kind=RecurrenceKind.RECURRING,
+                pause_from__isnull=False,
+                pause_until__isnull=False,
+                pause_from__lte=start_date,
+                pause_until__gte=start_date,
+            )
+            .order_by("-updated_at")
+            .first()
+        )
+        if not pause_plan:
+            return donor.name or ""
+        reason = (pause_plan.metadata or {}).get("pause_reason")
+        label = _pause_reason_report_label(reason if isinstance(reason, str) else None)
+        return label or (donor.name or "")
 
     def perform_create(self, serializer):
         if self.request.user.role != UserRole.ADMIN:
@@ -522,6 +593,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             .exclude(
                 Q(pause_from__lte=last_day)
                 & (Q(pause_until__gte=first_day) | Q(pause_until__isnull=True))
+                & Q(metadata__pause_reason__in=NO_PAYMENT_PAUSE_REASON_VALUES)
             )
         )
 
@@ -853,14 +925,13 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     def saturday_navagraha_report(self, request):
         _ensure_report_download_access(request.user)
 
-        queryset = (
+        queryset = self._exclude_paused_window_registrations(
             PoojaRegistration.objects.filter(
                 pooja_option__name__iexact=SATURDAY_NAVAGRAHA_POOJA_NAME,
                 donor__isnull=False,
             )
-            .select_related("donor")
-            .order_by("donor__name", "donor__id", "start_date")
         )
+        queryset = queryset.select_related("donor").order_by("donor__name", "donor__id", "start_date")
 
         results = []
         for registration in queryset:
@@ -870,7 +941,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             results.append(
                 {
                     "donor_id": donor.id,
-                    "name": donor.name or "",
+                    "name": self._report_name_for_registration(registration),
                     "phone_number": donor.phone_number or "",
                     "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
                 }
@@ -882,14 +953,13 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     def pradosha_pooja_report(self, request):
         _ensure_report_download_access(request.user)
 
-        queryset = (
+        queryset = self._exclude_paused_window_registrations(
             PoojaRegistration.objects.filter(
                 pooja_option__name__iexact=PRADOSHA_POOJA_NAME,
                 donor__isnull=False,
             )
-            .select_related("donor")
-            .order_by("start_date", "donor__name", "donor__id")
         )
+        queryset = queryset.select_related("donor").order_by("start_date", "donor__name", "donor__id")
 
         results = []
         for registration in queryset:
@@ -899,7 +969,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             results.append(
                 {
                     "donor_id": donor.id,
-                    "name": donor.name or "",
+                    "name": self._report_name_for_registration(registration),
                     "phone_number": donor.phone_number or "",
                     "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
                 }
@@ -911,14 +981,13 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     def till_oil_for_lamps_report(self, request):
         _ensure_report_download_access(request.user)
 
-        queryset = (
+        queryset = self._exclude_paused_window_registrations(
             PoojaRegistration.objects.filter(
                 pooja_option__name__iexact=TILL_OIL_FOR_LAMPS_NAME,
                 donor__isnull=False,
             )
-            .select_related("donor")
-            .order_by("start_date", "donor__name", "donor__id")
         )
+        queryset = queryset.select_related("donor").order_by("start_date", "donor__name", "donor__id")
 
         results = []
         for registration in queryset:
@@ -928,7 +997,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             results.append(
                 {
                     "donor_id": donor.id,
-                    "name": donor.name or "",
+                    "name": self._report_name_for_registration(registration),
                     "phone_number": donor.phone_number or "",
                     "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
                 }
@@ -940,14 +1009,13 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     def nitya_neivedhyam_report(self, request):
         _ensure_report_download_access(request.user)
 
-        queryset = (
+        queryset = self._exclude_paused_window_registrations(
             PoojaRegistration.objects.filter(
                 pooja_option__name__iexact=NITYA_NEIVEDHYAM_NAME,
                 donor__isnull=False,
             )
-            .select_related("donor")
-            .order_by("start_date", "donor__name", "donor__id")
         )
+        queryset = queryset.select_related("donor").order_by("start_date", "donor__name", "donor__id")
 
         results = []
         for registration in queryset:
@@ -957,7 +1025,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             results.append(
                 {
                     "donor_id": donor.id,
-                    "name": donor.name or "",
+                    "name": self._report_name_for_registration(registration),
                     "phone_number": donor.phone_number or "",
                     "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
                 }
@@ -969,14 +1037,13 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     def gau_samrakshana_seva_report(self, request):
         _ensure_report_download_access(request.user)
 
-        queryset = (
+        queryset = self._exclude_paused_window_registrations(
             PoojaRegistration.objects.filter(
                 pooja_option__name__iexact=GAU_SAMRAKHSHANA_SEVA_NAME,
                 donor__isnull=False,
             )
-            .select_related("donor")
-            .order_by("start_date", "donor__name", "donor__id")
         )
+        queryset = queryset.select_related("donor").order_by("start_date", "donor__name", "donor__id")
 
         results = []
         for registration in queryset:
@@ -986,7 +1053,7 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
             results.append(
                 {
                     "donor_id": donor.id,
-                    "name": donor.name or "",
+                    "name": self._report_name_for_registration(registration),
                     "phone_number": donor.phone_number or "",
                     "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
                 }
@@ -998,25 +1065,29 @@ class PoojaRegistrationViewSet(viewsets.ModelViewSet):
     def post_prasadam_report(self, request):
         _ensure_report_download_access(request.user)
 
-        queryset = (
+        queryset = self._exclude_paused_window_registrations(
             PoojaRegistration.objects.filter(
                 post_prasadam=True,
                 donor__isnull=False,
             )
-            .values("donor_id", "donor__name", "donor__phone_number")
-            .annotate(pooja_date=Max("start_date"))
-            .order_by("donor__name", "donor_id")
-        )
-
-        results = [
-            {
-                "donor_id": row["donor_id"],
-                "name": row["donor__name"] or "",
-                "phone_number": row["donor__phone_number"] or "",
-                "pooja_date": row["pooja_date"].isoformat() if row["pooja_date"] else "",
+        ).select_related("donor").order_by("donor__name", "donor_id", "-start_date")
+        grouped: dict[int, dict[str, Any]] = {}
+        for registration in queryset:
+            donor = registration.donor
+            if donor is None:
+                continue
+            if donor.id in grouped:
+                continue
+            grouped[donor.id] = {
+                "donor_id": donor.id,
+                "name": self._report_name_for_registration(registration),
+                "phone_number": donor.phone_number or "",
+                "pooja_date": registration.start_date.isoformat() if registration.start_date else "",
             }
-            for row in queryset
-        ]
+        results = sorted(
+            grouped.values(),
+            key=lambda row: (row.get("name") or "").lower(),
+        )
 
         return Response({"count": len(results), "results": results})
 
@@ -1195,12 +1266,41 @@ class RecurringPoojaPlanViewSet(
                 record.amount = new_amount
                 record.save(update_fields=["amount"])
 
+    def _clear_due_registration_in_pause_window(
+        self,
+        plan: RecurringPoojaPlan,
+        *,
+        pause_from: date,
+        pause_until: date,
+    ) -> None:
+        registration = getattr(plan, "due_registration", None)
+        if registration is None:
+            return
+        if registration.start_date is None:
+            return
+        if not (pause_from <= registration.start_date <= pause_until):
+            return
+        has_success = PaymentRecord.objects.filter(
+            registration=registration,
+            status=PaymentStatus.SUCCESS,
+        ).exists()
+        if has_success:
+            return
+        PaymentRecord.objects.filter(
+            registration=registration,
+            status=PaymentStatus.PENDING,
+        ).delete()
+        registration.delete()
+        plan.due_registration = None
+        plan.save(update_fields=["due_registration"])
+
     @action(detail=True, methods=["post"], url_path="pause")
     def pause(self, request, pk=None):
         plan = self.get_object()
         pause_from_value = request.data.get("pause_from")
         pause_until_value = request.data.get("pause_until")
         pause_reason_value = request.data.get("pause_reason")
+        pause_reason = _canonicalize_pause_reason(pause_reason_value if isinstance(pause_reason_value, str) else None)
         if not pause_until_value:
             return Response({"detail": "Provide a pause_until date."}, status=status.HTTP_400_BAD_REQUEST)
         pause_until = parse_date(pause_until_value)
@@ -1210,7 +1310,7 @@ class RecurringPoojaPlanViewSet(
         if pause_from is None:
             return Response({"detail": "Invalid date provided for pause_from."}, status=status.HTTP_400_BAD_REQUEST)
         today = timezone.localdate()
-        if pause_from < today:
+        if pause_from < today and request.user.role != UserRole.ADMIN:
             return Response({"detail": "Pause start must be today or later."}, status=status.HTTP_400_BAD_REQUEST)
         if pause_until <= pause_from:
             return Response({"detail": "Pause end must be after the pause start."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1219,28 +1319,32 @@ class RecurringPoojaPlanViewSet(
         due_registration = find_due_registration(plan, pause_from)
         paid_amount = sum_successful_payments(due_registration)
         if (
-            pause_reason_value == PAUSE_REASON_NO_POJA_NO_PAYMENT
+            pause_reason == PAUSE_REASON_NO_POJA_NO_PAYMENT
             and not was_paused
             and paid_amount > Decimal("0.00")
             and _is_registration_in_pause_window(due_registration, pause_from)
         ):
             _credit_custom_balance(plan.donor, paid_amount)
             metadata["pause_handling_amount"] = str(paid_amount)
-        elif pause_reason_value == PAUSE_REASON_USE_FOR_TEMPLE:
-            if paid_amount > Decimal("0.00") and _is_registration_in_pause_window(due_registration, pause_from):
-                _credit_monthly_donation(plan.donor, paid_amount)
-                metadata["pause_handling_amount"] = str(paid_amount)
-        elif pause_reason_value == PAUSE_REASON_SAMY and paid_amount > Decimal("0.00"):
+        elif pause_reason == PAUSE_REASON_SAMY and paid_amount > Decimal("0.00"):
             metadata["handled_for_samy"] = True
-        if pause_reason_value:
-            metadata["pause_reason"] = pause_reason_value
+        if pause_reason:
+            metadata["pause_reason"] = pause_reason
         else:
             metadata.pop("pause_reason", None)
         plan.metadata = metadata
         plan.pause_from = pause_from
         plan.pause_until = pause_until
-        plan.is_active = False
+        plan.is_active = pause_reason in {PAUSE_REASON_USE_FOR_TEMPLE, PAUSE_REASON_SAMY}
         plan.save()
+        if pause_reason == PAUSE_REASON_NO_POJA_NO_PAYMENT:
+            self._clear_due_registration_in_pause_window(plan, pause_from=pause_from, pause_until=pause_until)
+            recalculate_pending_dues_for_donor_window(
+                donor_id=plan.donor_id,
+                window_start=pause_from,
+                window_end=pause_until,
+                today=today,
+            )
         serializer = self.get_serializer(plan)
         return Response(serializer.data)
 
@@ -1826,11 +1930,28 @@ class PoojaDonorCalendarView(APIView):
             registration_filters = registration_filters.filter(donor_id=donor_scope_user_id)
         queryset = (
             registration_filters
+            .annotate(
+                is_paused_registration=Exists(
+                    RecurringPoojaPlan.objects.filter(
+                        donor_id=OuterRef("donor_id"),
+                        pooja_option_id=OuterRef("pooja_option_id"),
+                        recurrence_kind=RecurrenceKind.RECURRING,
+                        pause_from__isnull=False,
+                        pause_until__isnull=False,
+                        pause_from__lte=OuterRef("start_date"),
+                        pause_until__gte=OuterRef("start_date"),
+                        metadata__pause_reason__in=NO_PAYMENT_PAUSE_REASON_VALUES,
+                    ).filter(day_option_id=OuterRef("day_option_id"))
+                )
+            )
+            .exclude(is_paused_registration=True)
             .select_related("donor", "donor__profile", "day_option")
             .only(
                 "id",
                 "start_date",
                 "created_at",
+                "pooja_option_id",
+                "day_option_id",
                 "donor__id",
                 "donor__name",
                 "donor__phone_number",
@@ -1848,6 +1969,7 @@ class PoojaDonorCalendarView(APIView):
         seen_donor_ids: dict[date, set[int]] = defaultdict(set)
         day_options_by_date: dict[date, dict[int, dict[str, Any]]] = defaultdict(dict)
         unassigned_any_day_donors: list[dict[str, Any]] = []
+        report_name_cache: dict[tuple[int, int, int | None, date], str] = {}
 
         def build_day_option_payload(option: PoojaDayOption | None) -> dict[str, Any] | None:
             if option is None or option.id is None:
@@ -2031,17 +2153,49 @@ class PoojaDonorCalendarView(APIView):
             donor = registration.donor
             if donor is None:
                 continue
+            registration_date = registration.start_date or (
+                registration.created_at.date() if registration.created_at else None
+            )
+            display_name = donor.name or ""
+            if registration_date is not None:
+                cache_key = (
+                    registration.donor_id,
+                    registration.pooja_option_id,
+                    registration.day_option_id,
+                    registration_date,
+                )
+                cached_name = report_name_cache.get(cache_key)
+                if cached_name is None:
+                    pause_plan = (
+                        RecurringPoojaPlan.objects.filter(
+                            donor_id=registration.donor_id,
+                            pooja_option_id=registration.pooja_option_id,
+                            day_option_id=registration.day_option_id,
+                            recurrence_kind=RecurrenceKind.RECURRING,
+                            pause_from__isnull=False,
+                            pause_until__isnull=False,
+                            pause_from__lte=registration_date,
+                            pause_until__gte=registration_date,
+                        )
+                        .order_by("-updated_at")
+                        .first()
+                    )
+                    if pause_plan:
+                        reason = (pause_plan.metadata or {}).get("pause_reason")
+                        label = _pause_reason_report_label(reason if isinstance(reason, str) else None)
+                        cached_name = label or display_name
+                    else:
+                        cached_name = display_name
+                    report_name_cache[cache_key] = cached_name
+                display_name = cached_name
             donor_payload = {
                 "donor_id": _resolve_donor_identifier(donor),
-                "name": donor.name or "",
+                "name": display_name,
                 "phone_number": donor.phone_number or "",
             }
 
             day_option = getattr(registration, "day_option", None)
             day_option_payload = build_day_option_payload(day_option)
-            registration_date = registration.start_date or (
-                registration.created_at.date() if registration.created_at else None
-            )
             if _is_any_day_option(getattr(day_option, "code", None), getattr(day_option, "description", None)):
                 queue_unassigned_any_day_donor(
                     donor.id,

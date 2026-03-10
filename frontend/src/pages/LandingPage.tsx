@@ -79,7 +79,7 @@ const LandingPage = () => {
       <style>{`
         /* ── Same font stack as About Kakkalani Village page ── */
         :root {
-          /* text — slate scale (matches About page text-slate-*) */
+          /* text — slate scale */
           --t1: #0f172a;   /* slate-900: headings                   */
           --t2: #1e293b;   /* slate-800: sub-headings               */
           --t3: #334155;   /* slate-700: body paragraphs            */
@@ -109,11 +109,6 @@ const LandingPage = () => {
           font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
           color:var(--t1); overflow-x:hidden;
           background-color:#fffbeb;
-          background-image:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cline x1='0' y1='0' x2='150' y2='0' stroke='rgba(217%2C119%2C6%2C0.05)' stroke-width='0.5'/%3E%3Cline x1='0' y1='75' x2='150' y2='75' stroke='rgba(217%2C119%2C6%2C0.05)' stroke-width='0.5'/%3E%3Cline x1='0' y1='0' x2='0' y2='150' stroke='rgba(217%2C119%2C6%2C0.05)' stroke-width='0.5'/%3E%3Cline x1='75' y1='0' x2='75' y2='150' stroke='rgba(217%2C119%2C6%2C0.05)' stroke-width='0.5'/%3E%3Ccircle cx='0' cy='0' r='2.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='75' cy='0' r='2.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='0' cy='75' r='2.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='75' cy='75' r='33' fill='none' stroke='rgba(217%2C119%2C6%2C0.07)' stroke-width='0.8'/%3E%3Ccircle cx='75' cy='75' r='27' fill='none' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='75' y2='43' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='91' y2='47' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='103' y2='59' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='107' y2='75' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='103' y2='91' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='91' y2='103' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='75' y2='107' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='59' y2='103' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='47' y2='91' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='43' y2='75' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='47' y2='59' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Cline x1='75' y1='75' x2='59' y2='47' stroke='rgba(217%2C119%2C6%2C0.06)' stroke-width='0.6'/%3E%3Ccircle cx='75' cy='43' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='91' cy='47' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='103' cy='59' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='107' cy='75' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='103' cy='91' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='91' cy='103' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='75' cy='107' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='59' cy='103' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='47' cy='91' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='43' cy='75' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='47' cy='59' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Ccircle cx='59' cy='47' r='1.5' fill='rgba(217%2C119%2C6%2C0.09)'/%3E%3Cpolygon points='75%2C58 90%2C84 60%2C84' fill='rgba(217%2C119%2C6%2C0.04)' stroke='rgba(217%2C119%2C6%2C0.09)' stroke-width='0.8'/%3E%3Cpolygon points='75%2C92 90%2C66 60%2C66' fill='rgba(217%2C119%2C6%2C0.04)' stroke='rgba(217%2C119%2C6%2C0.09)' stroke-width='0.8'/%3E%3Ccircle cx='75' cy='75' r='3' fill='rgba(217%2C119%2C6%2C0.12)'/%3E%3C/svg%3E"),
-            linear-gradient(135deg,#fffbeb 0%,#ffffff 50%,#fffbeb 100%);
-          background-size: 150px 150px, 100% 100%;
-          background-repeat: repeat, no-repeat;
         }
         .lp *, .lp *::before, .lp *::after { box-sizing:border-box; }
 
@@ -187,17 +182,6 @@ const LandingPage = () => {
         /* Om (ॐ) symbol watermark — faint temple backdrop behind section header */
         .heritage-hdr {
           text-align:center; margin-bottom:3rem;
-          position:relative; overflow:hidden;
-        }
-        .heritage-hdr::before {
-          content:'ॐ';
-          position:absolute; top:50%; left:50%;
-          transform:translate(-50%,-50%);
-          font-family:Georgia,serif;
-          font-size:clamp(9rem,22vw,18rem);
-          color:rgba(217,119,6,0.07);
-          pointer-events:none; user-select:none;
-          z-index:0; line-height:1;
         }
         .heritage-hdr > * { position:relative; z-index:1; }
 
@@ -341,17 +325,7 @@ const LandingPage = () => {
         /* ═══════════════════════════════════════
            HOW TO REACH — compact & simple
         ═══════════════════════════════════════ */
-        .reach { padding:3.5rem 0 4rem; position:relative; overflow:hidden; }
-        .reach::before {
-          content:'ॐ';
-          position:absolute; bottom:-2rem; right:3%;
-          font-family:Georgia,serif;
-          font-size:clamp(10rem,25vw,22rem);
-          color:rgba(217,119,6,0.06);
-          pointer-events:none; user-select:none;
-          z-index:0; line-height:1;
-        }
-        .reach > .wrap { position:relative; z-index:1; }
+        .reach { padding:3.5rem 0 4rem; }
         .reach-hdr {
           display:flex; align-items:center; gap:.6rem;
           margin-bottom:1.6rem; padding-bottom:1rem;

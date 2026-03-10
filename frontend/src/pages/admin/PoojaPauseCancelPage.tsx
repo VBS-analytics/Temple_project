@@ -659,7 +659,7 @@ const PoojaPauseCancelPage = () => {
                     )}
 
                     {/* Cancel / Resume */}
-                    {isActive ? (
+                    {!isPaused && isActive ? (
                       <button
                         type="button"
                         onClick={() => handleCancelPlan(plan.id)}
@@ -798,7 +798,6 @@ const PoojaPauseCancelPage = () => {
                             <label className="block text-xs font-semibold text-slate-600">From</label>
                             <input
                               type="date"
-                              min={todayIso()}
                               value={pauseFromDates[plan.id] ?? todayIso()}
                               onChange={(e) => setPauseFromDates((prev) => ({ ...prev, [plan.id]: e.target.value }))}
                               onFocus={(e) => {
