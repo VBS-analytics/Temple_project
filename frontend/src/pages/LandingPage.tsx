@@ -17,11 +17,13 @@ const howToReachRoutes = [
 
 type TempleImage = { src: string; deity: string; name: string; contain?: boolean };
 
-const quickStats = [
-  { icon: "📍", label: "Location",        value: "10 km SE of Thiruvarur" },
-  { icon: "🛕", label: "Sacred Temples",  value: "5+ Sacred Sites" },
-  { icon: "👨‍👩‍👧‍👦", label: "Heritage",       value: "4–5 Generations" },
-  { icon: "🙏", label: "Divine Blessings",value: "Mahaperiyava & Ramana Maharishi" },
+type StatIcon = "location" | "temple" | "heritage" | "blessings";
+
+const quickStats: Array<{ icon: StatIcon; label: string; value: string }> = [
+  { icon: "location",  label: "Location",         value: "10 km SE of Thiruvarur" },
+  { icon: "temple",    label: "Sacred Temples",   value: "5+ Sacred Sites" },
+  { icon: "heritage",  label: "Heritage",         value: "4–5 Generations" },
+  { icon: "blessings", label: "Divine Blessings", value: "Mahaperiyava & Ramana Maharishi" },
 ];
 
 // Village Snapshot data (from AboutKakkalaniVillage page)
@@ -58,6 +60,56 @@ const ChevronDown = ({ flip }: { flip?: boolean }) => (
   </svg>
 );
 
+const LocationStatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11Z" />
+    <circle cx="12" cy="10" r="2.2" />
+  </svg>
+);
+
+const TempleStatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l2.3 2.2L12 7.4 9.7 5.2 12 3Z" />
+    <path d="M8.2 8.2h7.6l-.9 2.2h-5.8l-.9-2.2Z" />
+    <path d="M7.2 12h9.6v8H7.2z" />
+    <path d="M10.5 20v-4h3v4" />
+  </svg>
+);
+
+const HeritageStatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="8" cy="8" r="2.2" />
+    <circle cx="16" cy="8.5" r="2" />
+    <path d="M4.8 18.5c.2-2.7 2-4.3 4.4-4.3 2.3 0 4.1 1.7 4.3 4.3" />
+    <path d="M13.5 18.5c.2-2 1.5-3.2 3.3-3.2 1.7 0 3 1.2 3.2 3.2" />
+  </svg>
+);
+
+const BlessingsStatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8.1 8.8l1.9 2.1 2-2.1" />
+    <path d="M6.3 10.6L4.6 16c-.4 1.3.5 2.6 1.9 2.6h2.2" />
+    <path d="M17.7 10.6l1.7 5.4c.4 1.3-.5 2.6-1.9 2.6h-2.2" />
+    <path d="M10 11.1V19h4v-7.9" />
+  </svg>
+);
+
+const renderStatIcon = (icon: StatIcon) => {
+  if (icon === "location") return <LocationStatIcon />;
+  if (icon === "temple") return <TempleStatIcon />;
+  if (icon === "heritage") return <HeritageStatIcon />;
+  return <BlessingsStatIcon />;
+};
+
+const HistorySectionIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 20V9.5L12 5l7 4.5V20" />
+    <path d="M9.2 20v-5.5h5.6V20" />
+    <path d="M3.8 20h16.4" />
+    <path d="M12 5V3.2" />
+  </svg>
+);
+
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 
 const LandingPage = () => {
@@ -79,24 +131,25 @@ const LandingPage = () => {
       <style>{`
         /* ── Same font stack as About Kakkalani Village page ── */
         :root {
-          /* text — slate scale */
-          --t1: #0f172a;   /* slate-900: headings                   */
-          --t2: #1e293b;   /* slate-800: sub-headings               */
-          --t3: #334155;   /* slate-700: body paragraphs            */
-          --t4: #475569;   /* slate-600: muted / labels             */
-          /* accent — saffron scale (Hindu sacred colour of devotion) */
-          --ac:  #d97706;  /* amber-600: saffron, buttons, icons    */
-          --ac2: #b45309;  /* amber-700: hover                      */
-          --acl: #fef3c7;  /* amber-100: light icon bg              */
-          --acm: #fffbeb;  /* amber-50:  tile bg                    */
-          /* backgrounds */
-          --bg:  #fffbeb;  /* amber-50 warm cream                   */
-          --bg2: #ffffff;  /* white cards                           */
-          --bg3: #faf5eb;  /* warm off-white alt                    */
+          /* text — earth tone scale */
+          --t1: #2e2018;   /* dark earth: headings                  */
+          --t2: #4a3326;   /* medium earth: sub-headings            */
+          --t3: #5f4636;   /* body text                             */
+          --t4: #7a5e4b;   /* muted labels                          */
+          /* accent — temple wall (sendooram) */
+          --ac:  #a33a2b;  /* temple red                            */
+          --ac2: #7e2a20;  /* deep red hover                        */
+          --acl: #efd9cf;  /* pale lime-wash red tint               */
+          --acm: #f8eee2;  /* light tile bg                         */
+          /* backgrounds — sunnambu / lime wash */
+          --bg:  #f7f1e6;  /* page background                        */
+          --bg2: #fffdf8;  /* card white                             */
+          --bg3: #fbf5ea;  /* alternate warm white                   */
+          --bg-earth-mist: rgba(126,42,32,.09);
           /* border */
-          --bd:  rgba(148,163,184,.25); /* slate-300 at 25%         */
+          --bd:  rgba(163,58,43,.22); /* muted temple red border   */
           /* footer */
-          --ft:  #0f172a;  /* slate-900                             */
+          --ft:  #5c1f17;  /* deep temple red                       */
         }
 
         /* ── BASE — same font as About page (system serif + sans) ── */
@@ -107,9 +160,32 @@ const LandingPage = () => {
         */
         .lp {
           font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-          color:var(--t1); overflow-x:hidden;
-          background-color:#fffbeb;
+          color:var(--t1); overflow-x:hidden; position:relative; isolation:isolate;
+          background-color:var(--bg);
+          background-image:
+            radial-gradient(circle at 12% 18%, rgba(255,255,255,.42) 0%, rgba(255,255,255,0) 34%),
+            radial-gradient(circle at 86% 12%, var(--bg-earth-mist) 0%, rgba(126,42,32,0) 30%),
+            radial-gradient(circle at 18% 84%, rgba(163,58,43,.06) 0%, rgba(163,58,43,0) 28%),
+            radial-gradient(circle at 82% 78%, rgba(255,255,255,.36) 0%, rgba(255,255,255,0) 34%),
+            linear-gradient(to bottom, rgba(255,255,255,.26), rgba(255,255,255,0));
+          background-attachment: fixed;
         }
+        .lp::before {
+          content:"";
+          position:absolute; inset:0; z-index:0; pointer-events:none;
+          background:
+            linear-gradient(to right, rgba(255,255,255,.18), rgba(255,255,255,0) 30%, rgba(255,255,255,.12) 55%, rgba(255,255,255,0) 100%);
+          opacity:.3;
+        }
+        .lp::after {
+          content:"";
+          position:absolute; inset:0; z-index:0; pointer-events:none;
+          background:
+            radial-gradient(circle at 1px 1px, rgba(126,42,32,.15) 1px, transparent 0);
+          background-size: 22px 22px;
+          opacity:.04;
+        }
+        .lp > * { position:relative; z-index:1; }
         .lp *, .lp *::before, .lp *::after { box-sizing:border-box; }
 
         /* ── REVEAL ── */
@@ -121,8 +197,8 @@ const LandingPage = () => {
         .wrap { width:100%; padding:0 5%; }
 
         /* plain section backgrounds — no vector pattern */
-        .t-bg       { background:#fffbeb; }
-        .t-bg-white { background:#ffffff; }
+        .t-bg       { background:var(--bg); }
+        .t-bg-white { background:var(--bg2); }
 
         /* ── SHARED TYPOGRAPHY ── */
         .eyebrow {
@@ -161,7 +237,7 @@ const LandingPage = () => {
         /* ═══════════════════════════════════════
            STATS
         ═══════════════════════════════════════ */
-        .stats { padding:2rem 0 4rem; }
+        .stats { padding:2rem 0 1.5rem; }
         .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:1.2rem; }
         .stat-card {
           background:var(--bg2); border:1px solid var(--bd); border-radius:1.1rem;
@@ -169,16 +245,21 @@ const LandingPage = () => {
           box-shadow:0 2px 14px rgba(0,0,0,.06); position:relative; overflow:hidden;
           transition:transform .3s, box-shadow .3s;
         }
-        .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(to right,var(--ac),#fbbf24); }
+        .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(to right,var(--ac),var(--ac2)); }
         .stat-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.1); }
-        .stat-icon { font-size:2rem; margin-bottom:.55rem; display:block; }
+        .stat-icon {
+          width:48px; height:48px; margin:0 auto .75rem;
+          display:flex; align-items:center; justify-content:center;
+          border-radius:.85rem; background:var(--acm); color:var(--ac);
+          border:1px solid var(--acl);
+        }
         .stat-val { font-family:Georgia,serif; font-size:1.18rem; font-weight:700; color:var(--t1); line-height:1.3; margin-bottom:.35rem; }
         .stat-lbl { font-size:.65rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--ac); }
 
         /* ═══════════════════════════════════════
            HERITAGE section wrapper
         ═══════════════════════════════════════ */
-        .heritage { padding:5rem 0; }
+        .heritage { padding:2.25rem 0 4rem; }
         /* Om (ॐ) symbol watermark — faint temple backdrop behind section header */
         .heritage-hdr {
           text-align:center; margin-bottom:3rem;
@@ -200,12 +281,13 @@ const LandingPage = () => {
           font-size:1.4rem; flex-shrink:0;
           transition:transform .3s;
         }
+        .h-icon svg { width:24px; height:24px; color:var(--ac); }
         .h-section:hover .h-icon { transform:scale(1.1); }
         .h-sec-title {
           font-family:Georgia,'Times New Roman',serif; font-size:clamp(1.25rem,2.4vw,1.9rem);
           font-weight:700; color:var(--t1); margin:0; line-height:1.2;
         }
-        .h-rule { width:48px; height:4px; background:linear-gradient(to right,var(--ac),#fbbf24); border-radius:2px; margin:.55rem 0 1rem 54px; }
+        .h-rule { width:48px; height:4px; background:linear-gradient(to right,var(--ac),var(--ac2)); border-radius:2px; margin:.55rem 0 1rem 54px; }
         @media(max-width:480px){ .h-rule { margin-left:0; } }
 
         .h-para {
@@ -257,12 +339,12 @@ const LandingPage = () => {
         }
         @media(max-width:820px){ .hist-cols { grid-template-columns:1fr; } }
 
-        /* Village Snapshot card — blue gradient matching About page */
+        /* Village Snapshot card */
         .snapshot-card {
           border-radius:1.5rem; overflow:hidden;
-          background:linear-gradient(135deg,#d97706 0%,#b45309 100%);
+          background:linear-gradient(135deg,var(--ac) 0%,var(--ac2) 100%);
           padding:1.75rem; color:#fff; position:relative;
-          box-shadow:0 8px 32px rgba(217,119,6,.28);
+          box-shadow:0 8px 32px rgba(163,58,43,.32);
         }
         .snapshot-card::before, .snapshot-card::after {
           content:''; position:absolute; border-radius:50%;
@@ -314,12 +396,12 @@ const LandingPage = () => {
         .t-card.t-contain .t-card-overlay { background:linear-gradient(to top, rgba(0,0,0,.6) 0%, transparent 38%); }
         .t-card::after {
           content:''; position:absolute; top:0; left:0; right:0; height:3px;
-          background:linear-gradient(to right,var(--ac),#fbbf24);
+          background:linear-gradient(to right,var(--ac),var(--ac2));
           transform:scaleX(0); transform-origin:left; transition:transform .35s; z-index:2;
         }
         .t-card:hover::after { transform:scaleX(1); }
         .t-info { position:absolute; bottom:0; left:0; right:0; padding:1rem; z-index:1; }
-        .t-deity { font-size:.58rem; font-weight:700; letter-spacing:.25em; text-transform:uppercase; color:#fcd34d; margin-bottom:.3rem; }
+        .t-deity { font-size:.58rem; font-weight:700; letter-spacing:.25em; text-transform:uppercase; color:#ffe9e3; margin-bottom:.3rem; }
         .t-name { font-family:Georgia,serif; font-size:.95rem; font-weight:600; color:#fff; line-height:1.25; }
 
         /* ═══════════════════════════════════════
@@ -394,9 +476,9 @@ const LandingPage = () => {
           width:100%; padding:0 1.5rem;
           display:flex; flex-direction:column; align-items:center; text-align:center; gap:.3rem;
         }
-        .ft-brand { font-family:Georgia,serif; font-size:1.3rem; font-weight:700; color:#fcd34d; letter-spacing:.08em; }
-        .ft-rule { width:55px; height:1px; background:linear-gradient(to right,transparent,#fbbf24,transparent); margin:.45rem auto; }
-        .ft-copy { font-size:.7rem; color:rgba(148,163,184,.5); letter-spacing:.05em; }
+        .ft-brand { font-family:Georgia,serif; font-size:1.3rem; font-weight:700; color:var(--acl); letter-spacing:.08em; }
+        .ft-rule { width:55px; height:1px; background:linear-gradient(to right,transparent,var(--ac),transparent); margin:.45rem auto; }
+        .ft-copy { font-size:.7rem; color:rgba(247,241,230,.72); letter-spacing:.05em; }
 
         /* ═══════════════════════════════════════
            RESPONSIVE MISC
@@ -430,7 +512,7 @@ const LandingPage = () => {
               <div className="stats-grid">
                 {quickStats.map((s, i) => (
                   <div key={s.label} className={`stat-card lr ld${i + 1}`}>
-                    <span className="stat-icon">{s.icon}</span>
+                    <span className="stat-icon">{renderStatIcon(s.icon)}</span>
                     <div className="stat-val">{s.value}</div>
                     <div className="stat-lbl">{s.label}</div>
                   </div>
@@ -462,7 +544,7 @@ const LandingPage = () => {
               {/* ── 1. HISTORY & FOUNDATIONS — snapshot left, text right ── */}
               <div className="h-section lr ld1">
                 <div className="h-title-bar">
-                  <div className="h-icon">🏛️</div>
+                  <div className="h-icon"><HistorySectionIcon /></div>
                   <h3 className="h-sec-title">History & Foundations</h3>
                 </div>
                 <div className="h-rule" />
@@ -510,7 +592,7 @@ const LandingPage = () => {
               {/* ── 2. TEMPLES & SACRED SITES — full width text + image grid ── */}
               <div className="h-section lr ld2">
                 <div className="h-title-bar">
-                  <div className="h-icon">🕉️</div>
+                  <div className="h-icon"><TempleStatIcon /></div>
                   <h3 className="h-sec-title">Temples & Sacred Sites</h3>
                 </div>
                 <div className="h-rule" />
@@ -554,7 +636,7 @@ const LandingPage = () => {
               {/* ── 3. BLESSINGS & LEGACY — text left, images right ── */}
               <div className="h-section lr ld3">
                 <div className="h-title-bar">
-                  <div className="h-icon">🙏</div>
+                  <div className="h-icon"><BlessingsStatIcon /></div>
                   <h3 className="h-sec-title">Blessings & Legacy</h3>
                 </div>
                 <div className="h-rule" />

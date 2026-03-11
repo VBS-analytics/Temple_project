@@ -63,33 +63,33 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     variant === 'overlay'
       ? 'absolute inset-x-0 top-0 bg-transparent text-white'
       : variant === 'amber'
-      ? 'relative sticky top-0 border-b border-[#fef3c7] bg-[#fffbeb]/95 text-black shadow-[0_10px_24px_-20px_rgba(180,83,9,0.2)] backdrop-blur'
+      ? 'relative sticky top-0 border-b border-[#efd9cf] bg-[#f7f1e6]/95 text-black shadow-[0_10px_24px_-20px_rgba(126,42,32,0.28)] backdrop-blur'
       : 'relative sticky top-0 border-b border-[#90CAF9] bg-[#E3F2FD]/95 text-black shadow-[0_10px_24px_-20px_rgba(21,101,192,0.35)] backdrop-blur'
   );
   const navLinkClass =
     variant === 'overlay'
       ? 'font-bold text-white transition hover:text-[#f4ba1a]'
       : variant === 'amber'
-      ? 'font-bold text-black transition hover:text-[#b45309]'
+      ? 'font-bold text-black transition hover:text-[#7e2a20]'
       : 'font-bold text-black transition hover:text-[#1565C0]';
   const dropdownClass =
     variant === 'overlay'
       ? 'bg-white/95 text-slate-700'
       : variant === 'amber'
-      ? 'bg-[#fffbeb] text-[#334155] border border-[#fcd34d]'
+      ? 'bg-[#fffdf8] text-[#5f4636] border border-[#efd9cf]'
       : 'bg-white text-black border border-[#90CAF9]';
   const buttonBase =
     variant === 'overlay'
       ? 'bg-[#f06f4a] hover:bg-[#ff8a60]'
       : variant === 'amber'
-      ? 'bg-[#b45309] hover:bg-[#92400e]'
+      ? 'bg-[#a33a2b] hover:bg-[#7e2a20]'
       : 'bg-[#E65100] hover:bg-[#F57C00]';
 
   const brandTextClass =
     variant === 'overlay'
       ? 'text-white/80'
       : variant === 'amber'
-      ? 'text-[#92400e]'
+      ? 'text-[#7e2a20]'
       : 'text-[#1565C0]';
 
   const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
@@ -104,19 +104,19 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
     variant === 'overlay'
       ? 'border-white/40 text-white hover:bg-white/10'
       : variant === 'amber'
-      ? 'border-[#fcd34d] text-[#b45309] hover:bg-amber-50/80'
+      ? 'border-[#efd9cf] text-[#a33a2b] hover:bg-[#fff7f3]/80'
       : 'border-[#90CAF9] text-[#1565C0] hover:bg-white/80';
   const donateButtonClass =
     variant === 'overlay'
       ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
       : variant === 'amber'
-      ? 'text-xs font-semibold uppercase tracking-wide text-black transition hover:text-[#92400e]'
+      ? 'text-xs font-semibold uppercase tracking-wide text-black transition hover:text-[#7e2a20]'
       : 'text-xs font-semibold uppercase tracking-wide text-black transition hover:text-[#1976D2]';
   const patronButtonClass =
     variant === 'overlay'
       ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
       : variant === 'amber'
-      ? 'text-xs font-semibold uppercase tracking-wide text-[#b45309] transition hover:text-[#92400e]'
+      ? 'text-xs font-semibold uppercase tracking-wide text-[#a33a2b] transition hover:text-[#7e2a20]'
       : 'text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:text-[#1976D2]';
 
   useEffect(() => {
@@ -208,7 +208,12 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                           <Link
                             key={child.label}
                             to={toValue}
-                            className="block rounded-lg px-3 py-2 transition hover:bg-blue-50 hover:text-blue-900"
+                            className={clsx(
+                              "block rounded-lg px-3 py-2 transition",
+                              variant === 'amber'
+                                ? "hover:bg-[#f8eee2] hover:text-[#7e2a20]"
+                                : "hover:bg-blue-50 hover:text-blue-900"
+                            )}
                           >
                             {child.label}
                           </Link>
@@ -285,14 +290,14 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
         <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0" onClick={closeMobileMenu} />
           <div className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col bg-white text-black shadow-2xl sm:max-w-sm">
-            <div className={clsx("flex items-center justify-between border-b px-6 py-4", variant === 'amber' ? "border-[#fef3c7]" : "border-[#90CAF9]")}>
+            <div className={clsx("flex items-center justify-between border-b px-6 py-4", variant === 'amber' ? "border-[#efd9cf]" : "border-[#90CAF9]")}>
               <div>
-                <p className={clsx("text-xs font-semibold uppercase tracking-[0.3em]", variant === 'amber' ? "text-[#92400e]" : "text-[#1565C0]")}>Kakkalani Gramam</p>
+                <p className={clsx("text-xs font-semibold uppercase tracking-[0.3em]", variant === 'amber' ? "text-[#7e2a20]" : "text-[#1565C0]")}>Kakkalani Gramam</p>
               </div>
               <button
                 type="button"
                 onClick={closeMobileMenu}
-                className={clsx("rounded-full border p-2 transition", variant === 'amber' ? "border-[#fcd34d] text-[#b45309] hover:bg-[#fef3c7]" : "border-[#90CAF9] text-[#1565C0] hover:bg-blue-50")}
+                className={clsx("rounded-full border p-2 transition", variant === 'amber' ? "border-[#efd9cf] text-[#a33a2b] hover:bg-[#f8eee2]" : "border-[#90CAF9] text-[#1565C0] hover:bg-blue-50")}
                 aria-label="Close menu"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -317,10 +322,10 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                           'block w-full rounded-xl border px-4 py-3 text-sm font-semibold text-black transition',
                           isNavItemActive(item)
                             ? variant === 'amber'
-                              ? 'border-[#fcd34d] bg-[#fef3c7] text-[#b45309]'
+                              ? 'border-[#efd9cf] bg-[#f8eee2] text-[#a33a2b]'
                               : 'border-[#90CAF9] bg-blue-50 text-[#1565C0]'
                             : variant === 'amber'
-                              ? 'border-[#fef3c7] bg-white hover:border-[#fcd34d] hover:bg-[#fffbeb]'
+                              ? 'border-[#efd9cf] bg-white hover:border-[#a33a2b] hover:bg-[#f8eee2]'
                               : 'border-blue-100 bg-white hover:border-[#90CAF9] hover:bg-blue-50/70'
                         )}
                         aria-current={isNavItemActive(item) ? 'page' : undefined}
@@ -328,7 +333,12 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                         {item.label}
                       </Link>
                       {item.children && (
-                        <ul className="mt-2 space-y-1 rounded-xl border border-blue-100 bg-blue-50/50 p-2 text-sm font-medium">
+                        <ul className={clsx(
+                          "mt-2 space-y-1 rounded-xl p-2 text-sm font-medium",
+                          variant === 'amber'
+                            ? "border border-[#efd9cf] bg-[#f8eee2]/60"
+                            : "border border-blue-100 bg-blue-50/50"
+                        )}>
                           {item.children.map((child) => {
                             const childTo = resolveLinkTo(child.href, child.type);
                             return (
@@ -356,7 +366,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   className={clsx(
                     "block w-full text-center text-sm font-semibold transition",
                     variant === 'amber'
-                      ? "py-2 text-black hover:text-[#92400e]"
+                      ? "py-2 text-black hover:text-[#7e2a20]"
                       : variant === 'overlay'
                       ? "py-2 text-white hover:text-white/80"
                       : "py-2 text-black hover:text-[#1976D2]"
@@ -373,7 +383,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                   className={clsx(
                     "block w-full text-center text-sm font-semibold transition",
                     variant === 'amber'
-                      ? "py-2 text-[#b45309] hover:text-[#92400e]"
+                      ? "py-2 text-[#a33a2b] hover:text-[#7e2a20]"
                       : variant === 'overlay'
                       ? "py-2 text-white hover:text-white/80"
                       : "py-2 text-[#1565C0] hover:text-[#1976D2]"
@@ -416,7 +426,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                 className={clsx(
                   "relative w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl bg-white p-5 sm:max-h-[calc(100dvh-5rem)]",
                   variant === 'amber'
-                    ? "border border-[#fcd34d] shadow-[0_30px_80px_-30px_rgba(180,83,9,0.35)]"
+                    ? "border border-[#efd9cf] shadow-[0_30px_80px_-30px_rgba(126,42,32,0.35)]"
                     : "border border-[#90CAF9] shadow-[0_30px_80px_-30px_rgba(21,101,192,0.55)]"
                 )}
                 onClick={(event) => event.stopPropagation()}
@@ -424,14 +434,14 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                 <div className={clsx(
                   "pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r rounded-t-2xl",
                   variant === 'amber'
-                    ? "from-[#d97706] via-[#b45309] to-[#d97706]"
+                    ? "from-[#a33a2b] via-[#7e2a20] to-[#a33a2b]"
                     : "from-[#1565C0] via-[#1976D2] to-[#1565C0]"
                 )} />
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className={clsx(
                       "text-[0.62rem] font-semibold uppercase tracking-[0.24em]",
-                      variant === 'amber' ? "text-[#b45309]" : "text-[#1565C0]"
+                      variant === 'amber' ? "text-[#a33a2b]" : "text-[#1565C0]"
                     )}>
                       Contact to Become a Patron
                     </p>
@@ -467,7 +477,7 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
                       className={clsx(
                         "group flex items-center justify-between rounded-xl bg-white px-4 py-3 transition",
                         variant === 'amber'
-                          ? "border border-[#fef3c7] hover:border-[#fcd34d]"
+                          ? "border border-[#efd9cf] hover:border-[#a33a2b]"
                           : "border border-blue-100 hover:border-[#90CAF9]"
                       )}
                     >

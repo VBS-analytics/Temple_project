@@ -132,8 +132,8 @@ const CSS_STYLES = `
   /* ── KovilDetailsPage — Sacred Stone & Saffron ── */
   .kp {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: #0f172a;
-    background-color: #fffbeb;
+    color: #2e2018;
+    background-color: #f7f1e6;
     min-height: 100vh;
     overflow-x: hidden;
   }
@@ -146,27 +146,27 @@ const CSS_STYLES = `
   .kp-pg-hdr {
     padding: 1.25rem 0 1.5rem;
     text-align: center;
-    border-bottom: 1px solid #fef3c7;
+    border-bottom: 1px solid #efd9cf;
     position: relative;
   }
   .kp-eyebrow {
     display: inline-flex; align-items: center; gap: .5rem;
     font-size: .72rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
-    color: #d97706; margin-bottom: .65rem;
+    color: #a33a2b; margin-bottom: .65rem;
   }
   .kp-eyebrow::before, .kp-eyebrow::after {
     content: ''; display: inline-block; width: 24px; height: 1.5px;
-    background: #d97706; opacity: .4;
+    background: #a33a2b; opacity: .4;
   }
   .kp-pg-title {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: clamp(2rem, 4vw, 3.25rem);
-    font-weight: 700; color: #0f172a; margin: 0 0 .6rem; line-height: 1.15;
+    font-weight: 700; color: #2e2018; margin: 0 0 .6rem; line-height: 1.15;
   }
-  .kp-pg-title em { color: #d97706; font-style: normal; }
+  .kp-pg-title em { color: #a33a2b; font-style: normal; }
   .kp-pg-desc {
     font-size: clamp(.9rem, 1.8vw, 1.05rem);
-    color: #475569; max-width: 900px; margin: 0 auto; line-height: 1.75; white-space: nowrap;
+    color: #7a5e4b; max-width: 900px; margin: 0 auto; line-height: 1.75; white-space: nowrap;
   }
   @media (max-width: 640px) {
     .kp-pg-desc {
@@ -201,27 +201,27 @@ const CSS_STYLES = `
     min-height: 44px; padding: .45rem 1rem .45rem .45rem;
     border-radius: 999px; cursor: pointer;
     font-size: .82rem; font-weight: 700; line-height: 1.3;
-    border: 2px solid #fef3c7; background: #fff; color: #1f2937;
+    border: 2px solid #efd9cf; background: #fff; color: #1f2937;
     transition: border-color .2s, background .2s, box-shadow .2s, color .2s;
     white-space: nowrap;
   }
   .kp-tab:hover {
-    border-color: #fcd34d; background: #fffbeb; color: #92400e;
+    border-color: #d8b9ac; background: #f7f1e6; color: #5c1f17;
   }
   .kp-tab--active {
-    background: linear-gradient(to right, #d97706, #b45309);
+    background: linear-gradient(to right, #a33a2b, #7e2a20);
     border-color: transparent; color: #fff;
-    box-shadow: 0 4px 18px rgba(217,119,6,.3);
+    box-shadow: 0 4px 18px rgba(163,58,43,.3);
   }
   .kp-tab--active:hover {
-    background: linear-gradient(to right, #b45309, #92400e);
+    background: linear-gradient(to right, #7e2a20, #5c1f17);
     border-color: transparent; color: #fff;
   }
   .kp-tab-tag {
     display: inline-flex; align-items: center; justify-content: center;
     width: 26px; height: 26px; border-radius: 50%;
-    background: #fef3c7; border: 1.5px solid #fcd34d;
-    font-size: .65rem; font-weight: 700; color: #92400e; flex-shrink: 0;
+    background: #efd9cf; border: 1.5px solid #d8b9ac;
+    font-size: .65rem; font-weight: 700; color: #5c1f17; flex-shrink: 0;
   }
   .kp-tab--active .kp-tab-tag {
     background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.4); color: #fff;
@@ -252,7 +252,7 @@ const CSS_STYLES = `
 
   /* ── TEMPLE HEADER BANNER ── */
   .kp-temple-hdr {
-    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    background: linear-gradient(135deg, #a33a2b 0%, #7e2a20 100%);
     border-radius: 1.25rem; padding: 1.1rem 1.75rem;
     color: #fff; position: relative; overflow: hidden;
     margin-bottom: 1.5rem;
@@ -315,8 +315,8 @@ const CSS_STYLES = `
     border-radius: 50%;
     background: rgba(255,255,255,.85);
     backdrop-filter: blur(4px);
-    border: 1.5px solid rgba(217,119,6,.2);
-    color: #92400e;
+    border: 1.5px solid rgba(163,58,43,.22);
+    color: #5c1f17;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     transition: background .2s, transform .2s, box-shadow .2s;
@@ -325,7 +325,7 @@ const CSS_STYLES = `
   }
   .kp-slide-arrow:hover {
     background: #fff;
-    box-shadow: 0 4px 14px rgba(217,119,6,.25);
+    box-shadow: 0 4px 14px rgba(163,58,43,.28);
     transform: translateY(-50%) scale(1.08);
   }
   .kp-slide-arrow--left { left: .75rem; }
@@ -342,7 +342,7 @@ const CSS_STYLES = `
   }
   .kp-slide-caption {
     text-align: center;
-    font-size: .78rem; color: #78716c;
+    font-size: .78rem; color: #8a6f5a;
     font-style: italic;
     margin-top: .5rem;
   }
@@ -352,15 +352,15 @@ const CSS_STYLES = `
   }
   .kp-slide-dot {
     width: 8px; height: 8px; border-radius: 50%;
-    border: 1.5px solid #d97706;
+    border: 1.5px solid #a33a2b;
     background: transparent;
     cursor: pointer;
     padding: 0;
     transition: background .2s, transform .2s;
   }
-  .kp-slide-dot:hover { background: rgba(217,119,6,.35); }
+  .kp-slide-dot:hover { background: rgba(163,58,43,.35); }
   .kp-slide-dot--active {
-    background: #d97706;
+    background: #a33a2b;
     transform: scale(1.2);
   }
   @media(max-width: 640px) {
@@ -375,7 +375,7 @@ const CSS_STYLES = `
 
   /* ── SECTION CARD ── */
   .kp-sec {
-    background: #fff; border: 1px solid rgba(217,119,6,.15);
+    background: #fff; border: 1px solid rgba(163,58,43,.15);
     border-radius: 1.25rem; padding: 1.75rem 2rem;
     margin-bottom: 1.25rem;
     box-shadow: 0 2px 12px rgba(0,0,0,.05);
@@ -409,57 +409,57 @@ const CSS_STYLES = `
   .kp-sec-hdr { margin-bottom: 1.4rem; }
   .kp-sec-eyebrow {
     font-size: .62rem; font-weight: 700; letter-spacing: .25em; text-transform: uppercase;
-    color: #d97706; display: block; margin-bottom: .35rem;
+    color: #a33a2b; display: block; margin-bottom: .35rem;
   }
   .kp-sec-title {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: clamp(1.15rem, 2.4vw, 1.6rem);
-    font-weight: 700; color: #0f172a; margin: 0; line-height: 1.25;
+    font-weight: 700; color: #2e2018; margin: 0; line-height: 1.25;
   }
   .kp-rule {
     width: 38px; height: 3px;
-    background: linear-gradient(to right, #d97706, #fbbf24);
+    background: linear-gradient(to right, #a33a2b, #bf5a48);
     border-radius: 2px; margin: .5rem 0 0;
   }
 
   /* ── HIGHLIGHT BOX ── */
   .kp-hl {
-    background: #fffbeb; border: 1px solid #fef3c7;
-    border-left: 3px solid #d97706;
+    background: #f7f1e6; border: 1px solid #efd9cf;
+    border-left: 3px solid #a33a2b;
     border-radius: .75rem; padding: 1rem 1.1rem;
   }
-  .kp-hl-title { font-size: .82rem; font-weight: 700; color: #0f172a; margin-bottom: .3rem; }
-  .kp-hl-text { font-size: .9rem; color: #334155; line-height: 1.7; }
-  .kp-hl-text strong { color: #0f172a; }
+  .kp-hl-title { font-size: .82rem; font-weight: 700; color: #2e2018; margin-bottom: .3rem; }
+  .kp-hl-text { font-size: .9rem; color: #5f4636; line-height: 1.7; }
+  .kp-hl-text strong { color: #2e2018; }
 
   /* ── SACRED STORY BOX ── */
   .kp-sacred {
-    background: linear-gradient(135deg, #fffbeb 0%, #fff7e6 100%);
-    border: 1.5px solid #fcd34d; border-radius: 1rem;
+    background: linear-gradient(135deg, #f7f1e6 0%, #fcf3eb 100%);
+    border: 1.5px solid #d8b9ac; border-radius: 1rem;
     padding: 1.1rem 1.25rem; margin: .75rem 0;
   }
   .kp-sacred-title {
     font-family: Georgia, serif; font-size: .92rem; font-weight: 700;
-    color: #92400e; margin-bottom: .4rem;
+    color: #5c1f17; margin-bottom: .4rem;
   }
-  .kp-sacred-text { font-size: .9rem; color: #334155; line-height: 1.72; }
-  .kp-sacred-text strong { color: #0f172a; }
+  .kp-sacred-text { font-size: .9rem; color: #5f4636; line-height: 1.72; }
+  .kp-sacred-text strong { color: #2e2018; }
 
   /* ── DEITY / FEATURE ROW ── */
   .kp-deity-row {
     display: flex; align-items: flex-start; gap: 1rem;
-    border-bottom: 1px solid rgba(217,119,6,.1);
+    border-bottom: 1px solid rgba(163,58,43,.14);
     padding: 1rem 0;
   }
   .kp-deity-row:first-of-type { padding-top: 0; }
   .kp-deity-row:last-of-type { border-bottom: none; padding-bottom: 0; }
   .kp-deity-dot {
     width: 8px; height: 8px; border-radius: 50%;
-    background: #d97706; flex-shrink: 0; margin-top: .45rem;
+    background: #a33a2b; flex-shrink: 0; margin-top: .45rem;
   }
-  .kp-deity-name { font-size: .95rem; font-weight: 700; color: #0f172a; margin-bottom: .3rem; }
-  .kp-deity-desc { font-size: .875rem; color: #334155; line-height: 1.7; }
-  .kp-deity-desc strong { color: #0f172a; }
+  .kp-deity-name { font-size: .95rem; font-weight: 700; color: #2e2018; margin-bottom: .3rem; }
+  .kp-deity-desc { font-size: .875rem; color: #5f4636; line-height: 1.7; }
+  .kp-deity-desc strong { color: #2e2018; }
 
   /* ── TIMELINE ── */
   .kp-timeline { display: flex; flex-direction: column; }
@@ -467,20 +467,20 @@ const CSS_STYLES = `
   .kp-tl-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 52px; }
   .kp-tl-year {
     width: 52px; height: 52px; border-radius: 50%;
-    background: #d97706; color: #fff;
+    background: #a33a2b; color: #fff;
     font-size: .63rem; font-weight: 700; text-align: center; line-height: 1.2;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .kp-tl-line {
     width: 2px; flex: 1; min-height: 1.5rem;
-    background: linear-gradient(to bottom, #d97706, #fef3c7);
+    background: linear-gradient(to bottom, #a33a2b, #efd9cf);
   }
   .kp-tl-item:last-child .kp-tl-line { display: none; }
   .kp-tl-body { padding: 0 0 1.75rem; flex: 1; }
   .kp-tl-item:last-child .kp-tl-body { padding-bottom: 0; }
-  .kp-tl-title { font-size: 1rem; font-weight: 700; color: #0f172a; margin-bottom: .3rem; }
-  .kp-tl-text { font-size: .875rem; color: #334155; line-height: 1.7; }
-  .kp-tl-text strong { color: #0f172a; }
+  .kp-tl-title { font-size: 1rem; font-weight: 700; color: #2e2018; margin-bottom: .3rem; }
+  .kp-tl-text { font-size: .875rem; color: #5f4636; line-height: 1.7; }
+  .kp-tl-text strong { color: #2e2018; }
   .kp-timeline .kp-hl { padding: 1.25rem; }
 
   /* ── IMAGE GRID ── */
@@ -492,7 +492,7 @@ const CSS_STYLES = `
     object-fit: cover; border-radius: .75rem;
     box-shadow: 0 2px 10px rgba(0,0,0,.1);
   }
-  .kp-img-cap { font-size: .7rem; color: #78716c; margin-top: .35rem; font-style: italic; }
+  .kp-img-cap { font-size: .7rem; color: #8a6f5a; margin-top: .35rem; font-style: italic; }
 
   /* single image */
   .kp-img-single { border-radius: .75rem; overflow: hidden; margin-top: .85rem; }
@@ -512,35 +512,35 @@ const CSS_STYLES = `
   }
   .kp-ba-label {
     font-size: .63rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-    color: #d97706; margin-top: .3rem; display: block;
+    color: #a33a2b; margin-top: .3rem; display: block;
   }
 
   /* ── ALERT BOXES ── */
   .kp-alert { border-radius: .75rem; padding: 1rem 1.1rem; }
-  .kp-alert--info { background: #fffbeb; border: 1px solid #fef3c7; }
-  .kp-alert--warn { background: #fff7e6; border: 1px solid #fcd34d; }
+  .kp-alert--info { background: #f7f1e6; border: 1px solid #efd9cf; }
+  .kp-alert--warn { background: #fcf3eb; border: 1px solid #d8b9ac; }
   .kp-alert--ok   { background: #f0fdf4; border: 1px solid #bbf7d0; }
-  .kp-alert-title { font-size: .82rem; font-weight: 700; margin-bottom: .3rem; color: #0f172a; }
-  .kp-alert--warn .kp-alert-title { color: #92400e; }
+  .kp-alert-title { font-size: .82rem; font-weight: 700; margin-bottom: .3rem; color: #2e2018; }
+  .kp-alert--warn .kp-alert-title { color: #5c1f17; }
   .kp-alert--ok   .kp-alert-title { color: #166534; }
-  .kp-alert-text { font-size: .875rem; color: #334155; line-height: 1.7; }
-  .kp-alert-text strong { color: #0f172a; }
+  .kp-alert-text { font-size: .875rem; color: #5f4636; line-height: 1.7; }
+  .kp-alert-text strong { color: #2e2018; }
 
   /* ── VIDEO LINK BUTTON ── */
   .kp-video-link {
     display: inline-flex; align-items: center; gap: .5rem;
-    background: #d97706; color: #fff;
+    background: #a33a2b; color: #fff;
     padding: .55rem 1.25rem; border-radius: 999px;
     font-size: .82rem; font-weight: 700; text-decoration: none;
     transition: background .2s, transform .2s;
   }
-  .kp-video-link:hover { background: #b45309; transform: translateY(-1px); }
+  .kp-video-link:hover { background: #7e2a20; transform: translateY(-1px); }
   .kp-video-preview {
     position: relative;
     display: block;
     border-radius: .85rem;
     overflow: hidden;
-    border: 1px solid #fcd34d;
+    border: 1px solid #d8b9ac;
     box-shadow: 0 3px 12px rgba(0,0,0,.12);
     text-decoration: none;
     margin-bottom: .85rem;
@@ -559,7 +559,7 @@ const CSS_STYLES = `
     width: 54px;
     height: 54px;
     border-radius: 50%;
-    background: rgba(217,119,6,.9);
+    background: rgba(163,58,43,.9);
     color: #fff;
     font-size: 1.15rem;
     font-weight: 700;
@@ -582,7 +582,7 @@ const CSS_STYLES = `
 
   /* ── COMMUNITY IMPACT BANNER ── */
   .kp-community {
-    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    background: linear-gradient(135deg, #a33a2b 0%, #7e2a20 100%);
     border-radius: 1.25rem; padding: 1.75rem 2rem; color: #fff; margin-bottom: 1.25rem;
   }
   .kp-community-title {
@@ -594,17 +594,17 @@ const CSS_STYLES = `
   /* ── CONTACT BOX ── */
   .kp-contact {
     display: flex; align-items: flex-start; gap: 1rem;
-    background: #fffbeb; border: 1.5px solid #fef3c7;
+    background: #f7f1e6; border: 1.5px solid #efd9cf;
     border-radius: 1rem; padding: 1.25rem;
     margin-bottom: 1.25rem;
   }
   .kp-contact-icon {
-    width: 44px; height: 44px; background: #d97706; border-radius: .75rem;
+    width: 44px; height: 44px; background: #a33a2b; border-radius: .75rem;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.25rem; flex-shrink: 0;
   }
-  .kp-contact-title { font-family: Georgia,serif; font-weight: 700; color: #0f172a; margin-bottom: .3rem; font-size: 1rem; }
-  .kp-contact-text { font-size: .875rem; color: #334155; line-height: 1.65; }
+  .kp-contact-title { font-family: Georgia,serif; font-weight: 700; color: #2e2018; margin-bottom: .3rem; font-size: 1rem; }
+  .kp-contact-text { font-size: .875rem; color: #5f4636; line-height: 1.65; }
 `;
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
@@ -671,10 +671,10 @@ const KovilDetailsPage = () => {
         </main>
 
         {/* Footer */}
-        <footer className="text-center pt-6 pb-8 border-t border-amber-100 mt-8">
-          <p className="text-xs sm:text-sm text-slate-500 px-4">
+        <footer className="text-center pt-6 pb-8 border-t border-[#efd9cf] mt-8">
+          <p className="text-xs sm:text-sm text-[#7a5e4b] px-4">
             © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
-            <span className="text-red-500">❤</span> for the community.
+            <span className="text-[#a33a2b]">❤</span> for the community.
           </p>
         </footer>
       </div>
@@ -1313,7 +1313,7 @@ const GnanambalContent = () => (
             <div className="kp-tl-title">Origin of the Name "Kakkalani"</div>
             <div
               className="kp-hl"
-              style={{ borderColor: "#d97706", borderWidth: "2px", background: "linear-gradient(to right,#fffbeb,#fff7e6)" }}
+              style={{ borderColor: "#a33a2b", borderWidth: "2px", background: "linear-gradient(to right,#f7f1e6,#fcf3eb)" }}
             >
               <div className="kp-hl-text">
                 As Gangai water was brought and filled into the well, this village was named as{" "}
@@ -1401,7 +1401,7 @@ const AyyanarContent = () => (
               Watch Temple Video
             </a>
           </div>
-          <div className="kp-hl-text" style={{ marginTop: ".65rem", fontSize: ".8rem", color: "#78716c" }}>
+          <div className="kp-hl-text" style={{ marginTop: ".65rem", fontSize: ".8rem", color: "#8a6f5a" }}>
             Thanks to his effort & sharing the video documentation of this sacred temple.
           </div>
         </div>
