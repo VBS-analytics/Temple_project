@@ -647,6 +647,49 @@ const getApiPassbookEntryTimestamp = (entry: Pick<ApiPassbookEntry, 'entry_date'
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const normalizePaginatedNextUrl = (nextUrl: string | null): string | null => {
+  if (!nextUrl) {
+    return null;
+  }
+
+  try {
+    // Relative "next" paths are already safe for axios(baseURL)
+    if (!/^https?:\/\//i.test(nextUrl)) {
+      return nextUrl;
+    }
+
+    if (typeof window === 'undefined') {
+      return nextUrl;
+    }
+
+    const parsed = new URL(nextUrl);
+    const apiBase = api.defaults.baseURL ? String(api.defaults.baseURL) : '';
+    const appOrigin = window.location.origin;
+
+    // Prevent mixed-content blocks when app is served over HTTPS but API next-link is HTTP.
+    if (window.location.protocol === 'https:' && parsed.protocol === 'http:') {
+      parsed.protocol = 'https:';
+    }
+
+    // Convert same-origin absolute API links to relative links so axios(baseURL) can handle them.
+    if (apiBase) {
+      const apiBaseUrl = new URL(apiBase, appOrigin);
+      const normalizedBasePath = apiBaseUrl.pathname.endsWith('/')
+        ? apiBaseUrl.pathname
+        : `${apiBaseUrl.pathname}/`;
+
+      if (parsed.origin === apiBaseUrl.origin && parsed.pathname.startsWith(normalizedBasePath)) {
+        const relativeApiPath = parsed.pathname.slice(normalizedBasePath.length);
+        return `${relativeApiPath}${parsed.search}${parsed.hash}`;
+      }
+    }
+
+    return parsed.toString();
+  } catch {
+    return nextUrl;
+  }
+};
+
 const isApiPassbookEntryMoreRecent = (
   candidate: Pick<ApiPassbookEntry, 'entry_date' | 'id'>,
   current: Pick<ApiPassbookEntry, 'entry_date' | 'id'>,
@@ -1173,7 +1216,9 @@ const PaymentStatementPage = () => {
           );
           allResults.push(...payload);
           pageCount += 1;
-          nextUrl = paginate ? response.data?.next ?? null : null;
+          nextUrl = paginate
+            ? normalizePaginatedNextUrl(response.data?.next ?? null)
+            : null;
           // Safety cap to avoid accidental infinite loops
           if (allResults.length > 2000 || pageCount > 200) {
             console.warn('[PaymentStatement] passbook pagination aborted after limit', {
@@ -3355,4 +3400,3 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
 };
 
 export default PaymentStatementPage;
-
