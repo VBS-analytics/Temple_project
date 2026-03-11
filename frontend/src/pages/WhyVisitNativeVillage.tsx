@@ -1,8 +1,26 @@
 import PublicSiteHeader from "../components/PublicSiteHeader";
 import EnglishTamilToggle from "../components/EnglishTamilToggle";
 
+const BlessingIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8.1 8.8l1.9 2.1 2-2.1" />
+    <path d="M6.3 10.6L4.6 16c-.4 1.3.5 2.6 1.9 2.6h2.2" />
+    <path d="M17.7 10.6l1.7 5.4c.4 1.3-.5 2.6-1.9 2.6h-2.2" />
+    <path d="M10 11.1V19h4v-7.9" />
+  </svg>
+);
+
+const TempleIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l2.3 2.2L12 7.4 9.7 5.2 12 3Z" />
+    <path d="M8.2 8.2h7.6l-.9 2.2h-5.8l-.9-2.2Z" />
+    <path d="M7.2 12h9.6v8H7.2z" />
+    <path d="M10.5 20v-4h3v4" />
+  </svg>
+);
+
 const WhyVisitNativeVillage = () => (
-  <div className="min-h-screen bg-amber-50">
+  <div className="min-h-screen bg-[#f7f1e6] village-typography">
     <PublicSiteHeader variant="amber" />
 
     <main className="relative overflow-x-hidden senior-readable-content">
@@ -13,8 +31,8 @@ const WhyVisitNativeVillage = () => (
 
       {/* Decorative background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-10 w-32 h-32 sm:w-64 sm:h-64 bg-amber-200/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-10 w-48 h-48 sm:w-96 sm:h-96 bg-amber-200/20 rounded-full blur-3xl" />
+        <div className="absolute top-20 right-10 w-32 h-32 sm:w-64 sm:h-64 bg-[#a33a2b]/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 left-10 w-48 h-48 sm:w-96 sm:h-96 bg-[#7e2a20]/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative min-h-[70vh] px-4 pt-14 pb-8 sm:px-6 sm:pt-16 sm:pb-10 md:pt-16 md:pb-12 lg:px-8">
@@ -23,32 +41,32 @@ const WhyVisitNativeVillage = () => (
           {/* Header Section */}
           <header className="space-y-3 sm:space-y-4 text-center px-2">
             {/* Main Heading */}
-            <h1 className="font-serif text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900 leading-tight break-words">
+            <h1 className="font-serif text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-[#2e2018] leading-tight break-words">
               Vijayam of Kanchi Shri Mahaperiyava to Kakkalani Village
             </h1>
 
-            <div className="h-1 w-16 sm:w-20 rounded-full mx-auto mt-3" style={{ background: "linear-gradient(to right, #d97706, #b45309)" }} />
+            <div className="h-1 w-16 sm:w-20 rounded-full mx-auto mt-3" style={{ background: "linear-gradient(to right, #a33a2b, #7e2a20)" }} />
           </header>
 
           {/* First Vijayam Section */}
-          <section className="group bg-white rounded-2xl sm:rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all duration-500 p-4 sm:p-6 md:p-8 relative overflow-hidden">
+          <section className="group bg-[#fffdf8] rounded-2xl sm:rounded-3xl border border-[#efd9cf] shadow-sm hover:shadow-xl hover:border-[#a33a2b] transition-all duration-500 p-4 sm:p-6 md:p-8 relative overflow-hidden">
             {/* Decorative corner */}
-            <div className="absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-amber-50 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-[#f8eee2] to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             {/* Icon badge */}
             <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5">
-              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-300" style={{ background: "#fef3c7" }}>
-                🙏
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-300" style={{ background: "#efd9cf" }}>
+                <BlessingIcon />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-slate-900 mb-1.5 sm:mb-2 break-words">
+                <h2 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-[#2e2018] mb-1.5 sm:mb-2 break-words">
                   First Vijayam (around 1920)
                 </h2>
-                <div className="h-1 w-12 sm:w-16 rounded-full" style={{ background: "linear-gradient(to right, #d97706, #b45309)" }} />
+                <div className="h-1 w-12 sm:w-16 rounded-full" style={{ background: "linear-gradient(to right, #a33a2b, #7e2a20)" }} />
               </div>
             </div>
 
-            <div className="space-y-3 sm:space-y-4 text-slate-700">
+            <div className="space-y-3 sm:space-y-4 text-[#5f4636]">
               <p className="text-sm sm:text-base md:text-lg leading-relaxed break-words">
                 Kanchi Shri Mahaperiyava&apos;s vijayam to our village was around the year 1920.
                 He visited the Pichu Iyer family during the upanayanam of Shri Mahalingam
@@ -61,13 +79,13 @@ const WhyVisitNativeVillage = () => (
                 and grandson of Mr. Mahalingam).
               </p>
 
-              <div className="mt-4 sm:mt-5 p-3 sm:p-4 bg-amber-50/60 rounded-xl border border-amber-100">
-                <p className="text-xs sm:text-sm font-medium text-slate-600 flex items-start gap-2 mb-2 sm:mb-3">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mt-4 sm:mt-5 p-3 sm:p-4 bg-[#f8eee2]/70 rounded-xl border border-[#efd9cf]">
+                <p className="text-xs sm:text-sm font-medium text-[#7a5e4b] flex items-start gap-2 mb-2 sm:mb-3">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#a33a2b] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 012.828 2.828" />
                   </svg>
                   <span className="break-all">
-                    <span className="font-semibold text-slate-700">Audio Reference</span>{" "}                  </span>
+                    <span className="font-semibold text-[#5f4636]">Audio Reference</span>{" "}                  </span>
                 </p>
                 <audio controls className="w-full" style={{ height: "36px" }}>
                   <source src="/audio/AUD-20240518-WA0003.ogx" type="audio/ogg" />
@@ -78,24 +96,24 @@ const WhyVisitNativeVillage = () => (
           </section>
 
           {/* Second Vijayam Section */}
-          <section className="group bg-white rounded-2xl sm:rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all duration-500 p-4 sm:p-6 md:p-8 relative overflow-hidden">
+          <section className="group bg-[#fffdf8] rounded-2xl sm:rounded-3xl border border-[#efd9cf] shadow-sm hover:shadow-xl hover:border-[#a33a2b] transition-all duration-500 p-4 sm:p-6 md:p-8 relative overflow-hidden">
             {/* Decorative corner */}
-            <div className="absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-amber-50 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-[#f8eee2] to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             {/* Icon badge */}
             <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5">
-              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-300" style={{ background: "#fef3c7" }}>
-                🕉️
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-300" style={{ background: "#efd9cf" }}>
+                <TempleIcon />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-slate-900 mb-1.5 sm:mb-2 break-words">
+                <h2 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-[#2e2018] mb-1.5 sm:mb-2 break-words">
                   Second Vijayam (1954)
                 </h2>
-                <div className="h-1 w-12 sm:w-16 rounded-full" style={{ background: "linear-gradient(to right, #d97706, #b45309)" }} />
+                <div className="h-1 w-12 sm:w-16 rounded-full" style={{ background: "linear-gradient(to right, #a33a2b, #7e2a20)" }} />
               </div>
             </div>
 
-            <div className="space-y-3 sm:space-y-4 text-slate-700">
+            <div className="space-y-3 sm:space-y-4 text-[#5f4636]">
               <p className="text-sm sm:text-base md:text-lg leading-relaxed break-words">
                 Kanchi Shri Mahaperiyava&apos;s second vijayam to our village was through the
                 Pannai family in 1954.
@@ -111,9 +129,9 @@ const WhyVisitNativeVillage = () => (
                 Mangalam Periamma&apos;s house, where special hut-type arrangements were made.
               </p>
 
-              <div className="mt-4 sm:mt-5 p-3 sm:p-4 bg-amber-50/60 rounded-xl border border-amber-100">
-                <p className="text-xs sm:text-sm text-slate-600 flex items-start gap-2">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mt-4 sm:mt-5 p-3 sm:p-4 bg-[#f8eee2]/70 rounded-xl border border-[#efd9cf]">
+                <p className="text-xs sm:text-sm text-[#7a5e4b] flex items-start gap-2">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#a33a2b] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -126,7 +144,7 @@ const WhyVisitNativeVillage = () => (
           </section>
 
           {/* Call to Action */}
-          <div className="mt-8 sm:mt-10 md:mt-12 p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl shadow-lg text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #d97706 0%, #b45309 100%)" }}>
+          <div className="mt-8 sm:mt-10 md:mt-12 p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl shadow-lg text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #a33a2b 0%, #7e2a20 100%)" }}>
             {/* Decorative circles */}
             <div className="absolute -bottom-8 -right-8 w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-white/10" />
             <div className="absolute -top-4 -left-4 w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-white/10" />
@@ -141,13 +159,13 @@ const WhyVisitNativeVillage = () => (
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center max-w-md sm:max-w-none mx-auto px-2">
                 <a
                   href="/kovi-details"
-                  className="px-5 py-2.5 sm:px-6 sm:py-3 md:px-8 md:py-4 rounded-xl sm:rounded-2xl bg-white text-amber-700 font-semibold text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 w-full sm:w-auto text-center"
+                  className="px-5 py-2.5 sm:px-6 sm:py-3 md:px-8 md:py-4 rounded-xl sm:rounded-2xl bg-white text-[#7e2a20] font-semibold text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 w-full sm:w-auto text-center"
                 >
                   About Kovil
                 </a>
                 <a
                   href="/"
-                  className="px-5 py-2.5 sm:px-6 sm:py-3 md:px-8 md:py-4 rounded-xl sm:rounded-2xl bg-transparent border-2 border-white text-white font-semibold text-sm sm:text-base hover:bg-white hover:text-amber-700 transition-all duration-300 w-full sm:w-auto text-center"
+                  className="px-5 py-2.5 sm:px-6 sm:py-3 md:px-8 md:py-4 rounded-xl sm:rounded-2xl bg-transparent border-2 border-white text-white font-semibold text-sm sm:text-base hover:bg-white hover:text-[#7e2a20] transition-all duration-300 w-full sm:w-auto text-center"
                 >
                   Return Home
                 </a>
@@ -160,14 +178,28 @@ const WhyVisitNativeVillage = () => (
     </main>
 
     {/* Footer */}
-    <footer className="text-center pt-6 pb-8 border-t border-amber-100 mt-8">
-      <p className="text-xs sm:text-sm text-slate-500 px-4">
+    <footer className="text-center pt-6 pb-8 border-t border-[#efd9cf] mt-8">
+      <p className="text-xs sm:text-sm text-[#7a5e4b] px-4">
         © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
-        <span className="text-red-500">❤</span> for the community.
+        <span className="text-[#a33a2b]">❤</span> for the community.
       </p>
     </footer>
 
     <style>{`
+      .village-typography {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #2e2018;
+      }
+      .village-typography h1,
+      .village-typography h2,
+      .village-typography h3 {
+        font-family: Georgia, 'Times New Roman', serif;
+        letter-spacing: 0;
+        color: #2e2018;
+      }
+      .village-typography svg {
+        color: #a33a2b;
+      }
       .senior-readable-content :where(p, li, td) {
         font-weight: 500;
       }

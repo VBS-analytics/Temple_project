@@ -57,11 +57,11 @@ import {
 
 interface PaymentRecordEntry {
   id: number | string;
-  donor: number | null;
+  donor: number | string | null;
   donor_name?: string | null;
-  payment_record_id?: number | null;
+  payment_record_id?: number | string | null;
   pooja_option?: string | null;
-  registration?: number | null;
+  registration?: number | string | null;
   registration_start_date?: string | null;
   registration_total_amount?: string | number | null;
   pooja_due_amount?: string | number | null;
@@ -78,7 +78,7 @@ interface PaymentRecordEntry {
 
 interface PoojaRegistrationEntry {
   id: number;
-  donor?: number | null;
+  donor?: number | string | null;
   donor_name?: string | null;
   pooja_option_name?: string | null;
   start_date?: string | null;
@@ -102,7 +102,7 @@ interface CartSnapshotItem {
 type CartLikeItem = CartItem | CartSnapshotItem;
 
 interface CartSnapshotRecord {
-  donor_id?: number | null;
+  donor_id?: number | string | null;
   donor_name?: string | null;
   donor_phone?: string | null;
   items?: CartSnapshotItem[] | null;
@@ -111,19 +111,19 @@ interface CartSnapshotRecord {
 
 interface DonorListEntry {
   user: {
-    id: number;
+    id: number | string;
     name?: string | null;
     phone_number?: string | null;
   };
 }
 
 interface CombineMappingParentEntry {
-  id?: number | null;
+  id?: number | string | null;
   active?: boolean | null;
 }
 
 interface CombineMappingMainEntry {
-  id?: number | null;
+  id?: number | string | null;
 }
 
 interface CombineMappingEntry {
@@ -409,10 +409,10 @@ type PassbookEntry = {
 };
 
 type ApiPassbookEntryRaw = {
-  id: number;
-  donor: number;
+  id: number | string;
+  donor: number | string;
   donor_name: string;
-  payment_record?: number | null;
+  payment_record?: number | string | null;
   entry_date: string;
   entry_type: 'balance' | 'due' | 'paid';
   opening_balance?: number | string | null;
@@ -588,6 +588,36 @@ const renderUpcomingOccurrenceList = (occurrences?: PaymentRecordEntry['upcoming
 
 const parseNumeric = (value?: string | number | null) => {
   return parsePassbookAmount(value);
+};
+
+const normalizeIdentifier = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+    return Math.trunc(parsed);
+  }
+  return null;
+};
+
+const sameIdentifier = (left: unknown, right: unknown): boolean => {
+  const normalizedLeft = normalizeIdentifier(left);
+  const normalizedRight = normalizeIdentifier(right);
+  if (normalizedLeft === null || normalizedRight === null) {
+    return false;
+  }
+  return normalizedLeft === normalizedRight;
 };
 
 const normalizeStatusLabel = (value?: string | null) => {
@@ -962,6 +992,7 @@ const PaymentStatementPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const user = useAuthStore((state) => state.user);
+  const normalizedUserId = normalizeIdentifier(user?.id);
   const isAdminUser = Boolean(user && isAdmin(user.role));
   const showDonorFilter = isAdminUser;
   const [donorOptions, setDonorOptions] = useState<DonorNameOption[]>([]);
@@ -992,12 +1023,12 @@ const PaymentStatementPage = () => {
   const { balance: currentBalance, openingBalance } = useCurrentBalance();
   const cartKey = user ? String(user.id) : 'guest';
   const localCartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
-  const [activeDonorId, setActiveDonorId] = useState<number | null>(user?.id ?? null);
+  const [activeDonorId, setActiveDonorId] = useState<number | null>(normalizedUserId);
   const [parentDonorOpeningBalance, setParentDonorOpeningBalance] = useState<number | null>(null);
   const parentDonorIds = useMemo(
     () =>
       parentDonors
-        .map((donor) => (typeof donor.id === 'number' ? donor.id : null))
+        .map((donor) => normalizeIdentifier(donor.id))
         .filter((id): id is number => id !== null),
     [parentDonors],
   );
@@ -1010,21 +1041,21 @@ const PaymentStatementPage = () => {
   // Auto-select current user's records on initial load (for non-admin users)
   // Admin users see all donors by default without auto-selecting
   useEffect(() => {
-    if (typeof user?.id !== 'number') {
+    if (normalizedUserId === null) {
       setActiveDonorId(null);
       return;
     }
     setActiveDonorId((prev) => {
-      if (prev === user.id) {
+      if (prev === normalizedUserId) {
         return prev;
       }
       const matchesExistingParent = prev !== null && parentDonorIds.includes(prev);
       if (matchesExistingParent) {
         return prev;
       }
-      return user.id;
+      return normalizedUserId;
     });
-  }, [user?.id, parentDonorIds]);
+  }, [normalizedUserId, parentDonorIds]);
 
   // Fetch combine access permissions for linked accounts
   useEffect(() => {
@@ -1065,12 +1096,12 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAdminUser, user?.id]);
+  }, [isAdminUser, normalizedUserId]);
 
   // Fetch parent donor's opening balance when activeDonorId changes to a parent donor
   useEffect(() => {
     if (
-      typeof user?.id !== 'number' ||
+      normalizedUserId === null ||
       activeDonorId === null ||
       activeDonorId === PARENT_AGGREGATE_DONOR_ID
     ) {
@@ -1079,7 +1110,7 @@ const PaymentStatementPage = () => {
     }
 
     // If viewing current user's records, clear parent balance
-    if (activeDonorId === user.id) {
+    if (activeDonorId === normalizedUserId) {
       setParentDonorOpeningBalance(null);
       return;
     }
@@ -1128,7 +1159,7 @@ const PaymentStatementPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [activeDonorId, user?.id, parentDonorIds]);
+  }, [activeDonorId, normalizedUserId, parentDonorIds]);
 
   // Monitor cart snapshot updates for real-time passbook refresh
   useEffect(() => {
@@ -1161,8 +1192,13 @@ const PaymentStatementPage = () => {
         if (!isMounted) {
           return;
         }
-        const payload = extractResults<PaymentRecordEntry>(response.data);
-        setRecords(payload);
+      const payload = extractResults<PaymentRecordEntry>(response.data).map((record) => ({
+        ...record,
+        donor: normalizeIdentifier(record.donor),
+        payment_record_id: normalizeIdentifier(record.payment_record_id),
+        registration: normalizeIdentifier(record.registration),
+      }));
+      setRecords(payload);
       } catch (exc) {
         if (!isMounted) {
           return;
@@ -1211,9 +1247,23 @@ const PaymentStatementPage = () => {
         while (nextUrl) {
           const response = await api.get(nextUrl);
           if (!isMounted) return;
-          const payload = normalizePassbookAmountEntries(
+          const payload: ApiPassbookEntry[] = normalizePassbookAmountEntries(
             extractResults<ApiPassbookEntryRaw>(response.data),
-          );
+          )
+            .map<ApiPassbookEntry | null>((entry) => {
+              const normalizedEntryId = normalizeIdentifier(entry.id);
+              const normalizedDonorId = normalizeIdentifier(entry.donor);
+              if (normalizedEntryId === null || normalizedDonorId === null) {
+                return null;
+              }
+              return {
+                ...entry,
+                id: normalizedEntryId,
+                donor: normalizedDonorId,
+                payment_record: normalizeIdentifier(entry.payment_record),
+              };
+            })
+            .filter((entry): entry is ApiPassbookEntry => entry !== null);
           allResults.push(...payload);
           pageCount += 1;
           nextUrl = paginate
@@ -1262,13 +1312,15 @@ const PaymentStatementPage = () => {
         const mapping: Record<number, number[]> = {};
 
         payload.forEach((entry) => {
-          const mainDonorId = entry.main_donor?.id;
-          if (typeof mainDonorId !== 'number') {
+          const mainDonorId = normalizeIdentifier(entry.main_donor?.id);
+          if (mainDonorId === null) {
             return;
           }
           const parentIds = (Array.isArray(entry.parent_donors) ? entry.parent_donors : [])
-            .filter((parent) => parent?.active === true && typeof parent.id === 'number')
-            .map((parent) => parent.id as number);
+            .map((parent) =>
+              parent?.active === true ? normalizeIdentifier(parent.id) : null,
+            )
+            .filter((id): id is number => id !== null);
 
           if (parentIds.length === 0) {
             return;
@@ -1377,9 +1429,14 @@ const PaymentStatementPage = () => {
             const rawName = (donor.user.name ?? '').trim();
             const fallbackName = rawName || `Donor #${donor.user.id}`;
             const phone = (donor.user.phone_number ?? '').trim();
+            const donorId = normalizeIdentifier(donor.user.id);
+            if (donorId === null) {
+              return null;
+            }
             const label = phone ? `${fallbackName} — ${phone}` : fallbackName;
-            return { id: donor.user.id, label };
+            return { id: donorId, label };
           })
+          .filter((option): option is DonorNameOption => option !== null)
           .sort((a, b) => a.label.localeCompare(b.label));
         if (!isMounted) {
           return;
@@ -1506,15 +1563,15 @@ const PaymentStatementPage = () => {
   }, [selectedDonorIds, donorOptions]);
 
   const donorViewTabs = useMemo(() => {
-    if (typeof user?.id !== 'number') {
+    if (normalizedUserId === null) {
       return [];
     }
     const tabs: { key: string; donorId: number; label: string }[] = [];
     const userLabel = (user.name ?? '').trim() || 'My payment statement';
-    tabs.push({ key: 'self', donorId: user.id, label: userLabel });
+    tabs.push({ key: 'self', donorId: normalizedUserId, label: userLabel });
 
     return tabs;
-  }, [user?.id, user?.name, parentDonorIds]);
+  }, [normalizedUserId, user?.name, parentDonorIds]);
 
   const showParentDonorTabs = donorViewTabs.length > 1;
 
@@ -1543,8 +1600,9 @@ const PaymentStatementPage = () => {
     }
     const paidRegistrationIds = new Set<number>();
     records.forEach((record) => {
-      if (typeof record.registration === 'number') {
-        paidRegistrationIds.add(record.registration);
+      const registrationId = normalizeIdentifier(record.registration);
+      if (registrationId !== null) {
+        paidRegistrationIds.add(registrationId);
       }
     });
     const remainingRegistrations = registrations.filter((registration) => {
@@ -1560,7 +1618,7 @@ const PaymentStatementPage = () => {
     const registrationRecords: PaymentRecordEntry[] = remainingRegistrations.map(
         (registration) => ({
           id: `registration-${registration.id}`,
-          donor: registration.donor ?? null,
+          donor: normalizeIdentifier(registration.donor),
           donor_name: registration.donor_name ?? null,
           pooja_option: registration.pooja_option_name ?? null,
           registration: registration.id,
@@ -1581,7 +1639,7 @@ const PaymentStatementPage = () => {
     );
     const localCartRecord = buildLocalCartRecord(
       localCartItems,
-      user?.id ?? null,
+      normalizedUserId,
       user?.name ?? null,
     );
     return [
@@ -1590,7 +1648,7 @@ const PaymentStatementPage = () => {
       ...cartRecords,
       ...(localCartRecord ? [localCartRecord] : []),
     ];
-  }, [records, registrations, cartSnapshots, localCartItems, user?.id, user?.name]);
+  }, [records, registrations, cartSnapshots, localCartItems, normalizedUserId, user?.name]);
 
   const filteredRecords = useMemo(() => {
     let nextRecords = mergedRecords;
@@ -1600,22 +1658,24 @@ const PaymentStatementPage = () => {
     if (selectedDonorIds.length > 0) {
       const selectedSet = new Set(selectedDonorIds);
       nextRecords = nextRecords.filter((record) => {
-        const donorId = record.donor;
-        return typeof donorId === 'number' && selectedSet.has(donorId);
+        const donorId = normalizeIdentifier(record.donor);
+        return donorId !== null && selectedSet.has(donorId);
       });
     } else if (!isAdminUser) {
       if (activeDonorId === PARENT_AGGREGATE_DONOR_ID) {
         const parentSet = new Set(parentDonorIds);
         nextRecords = nextRecords.filter((record) => {
-          const donorId = record.donor;
-          const donorMatch = typeof donorId === 'number' && parentSet.has(donorId);
+          const donorId = normalizeIdentifier(record.donor);
+          const donorMatch = donorId !== null && parentSet.has(donorId);
           const registrationName = (record.registration_donor_name ?? '').trim().toLowerCase();
           const registrationMatch =
             registrationName.length > 0 && parentDonorNames.includes(registrationName);
           return donorMatch || registrationMatch;
         });
       } else if (activeDonorId != null) {
-        nextRecords = nextRecords.filter((record) => record.donor === activeDonorId);
+        nextRecords = nextRecords.filter(
+          (record) => normalizeIdentifier(record.donor) === activeDonorId,
+        );
       } else {
         nextRecords = [];
       }
@@ -1739,14 +1799,16 @@ const PaymentStatementPage = () => {
           openingDonorName = ALL_PARENT_DONORS_LABEL;
         } else if (typeof activeDonorId === 'number') {
           openingDonorId = activeDonorId;
-          if (typeof user?.id === 'number' && activeDonorId === user.id) {
+          if (normalizedUserId !== null && activeDonorId === normalizedUserId) {
             openingDonorName = (user.name ?? '').trim() || null;
           } else {
-            const parentDonor = parentDonors.find((donor) => donor.id === activeDonorId);
+            const parentDonor = parentDonors.find(
+              (donor) => normalizeIdentifier(donor.id) === activeDonorId,
+            );
             openingDonorName = (parentDonor?.name ?? '').trim() || null;
           }
-        } else if (typeof user?.id === 'number') {
-          openingDonorId = user.id;
+        } else if (normalizedUserId !== null) {
+          openingDonorId = normalizedUserId;
           openingDonorName = (user.name ?? '').trim() || null;
         }
       }
@@ -1774,12 +1836,13 @@ const PaymentStatementPage = () => {
       const isPending = resolveStatusLabel(record) === STATUS_LABEL_PAYMENT_NOT_RECEIVED;
       if (!isPending) return false;
 
-      const hasRegistration = record.registration && record.registration > 0;
+      const registrationId = normalizeIdentifier(record.registration);
+      const hasRegistration = registrationId !== null && registrationId > 0;
       const isCartOrPending =
-        record.registration === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
+        registrationId === null && parseNumeric(record.registration_total_amount ?? 0) > 0;
 
       // Include monthly dues (PaymentRecords with no registration and no cart total)
-      const isMonthlyDue = record.registration === null && !isCartOrPending;
+      const isMonthlyDue = registrationId === null && !isCartOrPending;
 
       return hasRegistration || isCartOrPending || isMonthlyDue;
     });
@@ -2074,10 +2137,15 @@ const PaymentStatementPage = () => {
     if (!isAdminUser && activeDonorId === PARENT_AGGREGATE_DONOR_ID) {
       const parentSet = new Set(parentDonorIds);
       allRecords = allRecords.filter(
-        (record) => typeof record.donor === 'number' && parentSet.has(record.donor),
+        (record) => {
+          const donorId = normalizeIdentifier(record.donor);
+          return donorId !== null && parentSet.has(donorId);
+        },
       );
     } else if (!isAdminUser && typeof activeDonorId === 'number') {
-      allRecords = allRecords.filter((record) => record.donor === activeDonorId);
+      allRecords = allRecords.filter(
+        (record) => normalizeIdentifier(record.donor) === activeDonorId,
+      );
     }
     
     // Separate records into "before selected month" and "selected month"
@@ -2325,7 +2393,7 @@ const PaymentStatementPage = () => {
         return [];
       }
 
-      const mainDonorId = typeof user?.id === 'number' ? user.id : null;
+      const mainDonorId = normalizedUserId;
 
       const applyFilters = (entries: typeof apiPassbookEntries) => {
         let next = entries;
@@ -2475,12 +2543,12 @@ const PaymentStatementPage = () => {
         if (entry.isCurrentBalanceEntry) {
           // Opening rows carry starting balances (main + aggregate parent balances).
           const openingBalance = runningBalance;
-          const closingDue = Math.max(0, openingBalance + parseNumeric(entry.closingDue));
+          const closingDue = openingBalance + parseNumeric(entry.closingDue);
           runningBalance = closingDue;
           return { ...entry, openingBalance, closingDue };
         }
         const openingBalance = runningBalance;
-        const closingDue = Math.max(0, openingBalance + entry.dueAmount - entry.paidAmount);
+        const closingDue = openingBalance + entry.dueAmount - entry.paidAmount;
         runningBalance = closingDue;
         return { ...entry, openingBalance, closingDue };
       });
@@ -2577,7 +2645,7 @@ const PaymentStatementPage = () => {
     apiPassbookLoading,
     selectedMonthKey,
     paymentStatusFilter,
-    user?.id,
+    normalizedUserId,
     filteredRecords,
     openingBalance,
   ]);
@@ -2612,7 +2680,10 @@ const PaymentStatementPage = () => {
   };
 
   const getEntryDonorNameLabel = (entry: PassbookEntry) => {
-    return resolveDonorDisplayLabel(entry.record, entry.record.donor ?? null);
+    return resolveDonorDisplayLabel(
+      entry.record,
+      normalizeIdentifier(entry.record.donor),
+    );
   };
 
 const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: PaymentRecordEntry[]) => {
@@ -2649,8 +2720,8 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
   const canRenderDeleteActions = !isAdminUser && canDeletePaymentRecords;
 
   const getEntryPaymentRecordId = (entry: PassbookEntry): number | null => {
-    const value = entry.record.payment_record_id;
-    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    const value = normalizeIdentifier(entry.record.payment_record_id);
+    if (value === null || value <= 0) {
       return null;
     }
     return value;
@@ -2666,7 +2737,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     if (entry.entryType !== 'paid') {
       return false;
     }
-    if (entry.record.donor !== user?.id) {
+    if (!sameIdentifier(entry.record.donor, normalizedUserId)) {
       return false;
     }
     return getEntryPaymentRecordId(entry) !== null;
@@ -2752,10 +2823,11 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
       options?: { applyDonorFilter?: boolean },
     ) => {
       const applyDonorFilter = options?.applyDonorFilter ?? true;
+      const effectiveMainDonorId = parentToMainDonorId.get(entry.donor) ?? entry.donor;
       if (
         applyDonorFilter &&
         selectedMainDonorIds.size > 0 &&
-        !selectedMainDonorIds.has(entry.donor)
+        !selectedMainDonorIds.has(effectiveMainDonorId)
       ) {
         return false;
       }
@@ -2776,6 +2848,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
 
     const latestEntriesByDonor = new Map<number, ApiPassbookEntry>();
     const latestAggregateEntriesByDonor = new Map<number, ApiPassbookEntry>();
+    const latestCombinedDisplayByMainDonor = new Map<number, ApiPassbookEntry>();
     let matchedCount = 0;
 
     apiPassbookEntries.forEach((entry) => {
@@ -2789,9 +2862,52 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
         return;
       }
       if (activeCombinedParentDonorIds.has(entry.donor)) {
+        const mainDonorId = parentToMainDonorId.get(entry.donor);
+        if (typeof mainDonorId === 'number') {
+          const currentCombinedLatest = latestCombinedDisplayByMainDonor.get(mainDonorId);
+          const parentIsMoreRecent = (() => {
+            if (!currentCombinedLatest) {
+              return true;
+            }
+            const entryTs = getApiPassbookEntryTimestamp(entry);
+            const currentTs = getApiPassbookEntryTimestamp(currentCombinedLatest);
+            if (entryTs !== currentTs) {
+              return entryTs > currentTs;
+            }
+            const entryIsParent = activeCombinedParentDonorIds.has(entry.donor);
+            const currentIsParent = activeCombinedParentDonorIds.has(currentCombinedLatest.donor);
+            if (entryIsParent !== currentIsParent) {
+              return entryIsParent; // On same date, parent row is the final combined event.
+            }
+            return entry.id > currentCombinedLatest.id;
+          })();
+          if (parentIsMoreRecent) {
+            latestCombinedDisplayByMainDonor.set(mainDonorId, entry);
+          }
+        }
         return;
       }
       matchedCount += 1;
+      const combinedCurrentLatest = latestCombinedDisplayByMainDonor.get(entry.donor);
+      const mainIsMoreRecent = (() => {
+        if (!combinedCurrentLatest) {
+          return true;
+        }
+        const entryTs = getApiPassbookEntryTimestamp(entry);
+        const currentTs = getApiPassbookEntryTimestamp(combinedCurrentLatest);
+        if (entryTs !== currentTs) {
+          return entryTs > currentTs;
+        }
+        const entryIsParent = activeCombinedParentDonorIds.has(entry.donor);
+        const currentIsParent = activeCombinedParentDonorIds.has(combinedCurrentLatest.donor);
+        if (entryIsParent !== currentIsParent) {
+          return entryIsParent;
+        }
+        return entry.id > combinedCurrentLatest.id;
+      })();
+      if (mainIsMoreRecent) {
+        latestCombinedDisplayByMainDonor.set(entry.donor, entry);
+      }
       const currentLatest = latestEntriesByDonor.get(entry.donor);
       if (!currentLatest || isApiPassbookEntryMoreRecent(entry, currentLatest)) {
         latestEntriesByDonor.set(entry.donor, entry);
@@ -2799,6 +2915,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     });
 
     const groups = Array.from(latestEntriesByDonor.entries()).map(([donorId, entry]) => {
+      const displayEntry = latestCombinedDisplayByMainDonor.get(donorId) ?? entry;
       const donorPhone = donorPhones[donorId] ?? '';
       const donorLabel =
         entry.donor_name ||
@@ -2815,28 +2932,66 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
       const computedClosingDue =
         parseNumeric(entry.closing_due) +
         (activeParentDonorIds.length > 0 ? parentClosingDueTotal : 0);
+
+      const displayEntryIsParent = activeCombinedParentDonorIds.has(displayEntry.donor);
+      const sameEventParentEntries =
+        displayEntryIsParent && activeParentDonorIds.length > 0
+          ? apiPassbookEntries.filter(
+              (candidate) =>
+                activeParentDonorIds.includes(candidate.donor) &&
+                candidate.entry_date === displayEntry.entry_date &&
+                candidate.entry_type === displayEntry.entry_type &&
+                matchesFilters(candidate),
+            )
+          : [];
+      const aggregatedParentDueAmount =
+        sameEventParentEntries.length > 0
+          ? sameEventParentEntries.reduce((sum, candidate) => sum + candidate.due_amount, 0)
+          : 0;
+      const aggregatedParentPaidAmount =
+        sameEventParentEntries.length > 0
+          ? sameEventParentEntries.reduce((sum, candidate) => sum + candidate.paid_amount, 0)
+          : 0;
+      const displayDueAmount =
+        displayEntry.entry_type === 'due'
+          ? displayEntryIsParent && sameEventParentEntries.length > 0
+            ? aggregatedParentDueAmount
+            : displayEntry.due_amount
+          : 0;
+      const displayPaidAmount =
+        displayEntry.entry_type === 'paid'
+          ? displayEntryIsParent && sameEventParentEntries.length > 0
+            ? aggregatedParentPaidAmount
+            : displayEntry.paid_amount
+          : 0;
+
       const passbookEntry: PassbookEntry = {
         record: {
-          id: entry.id,
+          id: displayEntry.id,
           donor: donorId,
-          donor_name: entry.donor_name,
-          payment_record_id: entry.payment_record ?? null,
-          created_at: entry.entry_date,
-          payment_month: entry.entry_date,
-          transaction_reference: entry.transaction_details ?? undefined,
+          donor_name: displayEntry.donor_name,
+          payment_record_id: displayEntry.payment_record ?? null,
+          created_at: displayEntry.entry_date,
+          payment_month: displayEntry.entry_date,
+          transaction_reference: displayEntry.transaction_details ?? undefined,
           registration: null,
-          registration_start_date: entry.entry_date,
-          registration_total_amount: entry.due_amount,
-          amount: entry.paid_amount,
-          status: entry.entry_type === 'paid' ? 'success' : 'pending',
+          registration_start_date: displayEntry.entry_date,
+          registration_total_amount: displayDueAmount,
+          amount: displayPaidAmount,
+          status: displayEntry.entry_type === 'paid' ? 'success' : 'pending',
         } as PaymentRecordEntry,
-        dueAmount: entry.entry_type === 'due' ? entry.due_amount : 0,
-        paidAmount: entry.entry_type === 'paid' ? entry.paid_amount : 0,
+        dueAmount: displayDueAmount,
+        paidAmount: displayPaidAmount,
         openingBalance: 0,
         closingDue: computedClosingDue,
-        displayDate: formatDisplayDate(entry.entry_date),
-        entryType: entry.entry_type === 'paid' ? 'paid' : entry.entry_type === 'due' ? 'due' : undefined,
-        isCurrentBalanceEntry: entry.entry_type === 'balance',
+        displayDate: formatDisplayDate(displayEntry.entry_date),
+        entryType:
+          displayEntry.entry_type === 'paid'
+            ? 'paid'
+            : displayEntry.entry_type === 'due'
+            ? 'due'
+            : undefined,
+        isCurrentBalanceEntry: displayEntry.entry_type === 'balance',
       };
 
       return {

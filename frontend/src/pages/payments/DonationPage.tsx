@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
 import api from '../../lib/api';
+import PublicSiteHeader from '../../components/PublicSiteHeader';
 
 type DonationMethod = 'upi' | 'bank';
 
@@ -20,25 +21,25 @@ const css = `
   @import url('https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
   :root {
-    --saffron: #E65100;
-    --saffron-light: #FFF3E0;
-    --saffron-mid: #F57C00;
-    --blue: #1565C0;
-    --blue-2: #1976D2;
-    --blue-soft: #E3F2FD;
-    --blue-section: #F0F4FF;
-    --cream: #FFFFFF;
-    --ink: #000000;
-    --ink-2: #000000;
-    --ink-3: #000000;
-    --border: #90CAF9;
-    --border-focus: #1565C0;
+    --saffron: #A33A2B;
+    --saffron-light: #F8EEE2;
+    --saffron-mid: #7E2A20;
+    --blue: #A33A2B;
+    --blue-2: #7E2A20;
+    --blue-soft: #F7F1E6;
+    --blue-section: #FBF5EA;
+    --cream: #F7F1E6;
+    --ink: #2E2018;
+    --ink-2: #4A3326;
+    --ink-3: #7A5E4B;
+    --border: #EFD9CF;
+    --border-focus: #A33A2B;
     --white: #FFFFFF;
     --success: #2D7D46;
     --error: #C0392B;
     --radius: 14px;
-    --shadow-card: 0 2px 24px 0 rgba(21, 101, 192, 0.10), 0 1px 4px 0 rgba(21, 101, 192, 0.06);
-    --shadow-hover: 0 6px 32px 0 rgba(21, 101, 192, 0.18);
+    --shadow-card: 0 2px 24px 0 rgba(126, 42, 32, 0.12), 0 1px 4px 0 rgba(126, 42, 32, 0.08);
+    --shadow-hover: 0 6px 32px 0 rgba(126, 42, 32, 0.20);
   }
 
   .dp-wrap * { box-sizing: border-box; }
@@ -50,7 +51,7 @@ const css = `
     width: 48px; height: 48px; border-radius: 14px;
     background: linear-gradient(135deg, var(--saffron) 0%, var(--saffron-mid) 100%);
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 16px rgba(230, 81, 0, 0.30);
+    box-shadow: 0 4px 16px rgba(163, 58, 43, 0.30);
   }
   .dp-header h1 {
     font-family: 'Lora', serif;
@@ -97,8 +98,8 @@ const css = `
     color: var(--ink); transition: all .2s; letter-spacing: 0.01em;
   }
   .dp-tab.active {
-    background: #F5C518; color: #000;
-    box-shadow: 0 1px 6px rgba(245, 197, 24, 0.25);
+    background: var(--saffron-light); color: var(--saffron-mid);
+    box-shadow: 0 1px 6px rgba(163, 58, 43, 0.22);
   }
   .dp-tab:hover:not(.active) { color: var(--blue); }
 
@@ -161,7 +162,7 @@ const css = `
     outline: none; transition: border-color .18s, box-shadow .18s;
   }
   .dp-input::placeholder { color: var(--ink-3); opacity: 0.45; font-weight: 600; }
-  .dp-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.12); background: var(--white); }
+  .dp-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(163, 58, 43, 0.12); background: var(--white); }
   .dp-input.error { border-color: var(--error); }
   textarea.dp-input { resize: vertical; min-height: 80px; }
   .dp-error { font-size: 0.75rem; color: var(--error); margin-top: 5px; font-weight: 700; }
@@ -176,9 +177,9 @@ const css = `
     color: #fff; font-family: 'Poppins', sans-serif; font-size: 0.92rem;
     font-weight: 700; letter-spacing: 0.03em; padding: 14px;
     cursor: pointer; transition: all .2s; margin-top: 6px;
-    box-shadow: 0 4px 18px rgba(230, 81, 0, 0.30);
+    box-shadow: 0 4px 18px rgba(163, 58, 43, 0.30);
   }
-  .dp-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(230, 81, 0, 0.40); }
+  .dp-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(163, 58, 43, 0.40); }
   .dp-submit:active:not(:disabled) { transform: translateY(0); }
   .dp-submit:disabled { opacity: 0.65; cursor: not-allowed; }
 
@@ -288,6 +289,7 @@ const DonationPage = () => {
     <>
       <style>{css}</style>
       <div className="dp-wrap">
+        <PublicSiteHeader variant="amber" />
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 24px 60px' }}>
           
           {/* Header */}
@@ -466,10 +468,10 @@ const DonationPage = () => {
         </div>
 
         {/* Footer */}
-        <footer style={{ textAlign: 'center', paddingTop: '1.5rem', paddingBottom: '2rem', borderTop: '1px solid #fef3c7', marginTop: '2rem' }}>
-          <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
+        <footer style={{ textAlign: 'center', paddingTop: '1.5rem', paddingBottom: '2rem', borderTop: '1px solid #efd9cf', marginTop: '2rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#7a5e4b' }}>
             © {new Date().getFullYear()} Kakkalani Gramam. Built with{" "}
-            <span style={{ color: '#ef4444' }}>❤</span> for the community.
+            <span style={{ color: '#a33a2b' }}>❤</span> for the community.
           </p>
         </footer>
       </div>
