@@ -2680,12 +2680,38 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
       return [];
     }
 
+    const parentToMainDonorId = new Map<number, number>();
+    Object.entries(activeParentDonorIdsByMain).forEach(([mainDonorId, parentDonorIds]) => {
+      const parsedMainDonorId = Number(mainDonorId);
+      if (!Number.isFinite(parsedMainDonorId)) {
+        return;
+      }
+      parentDonorIds.forEach((parentDonorId) => {
+        parentToMainDonorId.set(parentDonorId, parsedMainDonorId);
+      });
+    });
+    const activeCombinedParentDonorIds = new Set(parentToMainDonorId.keys());
+
+    const selectedMainDonorIds = new Set<number>();
+    selectedDonorIds.forEach((selectedId) => {
+      const mainDonorId = parentToMainDonorId.get(selectedId);
+      if (typeof mainDonorId === 'number') {
+        selectedMainDonorIds.add(mainDonorId);
+        return;
+      }
+      selectedMainDonorIds.add(selectedId);
+    });
+
     const matchesFilters = (
       entry: typeof apiPassbookEntries[number],
       options?: { applyDonorFilter?: boolean },
     ) => {
       const applyDonorFilter = options?.applyDonorFilter ?? true;
-      if (applyDonorFilter && selectedDonorIds.length > 0 && !selectedDonorIds.includes(entry.donor)) {
+      if (
+        applyDonorFilter &&
+        selectedMainDonorIds.size > 0 &&
+        !selectedMainDonorIds.has(entry.donor)
+      ) {
         return false;
       }
       if (selectedMonthKey) {
@@ -2715,6 +2741,9 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
         }
       }
       if (!matchesFilters(entry)) {
+        return;
+      }
+      if (activeCombinedParentDonorIds.has(entry.donor)) {
         return;
       }
       matchedCount += 1;
@@ -2803,9 +2832,15 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
       return [];
     }
 
+    const activeCombinedParentDonorIds = new Set<number>();
+    Object.values(activeParentDonorIdsByMain).forEach((parentDonorIds) => {
+      parentDonorIds.forEach((parentDonorId) => activeCombinedParentDonorIds.add(parentDonorId));
+    });
+
     const groupedByDonor = new Map<number, PaymentRecordEntry[]>();
     filteredRecords.forEach((record) => {
       if (typeof record.donor !== 'number') return;
+      if (activeCombinedParentDonorIds.has(record.donor)) return;
       const donorId = record.donor;
       const rows = groupedByDonor.get(donorId) ?? [];
       rows.push(record);
@@ -2848,6 +2883,7 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
     donorPhones,
     filteredRecords,
     isAdminUser,
+    activeParentDonorIdsByMain,
   ]);
 
   const adminGroupsToRender =
