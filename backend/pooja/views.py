@@ -1360,7 +1360,7 @@ class RecurringPoojaPlanViewSet(
         reactivated = self._reactivate_plan(
             plan,
             force=True,
-            additional_metadata_keys=("canceled_at",),
+            additional_metadata_keys=("canceled_at", "cancel_effective_from"),
         )
         if reactivated and was_paused:
             try:
@@ -1432,15 +1432,41 @@ class RecurringPoojaPlanViewSet(
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
         plan = self.get_object()
-        plan.pause_from = None
-        plan.pause_until = None
+        today = timezone.localdate()
+        cancel_from_value = request.data.get("cancel_from")
+        cancel_from = parse_date(cancel_from_value) if cancel_from_value else today
+        if cancel_from is None:
+            return Response({"detail": "Invalid date provided for cancel_from."}, status=status.HTTP_400_BAD_REQUEST)
+        if cancel_from < today and request.user.role != UserRole.ADMIN:
+            return Response({"detail": "Backdated cancellation is allowed only for admins."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Treat cancel as an indefinite stop from the selected date.
+        # This keeps month-wise calculations accurate for periods before cancel_from.
+        indefinite_until = date.max
+        plan.pause_from = cancel_from
+        plan.pause_until = indefinite_until
         plan.is_active = False
         plan.next_occurrence = None
         metadata = dict(plan.metadata or {})
         metadata.pop("pause_reason", None)
+        metadata.pop("pause_handling_amount", None)
+        metadata.pop("handled_for_samy", None)
         metadata["canceled_at"] = timezone.localdate().isoformat()
+        metadata["cancel_effective_from"] = cancel_from.isoformat()
         plan.metadata = metadata
         plan.save()
+        if cancel_from <= today:
+            self._clear_due_registration_in_pause_window(
+                plan,
+                pause_from=cancel_from,
+                pause_until=today,
+            )
+            recalculate_pending_dues_for_donor_window(
+                donor_id=plan.donor_id,
+                window_start=cancel_from,
+                window_end=today,
+                today=today,
+            )
         serializer = self.get_serializer(plan)
         return Response(serializer.data)
 

@@ -14,25 +14,6 @@ type FormValues = {
   password: string;
 };
 
-const features = [
-  { icon: '🙏', title: 'Daily Darshan', description: 'Priority access to temple darshan slots' },
-  { icon: '📿', title: 'Ritual Services', description: 'Book and manage special poojas and rituals' },
-  { icon: '🌟', title: 'Spiritual Content', description: 'Personalized spiritual guidance and updates' },
-] as const;
-
-const testimonials = [
-  {
-    quote: "The portal has transformed how I connect with my spiritual practices. Booking darshan is now effortless!",
-    author: "Priya Sharma",
-    role: "Devotee since 2020"
-  },
-  {
-    quote: "Managing our family rituals has never been easier. The reminders and scheduling features are invaluable.",
-    author: "Rajesh Iyer",
-    role: "Community Member"
-  }
-] as const;
-
 const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
   code: entry.dialCode,
   label: entry.name,
@@ -133,129 +114,27 @@ const LoginPage = () => {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden"
+      className="relative flex min-h-screen flex-col overflow-hidden"
       style={{
-        backgroundImage:
-          'linear-gradient(rgba(9,2,3,0.94), rgba(9,2,3,0.95)), url("/images/landing-page-image.jpg")',
+        backgroundImage: 'url("/images/landing-page-image.jpg")',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
     >
-      {/* Animated Background Elements */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-10 top-10 h-64 w-64 rounded-full bg-[#f3c85c]/20 blur-3xl animate-pulse" />
-        <div className="absolute bottom-[-4rem] right-[-4rem] h-96 w-96 rounded-full bg-[#f06f4a]/15 blur-3xl animate-pulse" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,209,112,0.2),transparent_55%)]" />
-        
-        {/* Floating Elements */}
-        <div className="absolute top-1/4 left-1/4 w-8 h-8 rounded-full bg-amber-400/30 animate-float1" />
-        <div className="absolute top-1/3 right-1/4 w-6 h-6 rounded-full bg-rose-400/30 animate-float2" />
-        <div className="absolute bottom-1/4 left-1/3 w-10 h-10 rounded-full bg-yellow-400/30 animate-float3" />
-        <div className="absolute bottom-1/3 right-1/3 w-5 h-5 rounded-full bg-orange-400/30 animate-float4" />
-        
-        {/* Temple Silhouette */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-amber-900/30 to-transparent opacity-50"></div>
-      </div>
-      
-      <PublicSiteHeader variant="overlay" />
+      <div className="pointer-events-none absolute inset-0 bg-white/35" />
+      <PublicSiteHeader variant="amber" />
 
       {/* MAIN */}
-      <div className="relative z-10 flex items-center justify-center px-4 py-10 sm:py-12 sm:px-6 lg:px-10">
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-6 sm:px-6 lg:px-10">
         <div className="w-full max-w-screen-2xl">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
-            {/* Left Column - Content */}
-            <div className="space-y-6 sm:space-y-8 animate-fade-in text-center sm:text-left">
-              <div className="space-y-3 sm:space-y-4">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-[#f4c956] backdrop-blur-sm">
-                </div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4 tracking-tight">
-                  Reconnect with Your <span className="text-amber-300">Sacred Journey</span>
-                </h1>
-                <p className="text-base sm:text-lg md:text-xl text-amber-100 leading-relaxed max-w-2xl mx-auto sm:mx-0">
-                  Sign in to access personalized darshan slots, ritual schedules, and community seva opportunities.
-                </p>
-              </div>
-              
-              {/* Features */}
-              <div className="space-y-3 sm:space-y-4">
-                <h3 className="text-base sm:text-lg font-semibold text-amber-200">Portal Features</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  {features.map((feature, index) => (
-                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 transition-all duration-300 hover:bg-white/20">
-                      <div className="text-xl sm:text-2xl mb-2">{feature.icon}</div>
-                      <h4 className="font-semibold text-white text-sm sm:text-base">{feature.title}</h4>
-                      <p className="text-xs text-amber-100/80 mt-1">{feature.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Testimonials - Hidden on mobile, shown on md and up */}
-              <div className="space-y-3 sm:space-y-4 hidden md:block">
-                <h3 className="text-base sm:text-lg font-semibold text-amber-200">Community Voices</h3>
-                <div className="space-y-3 sm:space-y-4">
-                  {testimonials.map((testimonial, index) => (
-                    <div key={index} className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border-l-4 border-amber-400">
-                      <p className="text-amber-50 italic mb-2 text-sm">"{testimonial.quote}"</p>
-                      <div>
-                        <p className="font-medium text-white text-sm">{testimonial.author}</p>
-                        <p className="text-xs text-amber-100/70">{testimonial.role}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Stats */}
-              <div className="flex flex-wrap justify-center sm:justify-start items-center gap-4 sm:gap-6 pt-2 sm:pt-4 text-sm">
-                <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">70K+</span>
-                  <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
-                    Annual Devotees
-                  </span>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">120+</span>
-                  <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
-                    Daily Sevas
-                  </span>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-amber-300 font-bold text-lg sm:text-xl mr-2">24/7</span>
-                  <span className="text-xs font-medium text-[#f4c956] uppercase tracking-wider">
-                    Support
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            {/* Right Column - Form */}
-            <div className="animate-fade-in-up w-full max-w-md mx-auto lg:max-w-xl">
+          <div className="mx-auto w-full max-w-xl">
+            {/* Form */}
+            <div className="animate-fade-in-up w-full">
               {/* Progress Steps */}
-              <div className="mb-6 sm:mb-8">
-                <div className="flex justify-center mb-4 sm:mb-6">
-                  <div className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-base sm:text-lg font-bold mb-2 sm:mb-3 bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-lg"
-                      >
-                        1
-                      </div>
-                      <div className="text-center">
-                        <div className="text-base font-semibold text-amber-300">
-                          Sign In
-                        </div>
-                        <div className="text-xs text-white/60 max-w-[120px]">
-                          Enter your credentials
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <div className="mb-4 sm:mb-6" />
               
-              <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-1 shadow-2xl">
-                <div className="bg-white rounded-3xl overflow-hidden shadow-xl">
+              <div className="rounded-3xl border border-[#efd9cf]/80 bg-[#fff7ed]/65 p-1 shadow-2xl backdrop-blur-md">
+                <div className="overflow-hidden rounded-3xl bg-[#fffdf8]/82 shadow-xl backdrop-blur-sm">
                   <form onSubmit={handleSubmit(onSubmit)} className="p-5 sm:p-6 md:p-8">
                     {apiError && (
                       <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake flex items-center">
@@ -268,13 +147,13 @@ const LoginPage = () => {
                     
                     <div className="space-y-4 sm:space-y-6">
                       <div className="text-center mb-6 sm:mb-8">
-                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Sign In</h2>
-                        <p className="text-gray-600 text-sm sm:text-base">Enter your credentials to access your dashboard</p>
+                        <h2 className="mb-2 text-2xl font-bold text-[#7e2a20] sm:text-3xl">Sign In</h2>
+                        <p className="text-sm text-[#5f4636] sm:text-base">Enter your credentials to access your dashboard</p>
                       </div>
                       
                       <div className="space-y-4 sm:space-y-5">
                       <div className="relative">
-                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                          <label className="mb-1 flex items-center text-sm font-medium text-[#5f4636]">
                             Mobile Number <span className="text-rose-500 ml-1">*</span>
                           </label>
                           <div className="relative">
@@ -292,8 +171,8 @@ const LoginPage = () => {
                           <input
                               type="tel"
                               value={localPhoneNumber}
-                              className={`w-full rounded-xl border pl-36 pr-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                isFocused === 'phone_number' || errors.phone_number ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                              className={`w-full rounded-xl border bg-white/90 py-3 pl-36 pr-4 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
+                                isFocused === 'phone_number' || errors.phone_number ? 'border-[#a33a2b] shadow-sm' : 'border-[#d8c2b3]'
                               }`}
                               placeholder="Enter your mobile number"
                               onChange={(event) => handleLocalPhoneInput(event.target.value)}
@@ -322,19 +201,19 @@ const LoginPage = () => {
                         </div>
                         
                         <div className="relative">
-                          <label className="flex items-center text-sm font-medium text-gray-700 mb-1">
+                          <label className="mb-1 flex items-center text-sm font-medium text-[#5f4636]">
                             <span>Password <span className="text-rose-500 ml-1">*</span></span>
                           </label>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg className="h-5 w-5 text-[#8a7465]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                               </svg>
                             </div>
                             <input
                               type={showPassword ? "text" : "password"}
-                              className={`w-full rounded-xl border pl-10 pr-12 py-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 ${
-                                isFocused === 'password' || errors.password ? 'border-amber-500 shadow-sm' : 'border-gray-300'
+                              className={`w-full rounded-xl border bg-white/90 py-3 pl-10 pr-12 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
+                                isFocused === 'password' || errors.password ? 'border-[#a33a2b] shadow-sm' : 'border-[#d8c2b3]'
                               }`}
                               placeholder="Enter your password"
                               {...register('password', { 
@@ -346,7 +225,7 @@ const LoginPage = () => {
                             />
                             <button
                               type="button"
-                              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#8a7465] hover:text-[#7e2a20]"
                               onClick={togglePasswordVisibility}
                             >
                               {showPassword ? (
@@ -379,7 +258,7 @@ const LoginPage = () => {
                           type="checkbox"
                           className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
                         />
-                        <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                        <label htmlFor="remember-me" className="ml-2 block text-sm text-[#5f4636]">
                           Remember me
                         </label>
                       </div>
@@ -387,7 +266,7 @@ const LoginPage = () => {
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="relative flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] px-6 py-3 font-medium text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:from-[#8e3125] hover:to-[#682117] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         {isSubmitting ? (
                           <>
@@ -399,8 +278,8 @@ const LoginPage = () => {
                           </>
                         ) : (
                           <>
-                            Sign In
-                            <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <span className="mx-auto">Sign In</span>
+                            <svg className="absolute right-6 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                             </svg>
                           </>
@@ -417,7 +296,7 @@ const LoginPage = () => {
       </div>
       
       {/* Footer */}
-      <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-white/60 text-xs z-10">
+      <footer className="relative z-10 py-4 text-center text-xs text-slate-500">
         <p>© {new Date().getFullYear()} Kakkalani Gramam. All rights reserved.</p>
       </footer>
       

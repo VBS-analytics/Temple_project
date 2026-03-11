@@ -16,6 +16,7 @@ from django.db import transaction
 from pooja.models import PoojaRegistration, RecurringPoojaPlan, RecurrenceKind
 from payments.models import PaymentStatus
 from .models import PassbookEntry, PaymentRecord
+from pooja.services.recurrence import _calculate_recurring_month_total_for_donor
 
 User = get_user_model()
 _thread_local = threading.local()
@@ -173,12 +174,12 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
                 return value.replace(year=value.year + 1, month=1, day=1)
             return value.replace(month=value.month + 1, day=1)
 
-        non_chrt_plans = []
         earliest_plan_month = None
         for plan in RecurringPoojaPlan.objects.filter(
             donor_id=donor_id,
-            is_active=True,
             recurrence_kind=RecurrenceKind.RECURRING,
+        ).filter(
+            Q(is_active=True) | Q(pause_from__isnull=False) | Q(pause_until__isnull=False)
         ):
             # Skip CHRT and one-time/dated plans; they are handled elsewhere.
             if plan.one_time_date:
@@ -186,32 +187,20 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             if plan.day_option and plan.day_option.code == "CHRT":
                 continue
 
-            plan_amount = Decimal(str(plan.amount or "0.00"))
-            if plan_amount <= 0:
-                continue
-
             anchor_date_for_plan = _plan_due_anchor_date(plan)
             if not anchor_date_for_plan:
                 continue
 
             month_start = anchor_date_for_plan.replace(day=1)
-            non_chrt_plans.append((month_start, plan_amount))
             if earliest_plan_month is None or month_start < earliest_plan_month:
                 earliest_plan_month = month_start
-
-        def _non_chrt_total_for_month(month_start: date) -> Decimal:
-            total = Decimal("0.00")
-            for plan_start_month, plan_amount in non_chrt_plans:
-                if plan_start_month <= month_start:
-                    total += plan_amount
-            return total
 
         if earliest_plan_month:
             cursor = max(earliest_plan_month, anchor_date.replace(day=1))
             while cursor <= current_month:
                 existing = monthly_dues_by_month.get(cursor)
                 existing_amount = existing["amount"] if existing else Decimal("0.00")
-                target_amount = _non_chrt_total_for_month(cursor)
+                target_amount = _calculate_recurring_month_total_for_donor(donor_id, cursor)
                 if target_amount <= 0:
                     cursor = _next_month(cursor)
                     continue
@@ -261,7 +250,7 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             )
 
         for month_start, chrt_total_for_month in chrt_amounts_by_month.items():
-            base_non_chrt = _non_chrt_total_for_month(month_start)
+            base_non_chrt = _calculate_recurring_month_total_for_donor(donor_id, month_start)
             target_amount = base_non_chrt + chrt_total_for_month
             existing = monthly_dues_by_month.get(month_start)
             existing_amount = existing["amount"] if existing else Decimal("0.00")
