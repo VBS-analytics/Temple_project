@@ -144,6 +144,15 @@ type DonorCalendarSummary = {
   dayOptions: DayOptionCalendarEntry[];
 };
 
+const hasAssignedDonorSummary = (summary?: DonorCalendarSummary) => {
+  if (!summary) return false;
+  return Boolean(
+    summary.ids?.trim()
+      || summary.names?.trim()
+      || summary.phones?.trim(),
+  );
+};
+
 type DailyMessageEntry = {
   id: number;
   label: string;
@@ -481,7 +490,7 @@ const PoojaDetailsPage = () => {
   // Compute all per-date values ONCE. Both the report rows and the table render consume
   // this memo — eliminating the previous double-computation of resolveDayOptionInfo etc.
   const perDateData = useMemo<PerDateData[]>(() => {
-    return selectedMonthDates.map((date) => {
+    const allRows = selectedMonthDates.map((date) => {
       const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
         date.getDate(),
       ).padStart(2, '0')}`;
@@ -493,6 +502,12 @@ const PoojaDetailsPage = () => {
       const dailyHeader = formatDailyHeader(dayName, dayOptionValue) ?? '—';
       return { date, dateKey, tamilStar, donorInfo, dayOptionInfo, dayOptionValue, dayName, dailyHeader };
     });
+
+    if (isAdminUser) {
+      return allRows;
+    }
+
+    return allRows.filter((row) => hasAssignedDonorSummary(row.donorInfo));
   }, [
     selectedMonthDates,
     tamilStars,
@@ -500,6 +515,7 @@ const PoojaDetailsPage = () => {
     resolveDayOptionInfo,
     buildDayOptionText,
     formatDailyHeader,
+    isAdminUser,
   ]);
 
   const reportRows = useMemo<ReportRow[]>(() => {
