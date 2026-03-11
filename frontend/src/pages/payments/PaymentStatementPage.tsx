@@ -3355,3 +3355,4 @@ const getEntryTransactionDetailsLabel = (entry: PassbookEntry, allRecords: Payme
 };
 
 export default PaymentStatementPage;
+
