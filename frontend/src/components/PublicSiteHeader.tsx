@@ -53,9 +53,10 @@ const resolveAnchorTo = (hash: string): To => ({
 
 type PublicSiteHeaderProps = {
   variant?: 'overlay' | 'solid' | 'amber';
+  templeWallBorder?: boolean;
 };
 
-const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
+const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: PublicSiteHeaderProps) => {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
   const navLinks = isLoginPage ? loginPageNavLinks : baseNavLinks;
@@ -154,7 +155,10 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
             </p>
           </Link>
 
-          <nav className="hidden flex-1 items-center justify-center gap-6 text-xs tracking-wide md:flex">
+          <nav className={clsx(
+            "hidden flex-1 items-center justify-center text-xs tracking-wide md:flex",
+            templeWallBorder ? "gap-7" : "gap-6"
+          )}>
             {visibleNavLinks.map((item) => {
               if (item.children?.length) {
                 return (
@@ -208,7 +212,11 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
 
               if (item.type === 'route') {
                 return (
-                  <Link key={item.label} to={item.href} className={navLinkClass}>
+                  <Link
+                    key={item.label}
+                    to={item.href}
+                    className={navLinkClass}
+                  >
                     {item.label}
                   </Link>
                 );
@@ -249,6 +257,16 @@ const PublicSiteHeader = ({ variant = 'solid' }: PublicSiteHeaderProps) => {
             </button>
           </div>
       </div>
+      {templeWallBorder && (
+        <div
+          aria-hidden="true"
+          className="h-[6px] w-full border-y border-[#efd9cf]"
+          style={{
+            background:
+              'repeating-linear-gradient(90deg, #a33a2b 0 8px, #fffdf8 8px 16px)',
+          }}
+        />
+      )}
 
       {mobileMenuOpen &&
         createPortal(

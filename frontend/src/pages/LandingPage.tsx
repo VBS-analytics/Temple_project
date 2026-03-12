@@ -226,7 +226,18 @@ const LandingPage = () => {
         .orn-gm { width:6px; height:6px; background:var(--ac); border-radius:1px; transform:rotate(45deg); opacity:.6; }
 
         /* section divider line */
-        .top-stripe { border-top:2px solid var(--acl); }
+        .top-stripe { position:relative; border-top:none; }
+        .top-stripe::before {
+          content:"";
+          position:absolute;
+          left:5%;
+          right:5%;
+          top:0;
+          height:6px;
+          border-top:1px solid #efd9cf;
+          border-bottom:1px solid #efd9cf;
+          background:repeating-linear-gradient(90deg, #a33a2b 0 8px, #fffdf8 8px 16px);
+        }
 
         /* ═══════════════════════════════════════
            HERO
@@ -268,10 +279,23 @@ const LandingPage = () => {
 
         /* shared row styling */
         .h-section {
+          position:relative;
           padding:2.75rem 0;
-          border-bottom:1px solid var(--bd);
+          border-bottom:none;
         }
-        .h-section:last-child { border-bottom:none; padding-bottom:0; }
+        .h-section::after {
+          content:"";
+          position:absolute;
+          left:0;
+          right:0;
+          bottom:0;
+          height:6px;
+          border-top:1px solid #efd9cf;
+          border-bottom:1px solid #efd9cf;
+          background:repeating-linear-gradient(90deg, #a33a2b 0 8px, #fffdf8 8px 16px);
+        }
+        .h-section:last-child { padding-bottom:0; }
+        .h-section:last-child::after { display:none; }
 
         /* icon + title bar — matches About page article header */
         .h-title-bar { display:flex; align-items:center; gap:.8rem; margin-bottom:.5rem; }
@@ -497,7 +521,7 @@ const LandingPage = () => {
       `}</style>
 
       <div className="lp">
-        <PublicSiteHeader variant="amber" />
+        <PublicSiteHeader variant="amber" templeWallBorder />
 
         <main>
 

@@ -638,11 +638,11 @@ const TreeNode = ({
           <button
             type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
-            className="mt-1 rounded p-1 transition-colors hover:bg-orange-50"
+            className="mt-1 rounded p-1 transition-colors hover:bg-[#f8eee2]"
             aria-label={isExpanded ? "Collapse branch" : "Expand branch"}
           >
             <Icon
-              className="h-4 w-4 text-orange-600"
+              className="h-4 w-4 text-[#a33a2b]"
               path={isExpanded ? "m19 9-7 7-7-7" : "m9 5 7 7-7 7"}
             />
           </button>
@@ -653,13 +653,13 @@ const TreeNode = ({
           <button
             type="button"
             onClick={handlePersonClick}
-            className="w-full rounded-2xl border-2 border-orange-100 bg-white p-3 text-left shadow-sm transition-all hover:border-orange-400 hover:shadow-md"
+            className="w-full rounded-2xl border-2 border-[#efd9cf] bg-white p-3 text-left shadow-sm transition-all hover:border-[#a33a2b] hover:shadow-md"
           >
             <div className="flex items-start gap-3">
               <div
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
                   node.gender === "male"
-                    ? "bg-amber-100 text-amber-700"
+                    ? "bg-[#efd9cf] text-[#7e2a20]"
                     : "bg-rose-100 text-rose-600"
                 }`}
               >
@@ -669,24 +669,24 @@ const TreeNode = ({
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-slate-800">{node.name}</div>
-                <div className="mt-0.5 text-sm text-slate-500">
+                <div className="font-semibold text-[#2e2018]">{node.name}</div>
+                <div className="mt-0.5 text-sm text-[#7a5e4b]">
                   {node.birthYear
                     ? `${node.birthYear}${node.deathYear ? ` – ${node.deathYear}` : ""}`
                     : "Year unknown"}
                   {node.birthPlace ? ` | ${node.birthPlace}` : ""}
                 </div>
                 {node.occupation && (
-                  <div className="mt-1 text-xs text-slate-400">{node.occupation}</div>
+                  <div className="mt-1 text-xs text-[#8a6f5a]">{node.occupation}</div>
                 )}
               </div>
-              <span className="rounded-full bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 border border-orange-100">
+              <span className="rounded-full bg-[#f8eee2] px-2 py-1 text-xs font-medium text-[#7e2a20] border border-[#efd9cf]">
                 Gen {node.generation}
               </span>
             </div>
           </button>
           {hasChildren && isExpanded && (
-            <div className="ml-4 mt-2 border-l-2 border-orange-100 pl-4">
+            <div className="ml-4 mt-2 border-l-2 border-[#efd9cf] pl-4">
               {node.children.map((child) => (
                 <TreeNode
                   key={child.id}
@@ -715,7 +715,7 @@ const TreeView = ({
 }) => {
   const root = useMemo(() => buildHierarchy(people, rootPersonId), [people, rootPersonId]);
   if (!root) {
-    return <div className="p-8 text-center text-slate-500">No lineage data available.</div>;
+    return <div className="p-8 text-center text-[#7a5e4b]">No lineage data available.</div>;
   }
   return (
     <div className="p-4 sm:p-6">
@@ -749,21 +749,21 @@ const TimelineView = ({
     <div className="p-4 sm:p-6">
       <div className="mx-auto max-w-5xl space-y-8">
         {grouped.length === 0 ? (
-          <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-8 text-center text-slate-500">
+          <div className="rounded-2xl border border-[#efd9cf] bg-[#f8eee2]/40 p-8 text-center text-[#7a5e4b]">
             No timeline records available for this family yet.
           </div>
         ) : (
           grouped.map((group) => (
             <section key={group.generation}>
               <div className="mb-4 flex items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-600 font-bold text-white shadow-md">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#a33a2b] to-[#7e2a20] font-bold text-white shadow-md">
                   {group.generation}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">
+                  <h3 className="text-lg font-semibold text-[#2e2018]">
                     Generation {group.generation}
                   </h3>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-[#7a5e4b]">
                     {group.persons.length}{" "}
                     {group.persons.length === 1 ? "person" : "people"}
                   </p>
@@ -779,23 +779,23 @@ const TimelineView = ({
                       key={person.id}
                       type="button"
                       onClick={() => onPersonClick(person)}
-                      className="rounded-2xl border border-orange-100 bg-white p-4 text-left shadow-sm transition-all hover:border-orange-400 hover:shadow-md"
+                      className="rounded-2xl border border-[#efd9cf] bg-white p-4 text-left shadow-sm transition-all hover:border-[#a33a2b] hover:shadow-md"
                     >
-                      <div className="font-semibold text-slate-800">{person.name}</div>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <div className="font-semibold text-[#2e2018]">{person.name}</div>
+                      <p className="mt-1 text-sm text-[#7a5e4b]">
                         {person.birthYear || "Year unknown"}
                         {person.deathYear ? ` – ${person.deathYear}` : ""}
                       </p>
                       {person.birthPlace && (
-                        <p className="text-sm text-slate-400">{person.birthPlace}</p>
+                        <p className="text-sm text-[#8a6f5a]">{person.birthPlace}</p>
                       )}
                       {spouse && (
-                        <p className="mt-2 text-xs text-orange-700 font-medium">
+                        <p className="mt-2 text-xs text-[#7e2a20] font-medium">
                           Spouse: {spouse.name}
                         </p>
                       )}
                       {(person.children?.length || 0) > 0 && (
-                        <p className="text-xs text-amber-700">
+                        <p className="text-xs text-[#7e2a20]">
                           Children: {person.children?.length}
                         </p>
                       )}
@@ -869,11 +869,11 @@ const TableView = ({
       <button
         type="button"
         onClick={() => onSort(field)}
-        className="flex items-center gap-1 font-semibold text-slate-700 hover:text-orange-600 transition-colors"
+        className="flex items-center gap-1 font-semibold text-[#5f4636] hover:text-[#a33a2b] transition-colors"
       >
         {label}
         {sortField === field && (
-          <span className="text-orange-500">{sortDirection === "asc" ? " ↑" : " ↓"}</span>
+          <span className="text-[#a33a2b]">{sortDirection === "asc" ? " ↑" : " ↓"}</span>
         )}
       </button>
     </th>
@@ -888,7 +888,7 @@ const TableView = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search name, place, occupation…"
-            className="w-full rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            className="w-full rounded-xl border border-[#d8b9ac] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#a33a2b] focus:ring-2 focus:ring-[#efd9cf]"
             aria-label="Search people"
           />
           <select
@@ -898,7 +898,7 @@ const TableView = ({
                 e.target.value === "all" ? "all" : Number(e.target.value),
               )
             }
-            className="rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            className="rounded-xl border border-[#d8b9ac] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#a33a2b] focus:ring-2 focus:ring-[#efd9cf]"
             aria-label="Filter generation"
           >
             <option value="all">All Generations</option>
@@ -910,25 +910,25 @@ const TableView = ({
           </select>
         </div>
 
-        <div className="mb-3 text-sm text-slate-500">
+        <div className="mb-3 text-sm text-[#7a5e4b]">
           Showing {rows.length} of {people.length}
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-orange-100 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-[#efd9cf] bg-white shadow-sm">
           <table className="w-full min-w-[680px]">
             <thead>
-              <tr className="border-b border-orange-100 bg-orange-50/60 text-left text-sm">
+              <tr className="border-b border-[#efd9cf] bg-[#f8eee2]/60 text-left text-sm">
                 <SortTh field="name" label="Name" />
                 <SortTh field="generation" label="Generation" />
                 <SortTh field="birthYear" label="Birth" />
                 <SortTh field="birthPlace" label="Place" />
-                <th className="px-4 py-3 font-semibold text-slate-700">Occupation</th>
+                <th className="px-4 py-3 font-semibold text-[#5f4636]">Occupation</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-10 text-center text-[#8a6f5a]">
                     {people.length === 0
                       ? "No people records available for this family yet."
                       : "No matching people found."}
@@ -938,17 +938,17 @@ const TableView = ({
                 rows.map((person) => (
                   <tr
                     key={person.id}
-                    className="cursor-pointer border-b border-orange-50 text-sm transition-colors hover:bg-orange-50/50"
+                    className="cursor-pointer border-b border-[#f8eee2] text-sm transition-colors hover:bg-[#f8eee2]/50"
                     onClick={() => onPersonClick(person)}
                   >
-                    <td className="px-4 py-3 font-medium text-slate-800">{person.name}</td>
-                    <td className="px-4 py-3 text-slate-500">{person.generation}</td>
-                    <td className="px-4 py-3 text-slate-500">
+                    <td className="px-4 py-3 font-medium text-[#2e2018]">{person.name}</td>
+                    <td className="px-4 py-3 text-[#7a5e4b]">{person.generation}</td>
+                    <td className="px-4 py-3 text-[#7a5e4b]">
                       {person.birthYear || "–"}
                       {person.deathYear ? ` – ${person.deathYear}` : ""}
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{person.birthPlace || "–"}</td>
-                    <td className="px-4 py-3 text-slate-500">{person.occupation || "–"}</td>
+                    <td className="px-4 py-3 text-[#7a5e4b]">{person.birthPlace || "–"}</td>
+                    <td className="px-4 py-3 text-[#7a5e4b]">{person.occupation || "–"}</td>
                   </tr>
                 ))
               )}
@@ -984,7 +984,7 @@ const PersonDetailModal = ({
     <button
       type="button"
       onClick={() => onNavigate(target.id)}
-      className="block text-left text-sm text-orange-700 hover:underline font-medium"
+      className="block text-left text-sm text-[#7e2a20] hover:underline font-medium"
     >
       {label}: {target.name}
     </button>
@@ -1000,11 +1000,11 @@ const PersonDetailModal = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="sticky top-0 rounded-t-3xl bg-gradient-to-r from-orange-500 to-amber-600 p-6 text-white">
+        <div className="sticky top-0 rounded-t-3xl bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] p-6 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold font-serif">{person.name}</h2>
-              <p className="text-sm text-orange-100 mt-1">
+              <p className="text-sm text-[#efd9cf] mt-1">
                 Generation {person.generation}
                 {person.branch ? ` | Branch ${person.branch}` : ""}
               </p>
@@ -1034,24 +1034,24 @@ const PersonDetailModal = ({
               { label: "Occupation", value: person.occupation || "Not recorded" },
               { label: "Gender", value: person.gender },
             ].map(({ label, value }) => (
-              <div key={label} className="rounded-2xl bg-orange-50/60 p-3 text-sm border border-orange-100">
-                <div className="text-orange-600 font-medium text-xs uppercase tracking-wider mb-1">
+              <div key={label} className="rounded-2xl bg-[#f8eee2]/60 p-3 text-sm border border-[#efd9cf]">
+                <div className="text-[#a33a2b] font-medium text-xs uppercase tracking-wider mb-1">
                   {label}
                 </div>
-                <div className="font-semibold text-slate-800 capitalize">{value}</div>
+                <div className="font-semibold text-[#2e2018] capitalize">{value}</div>
               </div>
             ))}
           </div>
 
           {person.notes && (
-            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+            <div className="rounded-2xl border border-[#d8b9ac] bg-[#f8eee2] p-4 text-sm text-[#5c1f17]">
               {person.notes}
             </div>
           )}
 
-          <div className="rounded-2xl border border-orange-100 p-4 space-y-3">
-            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-              <span className="w-1 h-5 rounded-full bg-gradient-to-b from-orange-500 to-amber-600 inline-block" />
+          <div className="rounded-2xl border border-[#efd9cf] p-4 space-y-3">
+            <h3 className="font-semibold text-[#2e2018] flex items-center gap-2">
+              <span className="w-1 h-5 rounded-full bg-gradient-to-b from-[#a33a2b] to-[#7e2a20] inline-block" />
               Relationships
             </h3>
             {spouse && <JumpLink label="Spouse" target={spouse} />}
@@ -1068,7 +1068,7 @@ const PersonDetailModal = ({
               !mother &&
               siblings.length === 0 &&
               children.length === 0 && (
-                <p className="text-sm text-slate-400">No recorded relationships.</p>
+                <p className="text-sm text-[#8a6f5a]">No recorded relationships.</p>
               )}
           </div>
         </div>
@@ -1177,28 +1177,27 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
     { id: "diagram", label: "Diagram" },
     { id: "tree", label: "Tree" },
     { id: "timeline", label: "Timeline" },
-    { id: "table", label: "Table" },
   ];
 
   return (
     <div
       className={
         embedded
-          ? "rounded-3xl border border-orange-100 bg-white p-4 shadow-sm sm:p-6 lg:p-8 hover:shadow-xl hover:border-orange-200 transition-all duration-500"
-          : "min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50"
+          ? "rounded-3xl border border-[#efd9cf] bg-white p-4 shadow-sm sm:p-6 lg:p-8 hover:shadow-xl hover:border-[#d8b9ac] transition-all duration-500"
+          : "min-h-screen bg-gradient-to-br from-[#f8eee2] via-white to-[#f8eee2]"
       }
     >
       {/* Subtitle shown in both embedded and standalone */}
-      <div className={embedded ? "mb-6 text-center" : "border-b border-orange-100 bg-white/80 backdrop-blur-sm"}>
+      <div className={embedded ? "mb-6 text-center" : "border-b border-[#efd9cf] bg-white/80 backdrop-blur-sm"}>
         {!embedded && (
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 text-center">
-            <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
+            <p className="mx-auto max-w-2xl text-base text-[#7a5e4b] sm:text-lg">
               {activeTree?.subtitle || "Explore your family heritage"}
             </p>
           </div>
         )}
         {embedded && (
-          <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
+          <p className="mx-auto max-w-2xl text-base text-[#7a5e4b] sm:text-lg">
             {activeTree?.subtitle || "Explore your family heritage"}
           </p>
         )}
@@ -1217,18 +1216,18 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
             <button
               type="button"
               onClick={() => scrollTabs(-220)}
-              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-orange-200 bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
+              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#d8b9ac] bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
               aria-label="Scroll family trees left"
             >
-              <Icon className="h-5 w-5 text-orange-600" path="m15 19-7-7 7-7" />
+              <Icon className="h-5 w-5 text-[#a33a2b]" path="m15 19-7-7 7-7" />
             </button>
             <button
               type="button"
               onClick={() => scrollTabs(220)}
-              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-orange-200 bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
+              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#d8b9ac] bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white lg:hidden"
               aria-label="Scroll family trees right"
             >
-              <Icon className="h-5 w-5 text-orange-600" path="m9 5 7 7-7 7" />
+              <Icon className="h-5 w-5 text-[#a33a2b]" path="m9 5 7 7-7 7" />
             </button>
             <div
               ref={tabsRef}
@@ -1244,8 +1243,8 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                     onClick={() => setActiveTreeId(tree.id)}
                     className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 sm:px-5 ${
                       isActive
-                        ? "scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/30"
-                        : "border border-orange-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-orange-400 hover:shadow-md"
+                        ? "scale-105 bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] text-white shadow-lg shadow-[#a33a2b]/30"
+                        : "border border-[#d8b9ac] bg-white text-[#5f4636] hover:-translate-y-0.5 hover:border-[#a33a2b] hover:shadow-md"
                     }`}
                     aria-pressed={isActive}
                   >
@@ -1258,7 +1257,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
         </div>
 
         {/* View mode tabs */}
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-orange-100 bg-white p-2 shadow-sm">
+        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#efd9cf] bg-white p-2 shadow-sm">
           {views.map((view) => {
             const active = viewMode === view.id;
             return (
@@ -1268,8 +1267,8 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                 onClick={() => setViewMode(view.id)}
                 className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
                   active
-                    ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-md shadow-orange-500/20"
-                    : "text-slate-600 hover:bg-orange-50 hover:text-orange-700"
+                    ? "bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] text-white shadow-md shadow-[#a33a2b]/20"
+                    : "text-[#7a5e4b] hover:bg-[#f8eee2] hover:text-[#7e2a20]"
                 }`}
               >
                 {view.label}
@@ -1279,24 +1278,24 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
         </div>
 
         {/* Main content card */}
-        <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-sm hover:shadow-xl hover:border-orange-200 transition-all duration-500">
+        <div className="overflow-hidden rounded-3xl border border-[#efd9cf] bg-white shadow-sm hover:shadow-xl hover:border-[#d8b9ac] transition-all duration-500">
 
           {/* Diagram view */}
           {viewMode === "diagram" && (
             <>
-              <div className="border-b border-orange-100 bg-gradient-to-r from-orange-50/60 to-amber-50/40 px-4 py-4 sm:px-6">
+              <div className="border-b border-[#efd9cf] bg-gradient-to-r from-[#f8eee2]/60 to-[#f8eee2]/40 px-4 py-4 sm:px-6">
                 <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
                   {/* Zoom controls */}
-                  <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="flex items-center gap-2 rounded-xl border border-[#d8b9ac] bg-white px-3 py-2 shadow-sm">
                     <button
                       type="button"
                       onClick={zoomOut}
                       disabled={zoomLevel <= 50}
-                      className="rounded-lg p-1.5 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-1.5 transition-colors hover:bg-[#f8eee2] disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Zoom out"
                     >
                       <Icon
-                        className="h-4 w-4 text-orange-600"
+                        className="h-4 w-4 text-[#a33a2b]"
                         path="m21 21-4.35-4.35M8 11h6m5-1a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
                       />
                     </button>
@@ -1308,10 +1307,10 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                         step="25"
                         value={zoomLevel}
                         onChange={(e) => setZoomLevel(Number(e.target.value))}
-                        className="h-2 w-24 cursor-pointer appearance-none rounded-lg bg-orange-100 accent-orange-500 sm:w-32"
+                        className="h-2 w-24 cursor-pointer appearance-none rounded-lg bg-[#efd9cf] accent-[#a33a2b] sm:w-32"
                         aria-label="Zoom level"
                       />
-                      <span className="min-w-[3rem] text-center text-sm font-medium text-slate-700">
+                      <span className="min-w-[3rem] text-center text-sm font-medium text-[#5f4636]">
                         {zoomLevel}%
                       </span>
                     </div>
@@ -1319,31 +1318,31 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                       type="button"
                       onClick={zoomIn}
                       disabled={zoomLevel >= 300}
-                      className="rounded-lg p-1.5 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-1.5 transition-colors hover:bg-[#f8eee2] disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Zoom in"
                     >
                       <Icon
-                        className="h-4 w-4 text-orange-600"
+                        className="h-4 w-4 text-[#a33a2b]"
                         path="m21 21-4.35-4.35M11 8v6m-3-3h6m5-1a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
                       />
                     </button>
-                    <div className="mx-1 h-6 w-px bg-orange-200" />
+                    <div className="mx-1 h-6 w-px bg-[#d8b9ac]" />
                     <button
                       type="button"
                       onClick={resetZoom}
-                      className="rounded-lg p-1.5 transition-colors hover:bg-orange-50"
+                      className="rounded-lg p-1.5 transition-colors hover:bg-[#f8eee2]"
                       aria-label="Reset zoom"
                       title="Reset zoom"
                     >
                       <Icon
-                        className="h-4 w-4 text-orange-600"
+                        className="h-4 w-4 text-[#a33a2b]"
                         path="M8 3H5a2 2 0 0 0-2 2v3m0 8v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3m0-8V5a2 2 0 0 0-2-2h-3"
                       />
                     </button>
                   </div>
                   {hasDetailedData && (
-                    <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 font-medium">
-                      Detailed data available: switch to Tree, Timeline, or Table.
+                    <div className="rounded-xl border border-[#d8b9ac] bg-[#f8eee2] px-3 py-2 text-xs text-[#7e2a20] font-medium">
+                      Detailed data available: switch to Tree or Timeline.
                     </div>
                   )}
                 </div>
@@ -1351,9 +1350,9 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
 
               <div className="relative">
                 {activeTree?.isAvailable && activeTree.image ? (
-                  <div className="bg-gradient-to-br from-[#F0F4FF] via-white to-[#F0F4FF] p-4 sm:p-6">
+                  <div className="bg-gradient-to-br from-[#f8eee2] via-white to-[#f8eee2] p-4 sm:p-6">
                     <div
-                      className="overflow-auto rounded-2xl border border-[#90CAF9] bg-white shadow-inner shadow-[#1565C0]/10"
+                      className="overflow-auto rounded-2xl border border-[#efd9cf] bg-white shadow-inner shadow-[#a33a2b]/10"
                       style={{ maxHeight: "82vh" }}
                     >
                       <div
@@ -1377,9 +1376,9 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                       </div>
                     </div>
                     {activeTree.description && (
-                      <div className="mt-4 rounded-2xl border border-[#90CAF9] bg-[#E3F2FD] p-4 shadow-sm">
+                      <div className="mt-4 rounded-2xl border border-[#efd9cf] bg-[#f7f1e6] p-4 shadow-sm">
                         <div className="flex items-start gap-3">
-                          <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-[#1565C0] to-[#E65100]" />
+                          <div className="h-full w-1 flex-shrink-0 rounded-full bg-gradient-to-b from-[#a33a2b] to-[#7e2a20]" />
                           <p className="text-sm leading-relaxed text-black">
                             {activeTree.description}
                           </p>
@@ -1391,10 +1390,10 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                   <div className="px-6 py-24 text-center">
                     <div className="mx-auto max-w-md space-y-4">
                       <div className="text-5xl mb-4">🌳</div>
-                      <h3 className="text-xl font-semibold text-slate-800">
+                      <h3 className="text-xl font-semibold text-[#2e2018]">
                         Family Tree Coming Soon
                       </h3>
-                      <p className="text-slate-500">
+                      <p className="text-[#7a5e4b]">
                         This family tree visualization is being prepared. Share additional
                         records with the admin team.
                       </p>
@@ -1406,7 +1405,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
           )}
 
           {isLoadingDerivedPeople && viewMode !== "diagram" && (
-            <div className="p-8 text-center text-slate-500">Loading lineage details...</div>
+            <div className="p-8 text-center text-[#7a5e4b]">Loading lineage details...</div>
           )}
 
           {!isLoadingDerivedPeople && viewMode === "tree" && (
