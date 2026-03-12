@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import PublicSiteHeader from "../components/PublicSiteHeader";
 import EnglishTamilToggle from "../components/EnglishTamilToggle";
 
@@ -610,6 +611,15 @@ const CSS_STYLES = `
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 const KovilDetailsPage = () => {
   const [activeTabId, setActiveTabId] = useState<string>(temples[0].id);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const requestedTemple = searchParams.get("temple");
+    if (!requestedTemple) return;
+    if (!temples.some((temple) => temple.id === requestedTemple)) return;
+    if (requestedTemple === activeTabId) return;
+    setActiveTabId(requestedTemple);
+  }, [searchParams, activeTabId]);
 
   const renderContent = () => {
     switch (activeTabId) {

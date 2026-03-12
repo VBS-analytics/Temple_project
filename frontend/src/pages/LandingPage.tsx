@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import PublicSiteHeader from "../components/PublicSiteHeader";
 
 // ── DATA ─────────────────────────────────────────────────────────────────────
@@ -15,14 +16,13 @@ const howToReachRoutes = [
     href: "https://www.google.com/maps/dir/Nagapattinam,+Tamil+Nadu/Kakkalani+Lakshmi+Narayana+Perumal+Temple,+PMJM%2B2C5,+Thappalanpuliyur+II,+Tamil+Nadu+610106/@10.7454277,79.7324732,19649m/data=!3m1!1e3!4m14!4m13!1m5!1m1!1s0x3a556c9797ef6927:0xc869efbb726e6072!2m2!1d79.8448512!2d10.7672313!1m5!1m1!1s0x3a55416ffc6238d3:0x75bc85e1ff87c819!2m2!1d79.6835975!2d10.730005!3e0?entry=ttu&g_ep=EgoyMDI2MDIxNi4wIKXMDSoASAFQAw%3D%3D" },
 ];
 
-type TempleImage = { src: string; deity: string; name: string; contain?: boolean };
+type TempleImage = { src: string; deity: string; name: string; contain?: boolean; templeTabId: string };
 
 type StatIcon = "location" | "temple" | "heritage" | "blessings";
 
 const quickStats: Array<{ icon: StatIcon; label: string; value: string }> = [
   { icon: "location",  label: "Location",         value: "10 km SE of Thiruvarur" },
   { icon: "temple",    label: "Sacred Temples",   value: "5+ Sacred Sites" },
-  { icon: "heritage",  label: "Heritage",         value: "4–5 Generations" },
   { icon: "blessings", label: "Divine Blessings", value: "Mahaperiyava & Ramana Maharishi" },
 ];
 
@@ -35,10 +35,18 @@ const snapshotStats = [
 ];
 
 const templeImages: TempleImage[] = [
-  { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png", deity: "Sri Lakshmi Narayanar", name: "Lakshmi Narayanar Perumal Koil",    contain: true  },
-  { src: "/images/kovi/pillayar/pillayar-hd.jpg",                deity: "Sri Vinayakar",          name: "Aathagarai Pillayar Koil",          contain: false },
-  { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png",deity: "Sri Kalahastiswarar",    name: "Kalahastiswarar Koil",              contain: true  },
-  { src: "/images/kovi/ayyanar/ayyanar.png",                     deity: "Sri Ayyanar",            name: "Mangala Azhagar Ayyanar Koil",     contain: true  },
+  { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png", deity: "", name: "Perumal Koil", templeTabId: "lakshmi-narayanar-temple", contain: true  },
+  { src: "/images/kovi/pillayar/pillayar-hd.jpg", deity: "", name: "Pillayar Koil", templeTabId: "aathangarai-pillayar", contain: false },
+  { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", deity: "", name: "Kalahasteeswarar Koil", templeTabId: "gnanambal-samedha-kalahasteeswarar", contain: true  },
+  { src: "/images/kovi/ayyanar/ayyanar.png", deity: "", name: "Ayyanar Koil", templeTabId: "mangala-azhagar-ayyanar-koil", contain: true  },
+];
+
+const heroSlides = [
+  { src: "/images/landing-page-image.jpg", alt: "Kakkalani Village map, Tamil Nadu", fit: "cover" as const },
+  { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png", alt: "Lakshmi Narayanar temple deity", fit: "contain" as const },
+  { src: "/images/kovi/pillayar/pillayar-hd.jpg", alt: "Aathagarai Pillayar temple deity", fit: "contain" as const },
+  { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar temple deity", fit: "contain" as const },
+  { src: "/images/kovi/ayyanar/ayyanar-hd.jpg", alt: "Ayyanar temple deity", fit: "contain" as const },
 ];
 
 // ── ICONS ────────────────────────────────────────────────────────────────────
@@ -112,8 +120,30 @@ const HistorySectionIcon = () => (
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 
-const LandingPage = () => {
+type LandingPageProps = {
+  showHeader?: boolean;
+  showHero?: boolean;
+};
+
+const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) => {
   const [routesExpanded, setRoutesExpanded] = useState(false);
+  const [activeHeroSlide, setActiveHeroSlide] = useState(0);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash !== "#our-village-heritage") return;
+
+    const scrollToHeritage = () => {
+      const section = document.getElementById("our-village-heritage");
+      if (!section) return;
+      const headerOffset = 110;
+      const targetY = section.getBoundingClientRect().top + window.scrollY - headerOffset;
+      window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
+    };
+
+    const raf = requestAnimationFrame(scrollToHeritage);
+    return () => cancelAnimationFrame(raf);
+  }, [location.hash]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -123,6 +153,13 @@ const LandingPage = () => {
     document.querySelectorAll(".lr:not(.lv)").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [routesExpanded]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setActiveHeroSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 4500);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const visibleRoutes = routesExpanded ? howToReachRoutes : howToReachRoutes.slice(0, 2);
 
@@ -242,8 +279,23 @@ const LandingPage = () => {
         /* ═══════════════════════════════════════
            HERO
         ═══════════════════════════════════════ */
-        .hero { width:100%; height:70vh; min-height:360px; overflow:hidden; position:relative; }
-        .hero img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; display:block; }
+        .hero {
+          width:100%;
+          height:70vh;
+          min-height:360px;
+          overflow:hidden;
+          position:relative;
+          background:linear-gradient(145deg,var(--bg3),var(--bg2));
+        }
+        .hero-slide {
+          position:absolute; inset:0;
+          width:100%; height:100%;
+          object-position:center; display:block;
+          opacity:0; transition:opacity .85s ease-in-out;
+        }
+        .hero-slide.cover { object-fit:cover; }
+        .hero-slide.contain { object-fit:contain; }
+        .hero-slide.active { opacity:1; }
 
         /* ═══════════════════════════════════════
            STATS
@@ -409,6 +461,7 @@ const LandingPage = () => {
           box-shadow:0 3px 14px rgba(0,0,0,.12); border:1px solid var(--bd);
           background:var(--bg3);
         }
+        .t-card-link { display:block; text-decoration:none; color:inherit; }
         .t-card.t-cover img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .6s; }
         .t-card.t-contain img { width:100%; height:100%; object-fit:contain; padding:.3rem; display:block; transition:transform .5s; }
         .t-card:hover img { transform:scale(1.05); }
@@ -521,14 +574,24 @@ const LandingPage = () => {
       `}</style>
 
       <div className="lp">
-        <PublicSiteHeader variant="amber" templeWallBorder />
+        {showHeader && <PublicSiteHeader variant="amber" templeWallBorder />}
 
         <main>
 
           {/* ── HERO ── */}
-          <section className="hero">
-            <img src="/images/landing-page-image.jpg" alt="Kakkalani Village map, Tamil Nadu" />
-          </section>
+          {showHero && (
+            <section className="hero">
+              {heroSlides.map((slide, index) => (
+                <img
+                  key={slide.src}
+                  src={slide.src}
+                  alt={slide.alt}
+                  className={`hero-slide ${slide.fit}${index === activeHeroSlide ? " active" : ""}`}
+                  loading={index === 0 ? "eager" : "lazy"}
+                />
+              ))}
+            </section>
+          )}
 
           {/* ── STATS ── */}
           <section className="stats">
@@ -546,7 +609,7 @@ const LandingPage = () => {
           </section>
 
           {/* ═══ OUR VILLAGE HERITAGE ═══ */}
-          <section className="heritage">
+          <section id="our-village-heritage" className="heritage">
             <div className="wrap">
 
               {/* Section header */}
@@ -626,14 +689,21 @@ const LandingPage = () => {
                   {/* LEFT — 2×2 image grid */}
                   <div className="temple-img-grid">
                     {templeImages.map((t) => (
-                      <div key={t.src} className={`t-card ${t.contain ? "t-contain" : "t-cover"}`}>
-                        <img src={t.src} alt={t.name} loading="lazy" />
-                        <div className="t-card-overlay" />
-                        <div className="t-info">
-                          <div className="t-deity">{t.deity}</div>
-                          <div className="t-name">{t.name}</div>
+                      <Link
+                        key={t.src}
+                        to={`/kovi-details?temple=${encodeURIComponent(t.templeTabId)}`}
+                        className="t-card-link"
+                        aria-label={`Open ${t.name} details`}
+                      >
+                        <div className={`t-card ${t.contain ? "t-contain" : "t-cover"}`}>
+                          <img src={t.src} alt={t.name} loading="lazy" />
+                          <div className="t-card-overlay" />
+                          <div className="t-info">
+                            <div className="t-deity">{t.deity}</div>
+                            <div className="t-name">{t.name}</div>
+                          </div>
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                   {/* RIGHT — text content */}

@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useEffect, useState } from 'react';
+import { MouseEvent, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, To, useLocation } from 'react-router-dom';
 
@@ -15,6 +15,11 @@ type NavLinkItem = {
 
 const baseNavLinks: NavLinkItem[] = [
   { label: 'HOME', href: '/', type: 'route' },
+  {
+    label: 'SIGNIFICANCE OF KAKKALANI VILLAGE',
+    href: '#our-village-heritage',
+    type: 'anchor'
+  },
   {
     label: 'KAKKALANI TEMPLES',
     href: '/kovi-details',
@@ -33,6 +38,11 @@ const loginPageNavLinks: NavLinkItem[] = [
     label: 'ABOUT US',
     href: '/about',
     type: 'route',
+  },
+  {
+    label: 'SIGNIFICANCE OF KAKKALANI VILLAGE',
+    href: '#our-village-heritage',
+    type: 'anchor',
   },
   {
     label: 'KAKKALANI TEMPLES',
@@ -93,6 +103,21 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
       : 'text-[#1565C0]';
 
   const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
+  const scrollToAnchorSection = (hash: string) => {
+    const id = hash.replace(/^#/, '');
+    const section = document.getElementById(id);
+    if (!section) return;
+
+    const headerOffset = 110;
+    const targetY = section.getBoundingClientRect().top + window.scrollY - headerOffset;
+    window.scrollTo({ top: Math.max(targetY, 0), behavior: 'smooth' });
+    window.history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+  };
+  const handleAnchorClick = (event: MouseEvent<HTMLAnchorElement>, hash: string) => {
+    if (location.pathname !== '/') return;
+    event.preventDefault();
+    scrollToAnchorSection(hash);
+  };
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const isNavItemActive = (item: NavLinkItem) => {
     if (item.type === 'route') {
@@ -151,7 +176,7 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
         <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
           <Link to="/" className={clsx('min-w-0 flex-shrink text-left', brandTextClass)}>
             <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.24em]">
-              Kakkalani Gramam
+              Kakkalani Village
             </p>
           </Link>
 
@@ -223,7 +248,12 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
               }
 
               return (
-                <Link key={item.label} to={resolveAnchorTo(item.href)} className={navLinkClass}>
+                <Link
+                  key={item.label}
+                  to={resolveAnchorTo(item.href)}
+                  onClick={(event) => handleAnchorClick(event, item.href)}
+                  className={navLinkClass}
+                >
                   {item.label}
                 </Link>
               );
@@ -309,7 +339,12 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
                       <li key={item.label}>
                         <Link
                           to={toValue}
-                          onClick={closeMobileMenu}
+                          onClick={(event) => {
+                            if (item.type === 'anchor') {
+                              handleAnchorClick(event, item.href);
+                            }
+                            closeMobileMenu();
+                          }}
                           className={clsx(
                             'block w-full rounded-xl border px-4 py-3 text-sm font-semibold text-black transition',
                             isNavItemActive(item)
