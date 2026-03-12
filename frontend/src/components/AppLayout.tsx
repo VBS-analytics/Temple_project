@@ -141,24 +141,14 @@ const AppLayout = () => {
       end: true,
     },
     {
-      to: "/profile/donor-corner",
-      label: "Donor Corner",
-      show: Boolean(user && !isAdmin(user.role)),
-    },
-    {
-      to: "/profile/cow-samrakshana-seva",
-      label: "Cow Samrakshana Seva",
-      show: Boolean(user),
-    },
-    {
       to: "/profile/pooja-seva",
       label: "Pooja Seva",
       show: Boolean(user),
     },
     {
-      to: "/profile/ubhayam-report",
-      label: "Ubhayam Report",
-      show: Boolean(user && !isAdmin(user.role)),
+      to: "/profile/cow-samrakshana-seva",
+      label: "Cow Samrakshana Seva",
+      show: Boolean(user),
     },
     { to: "/pooja/register", label: "Pooja Registration", show: !isAdminUser },
     {
@@ -175,6 +165,16 @@ const AppLayout = () => {
       to: "/payments/statement",
       label: "Payment Statement",
       show: canViewPaymentStatement(user),
+    },
+    {
+      to: "/profile/ubhayam-report",
+      label: "Ubhayam Report",
+      show: Boolean(user && !isAdmin(user.role)),
+    },
+    {
+      to: "/profile/donor-corner",
+      label: "Donor Corner",
+      show: Boolean(user && !isAdmin(user.role)),
     },
   ];
 
@@ -269,30 +269,36 @@ const AppLayout = () => {
             >
               {navItems
                 .filter((item) => item.show)
-                .map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      clsx(
-                        "relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition",
-                        isActive
-                          ? "bg-[#F5C518] text-[#000000] shadow-[0_10px_20px_-16px_rgba(245,197,24,0.8)]"
-                          : navInactiveClass,
-                      )
-                    }
-                  >
-                    {item.label}
+                .map((item) => {
+                  const isDonorCornerTab = item.label === "Donor Corner";
 
-                    {/* BADGE */}
-                    {item.badge && (
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#E65100] px-1 text-xs font-semibold text-white shadow-sm">
-                        {item.badge}
-                      </span>
-                    )}
-                  </NavLink>
-                ))}
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        clsx(
+                          "relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition",
+                          isDonorCornerTab
+                            ? "bg-[#A52A2A] text-white shadow-[0_10px_20px_-16px_rgba(165,42,42,0.9)] hover:bg-[#8B1E1E]"
+                            : isActive
+                              ? "bg-[#F5C518] text-[#000000] shadow-[0_10px_20px_-16px_rgba(245,197,24,0.8)]"
+                              : navInactiveClass,
+                        )
+                      }
+                    >
+                      {item.label}
+
+                      {/* BADGE */}
+                      {item.badge && (
+                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#E65100] px-1 text-xs font-semibold text-white shadow-sm">
+                          {item.badge}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
             </nav>
           </div>
         </div>
