@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { countryDialCodes } from '../data/countryDialCodes';
 import { CountryCodePicker } from '../components/CountryCodePicker';
 import PublicSiteHeader from '../components/PublicSiteHeader';
+import LandingPage from './LandingPage';
 import { CountryOption } from '../types/country';
 import api from '../lib/api';
 import { useAuthStore } from '../store/auth';
@@ -22,12 +23,21 @@ const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
 
 const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
 
+const loginHeroSlides = [
+  { src: '/images/landing-page-image.jpg', fit: 'cover' as const },
+  { src: '/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png', fit: 'contain' as const },
+  { src: '/images/kovi/pillayar/pillayar-hd.jpg', fit: 'contain' as const },
+  { src: '/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png', fit: 'contain' as const },
+  { src: '/images/kovi/ayyanar/ayyanar-hd.jpg', fit: 'contain' as const },
+];
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [activeHeroSlide, setActiveHeroSlide] = useState(0);
   
   const {
     register,
@@ -58,6 +68,13 @@ const LoginPage = () => {
   useEffect(() => {
     setValue('phone_number', combinedPhoneNumber);
   }, [combinedPhoneNumber, setValue]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setActiveHeroSlide((prev) => (prev + 1) % loginHeroSlides.length);
+    }, 4500);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const handleCountryCodeChange = (iso: CountryOption['iso']) => {
     const option = countryCodeOptions.find((item) => item.iso === iso);
@@ -113,21 +130,28 @@ const LoginPage = () => {
   };
 
   return (
-    <div
-      className="relative flex min-h-screen flex-col overflow-hidden"
-      style={{
-        backgroundImage: 'url("/images/landing-page-image.jpg")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      <div className="pointer-events-none absolute inset-0 bg-white/35" />
-      <PublicSiteHeader variant="amber" />
+    <div className="bg-[#f7f1e6]">
+      <div className="relative flex min-h-screen flex-col overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#fbf5ea] to-[#fffdf8]" />
+        {loginHeroSlides.map((slide, index) => (
+          <img
+            key={slide.src}
+            src={slide.src}
+            alt=""
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-700 ${
+              slide.fit === 'cover' ? 'object-cover' : 'object-contain'
+            } ${index === activeHeroSlide ? 'opacity-100' : 'opacity-0'}`}
+            loading={index === 0 ? 'eager' : 'lazy'}
+          />
+        ))}
+        <div className="pointer-events-none absolute inset-0 bg-white/35" />
+        <PublicSiteHeader variant="amber" />
 
-      {/* MAIN */}
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-6 sm:px-6 lg:px-10">
-        <div className="w-full max-w-screen-2xl">
-          <div className="mx-auto w-full max-w-xl">
+        {/* MAIN */}
+        <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-6 sm:px-6 lg:items-start lg:justify-end lg:px-12 lg:pt-16">
+          <div className="w-full max-w-screen-2xl lg:flex lg:justify-end">
+            <div className="mx-auto w-full max-w-sm lg:mx-0 lg:max-w-[320px]">
             {/* Form */}
             <div className="animate-fade-in-up w-full">
               {/* Progress Steps */}
@@ -135,7 +159,7 @@ const LoginPage = () => {
               
               <div className="rounded-3xl border border-[#efd9cf]/80 bg-[#fff7ed]/65 p-1 shadow-2xl backdrop-blur-md">
                 <div className="overflow-hidden rounded-3xl bg-[#fffdf8]/82 shadow-xl backdrop-blur-sm">
-                  <form onSubmit={handleSubmit(onSubmit)} className="p-5 sm:p-6 md:p-8">
+                  <form onSubmit={handleSubmit(onSubmit)} className="p-3 sm:p-3.5 md:p-4">
                     {apiError && (
                       <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake flex items-center">
                         <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -145,15 +169,14 @@ const LoginPage = () => {
                       </div>
                     )}
                     
-                    <div className="space-y-4 sm:space-y-6">
-                      <div className="text-center mb-6 sm:mb-8">
-                        <h2 className="mb-2 text-2xl font-bold text-[#7e2a20] sm:text-3xl">Sign In</h2>
-                        <p className="text-sm text-[#5f4636] sm:text-base">Enter your credentials to access your dashboard</p>
+                    <div className="space-y-2.5 sm:space-y-3">
+                      <div className="text-center mb-3 sm:mb-4">
+                        <h2 className="mb-1 text-lg font-bold text-[#7e2a20] sm:text-xl">Sign In</h2>
                       </div>
                       
-                      <div className="space-y-4 sm:space-y-5">
+                      <div className="space-y-2.5 sm:space-y-3">
                       <div className="relative">
-                          <label className="mb-1 flex items-center text-sm font-medium text-[#5f4636]">
+                          <label className="mb-1 flex items-center text-xs font-medium text-[#5f4636] sm:text-sm">
                             Mobile Number <span className="text-rose-500 ml-1">*</span>
                           </label>
                           <div className="relative">
@@ -171,7 +194,7 @@ const LoginPage = () => {
                           <input
                               type="tel"
                               value={localPhoneNumber}
-                              className={`w-full rounded-xl border bg-white/90 py-3 pl-36 pr-4 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
+                              className={`w-full rounded-xl border bg-white/90 py-2 pl-36 pr-4 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
                                 isFocused === 'phone_number' || errors.phone_number ? 'border-[#a33a2b] shadow-sm' : 'border-[#d8c2b3]'
                               }`}
                               placeholder="Enter your mobile number"
@@ -201,7 +224,7 @@ const LoginPage = () => {
                         </div>
                         
                         <div className="relative">
-                          <label className="mb-1 flex items-center text-sm font-medium text-[#5f4636]">
+                          <label className="mb-1 flex items-center text-xs font-medium text-[#5f4636] sm:text-sm">
                             <span>Password <span className="text-rose-500 ml-1">*</span></span>
                           </label>
                           <div className="relative">
@@ -212,7 +235,7 @@ const LoginPage = () => {
                             </div>
                             <input
                               type={showPassword ? "text" : "password"}
-                              className={`w-full rounded-xl border bg-white/90 py-3 pl-10 pr-12 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
+                              className={`w-full rounded-xl border bg-white/90 py-2 pl-10 pr-12 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
                                 isFocused === 'password' || errors.password ? 'border-[#a33a2b] shadow-sm' : 'border-[#d8c2b3]'
                               }`}
                               placeholder="Enter your password"
@@ -258,7 +281,7 @@ const LoginPage = () => {
                           type="checkbox"
                           className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
                         />
-                        <label htmlFor="remember-me" className="ml-2 block text-sm text-[#5f4636]">
+                        <label htmlFor="remember-me" className="ml-2 block text-xs text-[#5f4636] sm:text-sm">
                           Remember me
                         </label>
                       </div>
@@ -266,7 +289,7 @@ const LoginPage = () => {
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="relative flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] px-6 py-3 font-medium text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:from-[#8e3125] hover:to-[#682117] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+                        className="relative flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] px-6 py-2 font-medium text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:from-[#8e3125] hover:to-[#682117] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         {isSubmitting ? (
                           <>
@@ -294,11 +317,10 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
-      
-      {/* Footer */}
-      <footer className="relative z-10 py-4 text-center text-xs text-slate-500">
-        <p>© {new Date().getFullYear()} Kakkalani Gramam. All rights reserved.</p>
-      </footer>
+
+      </div>
+
+      <LandingPage showHeader={false} showHero={false} />
       
       {/* Custom CSS for animations */}
       <style>{`
