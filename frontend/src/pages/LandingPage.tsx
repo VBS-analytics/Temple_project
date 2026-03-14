@@ -41,8 +41,7 @@ const templeImages: TempleImage[] = [
   { src: "/images/kovi/ayyanar/ayyanar.png", deity: "", name: "Ayyanar Koil", templeTabId: "mangala-azhagar-ayyanar-koil", contain: true  },
 ];
 
-const heroSlides = [
-  { src: "/images/landing-page-image.jpg", alt: "Kakkalani Village map, Tamil Nadu", fit: "cover" as const },
+const templeHeroSlides = [
   { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png", alt: "Lakshmi Narayanar temple deity", fit: "contain" as const },
   { src: "/images/kovi/pillayar/pillayar-hd.jpg", alt: "Aathagarai Pillayar temple deity", fit: "contain" as const },
   { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar temple deity", fit: "contain" as const },
@@ -127,7 +126,6 @@ type LandingPageProps = {
 
 const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) => {
   const [routesExpanded, setRoutesExpanded] = useState(false);
-  const [activeHeroSlide, setActiveHeroSlide] = useState(0);
   const location = useLocation();
 
   useEffect(() => {
@@ -153,13 +151,6 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
     document.querySelectorAll(".lr:not(.lv)").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [routesExpanded]);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setActiveHeroSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 4500);
-    return () => window.clearInterval(intervalId);
-  }, []);
 
   const visibleRoutes = routesExpanded ? howToReachRoutes : howToReachRoutes.slice(0, 2);
 
@@ -281,26 +272,60 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
         ═══════════════════════════════════════ */
         .hero {
           width:100%;
-          height:70vh;
-          min-height:360px;
+          height:12vh;
+          min-height:65px;
           overflow:hidden;
           position:relative;
           background:linear-gradient(145deg,var(--bg3),var(--bg2));
         }
-        .hero-slide {
-          position:absolute; inset:0;
-          width:100%; height:100%;
-          object-position:center; display:block;
-          opacity:0; transition:opacity .85s ease-in-out;
+        .hero-marquee-track {
+          display:flex;
+          gap:1rem;
+          width:max-content;
+          height:100%;
+          animation:hero-marquee-left 18s linear infinite;
+          will-change:transform;
         }
-        .hero-slide.cover { object-fit:cover; }
-        .hero-slide.contain { object-fit:contain; }
-        .hero-slide.active { opacity:1; }
+        .hero-marquee-item {
+          flex:0 0 auto;
+          width:clamp(90px, 7vw, 140px);
+          height:100%;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+        }
+        .hero-marquee-item img {
+          width:100%;
+          height:100%;
+          object-fit:contain;
+          object-position:center;
+          display:block;
+        }
+        @keyframes hero-marquee-left {
+          from { transform:translateX(0); }
+          to { transform:translateX(-33.3333%); }
+        }
+        .landing-hero {
+          width:100%;
+          height:81vh;
+          min-height:440px;
+          overflow:hidden;
+          position:relative;
+          margin-bottom:1.5rem;
+          background:linear-gradient(145deg,var(--bg3),var(--bg2));
+        }
+        .landing-hero-image {
+          width:100%;
+          height:100%;
+          object-fit:cover;
+          object-position:center;
+          display:block;
+        }
 
         /* ═══════════════════════════════════════
            STATS
         ═══════════════════════════════════════ */
-        .stats { padding:2rem 0 1.5rem; }
+        .stats { padding:3rem 0 1.5rem; }
         .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:1.2rem; }
         .stat-card {
           background:var(--bg2); border:1px solid var(--bd); border-radius:1.1rem;
@@ -561,6 +586,8 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
            RESPONSIVE MISC
         ═══════════════════════════════════════ */
         @media(max-width:640px){
+          .hero { width:100%; height:20vh; min-height:110px; }
+          .hero-marquee-item { width:120px; }
           .stats-grid { grid-template-columns:1fr 1fr; }
           .bless-imgs { flex-direction:row; }
           .bless-img-wrap { flex:1; aspect-ratio:4/5.1; }
@@ -581,15 +608,24 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
           {/* ── HERO ── */}
           {showHero && (
             <section className="hero">
-              {heroSlides.map((slide, index) => (
-                <img
-                  key={slide.src}
-                  src={slide.src}
-                  alt={slide.alt}
-                  className={`hero-slide ${slide.fit}${index === activeHeroSlide ? " active" : ""}`}
-                  loading={index === 0 ? "eager" : "lazy"}
-                />
-              ))}
+              <div className="hero-marquee-track">
+                {[...templeHeroSlides, ...templeHeroSlides, ...templeHeroSlides].map((slide, index) => (
+                  <div className="hero-marquee-item" key={`${slide.src}-${index}`}>
+                    <img src={slide.src} alt={slide.alt} loading={index < templeHeroSlides.length ? "eager" : "lazy"} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {showHero && (
+            <section className="landing-hero">
+              <img
+                src="/images/landing-page-image.jpg"
+                alt="Kakkalani Village map, Tamil Nadu"
+                className="landing-hero-image"
+                loading="lazy"
+              />
             </section>
           )}
 
