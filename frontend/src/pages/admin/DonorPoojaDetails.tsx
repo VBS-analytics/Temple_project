@@ -41,6 +41,7 @@ interface DonorPoojaDetailRow {
   rasi: string;
   tamilStar: string;
   familyMembers: string;
+  familyMemberDetails: DonorPoojaMember[];
   address: string;
 }
 
@@ -151,17 +152,36 @@ const compareDonorIdAscending = (left: string, right: string) => {
   return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
 };
 
+const formatStarRasiNameLine = (name: string, tamilStar: string, rasi: string) => {
+  const cleanName = name !== EMPTY_VALUE ? name : '';
+  const cleanStar = tamilStar !== EMPTY_VALUE ? tamilStar : '';
+  const cleanRasi = rasi !== EMPTY_VALUE ? `${rasi} ராசி` : '';
+  const parts = [cleanStar, cleanRasi, cleanName].filter((part) => part.length > 0);
+  return parts.join(' - ');
+};
+
 const formatDonorRowForCopy = (row: DonorPoojaDetailRow) => {
-  return [
-    `Donor ID: ${row.donorId}`,
-    `Donor Name: ${row.donorName}`,
-    `Donor Header Text: ${row.donorHeaderText}`,
-    `Gothram: ${row.gothram}`,
-    `Rasi: ${row.rasi}`,
-    `Tamil Star: ${row.tamilStar}`,
-    `Family Members: ${row.familyMembers}`,
-    `Address: ${row.address}`,
-  ].join('\n');
+  const lines: string[] = [];
+
+  lines.push(row.donorHeaderText);
+  lines.push(row.gothram !== EMPTY_VALUE ? `${row.gothram} கோத்திரம்` : EMPTY_VALUE);
+
+  const donorLine = formatStarRasiNameLine(row.donorName, row.tamilStar, row.rasi);
+  if (donorLine) {
+    lines.push(`* ${donorLine}`);
+  }
+
+  row.familyMemberDetails.forEach((member) => {
+    const memberName = normalizeText(member.name);
+    const memberStar = normalizeText(member.tamil_star);
+    const memberRasi = normalizeText(member.rasi);
+    const memberLine = formatStarRasiNameLine(memberName, memberStar, memberRasi);
+    if (memberLine) {
+      lines.push(`* ${memberLine}`);
+    }
+  });
+
+  return lines.join('\n');
 };
 
 const copyToClipboard = async (text: string) => {
@@ -187,6 +207,7 @@ const DonorPoojaDetails = () => {
   const [records, setRecords] = useState<DonorPoojaRecord[]>([]);
   const [copyStatus, setCopyStatus] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
+  const [lastCopiedRowId, setLastCopiedRowId] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -225,6 +246,14 @@ const DonorPoojaDetails = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!copyStatus) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setCopyStatus(''), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyStatus]);
+
   const rows = useMemo<DonorPoojaDetailRow[]>(() => {
     return records
       .map((record) => {
@@ -247,6 +276,7 @@ const DonorPoojaDetails = () => {
           rasi,
           tamilStar,
           familyMembers,
+          familyMemberDetails: Array.isArray(record.members) ? record.members : [],
           address,
         };
       })
@@ -285,8 +315,13 @@ const DonorPoojaDetails = () => {
     try {
       await copyToClipboard(formatDonorRowForCopy(row));
       setCopyStatus(`Copied record for ${row.donorName}`);
+      setLastCopiedRowId(row.id);
+      window.setTimeout(() => {
+        setLastCopiedRowId((current) => (current === row.id ? null : current));
+      }, 1600);
     } catch (copyError: any) {
       setCopyStatus(copyError?.message || 'Failed to copy row');
+      setLastCopiedRowId(null);
     }
   };
 
@@ -295,6 +330,7 @@ const DonorPoojaDetails = () => {
       const content = filteredRows.map((row) => formatDonorRowForCopy(row)).join('\n\n');
       await copyToClipboard(content);
       setCopyStatus(`Copied ${filteredRows.length} donor record${filteredRows.length > 1 ? 's' : ''}`);
+      setLastCopiedRowId(null);
     } catch (copyError: any) {
       setCopyStatus(copyError?.message || 'Failed to copy donor records');
     }
@@ -334,6 +370,7 @@ const DonorPoojaDetails = () => {
       const content = selectedRows.map((row) => formatDonorRowForCopy(row)).join('\n\n');
       await copyToClipboard(content);
       setCopyStatus(`Copied ${selectedRows.length} selected donor record${selectedRows.length > 1 ? 's' : ''}`);
+      setLastCopiedRowId(null);
     } catch (copyError: any) {
       setCopyStatus(copyError?.message || 'Failed to copy selected donor records');
     }
@@ -467,7 +504,7 @@ const DonorPoojaDetails = () => {
                         onClick={() => handleCopyRow(row)}
                         className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                       >
-                        Copy
+                        {lastCopiedRowId === row.id ? 'Copied' : 'Copy'}
                       </button>
                     </td>
                   </tr>
@@ -477,6 +514,11 @@ const DonorPoojaDetails = () => {
           </div>
         )}
       </section>
+      {copyStatus && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 shadow-md">
+          {copyStatus}
+        </div>
+      )}
     </div>
   );
 };
