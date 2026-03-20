@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from io import BytesIO
 from unittest.mock import patch
 
 from django.db.models import F, Window
@@ -7,6 +8,7 @@ from django.db.models.functions import RowNumber
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from openpyxl import load_workbook
 
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -105,6 +107,103 @@ class PaymentExportAccessTests(TestCase):
         self.client.force_authenticate(self.full_admin)
         response = self.client.get(reverse("payment-details-export"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class PaymentDetailsExportContentTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser(
+            phone_number="9444444444",
+            name="Export Admin",
+            password="adminpass",
+        )
+        self.main_donor = User.objects.create_user(
+            phone_number="+919111111111",
+            name="Main Donor",
+            password="secret",
+        )
+        self.subordinate_donor = User.objects.create_user(
+            phone_number="+919222222222",
+            name="Subordinate Donor",
+            password="secret",
+        )
+        self.regular_donor = User.objects.create_user(
+            phone_number="+919333333333",
+            name="Regular Donor",
+            password="secret",
+        )
+
+        month_start = timezone.localdate().replace(day=1)
+        CombinePaymentMapping.objects.create(
+            main_donor=self.main_donor,
+            parent_donor=self.subordinate_donor,
+            effective_from=month_start,
+        )
+
+        self.main_payment = self._create_payment(self.main_donor, "MAIN-TXN-1", Decimal("600.00"))
+        self.subordinate_payment = self._create_payment(
+            self.subordinate_donor, "SUB-TXN-1", Decimal("500.00")
+        )
+        self.regular_payment = self._create_payment(self.regular_donor, "REG-TXN-1", Decimal("400.00"))
+
+        self._create_passbook_entry(self.main_donor, self.main_payment, Decimal("600.00"))
+        self._create_passbook_entry(self.subordinate_donor, self.subordinate_payment, Decimal("500.00"))
+        self._create_passbook_entry(self.regular_donor, self.regular_payment, Decimal("400.00"))
+
+    def _create_payment(self, donor: User, transaction_reference: str, amount: Decimal) -> PaymentRecord:
+        return PaymentRecord.objects.create(
+            donor=donor,
+            amount=amount,
+            currency="INR",
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference=transaction_reference,
+            payment_month=timezone.localdate().replace(day=1),
+        )
+
+    def _create_passbook_entry(
+        self,
+        donor: User,
+        payment_record: PaymentRecord,
+        paid_amount: Decimal,
+    ) -> PassbookEntry:
+        return PassbookEntry.objects.create(
+            donor=donor,
+            entry_date=timezone.localdate().replace(day=1),
+            entry_type="paid",
+            transaction_details=payment_record.transaction_reference,
+            payment_record=payment_record,
+            opening_balance=Decimal("0.00"),
+            due_amount=paid_amount,
+            paid_amount=paid_amount,
+            closing_due=Decimal("0.00"),
+        )
+
+    def test_payment_details_export_excludes_active_subordinate_donors_from_all_sheets(self):
+        self.client.force_authenticate(self.admin)
+
+        with patch("payments.views.regenerate_all_passbooks"):
+            response = self.client.get(reverse("payment-details-export"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = b"".join(response.streaming_content)
+        workbook = load_workbook(filename=BytesIO(payload))
+
+        payment_rows = list(workbook["Payment Records"].iter_rows(min_row=2, values_only=True))
+        passbook_rows = list(workbook["Passbook Entries"].iter_rows(min_row=2, values_only=True))
+        statement_rows = list(workbook["Donor Statements"].iter_rows(min_row=2, values_only=True))
+
+        payment_donor_ids = {row[1] for row in payment_rows if row and row[1] is not None}
+        passbook_donor_ids = {row[1] for row in passbook_rows if row and row[1] is not None}
+        statement_donor_ids = {row[0] for row in statement_rows if row and row[0] is not None}
+
+        expected_ids = {self.main_donor.id, self.regular_donor.id}
+        self.assertSetEqual(payment_donor_ids, expected_ids)
+        self.assertSetEqual(passbook_donor_ids, expected_ids)
+        self.assertSetEqual(statement_donor_ids, expected_ids)
+        self.assertNotIn(self.subordinate_donor.id, payment_donor_ids)
+        self.assertNotIn(self.subordinate_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
 
 
 class PassbookRefreshDetectionTests(TestCase):

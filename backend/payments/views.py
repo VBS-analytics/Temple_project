@@ -1155,6 +1155,15 @@ class PaymentDetailsExportView(APIView):
         except Exception:
             return str(value)
 
+    @staticmethod
+    def _active_subordinate_donor_ids(reference_date: date) -> set[int]:
+        month_start = reference_date.replace(day=1)
+        return set(
+            CombinePaymentMapping.objects.filter(effective_from__lte=month_start)
+            .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=month_start))
+            .values_list("parent_donor_id", flat=True)
+        )
+
     def get(self, request):
         if not can_download_reports(request.user):
             return Response(
@@ -1164,6 +1173,7 @@ class PaymentDetailsExportView(APIView):
 
         # Refresh passbooks so donor-wise statements are up to date
         regenerate_all_passbooks()
+        subordinate_donor_ids = self._active_subordinate_donor_ids(timezone.localdate())
 
         workbook = Workbook()
         # Remove the default auto-created sheet for a clean slate
@@ -1194,6 +1204,7 @@ class PaymentDetailsExportView(APIView):
         payment_qs = (
             PaymentRecord.objects.select_related("donor", "registration", "registration__pooja_option")
             .exclude(donor__role=UserRole.ADMIN)
+            .exclude(donor_id__in=subordinate_donor_ids)
             .filter(status=PaymentStatus.SUCCESS)
             .order_by("-created_at")
         )
@@ -1242,6 +1253,7 @@ class PaymentDetailsExportView(APIView):
         passbook_qs = (
             PassbookEntry.objects.select_related("donor", "payment_record", "registration")
             .exclude(donor__role=UserRole.ADMIN)
+            .exclude(donor_id__in=subordinate_donor_ids)
             .order_by("donor_id", "entry_date")
         )
         for entry in passbook_qs:
@@ -1283,6 +1295,7 @@ class PaymentDetailsExportView(APIView):
         latest_statement_qs = (
             PassbookEntry.objects.select_related("donor", "payment_record", "registration")
             .exclude(donor__role=UserRole.ADMIN)
+            .exclude(donor_id__in=subordinate_donor_ids)
             .annotate(
                 donor_latest_rank=Window(
                     expression=RowNumber(),
@@ -1518,4 +1531,3 @@ class PassbookEntryViewSet(viewsets.ReadOnlyModelViewSet):
         if ordering_param in ('entry_date', '-entry_date'):
             return qs.order_by(ordering_param)
         return qs.order_by('donor', 'entry_date')
-
