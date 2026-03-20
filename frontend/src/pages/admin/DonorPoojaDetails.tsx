@@ -27,6 +27,7 @@ interface DonorPoojaRecord {
   user: {
     id: number;
     name?: string | null;
+    phone_number?: string | null;
   };
   profile?: DonorPoojaProfile;
   members?: DonorPoojaMember[];
@@ -35,6 +36,7 @@ interface DonorPoojaRecord {
 interface DonorPoojaDetailRow {
   id: number;
   donorId: string;
+  donorPhoneNumber: string;
   donorName: string;
   donorHeaderText: string;
   gothram: string;
@@ -259,6 +261,7 @@ const DonorPoojaDetails = () => {
       .map((record) => {
         const profile = record.profile;
         const donorId = normalizeText(profile?.donor_id);
+        const donorPhoneNumber = normalizeText(record.user?.phone_number);
         const donorName = normalizeText(record.user?.name);
         const donorHeaderText = normalizeText(profile?.notes);
         const gothram = normalizeText(profile?.gothra);
@@ -270,6 +273,7 @@ const DonorPoojaDetails = () => {
         return {
           id: record.user.id,
           donorId,
+          donorPhoneNumber,
           donorName,
           donorHeaderText,
           gothram,
@@ -297,6 +301,7 @@ const DonorPoojaDetails = () => {
     return rows.filter((row) => {
       const searchable = [
         row.donorId,
+        row.donorPhoneNumber,
         row.donorName,
         row.donorHeaderText,
         row.gothram,
@@ -448,6 +453,9 @@ const DonorPoojaDetails = () => {
                     Donor ID
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Donor Ph No
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                     Donor Name
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -486,6 +494,7 @@ const DonorPoojaDetails = () => {
                       />
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-700">{row.donorId}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{row.donorPhoneNumber}</td>
                     <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.donorName}</td>
                     <td className="px-4 py-3 text-sm text-slate-700">{row.donorHeaderText}</td>
                     <td className="px-4 py-3 text-sm text-slate-700">{row.gothram}</td>
