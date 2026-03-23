@@ -39,7 +39,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import api, { extractResults } from '../../lib/api';
 import { useCartStore } from '../../store/cart';
 import { usePaymentStore } from '../../store/payments';
@@ -252,6 +252,59 @@ const formatCombineMonthLabel = (value?: string | null) => {
   });
 };
 
+type ContributionTab = 'regular' | 'kumbabishekam';
+type DonationMethod = 'upi' | 'bank';
+
+const DONATION_QR_IMAGE_URL = '/images/donation-qr-code.jpg';
+const DONATION_UPI_ID = 'lakshmivenkat26@oksbi';
+
+const getTodayDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const buildDonationErrorMessage = (error: unknown) => {
+  const fallbackMessage = 'Unable to record donation right now. Please try again.';
+  if (!error || typeof error !== 'object') {
+    return fallbackMessage;
+  }
+
+  const err = error as {
+    response?: { data?: Record<string, unknown> };
+    message?: string;
+  };
+
+  const responseData = err.response?.data;
+  if (responseData && typeof responseData.detail === 'string' && responseData.detail.trim()) {
+    return responseData.detail;
+  }
+
+  if (responseData && typeof responseData === 'object') {
+    const firstError = Object.values(responseData).find((value) => {
+      if (typeof value === 'string' && value.trim()) {
+        return true;
+      }
+      return Array.isArray(value) && typeof value[0] === 'string' && value[0].trim();
+    });
+
+    if (typeof firstError === 'string' && firstError.trim()) {
+      return firstError;
+    }
+    if (Array.isArray(firstError) && typeof firstError[0] === 'string' && firstError[0].trim()) {
+      return firstError[0];
+    }
+  }
+
+  if (typeof err.message === 'string' && err.message.trim()) {
+    return err.message;
+  }
+
+  return fallbackMessage;
+};
+
 const PaymentPage = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
@@ -282,6 +335,26 @@ const PaymentPage = () => {
   const [, setLatestPaidPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
   const [, setPassbookSummaryLoading] = useState(false);
   const [activeMethod, setActiveMethod] = useState<'upi' | 'bank'>('upi');
+  const [activeContributionTab, setActiveContributionTab] = useState<ContributionTab>('regular');
+  const [activeDonationMethod, setActiveDonationMethod] = useState<DonationMethod>('upi');
+
+  const [copiedDonationUpi, setCopiedDonationUpi] = useState(false);
+  const [donationSubmitting, setDonationSubmitting] = useState(false);
+  const [donationMessage, setDonationMessage] = useState('');
+  const [donationMessageType, setDonationMessageType] = useState<'success' | 'error'>('success');
+
+  const [donationDonorName, setDonationDonorName] = useState('');
+  const [donationDonorPhoneNo, setDonationDonorPhoneNo] = useState('');
+  const [donationTransactionId, setDonationTransactionId] = useState('');
+  const [donationAmountPaid, setDonationAmountPaid] = useState('');
+  const [donationDate, setDonationDate] = useState(getTodayDate());
+  const [donationNotes, setDonationNotes] = useState('');
+
+  const [donationDonorNameError, setDonationDonorNameError] = useState<string | null>(null);
+  const [donationDonorPhoneError, setDonationDonorPhoneError] = useState<string | null>(null);
+  const [donationTransactionIdError, setDonationTransactionIdError] = useState<string | null>(null);
+  const [donationAmountError, setDonationAmountError] = useState<string | null>(null);
+  const [donationDateError, setDonationDateError] = useState<string | null>(null);
   
   const {
     balance: currentBalance,
@@ -479,6 +552,13 @@ const PaymentPage = () => {
       setPaymentDateError(null);
     }
   }, [paymentSnapshot]);
+
+  useEffect(() => {
+    setDonationDonorName((user?.name ?? '').trim());
+    setDonationDonorPhoneNo((user?.phone_number ?? '').trim());
+    setDonationDonorNameError(null);
+    setDonationDonorPhoneError(null);
+  }, [user?.name, user?.phone_number]);
   
   useEffect(() => {
     let isMounted = true;
@@ -575,6 +655,92 @@ const PaymentPage = () => {
       console.error('Failed to copy UPI ID', err);
     }
   }, []);
+
+  const handleCopyDonationUpi = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(DONATION_UPI_ID);
+      setCopiedDonationUpi(true);
+      setTimeout(() => setCopiedDonationUpi(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy donation UPI ID', error);
+      setDonationMessage('Unable to copy UPI ID.');
+      setDonationMessageType('error');
+    }
+  }, []);
+
+  const resetDonationForm = useCallback(() => {
+    setDonationTransactionId('');
+    setDonationAmountPaid('');
+    setDonationDate(getTodayDate());
+    setDonationNotes('');
+  }, []);
+
+  const handleDonationSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setDonationMessage('');
+      setDonationDonorNameError(null);
+      setDonationDonorPhoneError(null);
+      setDonationTransactionIdError(null);
+      setDonationAmountError(null);
+      setDonationDateError(null);
+
+      const trimmedDonorName = donationDonorName.trim();
+      const trimmedDonorPhoneNo = donationDonorPhoneNo.trim();
+      const trimmedTransactionId = donationTransactionId.trim();
+      const parsedAmount = Number(donationAmountPaid);
+
+      if (!trimmedDonorName) {
+        setDonationDonorNameError('Donor name is required.');
+        return;
+      }
+      if (!trimmedDonorPhoneNo) {
+        setDonationDonorPhoneError('Phone number is required.');
+        return;
+      }
+      if (!trimmedTransactionId) {
+        setDonationTransactionIdError('Transaction ID is required.');
+        return;
+      }
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        setDonationAmountError('Enter a valid donation amount.');
+        return;
+      }
+      if (!donationDate) {
+        setDonationDateError('Donation date is required.');
+        return;
+      }
+
+      setDonationSubmitting(true);
+      try {
+        await api.post('payments/donations/', {
+          donor_name: trimmedDonorName,
+          donor_phone_no: trimmedDonorPhoneNo,
+          transaction_id: trimmedTransactionId,
+          amount_paid: parsedAmount,
+          donation_date: donationDate,
+          notes: donationNotes.trim(),
+        });
+        setDonationMessage('Donation recorded successfully. Thank you for your contribution.');
+        setDonationMessageType('success');
+        resetDonationForm();
+      } catch (error) {
+        setDonationMessage(buildDonationErrorMessage(error));
+        setDonationMessageType('error');
+      } finally {
+        setDonationSubmitting(false);
+      }
+    },
+    [
+      donationAmountPaid,
+      donationDate,
+      donationDonorName,
+      donationDonorPhoneNo,
+      donationNotes,
+      donationTransactionId,
+      resetDonationForm,
+    ],
+  );
   
   const handlePaymentCompleted = async () => {
     if (registrationInProgress) return;
@@ -809,225 +975,475 @@ const PaymentPage = () => {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-            <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-slate-900">
-              <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
-              Payment Method
-            </h2>
+        <div className="mb-6 flex rounded-xl border border-slate-200 bg-white p-1 sm:max-w-2xl">
+          <button
+            type="button"
+            onClick={() => setActiveContributionTab('regular')}
+            className={`min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:text-base ${
+              activeContributionTab === 'regular'
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            Regular Contribution
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveContributionTab('kumbabishekam')}
+            className={`min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:text-base ${
+              activeContributionTab === 'kumbabishekam'
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            Sivan Koil Kumbabishekam
+          </button>
+        </div>
 
-            <div className="mb-5 flex rounded-lg border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setActiveMethod('upi')}
-                className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
-                  activeMethod === 'upi'
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                UPI
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveMethod('bank')}
-                className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
-                  activeMethod === 'bank'
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Bank Transfer
-              </button>
-            </div>
+        {activeContributionTab === 'regular' ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+              <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-slate-900">
+                <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
+                Payment Method
+              </h2>
 
-            {activeMethod === 'upi' ? (
-              <div className="space-y-5">
-                <div className="mx-auto w-full max-w-[320px] rounded-xl border border-slate-200 bg-white p-4">
-                  <img
-                    src={PAYMENT_QR_IMAGE_URL}
-                    alt="Payment QR Code"
-                    className="mx-auto h-44 w-44 object-contain sm:h-52 sm:w-52"
+              <div className="mb-5 flex rounded-lg border border-slate-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveMethod('upi')}
+                  className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
+                    activeMethod === 'upi'
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  UPI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveMethod('bank')}
+                  className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
+                    activeMethod === 'bank'
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Bank Transfer
+                </button>
+              </div>
+
+              {activeMethod === 'upi' ? (
+                <div className="space-y-5">
+                  <div className="mx-auto w-full max-w-[320px] rounded-xl border border-slate-200 bg-white p-4">
+                    <img
+                      src={PAYMENT_QR_IMAGE_URL}
+                      alt="Payment QR Code"
+                      className="mx-auto h-44 w-44 object-contain sm:h-52 sm:w-52"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">UPI ID</p>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="truncate text-base font-bold text-slate-900 sm:text-lg">alamelu7@icici</p>
+                      <button
+                        type="button"
+                        onClick={handleCopyUpi}
+                        title={copiedUpi ? 'Copied!' : 'Copy UPI ID'}
+                        className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        aria-label="Copy UPI ID"
+                      >
+                        {copiedUpi ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-center text-sm text-slate-500">Scan with any UPI app to pay instantly</p>
+
+                  {(isAndroid || isIos) && (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      {isAndroid && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenUpiApp(netPaymentAmount)}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Open UPI
+                        </button>
+                      )}
+                      {isIos && (
+                        <button
+                          type="button"
+                          onClick={() => handleSharePaymentQr(netPaymentAmount)}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Share QR
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {shareError && <p className="text-xs text-red-600" role="alert">{shareError}</p>}
+                </div>
+              ) : (
+                <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">ALAMELU V</p>
+                    <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
+                    <p className="mt-1 text-sm font-mono font-bold text-slate-900">007701028012</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
+                    <p className="mt-1 text-sm font-mono font-bold text-slate-900">ICIC0000077</p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+              <h2 className="mb-3 flex items-center gap-2 text-xl font-bold text-slate-900">
+                <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
+                Complete Payment
+              </h2>
+              <p className="mb-5 text-sm text-slate-500">
+                Submit your payment reference after completing the transfer.
+              </p>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handlePaymentCompleted();
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label htmlFor="transaction-ref" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Transaction ID / UPI ID
+                  </label>
+                  <input
+                    id="transaction-ref"
+                    type="text"
+                    value={transactionReference}
+                    onChange={(e) => {
+                      setTransactionReference(e.target.value);
+                      if (transactionReferenceError) setTransactionReferenceError(null);
+                    }}
+                    placeholder="Enter reference or UPI ID"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                  />
+                  {transactionReferenceError && (
+                    <p className="mt-1 text-xs text-red-600">{transactionReferenceError}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="amount-paid" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Amount Paid
+                  </label>
+                  <input
+                    id="amount-paid"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={amountPaid}
+                    onChange={(e) => {
+                      setAmountPaid(e.target.value);
+                      if (amountPaidError) setAmountPaidError(null);
+                    }}
+                    placeholder="Enter amount paid"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                  />
+                  {amountPaidError && (
+                    <p className="mt-1 text-xs text-red-600">{amountPaidError}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="payment-date" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Payment Date
+                  </label>
+                  <input
+                    id="payment-date"
+                    type="date"
+                    value={paymentDate}
+                    onChange={(e) => {
+                      setPaymentDate(e.target.value);
+                      if (paymentDateError) setPaymentDateError(null);
+                    }}
+                    onFocus={(e) => {
+                      const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                      input.showPicker?.();
+                    }}
+                    onClick={(e) => {
+                      const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                      input.showPicker?.();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Tab') {
+                        e.preventDefault();
+                      }
+                    }}
+                    onPaste={(e) => e.preventDefault()}
+                    onDrop={(e) => e.preventDefault()}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                  />
+                  {paymentDateError && (
+                    <p className="mt-1 text-xs text-red-600">{paymentDateError}</p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={registrationInProgress}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300 disabled:opacity-70"
+                >
+                  {registrationInProgress ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>Pay</>
+                  )}
+                </button>
+              </form>
+            </section>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+              <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-slate-900">
+                <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
+                Donation Method
+              </h2>
+
+              <div className="mb-5 flex rounded-lg border border-slate-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveDonationMethod('upi')}
+                  className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
+                    activeDonationMethod === 'upi'
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  UPI Payment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveDonationMethod('bank')}
+                  className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-sm font-semibold transition ${
+                    activeDonationMethod === 'bank'
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Bank Transfer
+                </button>
+              </div>
+
+              {activeDonationMethod === 'upi' ? (
+                <div className="space-y-5">
+                  <div className="mx-auto w-full max-w-[320px] rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Scan to Donate</p>
+                    <img
+                      src={DONATION_QR_IMAGE_URL}
+                      alt="Donation QR Code"
+                      className="mx-auto h-44 w-44 object-contain sm:h-52 sm:w-52"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">UPI ID</p>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="truncate text-base font-bold text-slate-900 sm:text-lg">{DONATION_UPI_ID}</p>
+                      <button
+                        type="button"
+                        onClick={handleCopyDonationUpi}
+                        title={copiedDonationUpi ? 'Copied!' : 'Copy UPI ID'}
+                        className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        aria-label="Copy donation UPI ID"
+                      >
+                        {copiedDonationUpi ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-center text-sm text-slate-500">Scan with any UPI app - PhonePe, GPay, Paytm, BHIM</p>
+                </div>
+              ) : (
+                <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">Lakshmi V</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
+                    <p className="mt-1 text-sm font-mono font-bold text-slate-900">1430104000056920</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
+                    <p className="mt-1 text-sm font-mono font-bold text-slate-900">IBKL0001430</p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+              <h2 className="mb-3 flex items-center gap-2 text-xl font-bold text-slate-900">
+                <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
+                Record Donation
+              </h2>
+              <p className="mb-5 text-sm text-slate-500">
+                After completing your payment, fill in the details below so we can acknowledge your contribution.
+              </p>
+
+              <form onSubmit={handleDonationSubmit} noValidate className="space-y-4">
+                <div>
+                  <label htmlFor="donation-donor-name" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Donor Name
+                  </label>
+                  <input
+                    id="donation-donor-name"
+                    type="text"
+                    value={donationDonorName}
+                    readOnly
+                    aria-readonly="true"
+                    placeholder="Full name of donor"
+                    className="w-full rounded-md border border-slate-300 bg-slate-100 px-3 py-2.5 text-sm text-slate-700"
+                  />
+                  {donationDonorNameError && <p className="mt-1 text-xs text-red-600">{donationDonorNameError}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="donation-phone-no" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Donor Phone No
+                  </label>
+                  <input
+                    id="donation-phone-no"
+                    type="tel"
+                    value={donationDonorPhoneNo}
+                    readOnly
+                    aria-readonly="true"
+                    placeholder="+91 98765 43210"
+                    className="w-full rounded-md border border-slate-300 bg-slate-100 px-3 py-2.5 text-sm text-slate-700"
+                  />
+                  {donationDonorPhoneError && <p className="mt-1 text-xs text-red-600">{donationDonorPhoneError}</p>}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="donation-amount" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Amount Paid (₹)
+                    </label>
+                    <input
+                      id="donation-amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={donationAmountPaid}
+                      onChange={(event) => {
+                        setDonationAmountPaid(event.target.value);
+                        if (donationAmountError) {
+                          setDonationAmountError(null);
+                        }
+                      }}
+                      placeholder="0.00"
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                    />
+                    {donationAmountError && <p className="mt-1 text-xs text-red-600">{donationAmountError}</p>}
+                  </div>
+
+                  <div>
+                    <label htmlFor="donation-date" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Donation Date
+                    </label>
+                    <input
+                      id="donation-date"
+                      type="date"
+                      value={donationDate}
+                      onChange={(event) => {
+                        setDonationDate(event.target.value);
+                        if (donationDateError) {
+                          setDonationDateError(null);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Tab') {
+                          event.preventDefault();
+                        }
+                      }}
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                    />
+                    {donationDateError && <p className="mt-1 text-xs text-red-600">{donationDateError}</p>}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="donation-transaction-id" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Transaction ID / UPI Reference
+                  </label>
+                  <input
+                    id="donation-transaction-id"
+                    type="text"
+                    value={donationTransactionId}
+                    onChange={(event) => {
+                      setDonationTransactionId(event.target.value);
+                      if (donationTransactionIdError) {
+                        setDonationTransactionIdError(null);
+                      }
+                    }}
+                    placeholder="e.g. 412345678901"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                  />
+                  {donationTransactionIdError && <p className="mt-1 text-xs text-red-600">{donationTransactionIdError}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="donation-notes" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Notes (optional)
+                  </label>
+                  <textarea
+                    id="donation-notes"
+                    value={donationNotes}
+                    onChange={(event) => setDonationNotes(event.target.value)}
+                    className="min-h-[84px] w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
                   />
                 </div>
 
-                <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">UPI ID</p>
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <p className="truncate text-base font-bold text-slate-900 sm:text-lg">alamelu7@icici</p>
-                    <button
-                      type="button"
-                      onClick={handleCopyUpi}
-                      title={copiedUpi ? 'Copied!' : 'Copy UPI ID'}
-                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      aria-label="Copy UPI ID"
-                    >
-                      {copiedUpi ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
+                <button
+                  type="submit"
+                  disabled={donationSubmitting}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300 disabled:opacity-70"
+                >
+                  {donationSubmitting ? 'Saving...' : 'Save Donation'}
+                </button>
 
-                <p className="text-center text-sm text-slate-500">Scan with any UPI app to pay instantly</p>
-
-                {(isAndroid || isIos) && (
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    {isAndroid && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenUpiApp(netPaymentAmount)}
-                        className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        Open UPI
-                      </button>
-                    )}
-                    {isIos && (
-                      <button
-                        type="button"
-                        onClick={() => handleSharePaymentQr(netPaymentAmount)}
-                        className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        Share QR
-                      </button>
-                    )}
+                {donationMessage && (
+                  <div
+                    className={`rounded-md border px-3 py-2 text-sm ${
+                      donationMessageType === 'success'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-red-200 bg-red-50 text-red-700'
+                    }`}
+                  >
+                    {donationMessage}
                   </div>
                 )}
-
-                {shareError && <p className="text-xs text-red-600" role="alert">{shareError}</p>}
-              </div>
-            ) : (
-              <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">ALAMELU V</p>
-                  <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
-                  <p className="mt-1 text-sm font-mono font-bold text-slate-900">007701028012</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">IFSC Code</p>
-                  <p className="mt-1 text-sm font-mono font-bold text-slate-900">ICIC0000077</p>
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-            <h2 className="mb-3 flex items-center gap-2 text-xl font-bold text-slate-900">
-              <span className="inline-block h-6 w-1 rounded-full bg-indigo-600" aria-hidden="true" />
-              Complete Payment
-            </h2>
-            <p className="mb-5 text-sm text-slate-500">
-              Submit your payment reference after completing the transfer.
-            </p>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handlePaymentCompleted();
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label htmlFor="transaction-ref" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Transaction ID / UPI ID
-                </label>
-                <input
-                  id="transaction-ref"
-                  type="text"
-                  value={transactionReference}
-                  onChange={(e) => {
-                    setTransactionReference(e.target.value);
-                    if (transactionReferenceError) setTransactionReferenceError(null);
-                  }}
-                  placeholder="Enter reference or UPI ID"
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                />
-                {transactionReferenceError && (
-                  <p className="mt-1 text-xs text-red-600">{transactionReferenceError}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="amount-paid" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Amount Paid
-                </label>
-                <input
-                  id="amount-paid"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={amountPaid}
-                  onChange={(e) => {
-                    setAmountPaid(e.target.value);
-                    if (amountPaidError) setAmountPaidError(null);
-                  }}
-                  placeholder="Enter amount paid"
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                />
-                {amountPaidError && (
-                  <p className="mt-1 text-xs text-red-600">{amountPaidError}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="payment-date" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Payment Date
-                </label>
-                <input
-                  id="payment-date"
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => {
-                    setPaymentDate(e.target.value);
-                    if (paymentDateError) setPaymentDateError(null);
-                  }}
-                  onFocus={(e) => {
-                    const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
-                    input.showPicker?.();
-                  }}
-                  onClick={(e) => {
-                    const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
-                    input.showPicker?.();
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Tab') {
-                      e.preventDefault();
-                    }
-                  }}
-                  onPaste={(e) => e.preventDefault()}
-                  onDrop={(e) => e.preventDefault()}
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                />
-                {paymentDateError && (
-                  <p className="mt-1 text-xs text-red-600">{paymentDateError}</p>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={registrationInProgress}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300 disabled:opacity-70"
-              >
-                {registrationInProgress ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    Pay
-                  </>
-                )}
-              </button>
-            </form>
-          </section>
-        </div>
+              </form>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );

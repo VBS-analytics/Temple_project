@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login Page – Design Samples</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a0a00; }
+
+    /* ─────────────────────────────────────────────
+       TOP NAV
+    ───────────────────────────────────────────── */
+    .design-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      display: flex; gap: 6px; padding: 9px 14px; flex-wrap: wrap;
+      background: rgba(0,0,0,.78); backdrop-filter: blur(10px);
+    }
+    .design-nav button {
+      padding: 5px 15px; border: 1.5px solid #c8813a; border-radius: 20px;
+      background: transparent; color: #f5ddb0; font-size: .75rem; font-weight: 600;
+      cursor: pointer; transition: .2s; white-space: nowrap;
+    }
+    .design-nav button.active,
+    .design-nav button:hover { background: #c8813a; color: #fff; }
+    .design-nav .nav-hint { color: #f5ddb0; font-size: .7rem; margin: auto 0 auto auto; opacity: .5; }
+
+    /* ── Screens ── */
+    .screen { display: none; min-height: 100vh; }
+    .screen.visible { display: flex; }
+
+
+    /* ════════════════════════════════════════════════
+       SHARED FORM STYLES  (used by all 3 designs)
+    ════════════════════════════════════════════════ */
+    .form-logo-row {
+      display: flex; align-items: center; gap: 11px; margin-bottom: 22px;
+    }
+    .form-logo-icon {
+      width: 44px; height: 44px; border-radius: 13px;
+      background: linear-gradient(135deg, #7e2a20, #c8813a);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(126,42,32,.35);
+    }
+    .form-logo-name { font-size: 1rem; font-weight: 700; color: #7e2a20; }
+    .form-logo-tagline { font-size: .65rem; color: #9a7a5a; margin-top: 1px; letter-spacing: .03em; }
+
+    .form-heading { font-size: 1.4rem; font-weight: 700; color: #3d1a0a; margin-bottom: 5px; }
+    .form-subheading { font-size: .83rem; color: #8a6a50; margin-bottom: 22px; line-height: 1.5; }
+
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: .76rem; font-weight: 600; color: #5f4636; margin-bottom: 5px; }
+    .field label span { color: #c0392b; margin-left: 2px; }
+
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      color: #b08060; font-size: 14px; pointer-events: none;
+    }
+    .field-input {
+      width: 100%; padding: 10px 13px 10px 40px;
+      border: 1.5px solid #e0ccb8; border-radius: 11px;
+      background: #fff; color: #2f2a26; font-size: .86rem;
+      transition: border-color .2s, box-shadow .2s; outline: none;
+    }
+    .field-input:focus { border-color: #a33a2b; box-shadow: 0 0 0 3px rgba(163,58,43,.13); }
+    .field-input.phone { padding-left: 92px; }
+
+    .phone-prefix {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      display: flex; align-items: center; padding: 0 9px;
+      border-right: 1.5px solid #e0ccb8;
+      font-size: .8rem; color: #5f4636; font-weight: 600;
+      gap: 4px; user-select: none; white-space: nowrap;
+    }
+    .eye-btn {
+      position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: #9a7a5a; font-size: 15px; padding: 3px;
+    }
+    .remember-row {
+      display: flex; align-items: center; gap: 7px;
+      font-size: .78rem; color: #6b5040; margin-bottom: 20px;
+    }
+    .remember-row input[type=checkbox] { accent-color: #a33a2b; width: 14px; height: 14px; }
+    .btn-signin {
+      width: 100%; padding: 12px;
+      background: linear-gradient(135deg, #8b2e20, #c8813a);
+      color: #fff; font-size: .9rem; font-weight: 700;
+      border: none; border-radius: 11px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      box-shadow: 0 4px 18px rgba(139,46,32,.35);
+      transition: opacity .2s, transform .1s; letter-spacing: .03em;
+    }
+    .btn-signin:hover { opacity: .92; transform: translateY(-1px); }
+    .divider-text {
+      text-align: center; font-size: .74rem; color: #b09070;
+      margin: 18px 0; position: relative;
+    }
+    .divider-text::before, .divider-text::after {
+      content: ''; position: absolute; top: 50%; width: 36%; height: 1px; background: #e0ccb8;
+    }
+    .divider-text::before { left: 0; } .divider-text::after { right: 0; }
+    .help-text { text-align: center; font-size: .74rem; color: #9a7a5a; }
+
+    .design-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 20px;
+      font-size: .6rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; margin-bottom: 14px;
+    }
+    .badge-a { background: #fdebd6; color: #7e2a20; border: 1px solid #e0ccb8; }
+    .badge-b { background: rgba(255,200,120,.12); color: #f5c97a; border: 1px solid rgba(255,200,100,.2); }
+    .badge-c { background: #fdf3e7; color: #7e2a20; border: 1px solid #e8d0b8; }
+    .badge-d { background: rgba(0,0,0,.35); color: #f5ddb0; border: 1px solid rgba(255,200,120,.35); }
+
+    /* ════════════════════════════════════════════════
+       DESIGN D – Village Map Image stays visible
+    ════════════════════════════════════════════════ */
+    #designD {
+      position: relative; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .d-bg-img {
+      position: absolute; inset: 0; z-index: 0;
+      background: url('frontend/public/images/landing-page-image.jpg') center center / cover no-repeat;
+    }
+    .d-overlay {
+      position: absolute; inset: 0; z-index: 1;
+      background: radial-gradient(ellipse at center, rgba(20,5,0,.3) 0%, rgba(10,3,0,.65) 100%);
+    }
+    .d-card {
+      position: relative; z-index: 2;
+      width: 100%; max-width: 400px;
+      background: rgba(253,246,236,.9);
+      backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,220,170,.55); border-radius: 24px;
+      padding: 36px 34px; margin: 0 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2), 0 24px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.7);
+    }
+    .d-card-accent {
+      height: 3px; background: linear-gradient(90deg, #7e2a20, #c8813a, #f0d060);
+      margin: -36px -34px 26px; border-radius: 24px 24px 0 0;
+    }
+    /* deity image strip at bottom */
+    .d-marquee-wrap {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 3;
+      overflow: hidden; height: 66px;
+      background: linear-gradient(to right, rgba(0,0,0,.6), rgba(40,10,5,.7));
+      backdrop-filter: blur(3px); display: flex; align-items: center;
+    }
+    .d-marquee-track {
+      display: flex; gap: 10px; padding: 8px 10px;
+      animation: d-scroll 30s linear infinite; flex-shrink: 0;
+    }
+    .d-marquee-track-clone { display: flex; gap: 10px; padding: 8px 10px; animation: d-scroll 30s linear infinite; flex-shrink: 0; }
+    @keyframes d-scroll { from { transform: translateX(0) } to { transform: translateX(-100%) } }
+    .d-marquee-row { display: flex; overflow: hidden; }
+    .d-deity-img {
+      width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+      border: 2px solid rgba(255,200,100,.5);
+      box-shadow: 0 2px 8px rgba(0,0,0,.5);
+    }
+
+    .om-row {
+      text-align: center; font-size: 1.8rem; margin-bottom: 3px; line-height: 1;
+      background: linear-gradient(135deg, #7e2a20, #c8813a);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .temple-dots { display: flex; justify-content: center; gap: 5px; margin-bottom: 16px; }
+    .temple-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .temple-dot:nth-child(1) { background: #7e2a20; }
+    .temple-dot:nth-child(2) { background: #c8813a; width: 7px; height: 7px; }
+    .temple-dot:nth-child(3) { background: #f0c060; }
+
+
+    /* ════════════════════════════════════════════════
+       DESIGN A – Split Panel
+    ════════════════════════════════════════════════ */
+    #designA { background: #fdf6ec; }
+    .split-left {
+      flex: 1; min-height: 100vh; position: relative; overflow: hidden; display: none;
+    }
+    @media (min-width: 768px) { .split-left { display: block; } }
+    .split-left-bg {
+      position: absolute; inset: 0;
+      background: linear-gradient(160deg, #7e2a20 0%, #c8813a 55%, #e8c07a 100%);
+    }
+    .split-left-overlay {
+      position: absolute; inset: 0; background: rgba(40,10,5,.45);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px; padding: 40px;
+    }
+    .split-temple-icon {
+      width: 86px; height: 86px; background: rgba(255,255,255,.12);
+      border: 2px solid rgba(255,220,150,.5); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 42px;
+    }
+    .split-left-title { font-size: 1.9rem; font-weight: 700; color: #fff; text-align: center; letter-spacing: .04em; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+    .split-left-sub { font-size: .9rem; color: rgba(255,235,190,.85); text-align: center; max-width: 270px; line-height: 1.6; }
+    .split-divider { width: 55px; height: 2px; background: linear-gradient(90deg, transparent, rgba(255,220,150,.7), transparent); }
+    .split-tags { display: flex; gap: 9px; flex-wrap: wrap; justify-content: center; }
+    .split-tag {
+      padding: 4px 13px; border-radius: 20px;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,220,150,.3);
+      color: rgba(255,235,190,.9); font-size: .74rem;
+    }
+    .split-deco { position: absolute; border-radius: 50%; background: rgba(255,200,100,.07); pointer-events: none; }
+    .split-deco-1 { width: 380px; height: 380px; top: -100px; left: -100px; }
+    .split-deco-2 { width: 260px; height: 260px; bottom: -80px; right: -60px; }
+    .split-right {
+      width: 100%; max-width: 460px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 60px 38px 38px; background: #fdf6ec;
+    }
+    @media (max-width: 767px) { .split-right { max-width: 100%; padding: 80px 22px 30px; } }
+
+
+    /* ════════════════════════════════════════════════
+       DESIGN B – Dark Frosted
+    ════════════════════════════════════════════════ */
+    #designB {
+      align-items: center; justify-content: center; position: relative; overflow: hidden;
+      background:
+        radial-gradient(ellipse at 20% 30%, #6a1f15 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 70%, #b06b20 0%, transparent 60%),
+        linear-gradient(160deg, #3d0e08 0%, #1a0a00 50%, #4a1a05 100%);
+    }
+    .b-arch { position: absolute; bottom: 0; width: 100%; height: 45%; background: rgba(255,200,120,.03); border-radius: 50% 50% 0 0 / 40% 40% 0 0; pointer-events: none; }
+    .b-arch-2 { position: absolute; bottom: 0; width: 70%; left: 15%; height: 38%; background: rgba(255,200,120,.04); border-radius: 50% 50% 0 0 / 60% 60% 0 0; pointer-events: none; }
+    .b-dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,200,120,.06) 1px, transparent 1px); background-size: 32px 32px; pointer-events: none; }
+    .b-orb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(60px); opacity: .35; }
+    .b-orb-1 { width: 400px; height: 400px; top: -100px; left: -120px; background: #7e2a20; }
+    .b-orb-2 { width: 300px; height: 300px; bottom: -80px; right: -80px; background: #c8813a; }
+    .b-orb-3 { width: 200px; height: 200px; top: 40%; left: 50%; transform: translate(-50%,-50%); background: #d4a034; opacity: .12; }
+
+    .frosted-card {
+      position: relative; z-index: 2;
+      width: 100%; max-width: 400px;
+      background: rgba(253,246,236,.11); backdrop-filter: blur(18px) saturate(1.4);
+      border: 1px solid rgba(255,220,160,.22); border-radius: 26px;
+      padding: 36px 32px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    @media (max-width: 480px) { .frosted-card { margin: 80px 14px 18px; padding: 28px 20px; } }
+
+    .frosted-card .form-heading { color: #fdf0d8; }
+    .frosted-card .form-subheading { color: rgba(255,220,160,.62); }
+    .frosted-card .field label { color: rgba(255,220,160,.82); }
+    .frosted-card .field-input { background: rgba(255,255,255,.08); border-color: rgba(255,200,140,.25); color: #fdf0d8; }
+    .frosted-card .field-input::placeholder { color: rgba(255,200,140,.38); }
+    .frosted-card .field-input:focus { border-color: rgba(255,180,80,.7); box-shadow: 0 0 0 3px rgba(200,129,58,.2); }
+    .frosted-card .phone-prefix { color: rgba(255,220,160,.9); border-right-color: rgba(255,200,140,.25); }
+    .frosted-card .input-icon { color: rgba(255,200,140,.52); }
+    .frosted-card .eye-btn { color: rgba(255,200,140,.58); }
+    .frosted-card .remember-row { color: rgba(255,220,160,.68); }
+    .frosted-card .divider-text { color: rgba(255,200,140,.42); }
+    .frosted-card .divider-text::before, .frosted-card .divider-text::after { background: rgba(255,200,140,.18); }
+    .frosted-card .help-text { color: rgba(255,200,140,.48); }
+    .frosted-card .form-logo-name { color: #fde4b0; }
+    .frosted-card .form-logo-tagline { color: rgba(255,210,140,.52); }
+    .btn-signin-gold { background: linear-gradient(135deg, #b56a10, #e8a828); box-shadow: 0 4px 18px rgba(200,130,40,.4); color: #3d1a00; }
+
+
+    /* ════════════════════════════════════════════════
+       DESIGN C – Clean Minimal
+    ════════════════════════════════════════════════ */
+    #designC {
+      align-items: center; justify-content: center; position: relative;
+      background: linear-gradient(145deg, #fdf3e7 0%, #fff8f0 40%, #fdebd6 100%);
+    }
+    .c-pattern { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .c-corner { position: absolute; width: 320px; height: 320px; border-radius: 50%; background: radial-gradient(circle, rgba(200,129,58,.08) 0%, transparent 70%); }
+    .c-corner-tl { top: -80px; left: -80px; }
+    .c-corner-br { bottom: -80px; right: -80px; background: radial-gradient(circle, rgba(126,42,32,.07) 0%, transparent 70%); }
+    .clean-card {
+      position: relative; z-index: 2; width: 100%; max-width: 390px;
+      background: #fff; border-radius: 22px; padding: 38px 34px;
+      box-shadow: 0 2px 6px rgba(126,42,32,.06), 0 12px 40px rgba(126,42,32,.12), 0 0 0 1px rgba(220,185,150,.2);
+    }
+    @media (max-width: 480px) { .clean-card { margin: 80px 14px 18px; padding: 30px 20px; } }
+    .card-accent-bar {
+      height: 4px; background: linear-gradient(90deg, #7e2a20, #c8813a, #f0c060);
+      margin: -38px -34px 26px; border-radius: 22px 22px 0 0;
+    }
+
+
+    /* ════════════════════════════════════════════════
+       MOBILE PREVIEW SCREEN
+    ════════════════════════════════════════════════ */
+    #designMobile {
+      flex-direction: column; align-items: stretch;
+      background: #0f0500; min-height: 100vh; padding-top: 48px;
+    }
+
+    /* sub-tabs to pick which design to preview */
+    .mob-sub-nav {
+      display: flex; gap: 8px; padding: 14px 20px 10px;
+      border-bottom: 1px solid rgba(255,200,100,.1);
+      background: rgba(0,0,0,.3); flex-wrap: wrap;
+    }
+    .mob-sub-nav button {
+      padding: 5px 16px; border: 1.5px solid rgba(200,129,58,.5); border-radius: 20px;
+      background: transparent; color: rgba(245,221,176,.7); font-size: .74rem; font-weight: 600;
+      cursor: pointer; transition: .2s;
+    }
+    .mob-sub-nav button.active { background: rgba(200,129,58,.7); color: #fff; border-color: transparent; }
+
+    /* device grid */
+    .mob-grid-title {
+      padding: 18px 24px 6px;
+      font-size: .72rem; color: rgba(245,221,176,.45); letter-spacing: .1em; text-transform: uppercase;
+    }
+    .mob-devices-scroll {
+      display: flex; gap: 28px; padding: 14px 28px 36px;
+      overflow-x: auto; align-items: flex-start;
+      scrollbar-width: thin; scrollbar-color: rgba(200,129,58,.3) transparent;
+    }
+    .mob-devices-scroll::-webkit-scrollbar { height: 5px; }
+    .mob-devices-scroll::-webkit-scrollbar-thumb { background: rgba(200,129,58,.3); border-radius: 4px; }
+
+    /* one device wrapper */
+    .mob-device-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; flex-shrink: 0; }
+    .mob-device-label { font-size: .68rem; color: rgba(245,221,176,.55); text-align: center; letter-spacing: .04em; }
+    .mob-device-sublabel { font-size: .62rem; color: rgba(245,221,176,.32); text-align: center; }
+
+    /* phone shell */
+    .mob-shell {
+      position: relative; border-radius: 36px;
+      background: #1e1e1e;
+      box-shadow:
+        0 0 0 2px #333,
+        0 0 0 4px #111,
+        0 20px 60px rgba(0,0,0,.7);
+    }
+    .mob-shell.tablet { border-radius: 22px; }
+
+    /* side buttons on phone */
+    .mob-shell::before {
+      content: ''; position: absolute; right: -5px; top: 80px;
+      width: 4px; height: 44px; background: #222; border-radius: 2px;
+    }
+    .mob-shell::after {
+      content: ''; position: absolute; left: -5px; top: 72px;
+      width: 4px; height: 30px; background: #222; border-radius: 2px;
+      box-shadow: 0 38px 0 #222, 0 68px 0 #222;
+    }
+    .mob-shell.tablet::before, .mob-shell.tablet::after { display: none; }
+
+    /* notch / dynamic island */
+    .mob-notch {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      width: 90px; height: 28px; background: #000; border-radius: 14px; z-index: 10;
+    }
+    .mob-notch.small { width: 80px; height: 24px; top: 10px; }
+    .mob-notch.island { width: 96px; height: 30px; border-radius: 18px; top: 12px; }
+    .mob-notch.bar { width: 100%; height: 24px; top: 0; border-radius: 0; }
+    .mob-notch.none { display: none; }
+
+    /* status bar */
+    .mob-statusbar {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 44px; z-index: 9;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding: 0 18px 4px; pointer-events: none;
+    }
+    .mob-statusbar.tablet-bar { height: 28px; padding: 0 14px 4px; }
+    .mob-status-time { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.7); }
+    .mob-status-icons { font-size: 10px; color: rgba(255,255,255,.55); display: flex; gap: 3px; }
+
+    /* home indicator */
+    .mob-home-ind {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      width: 110px; height: 4px; background: rgba(255,255,255,.18); border-radius: 3px; z-index: 10;
+    }
+
+    /* the actual viewport (clips & scrolls) */
+    .mob-viewport {
+      overflow: hidden; border-radius: 28px; position: relative;
+    }
+    .mob-shell.tablet .mob-viewport { border-radius: 18px; }
+
+    /* the inner content rendered at actual device width then scaled down */
+    .mob-content {
+      transform-origin: top left;
+      position: relative;
+    }
+
+    /* ── Design content rendered inside mobile frames ── */
+
+    /* Design A mobile: no left panel, full-width cream form */
+    .mc-a {
+      background: #fdf6ec;
+      padding: 52px 20px 28px; /* top = space for status bar */
+      min-height: 100%; display: flex; flex-direction: column;
+    }
+    .mc-a .form-logo-row { margin-bottom: 16px; }
+    .mc-a .form-heading { font-size: 1.25rem; }
+    .mc-a .form-subheading { font-size: .78rem; margin-bottom: 16px; }
+    .mc-a .field { margin-bottom: 13px; }
+    .mc-a .field-input { padding: 9px 12px 9px 38px; font-size: .82rem; }
+    .mc-a .field-input.phone { padding-left: 86px; }
+    .mc-a .phone-prefix { font-size: .76rem; padding: 0 8px; }
+    .mc-a .btn-signin { padding: 11px; font-size: .86rem; }
+    .mc-a .remember-row { font-size: .74rem; margin-bottom: 16px; }
+    .mc-a .divider-text { font-size: .7rem; margin: 14px 0; }
+    .mc-a .help-text { font-size: .7rem; }
+    /* Mobile A: compact header stripe at top */
+    .mc-a-header {
+      background: linear-gradient(90deg, #7e2a20, #c8813a);
+      margin: -52px -20px 20px; padding: 60px 20px 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .mc-a-header-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .mc-a-header-name { font-size: .9rem; font-weight: 700; color: #fff; }
+    .mc-a-header-sub { font-size: .6rem; color: rgba(255,235,180,.75); }
+
+    /* Design B mobile: frosted card on dark bg, takes full width */
+    .mc-b {
+      min-height: 100%;
+      background:
+        radial-gradient(ellipse at 20% 20%, #6a1f15 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, #b06b20 0%, transparent 55%),
+        linear-gradient(160deg, #3d0e08, #1a0a00 60%, #4a1a05);
+      padding: 52px 16px 28px;
+      display: flex; flex-direction: column;
+    }
+    .mc-b-card {
+      background: rgba(253,246,236,.1); backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,220,160,.2); border-radius: 20px;
+      padding: 24px 20px;
+      box-shadow: 0 6px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .mc-b .form-heading { color: #fdf0d8; font-size: 1.2rem; }
+    .mc-b .form-subheading { color: rgba(255,220,160,.6); font-size: .76rem; margin-bottom: 16px; }
+    .mc-b .field label { color: rgba(255,220,160,.8); font-size: .72rem; }
+    .mc-b .field { margin-bottom: 12px; }
+    .mc-b .field-input { background: rgba(255,255,255,.07); border-color: rgba(255,200,140,.22); color: #fdf0d8; padding: 9px 12px 9px 38px; font-size: .82rem; }
+    .mc-b .field-input::placeholder { color: rgba(255,200,140,.35); }
+    .mc-b .field-input.phone { padding-left: 86px; }
+    .mc-b .phone-prefix { color: rgba(255,220,160,.88); border-right-color: rgba(255,200,140,.22); font-size: .76rem; padding: 0 8px; }
+    .mc-b .input-icon { color: rgba(255,200,140,.5); font-size: 13px; left: 12px; }
+    .mc-b .eye-btn { color: rgba(255,200,140,.55); font-size: 14px; }
+    .mc-b .remember-row { color: rgba(255,220,160,.65); font-size: .72rem; margin-bottom: 16px; }
+    .mc-b .btn-signin { padding: 11px; font-size: .84rem; background: linear-gradient(135deg, #b56a10, #e8a828); color: #3d1a00; box-shadow: 0 4px 14px rgba(200,130,40,.4); }
+    .mc-b .divider-text { font-size: .68rem; color: rgba(255,200,140,.38); margin: 12px 0; }
+    .mc-b .divider-text::before, .mc-b .divider-text::after { background: rgba(255,200,140,.16); }
+    .mc-b .help-text { color: rgba(255,200,140,.45); font-size: .68rem; }
+    .mc-b .form-logo-row { margin-bottom: 16px; }
+    .mc-b .form-logo-name { color: #fde4b0; font-size: .92rem; }
+    .mc-b .form-logo-tagline { color: rgba(255,210,140,.5); }
+    .mc-b .om-row { font-size: 1.5rem; }
+    .mc-b .temple-dots { margin-bottom: 12px; }
+
+    /* Design C mobile */
+    .mc-c {
+      min-height: 100%;
+      background: linear-gradient(145deg, #fdf3e7 0%, #fff8f0 50%, #fdebd6 100%);
+      padding: 52px 16px 28px;
+      display: flex; flex-direction: column;
+    }
+    .mc-c-card {
+      background: #fff; border-radius: 18px; padding: 26px 20px;
+      box-shadow: 0 2px 5px rgba(126,42,32,.05), 0 10px 32px rgba(126,42,32,.11), 0 0 0 1px rgba(220,185,150,.18);
+    }
+    .mc-c-accent { height: 4px; background: linear-gradient(90deg, #7e2a20, #c8813a, #f0c060); margin: -26px -20px 22px; border-radius: 18px 18px 0 0; }
+    .mc-c .form-heading { font-size: 1.2rem; text-align: center; }
+    .mc-c .form-subheading { font-size: .76rem; text-align: center; margin-bottom: 18px; }
+    .mc-c .form-logo-row { justify-content: center; margin-bottom: 4px; }
+    .mc-c .form-logo-name { font-size: .95rem; }
+    .mc-c .field { margin-bottom: 12px; }
+    .mc-c .field-input { padding: 9px 12px 9px 38px; font-size: .82rem; }
+    .mc-c .field-input.phone { padding-left: 86px; }
+    .mc-c .phone-prefix { font-size: .76rem; padding: 0 8px; }
+    .mc-c .btn-signin { padding: 11px; font-size: .84rem; }
+    .mc-c .remember-row { font-size: .73rem; margin-bottom: 18px; }
+    .mc-c .om-row { font-size: 1.5rem; }
+    .mc-c .temple-dots { margin-bottom: 14px; }
+    .mc-c .design-badge { font-size: .56rem; }
+    .mc-c-footer { margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0e4d4; }
+
+    /* Tablet A: split panel (but narrower) */
+    .mc-a-tablet {
+      background: #fdf6ec;
+      min-height: 100%; display: flex;
+    }
+    .mc-a-tab-left {
+      width: 45%; background: linear-gradient(160deg, #7e2a20, #c8813a 60%, #e8c07a);
+      position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; padding: 52px 20px 20px;
+    }
+    .mc-a-tab-left::before { content: ''; position: absolute; inset: 0; background: rgba(40,10,5,.4); }
+    .mc-a-tab-left > * { position: relative; z-index: 1; }
+    .mc-a-tab-left .split-temple-icon { width: 60px; height: 60px; font-size: 30px; }
+    .mc-a-tab-left .split-left-title { font-size: 1.2rem; }
+    .mc-a-tab-left .split-left-sub { font-size: .72rem; max-width: 180px; }
+    .mc-a-tab-left .split-tag { font-size: .62rem; padding: 3px 10px; }
+    .mc-a-tab-right {
+      flex: 1; padding: 52px 22px 22px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .mc-a-tab-right .form-heading { font-size: 1.2rem; }
+    .mc-a-tab-right .form-subheading { font-size: .76rem; margin-bottom: 16px; }
+    .mc-a-tab-right .field { margin-bottom: 12px; }
+    .mc-a-tab-right .field-input { padding: 9px 12px 9px 36px; font-size: .8rem; }
+    .mc-a-tab-right .field-input.phone { padding-left: 82px; }
+    .mc-a-tab-right .phone-prefix { font-size: .72rem; padding: 0 7px; }
+    .mc-a-tab-right .btn-signin { padding: 10px; font-size: .82rem; }
+    .mc-a-tab-right .remember-row { font-size: .7rem; margin-bottom: 16px; }
+    .mc-a-tab-right .form-logo-row { margin-bottom: 16px; }
+
+    /* hidden mobile panels (only show for correct design) */
+    .mob-panel { display: none; }
+    .mob-panel.active { display: block; }
+
+    /* responsive note */
+    .mob-info {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      padding: 6px 28px 20px;
+    }
+    .mob-info-chip {
+      padding: 5px 14px; border-radius: 20px; font-size: .7rem;
+      background: rgba(200,129,58,.1); border: 1px solid rgba(200,129,58,.2);
+      color: rgba(245,221,176,.7);
+    }
+    .mob-info-chip strong { color: #f5c97a; }
+  </style>
+</head>
+<body>
+
+<!-- ── Design Switcher Nav ── -->
+<nav class="design-nav">
+  <button class="active" onclick="show('A',this)">Design A – Split Panel</button>
+  <button onclick="show('B',this)">Design B – Dark Frosted</button>
+  <button onclick="show('C',this)">Design C – Clean Minimal</button>
+  <button onclick="show('D',this)" style="border-color:#f0d060;color:#f5e090">Design D – Image BG ✨</button>
+  <button onclick="show('Mobile',this)" style="border-color:#60c8a0;color:#b0f0d8">📱 Mobile Preview</button>
+  <button onclick="show('MobOpts',this)" style="border-color:#80d0ff;color:#b0e8ff">📲 Mobile Options (A)</button>
+  <button onclick="show('Final',this)" style="border-color:#80ff80;color:#b0ffb0;font-weight:700">✅ Final Design (A+M2)</button>
+  <span class="nav-hint">Click to switch design</span>
+</nav>
+
+
+<!-- ══════════════════════════════════════════════════════
+     DESIGN A — Split Panel  (desktop)
+══════════════════════════════════════════════════════ -->
+<section id="designA" class="screen visible">
+  <div class="split-left">
+    <div class="split-left-bg"></div>
+    <div class="split-deco split-deco-1"></div>
+    <div class="split-deco split-deco-2"></div>
+    <div class="split-left-overlay">
+      <div class="split-temple-icon">🛕</div>
+      <div class="split-left-title">Kakkalani<br>Village Temples</div>
+      <div class="split-divider"></div>
+      <div class="split-left-sub">Manage pooja registrations, donations, and temple services from one place.</div>
+      <div class="split-tags">
+        <span class="split-tag">Pooja Booking</span>
+        <span class="split-tag">Payments</span>
+        <span class="split-tag">Passbook</span>
+      </div>
+    </div>
+  </div>
+  <div class="split-right">
+    <div class="form-logo-row">
+      <div class="form-logo-icon">🛕</div>
+      <div><div class="form-logo-name">Kakkalani Village</div><div class="form-logo-tagline">Temple Management System</div></div>
+    </div>
+    <div class="design-badge badge-a">Design A · Split Panel</div>
+    <div class="form-heading">Welcome back</div>
+    <div class="form-subheading">Sign in to manage poojas, payments &amp; donor records.</div>
+    <div class="field">
+      <label>Mobile Number <span>*</span></label>
+      <div class="input-wrap">
+        <div class="phone-prefix">🇮🇳 +91</div>
+        <input class="field-input phone" type="tel" placeholder="Enter your mobile number" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Password <span>*</span></label>
+      <div class="input-wrap">
+        <span class="input-icon">🔒</span>
+        <input class="field-input" type="password" placeholder="Enter your password" />
+        <button type="button" class="eye-btn">👁</button>
+      </div>
+    </div>
+    <label class="remember-row"><input type="checkbox" /> Remember me on this device</label>
+    <button class="btn-signin">Sign In &nbsp;→</button>
+    <div class="divider-text">or contact temple office for access</div>
+    <div class="help-text">For account assistance, please reach the temple administration.</div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════
+     DESIGN B — Dark Frosted  (desktop)
+══════════════════════════════════════════════════════ -->
+<section id="designB" class="screen">
+  <div class="b-orb b-orb-1"></div><div class="b-orb b-orb-2"></div><div class="b-orb b-orb-3"></div>
+  <div class="b-dots"></div><div class="b-arch"></div><div class="b-arch-2"></div>
+  <div class="frosted-card">
+    <div class="om-row">ॐ</div>
+    <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+    <div class="form-logo-row" style="margin-bottom:18px">
+      <div class="form-logo-icon">🛕</div>
+      <div><div class="form-logo-name">Kakkalani Village</div><div class="form-logo-tagline">Temple Management System</div></div>
+    </div>
+    <div class="design-badge badge-b">Design B · Dark Frosted</div>
+    <div class="form-heading">Sign In</div>
+    <div class="form-subheading">Enter your credentials to continue.</div>
+    <div class="field">
+      <label>Mobile Number <span>*</span></label>
+      <div class="input-wrap">
+        <div class="phone-prefix">🇮🇳 +91</div>
+        <input class="field-input phone" type="tel" placeholder="Mobile number" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Password <span>*</span></label>
+      <div class="input-wrap">
+        <span class="input-icon">🔒</span>
+        <input class="field-input" type="password" placeholder="Password" />
+        <button type="button" class="eye-btn">👁</button>
+      </div>
+    </div>
+    <label class="remember-row"><input type="checkbox" /> Remember me</label>
+    <button class="btn-signin btn-signin-gold">Sign In &nbsp;→</button>
+    <div class="divider-text">secure login · temple administration</div>
+    <div class="help-text">Having trouble? Contact the temple office for assistance.</div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════
+     DESIGN C — Clean Minimal  (desktop)
+══════════════════════════════════════════════════════ -->
+<section id="designC" class="screen">
+  <div class="c-pattern"><div class="c-corner c-corner-tl"></div><div class="c-corner c-corner-br"></div></div>
+  <div class="clean-card">
+    <div class="card-accent-bar"></div>
+    <div class="om-row">ॐ</div>
+    <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+    <div class="form-logo-row" style="justify-content:center;margin-bottom:5px">
+      <div class="form-logo-icon" style="width:48px;height:48px;font-size:25px">🛕</div>
+      <div><div class="form-logo-name" style="font-size:1.05rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management System</div></div>
+    </div>
+    <div style="text-align:center;margin-bottom:18px"><div class="design-badge badge-c">Design C · Clean Minimal</div></div>
+    <div class="form-heading" style="text-align:center">Sign In</div>
+    <div class="form-subheading" style="text-align:center;margin-bottom:20px">Welcome back. Enter your details below.</div>
+    <div class="field">
+      <label>Mobile Number <span>*</span></label>
+      <div class="input-wrap">
+        <div class="phone-prefix">🇮🇳 +91</div>
+        <input class="field-input phone" type="tel" placeholder="Enter your mobile number" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Password <span>*</span></label>
+      <div class="input-wrap">
+        <span class="input-icon">🔒</span>
+        <input class="field-input" type="password" placeholder="Enter your password" />
+        <button type="button" class="eye-btn">👁</button>
+      </div>
+    </div>
+    <label class="remember-row" style="margin-bottom:20px"><input type="checkbox" /> Remember me on this device</label>
+    <button class="btn-signin">Sign In &nbsp;→</button>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f0e4d4;text-align:center">
+      <div class="help-text">Need help? Contact the temple administration office.</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════
+     DESIGN D — Village Map Image stays fully visible
+══════════════════════════════════════════════════════ -->
+<section id="designD" class="screen">
+  <!-- The actual village map background image -->
+  <div class="d-bg-img"></div>
+  <!-- Dark vignette overlay — image still clearly visible -->
+  <div class="d-overlay"></div>
+
+  <!-- Centered login card, semi-transparent -->
+  <div class="d-card">
+    <div class="d-card-accent"></div>
+
+    <div class="form-logo-row" style="margin-bottom:16px">
+      <div class="form-logo-icon">🛕</div>
+      <div>
+        <div class="form-logo-name">Kakkalani Village</div>
+        <div class="form-logo-tagline">Temple Management System</div>
+      </div>
+    </div>
+
+    <div class="design-badge badge-d">Design D · Image Background</div>
+    <div class="form-heading">Sign In</div>
+    <div class="form-subheading" style="margin-bottom:20px">
+      Sign in to manage poojas, payments &amp; donor records.
+    </div>
+
+    <div class="field">
+      <label>Mobile Number <span>*</span></label>
+      <div class="input-wrap">
+        <div class="phone-prefix">🇮🇳 +91</div>
+        <input class="field-input phone" type="tel" placeholder="Enter your mobile number" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Password <span>*</span></label>
+      <div class="input-wrap">
+        <span class="input-icon">🔒</span>
+        <input class="field-input" type="password" placeholder="Enter your password" />
+        <button type="button" class="eye-btn">👁</button>
+      </div>
+    </div>
+
+    <label class="remember-row" style="margin-bottom:22px">
+      <input type="checkbox" /> Remember me on this device
+    </label>
+
+    <button class="btn-signin">Sign In &nbsp;→</button>
+
+    <div class="divider-text" style="margin:18px 0">or contact temple office for access</div>
+    <div class="help-text">For account assistance, please reach the temple administration.</div>
+  </div>
+
+  <!-- Deity image marquee strip at the bottom (same as current page) -->
+  <div class="d-marquee-wrap">
+    <div class="d-marquee-row">
+      <div class="d-marquee-track">
+        <img class="d-deity-img" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" alt="Lakshmi Narayanar" onerror="this.style.background='linear-gradient(135deg,#7e2a20,#c8813a)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" alt="Pillayar" onerror="this.style.background='linear-gradient(135deg,#c8813a,#f0c060)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" alt="Ayyanar" onerror="this.style.background='linear-gradient(135deg,#5a1a10,#a06030)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png" alt="Kalahasteeswarar" onerror="this.style.background='linear-gradient(135deg,#7e2a20,#c8813a)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/perumal.jpg" alt="Perumal" onerror="this.style.background='linear-gradient(135deg,#3a5a20,#7a9a40)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/shivan.jpg" alt="Shivan" onerror="this.style.background='linear-gradient(135deg,#1a3a5a,#4a7aaa)';this.src=''" />
+        <!-- duplicated for seamless scroll -->
+        <img class="d-deity-img" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" alt="" onerror="this.style.background='linear-gradient(135deg,#7e2a20,#c8813a)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" alt="" onerror="this.style.background='linear-gradient(135deg,#c8813a,#f0c060)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" alt="" onerror="this.style.background='linear-gradient(135deg,#5a1a10,#a06030)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png" alt="" onerror="this.style.background='linear-gradient(135deg,#7e2a20,#c8813a)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/perumal.jpg" alt="" onerror="this.style.background='linear-gradient(135deg,#3a5a20,#7a9a40)';this.src=''" />
+        <img class="d-deity-img" src="frontend/public/images/shivan.jpg" alt="" onerror="this.style.background='linear-gradient(135deg,#1a3a5a,#4a7aaa)';this.src=''" />
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════
+     MOBILE PREVIEW SCREEN
+══════════════════════════════════════════════════════ -->
+<section id="designMobile" class="screen">
+
+  <!-- sub-tab: pick A / B / C -->
+  <div class="mob-sub-nav">
+    <span style="color:rgba(245,221,176,.5);font-size:.72rem;margin:auto 6px auto 0">Preview design:</span>
+    <button class="active" onclick="mobDesign('A',this)">Design A – Split Panel</button>
+    <button onclick="mobDesign('B',this)">Design B – Dark Frosted</button>
+    <button onclick="mobDesign('C',this)">Design C – Clean Minimal</button>
+    <button onclick="mobDesign('D',this)" style="border-color:rgba(240,208,96,.5);color:#f5e090">Design D – Image BG ✨</button>
+  </div>
+
+  <!-- info chips -->
+  <div class="mob-grid-title">Mobile &amp; Tablet Layouts — how the form adapts at each screen size</div>
+  <div class="mob-info">
+    <div class="mob-info-chip"><strong>iPhone SE</strong> 375 × 667 px</div>
+    <div class="mob-info-chip"><strong>iPhone 14 Pro</strong> 393 × 852 px</div>
+    <div class="mob-info-chip"><strong>Samsung Galaxy S21</strong> 360 × 800 px</div>
+    <div class="mob-info-chip"><strong>iPad Mini</strong> 768 × 1024 px</div>
+  </div>
+
+  <!-- ── Device frames scroll row ── -->
+  <div class="mob-devices-scroll">
+
+
+    <!-- ╔══════════════════════════════╗
+         ║  iPhone SE  375 × 667       ║
+         ╚══════════════════════════════╝ -->
+    <div class="mob-device-wrap">
+      <div class="mob-device-label">iPhone SE</div>
+      <div class="mob-device-sublabel">375 × 667 px</div>
+
+      <!-- shell: display at 195px wide → scale = 195/375 = 0.52, height = 667*0.52 = 347px -->
+      <div class="mob-shell" style="width:227px; height:407px; padding:8px;">
+        <div class="mob-notch small"></div>
+        <div class="mob-statusbar">
+          <span class="mob-status-time">9:41</span>
+          <span class="mob-status-icons">▲ ⬛ 🔋</span>
+        </div>
+        <div class="mob-home-ind"></div>
+
+        <!-- viewport: inner 195×347, actual content 375×667 scaled -->
+        <div class="mob-viewport" style="width:211px; height:391px;">
+          <div class="mob-content" style="width:375px; transform:scale(0.5627); height:667px;">
+
+            <!-- DESIGN A PANEL -->
+            <div class="mob-panel active" id="mse-a" style="width:375px;min-height:667px">
+              <div class="mc-a" style="padding-top:50px">
+                <div class="mc-a-header">
+                  <div class="mc-a-header-icon">🛕</div>
+                  <div><div class="mc-a-header-name">Kakkalani Village</div><div class="mc-a-header-sub">Temple Management System</div></div>
+                </div>
+                <div class="design-badge badge-a" style="margin-bottom:12px">Design A · Mobile</div>
+                <div class="form-heading" style="font-size:1.2rem">Welcome back</div>
+                <div class="form-subheading" style="font-size:.76rem;margin-bottom:14px">Sign in to manage poojas &amp; payments.</div>
+                <div class="field"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" /></div></div>
+                <div class="field"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Password" /><button type="button" class="eye-btn">👁</button></div></div>
+                <label class="remember-row"><input type="checkbox" /> Remember me</label>
+                <button class="btn-signin">Sign In →</button>
+                <div class="divider-text" style="margin:14px 0;font-size:.7rem">temple office for access</div>
+                <div class="help-text" style="font-size:.7rem">Contact the temple administration.</div>
+              </div>
+            </div>
+
+            <!-- DESIGN B PANEL -->
+            <div class="mob-panel" id="mse-b" style="width:375px;min-height:667px">
+              <div class="mc-b" style="padding-top:50px">
+                <div class="mc-b-card">
+                  <div class="om-row">ॐ</div>
+                  <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                  <div class="form-logo-row" style="margin-bottom:14px"><div class="form-logo-icon" style="width:36px;height:36px;font-size:18px">🛕</div><div><div class="form-logo-name" style="font-size:.85rem;color:#fde4b0">Kakkalani Village</div><div class="form-logo-tagline" style="color:rgba(255,210,140,.5)">Temple Management</div></div></div>
+                  <div class="design-badge badge-b" style="font-size:.55rem">Design B · Mobile</div>
+                  <div class="form-heading" style="font-size:1.15rem;color:#fdf0d8">Sign In</div>
+                  <div class="form-subheading" style="font-size:.74rem;color:rgba(255,220,160,.6);margin-bottom:14px">Enter your credentials.</div>
+                  <div class="field"><label style="color:rgba(255,220,160,.8);font-size:.7rem">Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="color:rgba(255,220,160,.88);border-right-color:rgba(255,200,140,.22);font-size:.72rem;padding:0 7px">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8;font-size:.8rem;padding:9px 12px 9px 84px" /></div></div>
+                  <div class="field"><label style="color:rgba(255,220,160,.8);font-size:.7rem">Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="color:rgba(255,200,140,.5);font-size:13px">🔒</span><input class="field-input" type="password" placeholder="Password" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8;font-size:.8rem;padding:9px 12px 9px 36px" /><button type="button" class="eye-btn" style="color:rgba(255,200,140,.55);font-size:14px">👁</button></div></div>
+                  <label class="remember-row" style="color:rgba(255,220,160,.65);font-size:.7rem;margin-bottom:14px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin" style="background:linear-gradient(135deg,#b56a10,#e8a828);color:#3d1a00;font-size:.82rem;padding:10px">Sign In →</button>
+                  <div class="divider-text" style="font-size:.66rem;color:rgba(255,200,140,.35);margin:12px 0">temple administration</div>
+                  <div class="help-text" style="font-size:.66rem;color:rgba(255,200,140,.45)">Contact the temple office for help.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESIGN C PANEL -->
+            <div class="mob-panel" id="mse-c" style="width:375px;min-height:667px">
+              <div class="mc-c" style="padding-top:50px">
+                <div class="mc-c-card">
+                  <div class="mc-c-accent"></div>
+                  <div class="om-row">ॐ</div>
+                  <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                  <div class="form-logo-row" style="justify-content:center;margin-bottom:4px"><div class="form-logo-icon" style="width:38px;height:38px;font-size:19px">🛕</div><div><div class="form-logo-name" style="font-size:.88rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                  <div style="text-align:center;margin-bottom:14px"><div class="design-badge badge-c" style="font-size:.54rem">Design C · Mobile</div></div>
+                  <div class="form-heading" style="font-size:1.15rem;text-align:center">Sign In</div>
+                  <div class="form-subheading" style="font-size:.74rem;text-align:center;margin-bottom:16px">Welcome back. Enter details below.</div>
+                  <div class="field"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="font-size:.74rem;padding:0 7px">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="font-size:.8rem;padding:9px 12px 9px 84px" /></div></div>
+                  <div class="field"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="font-size:13px">🔒</span><input class="field-input" type="password" placeholder="Password" style="font-size:.8rem;padding:9px 12px 9px 36px" /><button type="button" class="eye-btn" style="font-size:14px">👁</button></div></div>
+                  <label class="remember-row" style="font-size:.72rem;margin-bottom:16px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin" style="font-size:.82rem;padding:10px">Sign In →</button>
+                  <div class="mc-c-footer"><div class="help-text" style="font-size:.68rem">Contact the temple administration office.</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESIGN D PANEL – iPhone SE -->
+            <div class="mob-panel" id="mse-d" style="width:375px;min-height:667px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(20,5,0,.32) 0%,rgba(10,3,0,.62) 100%)"></div>
+              <div style="position:relative;z-index:2;padding:54px 16px 80px;display:flex;align-items:center;justify-content:center;min-height:667px">
+                <div style="width:100%;background:rgba(253,246,236,.88);backdrop-filter:blur(14px);border:1px solid rgba(255,220,170,.5);border-radius:18px;overflow:hidden;box-shadow:0 16px 50px rgba(0,0,0,.55)">
+                  <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060)"></div>
+                  <div style="padding:18px 16px 16px">
+                    <div class="form-logo-row" style="margin-bottom:12px"><div class="form-logo-icon" style="width:34px;height:34px;font-size:17px">🛕</div><div><div class="form-logo-name" style="font-size:.82rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                    <div class="design-badge badge-d" style="font-size:.52rem;margin-bottom:10px">Design D · Image BG</div>
+                    <div class="form-heading" style="font-size:1.1rem">Sign In</div>
+                    <div class="form-subheading" style="font-size:.72rem;margin-bottom:12px">Sign in to manage poojas &amp; payments.</div>
+                    <div class="field" style="margin-bottom:10px"><label style="font-size:.7rem">Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="font-size:.72rem;padding:0 7px">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="font-size:.78rem;padding:8px 10px 8px 80px" /></div></div>
+                    <div class="field" style="margin-bottom:10px"><label style="font-size:.7rem">Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="font-size:12px;left:11px">🔒</span><input class="field-input" type="password" placeholder="Password" style="font-size:.78rem;padding:8px 10px 8px 34px" /><button class="eye-btn" style="font-size:13px">👁</button></div></div>
+                    <label class="remember-row" style="font-size:.7rem;margin-bottom:14px"><input type="checkbox" /> Remember me</label>
+                    <button class="btn-signin" style="font-size:.8rem;padding:10px">Sign In →</button>
+                  </div>
+                </div>
+              </div>
+              <!-- deity strip at bottom -->
+              <div style="position:absolute;bottom:0;left:0;right:0;z-index:3;height:58px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;overflow:hidden">
+                <div style="display:flex;gap:8px;padding:5px 8px;animation:d-scroll 20s linear infinite;flex-shrink:0">
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" onerror="this.style.background='#5a1a10';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/perumal.jpg" onerror="this.style.background='#3a5a20';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png" onerror="this.style.background='#1a3a5a';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/shivan.jpg" onerror="this.style.background='#4a1a5a';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /mob-content -->
+        </div><!-- /mob-viewport -->
+      </div><!-- /mob-shell -->
+    </div><!-- /wrap iPhone SE -->
+
+
+    <!-- ╔══════════════════════════════╗
+         ║  iPhone 14 Pro  393 × 852   ║
+         ╚══════════════════════════════╝ -->
+    <div class="mob-device-wrap">
+      <div class="mob-device-label">iPhone 14 Pro</div>
+      <div class="mob-device-sublabel">393 × 852 px</div>
+
+      <!-- display at 205px → scale = 205/393 = 0.5216 | height = 852*0.5216 = 444px -->
+      <div class="mob-shell" style="width:237px; height:476px; padding:8px;">
+        <div class="mob-notch island"></div>
+        <div class="mob-statusbar">
+          <span class="mob-status-time">9:41</span>
+          <span class="mob-status-icons">▲ ⬛ 🔋</span>
+        </div>
+        <div class="mob-home-ind"></div>
+        <div class="mob-viewport" style="width:221px; height:460px;">
+          <div class="mob-content" style="width:393px; transform:scale(0.5623); height:852px;">
+
+            <div class="mob-panel active" id="m14-a" style="width:393px;min-height:852px">
+              <div class="mc-a" style="padding-top:54px">
+                <div class="mc-a-header">
+                  <div class="mc-a-header-icon">🛕</div>
+                  <div><div class="mc-a-header-name">Kakkalani Village</div><div class="mc-a-header-sub">Temple Management System</div></div>
+                </div>
+                <div class="design-badge badge-a" style="margin-bottom:12px">Design A · Mobile</div>
+                <div class="form-heading" style="font-size:1.3rem">Welcome back</div>
+                <div class="form-subheading" style="font-size:.8rem;margin-bottom:16px">Sign in to manage poojas &amp; payments.</div>
+                <div class="field"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" /></div></div>
+                <div class="field"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Password" /><button class="eye-btn">👁</button></div></div>
+                <label class="remember-row"><input type="checkbox" /> Remember me</label>
+                <button class="btn-signin">Sign In →</button>
+                <div class="divider-text" style="margin:16px 0">or contact temple office for access</div>
+                <div class="help-text">For account assistance, contact the temple administration.</div>
+              </div>
+            </div>
+
+            <div class="mob-panel" id="m14-b" style="width:393px;min-height:852px">
+              <div class="mc-b" style="padding-top:54px">
+                <div class="mc-b-card">
+                  <div class="om-row">ॐ</div>
+                  <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                  <div class="form-logo-row" style="margin-bottom:16px"><div class="form-logo-icon" style="width:38px;height:38px;font-size:20px">🛕</div><div><div class="form-logo-name" style="font-size:.9rem;color:#fde4b0">Kakkalani Village</div><div class="form-logo-tagline" style="color:rgba(255,210,140,.5)">Temple Management</div></div></div>
+                  <div class="design-badge badge-b" style="font-size:.56rem">Design B · Mobile</div>
+                  <div class="form-heading" style="font-size:1.2rem;color:#fdf0d8">Sign In</div>
+                  <div class="form-subheading" style="font-size:.78rem;color:rgba(255,220,160,.6);margin-bottom:16px">Enter your credentials to continue.</div>
+                  <div class="field"><label style="color:rgba(255,220,160,.8)">Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="color:rgba(255,220,160,.88);border-right-color:rgba(255,200,140,.22)">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8" /></div></div>
+                  <div class="field"><label style="color:rgba(255,220,160,.8)">Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="color:rgba(255,200,140,.5)">🔒</span><input class="field-input" type="password" placeholder="Password" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8" /><button class="eye-btn" style="color:rgba(255,200,140,.55)">👁</button></div></div>
+                  <label class="remember-row" style="color:rgba(255,220,160,.65);margin-bottom:16px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin" style="background:linear-gradient(135deg,#b56a10,#e8a828);color:#3d1a00">Sign In →</button>
+                  <div class="divider-text" style="color:rgba(255,200,140,.38)">secure login · temple administration</div>
+                  <div class="help-text" style="color:rgba(255,200,140,.45)">Having trouble? Contact the temple office.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mob-panel" id="m14-c" style="width:393px;min-height:852px">
+              <div class="mc-c" style="padding-top:54px">
+                <div class="mc-c-card">
+                  <div class="mc-c-accent"></div>
+                  <div class="om-row">ॐ</div>
+                  <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                  <div class="form-logo-row" style="justify-content:center;margin-bottom:5px"><div class="form-logo-icon" style="width:42px;height:42px;font-size:22px">🛕</div><div><div class="form-logo-name" style="font-size:.96rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                  <div style="text-align:center;margin-bottom:16px"><div class="design-badge badge-c">Design C · Mobile</div></div>
+                  <div class="form-heading" style="text-align:center">Sign In</div>
+                  <div class="form-subheading" style="text-align:center;margin-bottom:18px">Welcome back. Enter your details below.</div>
+                  <div class="field"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" /></div></div>
+                  <div class="field"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Password" /><button class="eye-btn">👁</button></div></div>
+                  <label class="remember-row" style="margin-bottom:18px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin">Sign In →</button>
+                  <div class="mc-c-footer"><div class="help-text">Contact the temple administration office.</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESIGN D – iPhone 14 Pro -->
+            <div class="mob-panel" id="m14-d" style="width:393px;min-height:852px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(20,5,0,.32) 0%,rgba(10,3,0,.62) 100%)"></div>
+              <div style="position:relative;z-index:2;padding:58px 18px 82px;display:flex;align-items:center;justify-content:center;min-height:852px">
+                <div style="width:100%;background:rgba(253,246,236,.88);backdrop-filter:blur(14px);border:1px solid rgba(255,220,170,.5);border-radius:20px;overflow:hidden;box-shadow:0 16px 50px rgba(0,0,0,.55)">
+                  <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060)"></div>
+                  <div style="padding:20px 18px 18px">
+                    <div class="form-logo-row" style="margin-bottom:14px"><div class="form-logo-icon" style="width:38px;height:38px;font-size:20px">🛕</div><div><div class="form-logo-name" style="font-size:.9rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                    <div class="design-badge badge-d" style="font-size:.54rem;margin-bottom:12px">Design D · Image BG</div>
+                    <div class="form-heading" style="font-size:1.2rem">Sign In</div>
+                    <div class="form-subheading" style="font-size:.76rem;margin-bottom:14px">Sign in to manage poojas &amp; payments.</div>
+                    <div class="field" style="margin-bottom:12px"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" /></div></div>
+                    <div class="field" style="margin-bottom:12px"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Password" /><button class="eye-btn">👁</button></div></div>
+                    <label class="remember-row" style="margin-bottom:16px"><input type="checkbox" /> Remember me</label>
+                    <button class="btn-signin" style="font-size:.86rem;padding:11px">Sign In →</button>
+                  </div>
+                </div>
+              </div>
+              <div style="position:absolute;bottom:0;left:0;right:0;z-index:3;height:60px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;overflow:hidden">
+                <div style="display:flex;gap:8px;padding:6px 8px;animation:d-scroll 20s linear infinite">
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" onerror="this.style.background='#5a1a10';this.src=''" />
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/perumal.jpg" onerror="this.style.background='#3a5a20';this.src=''" />
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png" onerror="this.style.background='#1a3a5a';this.src=''" />
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/shivan.jpg" onerror="this.style.background='#4a1a5a';this.src=''" />
+                  <img style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div><!-- /wrap iPhone 14 Pro -->
+
+
+    <!-- ╔══════════════════════════════╗
+         ║  Samsung Galaxy S21  360×800 ║
+         ╚══════════════════════════════╝ -->
+    <div class="mob-device-wrap">
+      <div class="mob-device-label">Galaxy S21</div>
+      <div class="mob-device-sublabel">360 × 800 px</div>
+
+      <!-- display at 200px → scale = 200/360 = 0.5556 | height = 800*0.5556 = 445px -->
+      <div class="mob-shell" style="width:232px; height:477px; padding:8px; border-radius:28px;">
+        <div class="mob-notch bar" style="border-radius:20px 20px 0 0;height:22px;width:100%;background:#000"></div>
+        <div class="mob-statusbar">
+          <span class="mob-status-time">9:41</span>
+          <span class="mob-status-icons">▲ ⬛ 🔋</span>
+        </div>
+        <div class="mob-home-ind" style="background:rgba(255,255,255,.22)"></div>
+        <div class="mob-viewport" style="width:216px; height:461px; border-radius:20px;">
+          <div class="mob-content" style="width:360px; transform:scale(0.6); height:800px;">
+
+            <div class="mob-panel active" id="msg-a" style="width:360px;min-height:800px">
+              <div class="mc-a" style="padding-top:48px">
+                <div class="mc-a-header">
+                  <div class="mc-a-header-icon">🛕</div>
+                  <div><div class="mc-a-header-name">Kakkalani Village</div><div class="mc-a-header-sub">Temple Management System</div></div>
+                </div>
+                <div class="design-badge badge-a" style="margin-bottom:12px">Design A · Android</div>
+                <div class="form-heading" style="font-size:1.2rem">Welcome back</div>
+                <div class="form-subheading" style="font-size:.76rem;margin-bottom:14px">Sign in to manage poojas &amp; payments.</div>
+                <div class="field"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" /></div></div>
+                <div class="field"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Password" /><button class="eye-btn">👁</button></div></div>
+                <label class="remember-row"><input type="checkbox" /> Remember me</label>
+                <button class="btn-signin">Sign In →</button>
+                <div class="divider-text" style="margin:14px 0">temple office for access</div>
+                <div class="help-text">Contact the temple administration.</div>
+              </div>
+            </div>
+
+            <div class="mob-panel" id="msg-b" style="width:360px;min-height:800px">
+              <div class="mc-b" style="padding-top:48px">
+                <div class="mc-b-card">
+                  <div class="om-row">ॐ</div>
+                  <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                  <div class="form-logo-row" style="margin-bottom:14px"><div class="form-logo-icon" style="width:36px;height:36px;font-size:18px">🛕</div><div><div class="form-logo-name" style="color:#fde4b0;font-size:.85rem">Kakkalani Village</div><div class="form-logo-tagline" style="color:rgba(255,210,140,.5)">Temple Management</div></div></div>
+                  <div class="design-badge badge-b" style="font-size:.54rem">Design B · Android</div>
+                  <div class="form-heading" style="font-size:1.1rem;color:#fdf0d8">Sign In</div>
+                  <div class="form-subheading" style="font-size:.74rem;color:rgba(255,220,160,.6);margin-bottom:14px">Enter your credentials.</div>
+                  <div class="field"><label style="color:rgba(255,220,160,.8);font-size:.7rem">Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="color:rgba(255,220,160,.88);border-right-color:rgba(255,200,140,.22);font-size:.72rem">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8;font-size:.8rem" /></div></div>
+                  <div class="field"><label style="color:rgba(255,220,160,.8);font-size:.7rem">Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="color:rgba(255,200,140,.5)">🔒</span><input class="field-input" type="password" placeholder="Password" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8;font-size:.8rem" /><button class="eye-btn" style="color:rgba(255,200,140,.55)">👁</button></div></div>
+                  <label class="remember-row" style="color:rgba(255,220,160,.65);font-size:.7rem;margin-bottom:14px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin" style="background:linear-gradient(135deg,#b56a10,#e8a828);color:#3d1a00;font-size:.82rem;padding:10px">Sign In →</button>
+                  <div class="divider-text" style="color:rgba(255,200,140,.35);font-size:.65rem;margin:12px 0">temple administration</div>
+                  <div class="help-text" style="color:rgba(255,200,140,.45);font-size:.65rem">Contact the temple office.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mob-panel" id="msg-c" style="width:360px;min-height:800px">
+              <div class="mc-c" style="padding-top:48px">
+                <div class="mc-c-card">
+                  <div class="mc-c-accent"></div>
+                  <div class="om-row">ॐ</div>
+                  <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                  <div class="form-logo-row" style="justify-content:center;margin-bottom:4px"><div class="form-logo-icon" style="width:38px;height:38px;font-size:20px">🛕</div><div><div class="form-logo-name" style="font-size:.88rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                  <div style="text-align:center;margin-bottom:14px"><div class="design-badge badge-c" style="font-size:.54rem">Design C · Android</div></div>
+                  <div class="form-heading" style="text-align:center;font-size:1.1rem">Sign In</div>
+                  <div class="form-subheading" style="text-align:center;font-size:.74rem;margin-bottom:16px">Welcome back. Enter details.</div>
+                  <div class="field"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="font-size:.74rem">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="font-size:.8rem" /></div></div>
+                  <div class="field"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="font-size:13px">🔒</span><input class="field-input" type="password" placeholder="Password" style="font-size:.8rem" /><button class="eye-btn" style="font-size:14px">👁</button></div></div>
+                  <label class="remember-row" style="font-size:.72rem;margin-bottom:16px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin" style="font-size:.82rem;padding:10px">Sign In →</button>
+                  <div class="mc-c-footer"><div class="help-text" style="font-size:.66rem">Contact the temple administration.</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESIGN D – Galaxy S21 -->
+            <div class="mob-panel" id="msg-d" style="width:360px;min-height:800px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(20,5,0,.32) 0%,rgba(10,3,0,.62) 100%)"></div>
+              <div style="position:relative;z-index:2;padding:52px 16px 78px;display:flex;align-items:center;justify-content:center;min-height:800px">
+                <div style="width:100%;background:rgba(253,246,236,.88);backdrop-filter:blur(14px);border:1px solid rgba(255,220,170,.5);border-radius:18px;overflow:hidden;box-shadow:0 16px 50px rgba(0,0,0,.55)">
+                  <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060)"></div>
+                  <div style="padding:18px 16px 16px">
+                    <div class="form-logo-row" style="margin-bottom:12px"><div class="form-logo-icon" style="width:34px;height:34px;font-size:17px">🛕</div><div><div class="form-logo-name" style="font-size:.82rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                    <div class="design-badge badge-d" style="font-size:.52rem;margin-bottom:10px">Design D · Android</div>
+                    <div class="form-heading" style="font-size:1.1rem">Sign In</div>
+                    <div class="form-subheading" style="font-size:.72rem;margin-bottom:12px">Sign in to manage poojas &amp; payments.</div>
+                    <div class="field" style="margin-bottom:10px"><label style="font-size:.7rem">Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="font-size:.72rem;padding:0 7px">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="font-size:.78rem;padding:8px 10px 8px 80px" /></div></div>
+                    <div class="field" style="margin-bottom:10px"><label style="font-size:.7rem">Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="font-size:12px;left:11px">🔒</span><input class="field-input" type="password" placeholder="Password" style="font-size:.78rem;padding:8px 10px 8px 34px" /><button class="eye-btn" style="font-size:13px">👁</button></div></div>
+                    <label class="remember-row" style="font-size:.7rem;margin-bottom:14px"><input type="checkbox" /> Remember me</label>
+                    <button class="btn-signin" style="font-size:.8rem;padding:10px">Sign In →</button>
+                  </div>
+                </div>
+              </div>
+              <div style="position:absolute;bottom:0;left:0;right:0;z-index:3;height:56px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;overflow:hidden">
+                <div style="display:flex;gap:8px;padding:5px 8px;animation:d-scroll 20s linear infinite">
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" onerror="this.style.background='#5a1a10';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/perumal.jpg" onerror="this.style.background='#3a5a20';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/shivan.jpg" onerror="this.style.background='#4a1a5a';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div><!-- /Galaxy S21 -->
+
+
+    <!-- ╔══════════════════════════════════╗
+         ║  iPad Mini  768 × 1024           ║
+         ╚══════════════════════════════════╝ -->
+    <div class="mob-device-wrap">
+      <div class="mob-device-label">iPad Mini</div>
+      <div class="mob-device-sublabel">768 × 1024 px · Split panel visible!</div>
+
+      <!-- display viewport at 310px → scale = 310/768 = 0.4036 | height = 1024*0.4036 = 413px -->
+      <div class="mob-shell tablet" style="width:342px; height:445px; padding:10px; border-radius:20px;">
+        <div class="mob-statusbar tablet-bar">
+          <span class="mob-status-time" style="font-size:9px">9:41</span>
+          <span class="mob-status-icons" style="font-size:8px">▲ ⬛ 🔋</span>
+        </div>
+        <div class="mob-viewport" style="width:322px; height:425px; border-radius:12px;">
+          <div class="mob-content" style="width:768px; transform:scale(0.4193); height:1024px;">
+
+            <!-- DESIGN A TABLET: shows split panel since width ≥ 768 -->
+            <div class="mob-panel active" id="mipad-a" style="width:768px;height:1024px">
+              <div class="mc-a-tablet">
+                <div class="mc-a-tab-left">
+                  <div class="split-temple-icon" style="width:60px;height:60px;font-size:30px">🛕</div>
+                  <div class="split-left-title" style="font-size:1.3rem">Kakkalani<br>Village Temples</div>
+                  <div class="split-divider"></div>
+                  <div class="split-left-sub" style="font-size:.75rem;max-width:200px">Manage pooja registrations, donations &amp; temple services.</div>
+                  <div class="split-tags">
+                    <span class="split-tag" style="font-size:.62rem">Pooja Booking</span>
+                    <span class="split-tag" style="font-size:.62rem">Payments</span>
+                    <span class="split-tag" style="font-size:.62rem">Passbook</span>
+                  </div>
+                </div>
+                <div class="mc-a-tab-right">
+                  <div class="form-logo-row" style="margin-bottom:16px"><div class="form-logo-icon" style="width:40px;height:40px;font-size:20px">🛕</div><div><div class="form-logo-name" style="font-size:.92rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management System</div></div></div>
+                  <div class="design-badge badge-a" style="font-size:.56rem;margin-bottom:12px">Design A · iPad Mini</div>
+                  <div class="form-heading" style="font-size:1.15rem">Welcome back</div>
+                  <div class="form-subheading" style="font-size:.74rem;margin-bottom:16px">Sign in to manage poojas &amp; payments.</div>
+                  <div class="field" style="margin-bottom:12px"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="font-size:.72rem;padding:0 8px">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="font-size:.8rem;padding:9px 12px 9px 82px" /></div></div>
+                  <div class="field" style="margin-bottom:12px"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="font-size:13px">🔒</span><input class="field-input" type="password" placeholder="Password" style="font-size:.8rem;padding:9px 12px 9px 36px" /><button class="eye-btn" style="font-size:14px">👁</button></div></div>
+                  <label class="remember-row" style="font-size:.7rem;margin-bottom:16px"><input type="checkbox" /> Remember me</label>
+                  <button class="btn-signin" style="font-size:.84rem;padding:10px">Sign In →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESIGN B TABLET: centered card -->
+            <div class="mob-panel" id="mipad-b" style="width:768px;height:1024px;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 20% 30%,#6a1f15 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,#b06b20 0%,transparent 60%),linear-gradient(160deg,#3d0e08,#1a0a00 50%,#4a1a05)">
+              <div style="width:420px;background:rgba(253,246,236,.11);backdrop-filter:blur(18px);border:1px solid rgba(255,220,160,.22);border-radius:24px;padding:32px 28px;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+                <div class="om-row">ॐ</div>
+                <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                <div class="form-logo-row" style="margin-bottom:14px"><div class="form-logo-icon" style="width:38px;height:38px;font-size:20px">🛕</div><div><div class="form-logo-name" style="color:#fde4b0;font-size:.9rem">Kakkalani Village</div><div class="form-logo-tagline" style="color:rgba(255,210,140,.5)">Temple Management</div></div></div>
+                <div class="design-badge badge-b" style="font-size:.56rem">Design B · iPad Mini</div>
+                <div class="form-heading" style="color:#fdf0d8;font-size:1.2rem">Sign In</div>
+                <div class="form-subheading" style="color:rgba(255,220,160,.6);font-size:.76rem;margin-bottom:16px">Enter your credentials to continue.</div>
+                <div class="field" style="margin-bottom:12px"><label style="color:rgba(255,220,160,.8)">Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix" style="color:rgba(255,220,160,.88);border-right-color:rgba(255,200,140,.22)">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8" /></div></div>
+                <div class="field" style="margin-bottom:12px"><label style="color:rgba(255,220,160,.8)">Password <span>*</span></label><div class="input-wrap"><span class="input-icon" style="color:rgba(255,200,140,.5)">🔒</span><input class="field-input" type="password" placeholder="Password" style="background:rgba(255,255,255,.07);border-color:rgba(255,200,140,.22);color:#fdf0d8" /><button class="eye-btn" style="color:rgba(255,200,140,.55)">👁</button></div></div>
+                <label class="remember-row" style="color:rgba(255,220,160,.65);margin-bottom:16px"><input type="checkbox" /> Remember me</label>
+                <button class="btn-signin" style="background:linear-gradient(135deg,#b56a10,#e8a828);color:#3d1a00">Sign In →</button>
+                <div class="divider-text" style="color:rgba(255,200,140,.38)">secure login · temple administration</div>
+                <div class="help-text" style="color:rgba(255,200,140,.45)">Having trouble? Contact the temple office.</div>
+              </div>
+            </div>
+
+            <!-- DESIGN C TABLET: centered card on warm bg -->
+            <div class="mob-panel" id="mipad-c" style="width:768px;height:1024px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#fdf3e7,#fff8f0 40%,#fdebd6)">
+              <div style="width:400px;background:#fff;border-radius:20px;padding:36px 32px;box-shadow:0 2px 6px rgba(126,42,32,.06),0 12px 40px rgba(126,42,32,.12),0 0 0 1px rgba(220,185,150,.2)">
+                <div style="height:4px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0c060);margin:-36px -32px 24px;border-radius:20px 20px 0 0"></div>
+                <div class="om-row">ॐ</div>
+                <div class="temple-dots"><div class="temple-dot"></div><div class="temple-dot"></div><div class="temple-dot"></div></div>
+                <div class="form-logo-row" style="justify-content:center;margin-bottom:5px"><div class="form-logo-icon" style="width:42px;height:42px;font-size:22px">🛕</div><div><div class="form-logo-name" style="font-size:.96rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management</div></div></div>
+                <div style="text-align:center;margin-bottom:16px"><div class="design-badge badge-c">Design C · iPad Mini</div></div>
+                <div class="form-heading" style="text-align:center">Sign In</div>
+                <div class="form-subheading" style="text-align:center;margin-bottom:18px">Welcome back. Enter your details below.</div>
+                <div class="field" style="margin-bottom:12px"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Mobile number" /></div></div>
+                <div class="field" style="margin-bottom:12px"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Password" /><button class="eye-btn">👁</button></div></div>
+                <label class="remember-row" style="margin-bottom:18px"><input type="checkbox" /> Remember me</label>
+                <button class="btn-signin">Sign In →</button>
+                <div style="margin-top:18px;padding-top:14px;border-top:1px solid #f0e4d4;text-align:center"><div class="help-text">Contact the temple administration office.</div></div>
+              </div>
+            </div>
+
+            <!-- DESIGN D – iPad Mini: image fills screen, centered card -->
+            <div class="mob-panel" id="mipad-d" style="width:768px;height:1024px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+              <div style="position:absolute;inset:0;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(20,5,0,.28) 0%,rgba(10,3,0,.58) 100%)"></div>
+              <div style="position:relative;z-index:2;width:420px">
+                <div style="background:rgba(253,246,236,.9);backdrop-filter:blur(16px);border:1px solid rgba(255,220,170,.55);border-radius:22px;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.6)">
+                  <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060)"></div>
+                  <div style="padding:24px 22px 20px">
+                    <div class="form-logo-row" style="margin-bottom:14px"><div class="form-logo-icon" style="width:40px;height:40px;font-size:20px">🛕</div><div><div class="form-logo-name" style="font-size:.92rem">Kakkalani Village</div><div class="form-logo-tagline">Temple Management System</div></div></div>
+                    <div class="design-badge badge-d" style="font-size:.54rem;margin-bottom:12px">Design D · iPad Mini</div>
+                    <div class="form-heading" style="font-size:1.25rem">Sign In</div>
+                    <div class="form-subheading" style="font-size:.78rem;margin-bottom:16px">Sign in to manage poojas, payments &amp; donor records.</div>
+                    <div class="field" style="margin-bottom:12px"><label>Mobile Number <span>*</span></label><div class="input-wrap"><div class="phone-prefix">🇮🇳 +91</div><input class="field-input phone" type="tel" placeholder="Enter your mobile number" /></div></div>
+                    <div class="field" style="margin-bottom:12px"><label>Password <span>*</span></label><div class="input-wrap"><span class="input-icon">🔒</span><input class="field-input" type="password" placeholder="Enter your password" /><button class="eye-btn">👁</button></div></div>
+                    <label class="remember-row" style="margin-bottom:18px"><input type="checkbox" /> Remember me on this device</label>
+                    <button class="btn-signin">Sign In →</button>
+                    <div class="divider-text" style="margin:14px 0;font-size:.72rem">or contact temple office for access</div>
+                    <div class="help-text" style="font-size:.72rem">For account assistance, please reach the temple administration.</div>
+                  </div>
+                </div>
+              </div>
+              <!-- deity strip at bottom -->
+              <div style="position:absolute;bottom:0;left:0;right:0;z-index:3;height:70px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;overflow:hidden">
+                <div style="display:flex;gap:10px;padding:8px 12px;animation:d-scroll 24s linear infinite">
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" onerror="this.style.background='#5a1a10';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/perumal.jpg" onerror="this.style.background='#3a5a20';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png" onerror="this.style.background='#1a3a5a';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/shivan.jpg" onerror="this.style.background='#4a1a5a';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div><!-- /iPad Mini -->
+
+
+  </div><!-- /mob-devices-scroll -->
+
+  <!-- Behaviour notes at bottom -->
+  <div style="padding:6px 28px 32px;display:flex;flex-direction:column;gap:8px">
+    <div style="font-size:.7rem;color:rgba(245,221,176,.4);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">Responsive behaviour notes</div>
+    <div style="font-size:.74rem;color:rgba(245,221,176,.5);line-height:1.7;max-width:700px">
+      • <strong style="color:rgba(245,221,176,.75)">Design A (Split Panel)</strong> — left panel hides on phones (&lt;768 px); a compact gradient header bar replaces it. On iPad the split panel reappears.
+      <br>• <strong style="color:rgba(245,221,176,.75)">Design B (Dark Frosted)</strong> — card stretches to full width with reduced padding; background dark gradient fills the whole screen on all sizes.
+      <br>• <strong style="color:rgba(245,221,176,.75)">Design C (Clean Minimal)</strong> — card stretches to full width with reduced padding; warm cream background fills the whole screen.
+      <br>• <strong style="color:rgba(245,221,176,.75)">Design D (Image Background ✨)</strong> — village map image stays FULLY VISIBLE on all screen sizes; semi-transparent card sits centered on top; deity images scroll at the bottom exactly like the current page.
+      <br>• All inputs, buttons, and labels scale fluidly — no horizontal scroll on any listed device.
+    </div>
+  </div>
+
+</section><!-- /designMobile -->
+
+
+<!-- ══════════════════════════════════════════════════════
+     MOBILE OPTIONS SCREEN  — 5 layouts for Design A on phones
+══════════════════════════════════════════════════════ -->
+<section id="designMobOpts" class="screen" style="flex-direction:column;background:#080300;padding-top:48px">
+
+  <div style="padding:16px 24px 4px;font-size:1rem;font-weight:700;color:#f5ddb0;letter-spacing:.03em">
+    Design A – Mobile Layout Options
+    <span style="font-size:.72rem;font-weight:400;color:rgba(245,221,176,.45);margin-left:10px">Choose how the mobile screen should look</span>
+  </div>
+  <div style="padding:4px 24px 14px;font-size:.74rem;color:rgba(245,221,176,.4)">
+    Desktop stays as Split Panel. Pick the mobile style you prefer below.
+  </div>
+
+  <!-- 5 phones in a scrollable row -->
+  <div style="display:flex;gap:32px;padding:8px 28px 40px;overflow-x:auto;align-items:flex-start;scrollbar-width:thin;scrollbar-color:rgba(200,129,58,.3) transparent">
+
+
+    <!-- ══════════════════════
+         M1: Hero Banner + Form
+    ══════════════════════ -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
+      <div style="font-size:.75rem;font-weight:700;color:#f5ddb0">Option M1</div>
+      <div style="font-size:.65rem;color:rgba(245,221,176,.5);text-align:center">Gradient Hero<br>+ Stacked Form</div>
+
+      <div style="position:relative;border-radius:36px;background:#1e1e1e;box-shadow:0 0 0 2px #333,0 0 0 4px #111,0 20px 60px rgba(0,0,0,.7);width:232px;height:476px;padding:8px">
+        <div style="position:absolute;width:90px;height:30px;background:#000;border-radius:16px;top:12px;left:50%;transform:translateX(-50%);z-index:10"></div>
+        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:100px;height:4px;background:rgba(255,255,255,.18);border-radius:3px;z-index:10"></div>
+        <div style="overflow:hidden;border-radius:28px;width:216px;height:460px">
+          <div style="width:393px;transform:scale(0.5496);transform-origin:top left;height:838px">
+
+            <!-- Content: gradient hero top 38%, form bottom 62% -->
+            <div style="width:393px;min-height:838px;display:flex;flex-direction:column;background:#fdf6ec">
+              <!-- Hero top -->
+              <div style="background:linear-gradient(160deg,#7e2a20 0%,#c8813a 60%,#e8c07a 100%);padding:52px 28px 32px;display:flex;flex-direction:column;align-items:center;gap:14px;position:relative;overflow:hidden">
+                <div style="position:absolute;width:280px;height:280px;top:-80px;left:-60px;border-radius:50%;background:rgba(255,200,100,.07)"></div>
+                <div style="position:absolute;width:200px;height:200px;bottom:-60px;right:-40px;border-radius:50%;background:rgba(255,200,100,.07)"></div>
+                <div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,220,150,.5);display:flex;align-items:center;justify-content:center;font-size:36px;position:relative;z-index:1">🛕</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#fff;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,.4);position:relative;z-index:1">Kakkalani Village<br><span style="font-size:1rem;font-weight:400;color:rgba(255,235,190,.8)">Temple Management</span></div>
+                <div style="display:flex;gap:8px;position:relative;z-index:1">
+                  <span style="padding:4px 12px;border-radius:20px;background:rgba(255,255,255,.12);border:1px solid rgba(255,220,150,.3);color:rgba(255,235,190,.9);font-size:.72rem">Pooja Booking</span>
+                  <span style="padding:4px 12px;border-radius:20px;background:rgba(255,255,255,.12);border:1px solid rgba(255,220,150,.3);color:rgba(255,235,190,.9);font-size:.72rem">Payments</span>
+                </div>
+              </div>
+              <!-- Form bottom -->
+              <div style="flex:1;padding:28px 24px 20px">
+                <div style="font-size:1.25rem;font-weight:700;color:#3d1a0a;margin-bottom:4px">Welcome back</div>
+                <div style="font-size:.78rem;color:#8a6a50;margin-bottom:20px">Sign in to continue</div>
+                <div style="margin-bottom:14px">
+                  <div style="font-size:.76rem;font-weight:600;color:#5f4636;margin-bottom:5px">Mobile Number *</div>
+                  <div style="position:relative">
+                    <div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 9px;border-right:1.5px solid #e0ccb8;font-size:.78rem;color:#5f4636;font-weight:600">🇮🇳 +91</div>
+                    <input type="tel" placeholder="Mobile number" style="width:100%;padding:10px 12px 10px 88px;border:1.5px solid #e0ccb8;border-radius:11px;background:#fff;font-size:.84rem;outline:none" />
+                  </div>
+                </div>
+                <div style="margin-bottom:16px">
+                  <div style="font-size:.76rem;font-weight:600;color:#5f4636;margin-bottom:5px">Password *</div>
+                  <div style="position:relative">
+                    <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#b08060;font-size:14px">🔒</span>
+                    <input type="password" placeholder="Password" style="width:100%;padding:10px 36px 10px 38px;border:1.5px solid #e0ccb8;border-radius:11px;background:#fff;font-size:.84rem;outline:none" />
+                    <button style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:15px">👁</button>
+                  </div>
+                </div>
+                <label style="display:flex;align-items:center;gap:7px;font-size:.76rem;color:#6b5040;margin-bottom:18px"><input type="checkbox" style="accent-color:#a33a2b" /> Remember me</label>
+                <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.9rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;box-shadow:0 4px 16px rgba(139,46,32,.35)">Sign In →</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="max-width:180px;text-align:center;font-size:.65rem;color:rgba(245,221,176,.4);line-height:1.5">Gradient banner on top, clean form below. Clear branding visible.</div>
+    </div>
+
+
+    <!-- ══════════════════════
+         M2: Image Hero (top half) + Card slides up
+    ══════════════════════ -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
+      <div style="font-size:.75rem;font-weight:700;color:#f5ddb0">Option M2</div>
+      <div style="font-size:.65rem;color:rgba(245,221,176,.5);text-align:center">Image Hero (top)<br>+ Card slides up</div>
+
+      <div style="position:relative;border-radius:36px;background:#1e1e1e;box-shadow:0 0 0 2px #333,0 0 0 4px #111,0 20px 60px rgba(0,0,0,.7);width:232px;height:476px;padding:8px">
+        <div style="position:absolute;width:90px;height:30px;background:#000;border-radius:16px;top:12px;left:50%;transform:translateX(-50%);z-index:10"></div>
+        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:100px;height:4px;background:rgba(255,255,255,.18);border-radius:3px;z-index:10"></div>
+        <div style="overflow:hidden;border-radius:28px;width:216px;height:460px">
+          <div style="width:393px;transform:scale(0.5496);transform-origin:top left;height:838px">
+
+            <div style="width:393px;height:838px;position:relative;overflow:hidden">
+              <!-- BG image fills top half -->
+              <div style="position:absolute;top:0;left:0;right:0;height:55%;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <div style="position:absolute;top:0;left:0;right:0;height:55%;background:linear-gradient(to bottom,rgba(0,0,0,.2) 0%,rgba(0,0,0,.05) 60%,rgba(253,246,236,0) 100%)"></div>
+              <!-- Status bar overlay -->
+              <div style="position:absolute;top:0;left:0;right:0;height:48px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 6px;z-index:5">
+                <span style="font-size:11px;font-weight:700;color:#fff">9:41</span>
+                <span style="font-size:10px;color:rgba(255,255,255,.8)">▲ ⬛ 🔋</span>
+              </div>
+              <!-- Village label on image -->
+              <div style="position:absolute;top:56px;left:0;right:0;display:flex;flex-direction:column;align-items:center;z-index:4">
+                <div style="width:58px;height:58px;border-radius:50%;background:rgba(253,246,236,.9);border:3px solid rgba(255,220,150,.7);display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 4px 16px rgba(0,0,0,.35)">🛕</div>
+                <div style="margin-top:8px;font-size:1.1rem;font-weight:700;color:#fff;text-align:center;text-shadow:0 2px 8px rgba(0,0,0,.7)">Kakkalani Village</div>
+                <div style="font-size:.72rem;color:rgba(255,235,190,.85);text-shadow:0 1px 4px rgba(0,0,0,.6)">Temple Management System</div>
+              </div>
+              <!-- Card slides up from bottom, overlapping image -->
+              <div style="position:absolute;bottom:0;left:0;right:0;background:#fdf6ec;border-radius:28px 28px 0 0;padding:26px 24px 20px;box-shadow:0 -6px 30px rgba(0,0,0,.25)">
+                <div style="width:40px;height:4px;background:#e0ccb8;border-radius:2px;margin:0 auto 20px"></div>
+                <div style="font-size:1.2rem;font-weight:700;color:#3d1a0a;margin-bottom:4px">Sign In</div>
+                <div style="font-size:.76rem;color:#8a6a50;margin-bottom:18px">Enter your details to continue</div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Mobile Number *</div>
+                  <div style="position:relative">
+                    <div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 8px;border-right:1.5px solid #e0ccb8;font-size:.74rem;color:#5f4636;font-weight:600;white-space:nowrap">🇮🇳 +91</div>
+                    <input type="tel" placeholder="Mobile number" style="width:100%;padding:9px 12px 9px 82px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" />
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Password *</div>
+                  <div style="position:relative">
+                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#b08060;font-size:13px">🔒</span>
+                    <input type="password" placeholder="Password" style="width:100%;padding:9px 34px 9px 36px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" />
+                    <button style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:14px">👁</button>
+                  </div>
+                </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:.73rem;color:#6b5040;margin-bottom:16px"><input type="checkbox" style="accent-color:#a33a2b" /> Remember me</label>
+                <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.88rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;box-shadow:0 4px 15px rgba(139,46,32,.35)">Sign In →</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="max-width:180px;text-align:center;font-size:.65rem;color:rgba(245,221,176,.4);line-height:1.5">Village map shows in top half. Form card slides up from bottom. Very popular app pattern.</div>
+    </div>
+
+
+    <!-- ══════════════════════
+         M3: Full Image + Centered Card (Design D mobile)
+    ══════════════════════ -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
+      <div style="font-size:.75rem;font-weight:700;color:#f5ddb0">Option M3</div>
+      <div style="font-size:.65rem;color:rgba(245,221,176,.5);text-align:center">Full Image BG<br>+ Centered Card</div>
+
+      <div style="position:relative;border-radius:36px;background:#1e1e1e;box-shadow:0 0 0 2px #333,0 0 0 4px #111,0 20px 60px rgba(0,0,0,.7);width:232px;height:476px;padding:8px">
+        <div style="position:absolute;width:90px;height:30px;background:#000;border-radius:16px;top:12px;left:50%;transform:translateX(-50%);z-index:10"></div>
+        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:100px;height:4px;background:rgba(255,255,255,.18);border-radius:3px;z-index:10"></div>
+        <div style="overflow:hidden;border-radius:28px;width:216px;height:460px">
+          <div style="width:393px;transform:scale(0.5496);transform-origin:top left;height:838px">
+
+            <div style="width:393px;height:838px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+              <div style="position:absolute;inset:0;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <div style="position:absolute;inset:0;background:rgba(15,4,0,.52)"></div>
+              <div style="position:absolute;top:0;left:0;right:0;height:48px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 6px;z-index:5">
+                <span style="font-size:11px;font-weight:700;color:#fff">9:41</span>
+                <span style="font-size:10px;color:rgba(255,255,255,.8)">▲ ⬛ 🔋</span>
+              </div>
+              <div style="position:relative;z-index:2;width:340px">
+                <div style="background:rgba(253,246,236,.9);backdrop-filter:blur(16px);border:1px solid rgba(255,220,170,.5);border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+                  <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060)"></div>
+                  <div style="padding:22px 20px 20px">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                      <div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#7e2a20,#c8813a);display:flex;align-items:center;justify-content:center;font-size:20px">🛕</div>
+                      <div><div style="font-size:.9rem;font-weight:700;color:#7e2a20">Kakkalani Village</div><div style="font-size:.62rem;color:#9a7a5a">Temple Management System</div></div>
+                    </div>
+                    <div style="font-size:1.15rem;font-weight:700;color:#3d1a0a;margin-bottom:14px">Sign In</div>
+                    <div style="margin-bottom:12px">
+                      <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Mobile Number *</div>
+                      <div style="position:relative"><div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 8px;border-right:1.5px solid #e0ccb8;font-size:.74rem;color:#5f4636;font-weight:600">🇮🇳 +91</div><input type="tel" placeholder="Mobile number" style="width:100%;padding:9px 12px 9px 80px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" /></div>
+                    </div>
+                    <div style="margin-bottom:14px">
+                      <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Password *</div>
+                      <div style="position:relative"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#b08060;font-size:13px">🔒</span><input type="password" placeholder="Password" style="width:100%;padding:9px 34px 9px 36px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" /><button style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:14px">👁</button></div>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:.73rem;color:#6b5040;margin-bottom:16px"><input type="checkbox" style="accent-color:#a33a2b" /> Remember me</label>
+                    <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.88rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;box-shadow:0 4px 15px rgba(139,46,32,.35)">Sign In →</button>
+                  </div>
+                </div>
+              </div>
+              <!-- deity strip -->
+              <div style="position:absolute;bottom:0;left:0;right:0;z-index:3;height:56px;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);display:flex;align-items:center;overflow:hidden">
+                <div style="display:flex;gap:8px;padding:6px 8px;animation:d-scroll 20s linear infinite">
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/ayyanar/ayyanar-hd.jpg" onerror="this.style.background='#5a1a10';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/perumal.jpg" onerror="this.style.background='#3a5a20';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/shivan.jpg" onerror="this.style.background='#4a1a5a';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png" onerror="this.style.background='#7e2a20';this.src=''" />
+                  <img style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,200,100,.5)" src="frontend/public/images/kovi/pillayar/pillayar-hd.jpg" onerror="this.style.background='#c8813a';this.src=''" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="max-width:180px;text-align:center;font-size:.65rem;color:rgba(245,221,176,.4);line-height:1.5">Village map fills the whole screen. Semi-transparent card + deity strip at bottom.</div>
+    </div>
+
+
+    <!-- ══════════════════════
+         M4: Full gradient BG + card bottom-anchored
+    ══════════════════════ -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
+      <div style="font-size:.75rem;font-weight:700;color:#f5ddb0">Option M4</div>
+      <div style="font-size:.65rem;color:rgba(245,221,176,.5);text-align:center">Temple Gradient BG<br>+ Card bottom</div>
+
+      <div style="position:relative;border-radius:36px;background:#1e1e1e;box-shadow:0 0 0 2px #333,0 0 0 4px #111,0 20px 60px rgba(0,0,0,.7);width:232px;height:476px;padding:8px">
+        <div style="position:absolute;width:90px;height:30px;background:#000;border-radius:16px;top:12px;left:50%;transform:translateX(-50%);z-index:10"></div>
+        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:100px;height:4px;background:rgba(255,255,255,.18);border-radius:3px;z-index:10"></div>
+        <div style="overflow:hidden;border-radius:28px;width:216px;height:460px">
+          <div style="width:393px;transform:scale(0.5496);transform-origin:top left;height:838px">
+
+            <div style="width:393px;height:838px;position:relative;overflow:hidden;background:linear-gradient(160deg,#7e2a20 0%,#b05a28 45%,#c8813a 80%,#e8c07a 100%)">
+              <!-- decorative circles -->
+              <div style="position:absolute;width:350px;height:350px;top:-80px;left:-80px;border-radius:50%;background:rgba(255,200,100,.08)"></div>
+              <div style="position:absolute;width:260px;height:260px;top:180px;right:-80px;border-radius:50%;background:rgba(255,200,100,.06)"></div>
+              <!-- OM symbol -->
+              <div style="position:absolute;top:60px;left:0;right:0;text-align:center;font-size:3.5rem;color:rgba(255,255,255,.12);font-family:serif">ॐ</div>
+              <!-- status bar -->
+              <div style="position:absolute;top:0;left:0;right:0;height:48px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 6px;z-index:5">
+                <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.8)">9:41</span>
+                <span style="font-size:10px;color:rgba(255,255,255,.6)">▲ ⬛ 🔋</span>
+              </div>
+              <!-- branding at top-center -->
+              <div style="position:absolute;top:72px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:10px;z-index:4">
+                <div style="width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,220,150,.5);display:flex;align-items:center;justify-content:center;font-size:36px">🛕</div>
+                <div style="font-size:1.25rem;font-weight:700;color:#fff;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,.3)">Kakkalani Village</div>
+                <div style="font-size:.72rem;color:rgba(255,235,190,.75)">Temple Management System</div>
+              </div>
+              <!-- White card anchored at bottom -->
+              <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:26px 26px 0 0;padding:24px 22px 20px;box-shadow:0 -8px 32px rgba(0,0,0,.3)">
+                <div style="width:36px;height:4px;background:#e0ccb8;border-radius:2px;margin:0 auto 18px"></div>
+                <div style="font-size:1.1rem;font-weight:700;color:#3d1a0a;margin-bottom:14px">Sign In</div>
+                <div style="margin-bottom:11px">
+                  <div style="font-size:.73rem;font-weight:600;color:#5f4636;margin-bottom:4px">Mobile Number *</div>
+                  <div style="position:relative"><div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 8px;border-right:1.5px solid #e0ccb8;font-size:.72rem;color:#5f4636;font-weight:600">🇮🇳 +91</div><input type="tel" placeholder="Mobile number" style="width:100%;padding:9px 12px 9px 78px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fafafa;font-size:.8rem;outline:none" /></div>
+                </div>
+                <div style="margin-bottom:13px">
+                  <div style="font-size:.73rem;font-weight:600;color:#5f4636;margin-bottom:4px">Password *</div>
+                  <div style="position:relative"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#b08060;font-size:13px">🔒</span><input type="password" placeholder="Password" style="width:100%;padding:9px 34px 9px 36px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fafafa;font-size:.8rem;outline:none" /><button style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:14px">👁</button></div>
+                </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:.72rem;color:#6b5040;margin-bottom:14px"><input type="checkbox" style="accent-color:#a33a2b" /> Remember me</label>
+                <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.88rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;box-shadow:0 4px 14px rgba(139,46,32,.35)">Sign In →</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="max-width:180px;text-align:center;font-size:.65rem;color:rgba(245,221,176,.4);line-height:1.5">Temple gradient fills screen with OM symbol. Clean white card at the bottom.</div>
+    </div>
+
+
+    <!-- ══════════════════════
+         M5: Minimal full-screen form (no branding top)
+    ══════════════════════ -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
+      <div style="font-size:.75rem;font-weight:700;color:#f5ddb0">Option M5</div>
+      <div style="font-size:.65rem;color:rgba(245,221,176,.5);text-align:center">Clean fullscreen<br>form (no hero)</div>
+
+      <div style="position:relative;border-radius:36px;background:#1e1e1e;box-shadow:0 0 0 2px #333,0 0 0 4px #111,0 20px 60px rgba(0,0,0,.7);width:232px;height:476px;padding:8px">
+        <div style="position:absolute;width:90px;height:30px;background:#000;border-radius:16px;top:12px;left:50%;transform:translateX(-50%);z-index:10"></div>
+        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:100px;height:4px;background:rgba(255,255,255,.18);border-radius:3px;z-index:10"></div>
+        <div style="overflow:hidden;border-radius:28px;width:216px;height:460px">
+          <div style="width:393px;transform:scale(0.5496);transform-origin:top left;height:838px">
+
+            <div style="width:393px;min-height:838px;background:linear-gradient(145deg,#fdf3e7 0%,#fff8f0 50%,#fdebd6 100%);padding:52px 24px 28px;display:flex;flex-direction:column;justify-content:center">
+              <!-- Large OM + logo centered -->
+              <div style="text-align:center;margin-bottom:6px;font-size:2.8rem;background:linear-gradient(135deg,#7e2a20,#c8813a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">ॐ</div>
+              <div style="display:flex;justify-content:center;gap:5px;margin-bottom:20px">
+                <div style="width:5px;height:5px;border-radius:50%;background:#7e2a20"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:#c8813a;margin-top:-1px"></div>
+                <div style="width:5px;height:5px;border-radius:50%;background:#f0c060"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:22px">
+                <div style="width:52px;height:52px;border-radius:15px;background:linear-gradient(135deg,#7e2a20,#c8813a);display:flex;align-items:center;justify-content:center;font-size:27px;box-shadow:0 4px 14px rgba(126,42,32,.35)">🛕</div>
+                <div><div style="font-size:1.1rem;font-weight:700;color:#7e2a20">Kakkalani Village</div><div style="font-size:.65rem;color:#9a7a5a">Temple Management System</div></div>
+              </div>
+              <div style="background:#fff;border-radius:20px;padding:22px 20px;box-shadow:0 2px 4px rgba(126,42,32,.05),0 8px 28px rgba(126,42,32,.1),0 0 0 1px rgba(220,185,150,.2)">
+                <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060);margin:-22px -20px 18px;border-radius:20px 20px 0 0"></div>
+                <div style="font-size:1.1rem;font-weight:700;color:#3d1a0a;margin-bottom:14px;text-align:center">Sign In</div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Mobile Number *</div>
+                  <div style="position:relative"><div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 8px;border-right:1.5px solid #e0ccb8;font-size:.74rem;color:#5f4636;font-weight:600">🇮🇳 +91</div><input type="tel" placeholder="Mobile number" style="width:100%;padding:9px 12px 9px 80px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" /></div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Password *</div>
+                  <div style="position:relative"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#b08060;font-size:13px">🔒</span><input type="password" placeholder="Password" style="width:100%;padding:9px 34px 9px 36px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" /><button style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:14px">👁</button></div>
+                </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:.73rem;color:#6b5040;margin-bottom:16px"><input type="checkbox" style="accent-color:#a33a2b" /> Remember me</label>
+                <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.88rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;box-shadow:0 4px 14px rgba(139,46,32,.35)">Sign In →</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="max-width:180px;text-align:center;font-size:.65rem;color:rgba(245,221,176,.4);line-height:1.5">Warmth cream bg, no hero image. Logo + OM at top, form card below. Fastest to load.</div>
+    </div>
+
+
+  </div><!-- /device row -->
+
+  <!-- Summary table -->
+  <div style="padding:0 28px 36px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;max-width:1100px">
+    <div style="background:rgba(255,200,100,.06);border:1px solid rgba(255,200,100,.12);border-radius:12px;padding:12px 14px">
+      <div style="font-size:.72rem;font-weight:700;color:#f5c97a;margin-bottom:4px">M1 — Gradient Hero + Form</div>
+      <div style="font-size:.66rem;color:rgba(245,221,176,.5);line-height:1.5">Cleanest. Branding on top, pure form below. No scrolling needed. Best for simple phones.</div>
+    </div>
+    <div style="background:rgba(255,200,100,.06);border:1px solid rgba(255,200,100,.12);border-radius:12px;padding:12px 14px">
+      <div style="font-size:.72rem;font-weight:700;color:#f5c97a;margin-bottom:4px">M2 — Image Hero + Slide-up Card ⭐</div>
+      <div style="font-size:.66rem;color:rgba(245,221,176,.5);line-height:1.5">Most modern. Village map shows at top. Form slides up as a sheet. Users immediately know which village/temple this is.</div>
+    </div>
+    <div style="background:rgba(255,200,100,.06);border:1px solid rgba(255,200,100,.12);border-radius:12px;padding:12px 14px">
+      <div style="font-size:.72rem;font-weight:700;color:#f5c97a;margin-bottom:4px">M3 — Full Image + Card + Strip</div>
+      <div style="font-size:.66rem;color:rgba(245,221,176,.5);line-height:1.5">Image fills everything. Semi-transparent card + deity strip. Closest to current page but properly centered.</div>
+    </div>
+    <div style="background:rgba(255,200,100,.06);border:1px solid rgba(255,200,100,.12);border-radius:12px;padding:12px 14px">
+      <div style="font-size:.72rem;font-weight:700;color:#f5c97a;margin-bottom:4px">M4 — Temple Gradient + Bottom Card</div>
+      <div style="font-size:.66rem;color:rgba(245,221,176,.5);line-height:1.5">Rich gradient with OM. Clean white card at bottom. Very temple-feel aesthetic. No image needed.</div>
+    </div>
+    <div style="background:rgba(255,200,100,.06);border:1px solid rgba(255,200,100,.12);border-radius:12px;padding:12px 14px">
+      <div style="font-size:.72rem;font-weight:700;color:#f5c97a;margin-bottom:4px">M5 — Minimal Fullscreen Form</div>
+      <div style="font-size:.66rem;color:rgba(245,221,176,.5);line-height:1.5">Warm cream background. OM + logo at center-top. Clean white card. Fastest to load, works on any connection.</div>
+    </div>
+  </div>
+
+</section><!-- /designMobOpts -->
+
+
+<!-- ══════════════════════════════════════════════════════
+     FINAL DESIGN — Design A (desktop) + Option M2 (mobile)
+══════════════════════════════════════════════════════ -->
+<section id="designFinal" class="screen" style="flex-direction:column;background:#080300;padding-top:56px;align-items:center;justify-content:flex-start;overflow:auto">
+
+  <!-- Page header -->
+  <div style="text-align:center;padding:32px 20px 28px">
+    <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,220,100,.08);border:1px solid rgba(255,220,100,.2);border-radius:30px;padding:6px 18px;margin-bottom:16px">
+      <span style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:#f5c97a;text-transform:uppercase">Confirmed Final Design</span>
+    </div>
+    <div style="font-size:1.5rem;font-weight:700;color:#f5ddb0;line-height:1.3;margin-bottom:8px">Design A <span style="color:rgba(245,221,176,.3)">×</span> Option M2</div>
+    <div style="font-size:.84rem;color:rgba(245,221,176,.5)">Desktop uses the Split Panel &nbsp;·&nbsp; Mobile uses the Image Hero + Slide-up Card</div>
+  </div>
+
+  <!-- Side-by-side comparison row -->
+  <div style="display:flex;gap:52px;align-items:flex-start;justify-content:center;flex-wrap:wrap;padding:0 40px 60px">
+
+    <!-- ─────────────────────────────────────────────
+         DESKTOP BROWSER MOCKUP (Design A)
+    ───────────────────────────────────────────────── -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#60d890"></div>
+        <div style="font-size:.78rem;font-weight:700;color:#60d890;letter-spacing:.08em;text-transform:uppercase">Desktop / Laptop</div>
+      </div>
+
+      <!-- Browser chrome wrapper -->
+      <div style="background:#222;border-radius:12px 12px 8px 8px;box-shadow:0 0 0 1.5px #444,0 28px 80px rgba(0,0,0,.85);overflow:hidden;width:768px">
+        <!-- Chrome top bar -->
+        <div style="background:#333;padding:8px 14px;display:flex;align-items:center;gap:7px">
+          <div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#ffbd2e"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div>
+          <div style="flex:1;background:#1a1a1a;border-radius:5px;padding:4px 12px;font-size:.7rem;color:rgba(255,255,255,.35);margin:0 10px;font-family:monospace">localhost:5173/login</div>
+          <div style="width:20px;height:10px;border-radius:3px;background:#444"></div>
+          <div style="width:20px;height:10px;border-radius:3px;background:#444"></div>
+        </div>
+
+        <!-- Viewport: content at 1280×720, scaled 0.6 → display 768×432 -->
+        <div style="overflow:hidden;height:432px;background:#fdf6ec">
+          <div style="width:1280px;height:720px;transform:scale(0.6);transform-origin:top left;display:flex">
+
+            <!-- Left gradient panel -->
+            <div style="width:640px;height:720px;background:linear-gradient(160deg,#7e2a20 0%,#c8813a 55%,#e8c07a 100%);position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+              <div style="position:absolute;width:380px;height:380px;top:-100px;left:-100px;border-radius:50%;background:rgba(255,200,100,.07)"></div>
+              <div style="position:absolute;width:260px;height:260px;bottom:-80px;right:-60px;border-radius:50%;background:rgba(255,200,100,.07)"></div>
+              <div style="position:absolute;inset:0;background:rgba(40,10,5,.45)"></div>
+              <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:18px;padding:40px;text-align:center">
+                <div style="width:86px;height:86px;background:rgba(255,255,255,.12);border:2px solid rgba(255,220,150,.5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px">🛕</div>
+                <div style="font-size:1.9rem;font-weight:700;color:#fff;letter-spacing:.04em;text-shadow:0 2px 12px rgba(0,0,0,.5);line-height:1.25">Kakkalani<br>Village Temples</div>
+                <div style="width:55px;height:2px;background:linear-gradient(90deg,transparent,rgba(255,220,150,.7),transparent)"></div>
+                <div style="font-size:.9rem;color:rgba(255,235,190,.85);max-width:270px;line-height:1.6">Manage pooja registrations, donations, and temple services from one place.</div>
+                <div style="display:flex;gap:9px;flex-wrap:wrap;justify-content:center">
+                  <span style="padding:4px 13px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,220,150,.3);color:rgba(255,235,190,.9);font-size:.74rem">Pooja Booking</span>
+                  <span style="padding:4px 13px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,220,150,.3);color:rgba(255,235,190,.9);font-size:.74rem">Payments</span>
+                  <span style="padding:4px 13px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,220,150,.3);color:rgba(255,235,190,.9);font-size:.74rem">Passbook</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right form panel -->
+            <div style="flex:1;height:720px;background:#fdf6ec;display:flex;align-items:center;justify-content:center;padding:60px 38px">
+              <div style="width:100%;max-width:420px">
+                <div style="display:flex;align-items:center;gap:11px;margin-bottom:22px">
+                  <div style="width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#7e2a20,#c8813a);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(126,42,32,.35)">🛕</div>
+                  <div><div style="font-size:1rem;font-weight:700;color:#7e2a20">Kakkalani Village</div><div style="font-size:.65rem;color:#9a7a5a;margin-top:1px">Temple Management System</div></div>
+                </div>
+                <div style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#fdebd6;color:#7e2a20;border:1px solid #e0ccb8;margin-bottom:14px">Design A · Split Panel</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#3d1a0a;margin-bottom:5px">Welcome back</div>
+                <div style="font-size:.83rem;color:#8a6a50;margin-bottom:22px">Sign in to manage poojas, payments &amp; donor records.</div>
+                <div style="margin-bottom:16px">
+                  <label style="display:block;font-size:.76rem;font-weight:600;color:#5f4636;margin-bottom:5px">Mobile Number <span style="color:#c0392b">*</span></label>
+                  <div style="position:relative">
+                    <div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 9px;border-right:1.5px solid #e0ccb8;font-size:.8rem;color:#5f4636;font-weight:600;gap:4px;white-space:nowrap">🇮🇳 +91</div>
+                    <input type="tel" placeholder="Enter your mobile number" style="width:100%;padding:10px 13px 10px 92px;border:1.5px solid #e0ccb8;border-radius:11px;background:#fff;color:#2f2a26;font-size:.86rem;outline:none" />
+                  </div>
+                </div>
+                <div style="margin-bottom:16px">
+                  <label style="display:block;font-size:.76rem;font-weight:600;color:#5f4636;margin-bottom:5px">Password <span style="color:#c0392b">*</span></label>
+                  <div style="position:relative">
+                    <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#b08060;font-size:14px;pointer-events:none">🔒</span>
+                    <input type="password" placeholder="Enter your password" style="width:100%;padding:10px 13px 10px 40px;border:1.5px solid #e0ccb8;border-radius:11px;background:#fff;color:#2f2a26;font-size:.86rem;outline:none" />
+                    <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:15px;padding:3px">👁</button>
+                  </div>
+                </div>
+                <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:#6b5040;margin-bottom:20px"><input type="checkbox" style="accent-color:#a33a2b;width:14px;height:14px" /> Remember me on this device</label>
+                <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.9rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 4px 18px rgba(139,46,32,.35);letter-spacing:.03em">Sign In &nbsp;→</button>
+                <div style="text-align:center;font-size:.74rem;color:#b09070;margin:18px 0">or contact temple office for access</div>
+                <div style="text-align:center;font-size:.74rem;color:#9a7a5a">For account assistance, please reach the temple administration.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="font-size:.7rem;color:rgba(245,221,176,.4);text-align:center;max-width:650px;line-height:1.5">Split panel — gradient temple hero on left, clean login form on right. Shown at 1280×720 viewport (60% scale).</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         MOBILE PHONE MOCKUP (Option M2)
+    ───────────────────────────────────────────────── -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#80d0ff"></div>
+        <div style="font-size:.78rem;font-weight:700;color:#80d0ff;letter-spacing:.08em;text-transform:uppercase">Mobile / Smartphone</div>
+      </div>
+
+      <!-- Phone frame (same dimensions as other mobile mockups) -->
+      <div style="position:relative;border-radius:36px;background:#1e1e1e;box-shadow:0 0 0 2px #333,0 0 0 4px #111,0 24px 80px rgba(0,0,0,.8);width:232px;height:476px;padding:8px">
+        <div style="position:absolute;width:90px;height:30px;background:#000;border-radius:16px;top:12px;left:50%;transform:translateX(-50%);z-index:10"></div>
+        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:100px;height:4px;background:rgba(255,255,255,.18);border-radius:3px;z-index:10"></div>
+        <div style="overflow:hidden;border-radius:28px;width:216px;height:460px">
+          <div style="width:393px;transform:scale(0.5496);transform-origin:top left;height:838px">
+
+            <!-- M2 full-screen layout -->
+            <div style="width:393px;height:838px;position:relative;overflow:hidden">
+              <!-- BG: village map fills top ~55% -->
+              <div style="position:absolute;top:0;left:0;right:0;height:55%;background:url('frontend/public/images/landing-page-image.jpg') center/cover no-repeat"></div>
+              <!-- Soft gradient fade at bottom of image -->
+              <div style="position:absolute;top:0;left:0;right:0;height:55%;background:linear-gradient(to bottom,rgba(0,0,0,.2) 0%,rgba(0,0,0,.05) 60%,rgba(253,246,236,0) 100%)"></div>
+              <!-- Status bar -->
+              <div style="position:absolute;top:0;left:0;right:0;height:48px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 6px;z-index:5">
+                <span style="font-size:11px;font-weight:700;color:#fff">9:41</span>
+                <span style="font-size:10px;color:rgba(255,255,255,.8)">▲ ⬛ 🔋</span>
+              </div>
+              <!-- Temple branding overlaid on image -->
+              <div style="position:absolute;top:56px;left:0;right:0;display:flex;flex-direction:column;align-items:center;z-index:4">
+                <div style="width:58px;height:58px;border-radius:50%;background:rgba(253,246,236,.9);border:3px solid rgba(255,220,150,.7);display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 4px 16px rgba(0,0,0,.35)">🛕</div>
+                <div style="margin-top:8px;font-size:1.1rem;font-weight:700;color:#fff;text-align:center;text-shadow:0 2px 8px rgba(0,0,0,.7)">Kakkalani Village</div>
+                <div style="font-size:.72rem;color:rgba(255,235,190,.85);text-shadow:0 1px 4px rgba(0,0,0,.6)">Temple Management System</div>
+              </div>
+              <!-- Bottom card — anchored at bottom, overlaps image -->
+              <div style="position:absolute;bottom:0;left:0;right:0;background:#fdf6ec;border-radius:28px 28px 0 0;padding:26px 24px 20px;box-shadow:0 -6px 30px rgba(0,0,0,.25)">
+                <!-- Drag handle bar -->
+                <div style="width:40px;height:4px;background:#e0ccb8;border-radius:2px;margin:0 auto 20px"></div>
+                <!-- Accent bar -->
+                <div style="height:3px;background:linear-gradient(90deg,#7e2a20,#c8813a,#f0d060);border-radius:3px;margin-bottom:18px"></div>
+                <div style="font-size:1.2rem;font-weight:700;color:#3d1a0a;margin-bottom:4px">Sign In</div>
+                <div style="font-size:.76rem;color:#8a6a50;margin-bottom:18px">Enter your details to continue</div>
+                <!-- Mobile Number -->
+                <div style="margin-bottom:12px">
+                  <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Mobile Number *</div>
+                  <div style="position:relative">
+                    <div style="position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 8px;border-right:1.5px solid #e0ccb8;font-size:.74rem;color:#5f4636;font-weight:600;white-space:nowrap">🇮🇳 +91</div>
+                    <input type="tel" placeholder="Mobile number" style="width:100%;padding:9px 12px 9px 82px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" />
+                  </div>
+                </div>
+                <!-- Password -->
+                <div style="margin-bottom:14px">
+                  <div style="font-size:.74rem;font-weight:600;color:#5f4636;margin-bottom:4px">Password *</div>
+                  <div style="position:relative">
+                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#b08060;font-size:13px">🔒</span>
+                    <input type="password" placeholder="Password" style="width:100%;padding:9px 34px 9px 36px;border:1.5px solid #e0ccb8;border-radius:10px;background:#fff;font-size:.8rem;outline:none" />
+                    <button style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9a7a5a;font-size:14px">👁</button>
+                  </div>
+                </div>
+                <!-- Remember me -->
+                <label style="display:flex;align-items:center;gap:6px;font-size:.73rem;color:#6b5040;margin-bottom:16px"><input type="checkbox" style="accent-color:#a33a2b" /> Remember me</label>
+                <!-- Sign In button -->
+                <button style="width:100%;padding:12px;background:linear-gradient(135deg,#8b2e20,#c8813a);color:#fff;font-size:.88rem;font-weight:700;border:none;border-radius:11px;cursor:pointer;box-shadow:0 4px 15px rgba(139,46,32,.35)">Sign In →</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div style="max-width:232px;text-align:center;font-size:.7rem;color:rgba(245,221,176,.4);line-height:1.5">Village map image fills top, form card anchored at bottom. No scrolling needed.</div>
+    </div>
+
+  </div>
+
+  <!-- Ready-to-implement note -->
+  <div style="text-align:center;padding:0 20px 64px;max-width:580px;margin:0 auto">
+    <div style="background:rgba(96,216,144,.06);border:1px solid rgba(96,216,144,.18);border-radius:16px;padding:20px 24px">
+      <div style="font-size:.82rem;font-weight:700;color:#60d890;margin-bottom:8px">✅ Ready to implement in LoginPage.tsx</div>
+      <div style="font-size:.72rem;color:rgba(245,221,176,.45);line-height:1.7">When this looks good, the next step is implementing this combined layout in the real <code style="background:rgba(255,255,255,.07);padding:1px 6px;border-radius:4px;font-family:monospace;font-size:.7rem">LoginPage.tsx</code> using Tailwind CSS + React.<br>Desktop breakpoint: <code style="background:rgba(255,255,255,.07);padding:1px 6px;border-radius:4px;font-family:monospace;font-size:.7rem">lg:</code> split panel · Mobile: M2 bottom-sheet card.</div>
+    </div>
+  </div>
+
+</section><!-- /designFinal -->
+
+
+<script>
+  /* ── Top-level design switcher ── */
+  function show(id, btn) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
+    document.getElementById('design' + id).classList.add('visible');
+    document.querySelectorAll('.design-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  /* ── Mobile preview: switch design (A/B/C) inside all device frames ── */
+  const deviceIds = ['mse','m14','msg','mipad'];
+  let currentMobDesign = 'a';
+
+  function mobDesign(letter, btn) {
+    const l = letter.toLowerCase();
+    currentMobDesign = l;
+    deviceIds.forEach(function(d) {
+      ['a','b','c','d'].forEach(function(x) {
+        var el = document.getElementById(d + '-' + x);
+        if (el) el.classList.remove('active');
+      });
+      var target = document.getElementById(d + '-' + l);
+      if (target) target.classList.add('active');
+    });
+    document.querySelectorAll('.mob-sub-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+</script>
+</body>
+</html>

@@ -21,9 +21,9 @@ type TempleImage = { src: string; deity: string; name: string; contain?: boolean
 type StatIcon = "location" | "temple" | "heritage" | "blessings";
 
 const quickStats: Array<{ icon: StatIcon; label: string; value: string }> = [
-  { icon: "location",  label: "Location",         value: "10 km SE of Thiruvarur" },
-  { icon: "temple",    label: "Sacred Temples",   value: "5+ Sacred Sites" },
+  { icon: "temple",    label: "Sacred Temples",   value: "5+ Temple & Sacred Sites" },
   { icon: "blessings", label: "Divine Blessings", value: "Mahaperiyava & Ramana Maharishi" },
+  { icon: "location",  label: "Location",         value: "How to Reach Kakkalani" },
 ];
 
 // Village Snapshot data (from AboutKakkalaniVillage page)
@@ -129,10 +129,10 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
   const location = useLocation();
 
   useEffect(() => {
-    if (location.hash !== "#our-village-heritage") return;
+    if (location.hash !== "#significance-of-kakkalani-village") return;
 
     const scrollToHeritage = () => {
-      const section = document.getElementById("our-village-heritage");
+      const section = document.getElementById("significance-of-kakkalani-village");
       if (!section) return;
       const headerOffset = 110;
       const targetY = section.getBoundingClientRect().top + window.scrollY - headerOffset;
@@ -645,12 +645,12 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
           </section>
 
           {/* ═══ OUR VILLAGE HERITAGE ═══ */}
-          <section id="our-village-heritage" className="heritage">
+          <section id="significance-of-kakkalani-village" className="heritage">
             <div className="wrap">
 
               {/* Section header */}
               <div className="heritage-hdr lr">
-                <div className="eyebrow">Our Village Heritage</div>
+                <div className="eyebrow">SIGNIFICANCE OF KAKKALANI VILLAGE</div>
                 <h2 className="sec-title">
                   A Resilient Heritage of <em>Faith, Rivers & Temples</em>
                 </h2>
@@ -767,7 +767,7 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
               <div className="h-section lr ld3">
                 <div className="h-title-bar">
                   <div className="h-icon"><BlessingsStatIcon /></div>
-                  <h3 className="h-sec-title">Blessings & Legacy</h3>
+                  <h3 className="h-sec-title">Mahaperiyava & Ramana Maharishi</h3>
                 </div>
                 <div className="h-rule" />
 

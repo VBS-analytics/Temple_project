@@ -78,8 +78,8 @@ passbook_regen_job() {
 }
 
 # Control whether optional background jobs run.
-# Default enabled so opening-balance workbook changes are picked up on deploy.
-RUN_STARTUP_JOBS="${RUN_STARTUP_JOBS:-1}"
+# Default disabled to avoid re-importing opening balances on every restart.
+RUN_STARTUP_JOBS="${RUN_STARTUP_JOBS:-0}"
 if [ "$RUN_STARTUP_JOBS" = "1" ]; then
   echo "[4/6] Running startup jobs..."
   startup_jobs
