@@ -21,14 +21,14 @@ const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
   iso: entry.iso2,
 }));
 
-const defaultCountry = countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
+const defaultCountry =
+  countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
 
-const loginHeroSlides = [
-  { src: '/images/landing-page-image.jpg', fit: 'cover' as const },
-  { src: '/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png', fit: 'contain' as const },
-  { src: '/images/kovi/pillayar/pillayar-hd.jpg', fit: 'contain' as const },
-  { src: '/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png', fit: 'contain' as const },
-  { src: '/images/kovi/ayyanar/ayyanar-hd.jpg', fit: 'contain' as const },
+const loginMarqueeSlides = [
+  { src: '/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png', alt: 'Lakshmi Narayanar temple deity' },
+  { src: '/images/kovi/pillayar/pillayar-hd.jpg', alt: 'Aathagarai Pillayar temple deity' },
+  { src: '/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png', alt: 'Kalahasteeswarar temple deity' },
+  { src: '/images/kovi/ayyanar/ayyanar-hd.jpg', alt: 'Ayyanar temple deity' },
 ];
 
 const LoginPage = () => {
@@ -37,8 +37,7 @@ const LoginPage = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [activeHeroSlide, setActiveHeroSlide] = useState(0);
-  
+
   const {
     register,
     handleSubmit,
@@ -51,36 +50,25 @@ const LoginPage = () => {
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(defaultCountry);
   const [localPhoneNumber, setLocalPhoneNumber] = useState('');
   const [forceInternationalInput, setForceInternationalInput] = useState(false);
+
   const combinedPhoneNumber = (() => {
-    if (!localPhoneNumber) {
-      return '';
-    }
+    if (!localPhoneNumber) return '';
     if (forceInternationalInput) {
       const internationalDigits = localPhoneNumber.startsWith('00')
         ? localPhoneNumber.slice(2)
         : localPhoneNumber;
-      if (internationalDigits) {
-        return `+${internationalDigits}`;
-      }
+      if (internationalDigits) return `+${internationalDigits}`;
     }
     return `${selectedCountry.code}${localPhoneNumber}`;
   })();
+
   useEffect(() => {
     setValue('phone_number', combinedPhoneNumber);
   }, [combinedPhoneNumber, setValue]);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setActiveHeroSlide((prev) => (prev + 1) % loginHeroSlides.length);
-    }, 4500);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
   const handleCountryCodeChange = (iso: CountryOption['iso']) => {
     const option = countryCodeOptions.find((item) => item.iso === iso);
-    if (option) {
-      setSelectedCountry(option);
-    }
+    if (option) setSelectedCountry(option);
   };
 
   const handleLocalPhoneInput = (value: string) => {
@@ -88,9 +76,7 @@ const LoginPage = () => {
     const digits = trimmedValue.replace(/\D/g, '').slice(0, 15);
     const explicitInternational =
       Boolean(trimmedValue) &&
-      (trimmedValue.startsWith('+') ||
-        trimmedValue.startsWith('00') ||
-        digits.startsWith('00'));
+      (trimmedValue.startsWith('+') || trimmedValue.startsWith('00') || digits.startsWith('00'));
     setLocalPhoneNumber(digits);
     setForceInternationalInput(explicitInternational);
   };
@@ -111,255 +97,341 @@ const LoginPage = () => {
       redirectToDashboard(data.user?.role);
     } catch (error: any) {
       const detail =
-        error?.response?.data?.detail ??
-        'Unable to login. Please check your credentials.';
+        error?.response?.data?.detail ?? 'Unable to login. Please check your credentials.';
       setApiError(detail);
     }
   };
 
-  const handleFocus = (fieldName: string) => {
-    setIsFocused(fieldName);
-  };
-
-  const handleBlur = () => {
-    setIsFocused(null);
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+  const handleFocus = (fieldName: string) => setIsFocused(fieldName);
+  const handleBlur = () => setIsFocused(null);
+  const togglePasswordVisibility = () => setShowPassword((v) => !v);
 
   return (
-    <div className="bg-[#f7f1e6]">
-      <div className="relative flex min-h-screen flex-col overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#fbf5ea] to-[#fffdf8]" />
-        {loginHeroSlides.map((slide, index) => (
-          <img
-            key={slide.src}
-            src={slide.src}
-            alt=""
-            aria-hidden="true"
-            className={`pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-700 ${
-              slide.fit === 'cover' ? 'object-cover' : 'object-contain'
-            } ${index === activeHeroSlide ? 'opacity-100' : 'opacity-0'}`}
-            loading={index === 0 ? 'eager' : 'lazy'}
-          />
-        ))}
-        <div className="pointer-events-none absolute inset-0 bg-white/35" />
+    <div>
+      {/*
+        ══════════════════════════════════════════════════════════
+        LOGIN SECTION
+          Mobile (< lg):
+            – Scrollable: sticky header + marquee + village map
+              image + LandingPage content + spacer
+            – Fixed bottom panel: compact Sign In form (~30vh)
+          Desktop (lg+):  Design A – Split Panel
+            – Left 80 %: village map image
+            – Right 20 %: full Sign In form
+        ══════════════════════════════════════════════════════════
+      */}
+
+      {/* ═══ OUTER FLEX COL — header + marquee + content row ═══ */}
+      <div className="flex flex-col min-h-screen">
         <PublicSiteHeader variant="amber" />
 
-        {/* MAIN */}
-        <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-6 sm:px-6 lg:items-start lg:justify-end lg:px-12 lg:pt-16">
-          <div className="w-full max-w-screen-2xl lg:flex lg:justify-end">
-            <div className="mx-auto w-full max-w-sm lg:mx-0 lg:max-w-[320px]">
-            {/* Form */}
-            <div className="animate-fade-in-up w-full">
-              {/* Progress Steps */}
-              <div className="mb-4 sm:mb-6" />
-              
-              <div className="rounded-3xl border border-[#efd9cf]/80 bg-[#fff7ed]/65 p-1 shadow-2xl backdrop-blur-md">
-                <div className="overflow-hidden rounded-3xl bg-[#fffdf8]/82 shadow-xl backdrop-blur-sm">
-                  <form onSubmit={handleSubmit(onSubmit)} className="p-3 sm:p-3.5 md:p-4">
-                    {apiError && (
-                      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 rounded-xl text-red-600 text-sm border border-red-200 animate-shake flex items-center">
-                        <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                        {apiError}
-                      </div>
-                    )}
-                    
-                    <div className="space-y-2.5 sm:space-y-3">
-                      <div className="text-center mb-3 sm:mb-4">
-                        <h2 className="mb-1 text-lg font-bold text-[#7e2a20] sm:text-xl">Sign In</h2>
-                      </div>
-                      
-                      <div className="space-y-2.5 sm:space-y-3">
-                      <div className="relative">
-                          <label className="mb-1 flex items-center text-xs font-medium text-[#5f4636] sm:text-sm">
-                            Mobile Number <span className="text-rose-500 ml-1">*</span>
-                          </label>
-                          <div className="relative">
-                            <div className="absolute inset-y-0 left-0 flex items-center">
-                              <CountryCodePicker
-                                options={countryCodeOptions}
-                                selected={selectedCountry}
-                                onSelect={(iso) => handleCountryCodeChange(iso)}
-                                isFocused={isFocused === 'phone_number'}
-                                hasError={!!errors.phone_number}
-                                onFocus={() => handleFocus('phone_number')}
-                                onBlur={handleBlur}
-                              />
-                            </div>
-                          <input
-                              type="tel"
-                              value={localPhoneNumber}
-                              className={`w-full rounded-xl border bg-white/90 py-2 pl-36 pr-4 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
-                                isFocused === 'phone_number' || errors.phone_number ? 'border-[#a33a2b] shadow-sm' : 'border-[#d8c2b3]'
-                              }`}
-                              placeholder="Enter your mobile number"
-                              onChange={(event) => handleLocalPhoneInput(event.target.value)}
-                              onFocus={() => handleFocus('phone_number')}
-                              onBlur={handleBlur}
-                            />
-                            <input
-                              type="hidden"
-                              {...register('phone_number', {
-                                required: 'Mobile number is required',
-                                pattern: {
-                                  value: /^\+?[0-9]{7,15}$/,
-                                  message: 'Enter a valid international mobile number',
-                                },
-                              })}
-                            />
-                          </div>
-                          {errors.phone_number && (
-                            <p className="mt-1 text-xs text-red-600 flex items-center">
-                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                              {errors.phone_number.message}
-                            </p>
-                          )}
-                        </div>
-                        
-                        <div className="relative">
-                          <label className="mb-1 flex items-center text-xs font-medium text-[#5f4636] sm:text-sm">
-                            <span>Password <span className="text-rose-500 ml-1">*</span></span>
-                          </label>
-                          <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <svg className="h-5 w-5 text-[#8a7465]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                              </svg>
-                            </div>
-                            <input
-                              type={showPassword ? "text" : "password"}
-                              className={`w-full rounded-xl border bg-white/90 py-2 pl-10 pr-12 text-[#2f2a26] placeholder:text-[#8a7465] transition-all duration-300 focus:border-[#a33a2b] focus:ring-2 focus:ring-[#d8b8a0] ${
-                                isFocused === 'password' || errors.password ? 'border-[#a33a2b] shadow-sm' : 'border-[#d8c2b3]'
-                              }`}
-                              placeholder="Enter your password"
-                              {...register('password', { 
-                                required: 'Password is required',
-                                minLength: { value: 8, message: 'Password must be at least 8 characters' }
-                              })}
-                              onFocus={() => handleFocus('password')}
-                              onBlur={handleBlur}
-                            />
-                            <button
-                              type="button"
-                              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#8a7465] hover:text-[#7e2a20]"
-                              onClick={togglePasswordVisibility}
-                            >
-                              {showPassword ? (
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                </svg>
-                              ) : (
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              )}
-                            </button>
-                          </div>
-                          {errors.password && (
-                            <p className="mt-1 text-xs text-red-600 flex items-center">
-                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                              {errors.password.message}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center">
-                        <input
-                          id="remember-me"
-                          name="remember-me"
-                          type="checkbox"
-                          className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
-                        />
-                        <label htmlFor="remember-me" className="ml-2 block text-xs text-[#5f4636] sm:text-sm">
-                          Remember me
-                        </label>
-                      </div>
-                      
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="relative flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#a33a2b] to-[#7e2a20] px-6 py-2 font-medium text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:from-[#8e3125] hover:to-[#682117] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Signing in…
-                          </>
-                        ) : (
-                          <>
-                            <span className="mx-auto">Sign In</span>
-                            <svg className="absolute right-6 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                            </svg>
-                          </>
-                        )}
-                      </button>
-                      
-                    </div>
-                  </form>
+        {/* Deity image marquee strip */}
+        <section className="login-hero-strip" aria-label="Temple highlights">
+          <div className="login-hero-marquee-track">
+            {[...loginMarqueeSlides, ...loginMarqueeSlides, ...loginMarqueeSlides].map((slide, index) => (
+              <div className="login-hero-marquee-item" key={`${slide.src}-${index}`}>
+                <img
+                  src={slide.src}
+                  alt={slide.alt}
+                  loading={index < loginMarqueeSlides.length ? 'eager' : 'lazy'}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ═══ INNER CONTAINER — flex-col mobile / flex-row desktop ═══ */}
+        <div className="flex flex-col flex-1 min-h-0 lg:flex-row">
+
+          {/* ── MOBILE ONLY: village map image in normal document flow ── */}
+          <div
+            className="lg:hidden flex-shrink-0 w-full bg-cover bg-center"
+            style={{
+              backgroundImage: "url('/images/landing-page-image.jpg')",
+              height: 'clamp(220px, 70vw, 420px)',
+            }}
+          />
+
+          {/* ── MOBILE ONLY: LandingPage content (scrollable, compact wrapper) ── */}
+          <div className="lg:hidden login-lp-wrap">
+            <LandingPage showHeader={false} showHero={false} />
+          </div>
+
+          {/* ── MOBILE ONLY: spacer so content clears the fixed panel ── */}
+          <div className="lg:hidden h-[300px]" />
+
+          {/* ── DESKTOP ONLY: left 80 % image panel ── */}
+          <div
+            className="hidden lg:block lg:w-4/5 bg-cover bg-center"
+            style={{ backgroundImage: "url('/images/landing-page-image.jpg')" }}
+          />
+
+          {/*
+            ── SIGN IN PANEL ──
+            Mobile  : position:fixed — sits at bottom of viewport, out of flow
+            Desktop : position:static — right 20 % column of the flex row
+          */}
+          <div
+            className={[
+              // Mobile: fixed bottom drawer
+              'fixed bottom-0 left-0 right-0 z-50',
+              'bg-[#fdf6ec] rounded-t-[28px]',
+              'shadow-[0_-6px_30px_rgba(0,0,0,.25)]',
+              'px-5 pb-6 pt-4',
+              // Desktop: static right column
+              'lg:static lg:w-1/5',
+              'lg:flex lg:items-center lg:justify-center',
+              'lg:min-h-full lg:rounded-none lg:shadow-none',
+              'lg:px-6 lg:py-10',
+            ].join(' ')}
+          >
+            {/* Drag handle — mobile only */}
+            <div className="w-10 h-1 bg-[#e0ccb8] rounded-full mx-auto mb-3 lg:hidden" />
+            {/* Accent bar — mobile only */}
+            <div className="h-0.5 bg-gradient-to-r from-[#7e2a20] via-[#c8813a] to-[#f0d060] rounded-full mb-3 lg:hidden" />
+
+            <div className="w-full">
+
+              {/* Logo row — desktop only */}
+              <div className="hidden lg:flex items-center gap-3 mb-5">
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 shadow-md"
+                  style={{ background: 'linear-gradient(135deg,#7e2a20,#c8813a)' }}
+                >
+                  🛕
+                </div>
+                <div>
+                  <div className="font-bold text-[#7e2a20] text-base">Kakkalani Village</div>
                 </div>
               </div>
+
+              {/* Heading */}
+              <h2 className="text-xl font-bold text-[#3d1a0a] mb-1 lg:text-2xl">Sign In</h2>
+              <p className="text-xs text-[#8a6a50] mb-3 lg:hidden">Enter your details to continue</p>
+              <p className="hidden lg:block text-sm text-[#8a6a50] mb-5">
+                Sign in to manage poojas, payments &amp; donor records.
+              </p>
+
+              {/* API error */}
+              {apiError && (
+                <div className="mb-3 p-2.5 bg-red-50 rounded-xl text-red-600 text-xs border border-red-200 flex items-center animate-shake">
+                  <svg className="h-4 w-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {apiError}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+
+                {/* Mobile Number */}
+                <div>
+                  {/* Label hidden on mobile, shown on desktop */}
+                  <label className="hidden lg:flex mb-1 items-center text-xs font-semibold text-[#5f4636] sm:text-sm">
+                    Mobile Number <span className="text-rose-500 ml-1">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center">
+                      <CountryCodePicker
+                        options={countryCodeOptions}
+                        selected={selectedCountry}
+                        onSelect={(iso) => handleCountryCodeChange(iso)}
+                        isFocused={isFocused === 'phone_number'}
+                        hasError={!!errors.phone_number}
+                        onFocus={() => handleFocus('phone_number')}
+                        onBlur={handleBlur}
+                      />
+                    </div>
+                    <input
+                      type="tel"
+                      value={localPhoneNumber}
+                      className={`w-full rounded-xl border bg-white py-2.5 pl-36 pr-4 text-[#2f2a26] placeholder:text-[#8a7465] text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#d8b8a0] ${
+                        isFocused === 'phone_number' || errors.phone_number
+                          ? 'border-[#a33a2b] shadow-sm'
+                          : 'border-[#e0ccb8]'
+                      }`}
+                      placeholder="Mobile number"
+                      onChange={(e) => handleLocalPhoneInput(e.target.value)}
+                      onFocus={() => handleFocus('phone_number')}
+                      onBlur={handleBlur}
+                    />
+                    <input
+                      type="hidden"
+                      {...register('phone_number', {
+                        required: 'Mobile number is required',
+                        pattern: {
+                          value: /^\+?[0-9]{7,15}$/,
+                          message: 'Enter a valid international mobile number',
+                        },
+                      })}
+                    />
+                  </div>
+                  {errors.phone_number && (
+                    <p className="mt-1 text-xs text-red-600 flex items-center">
+                      <svg className="h-3 w-3 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {errors.phone_number.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Password */}
+                <div>
+                  {/* Label hidden on mobile, shown on desktop */}
+                  <label className="hidden lg:flex mb-1 items-center text-xs font-semibold text-[#5f4636] sm:text-sm">
+                    Password <span className="text-rose-500 ml-1">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-[#b08060]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      className={`w-full rounded-xl border bg-white py-2.5 pl-10 pr-12 text-[#2f2a26] placeholder:text-[#8a7465] text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#d8b8a0] ${
+                        isFocused === 'password' || errors.password
+                          ? 'border-[#a33a2b] shadow-sm'
+                          : 'border-[#e0ccb8]'
+                      }`}
+                      placeholder="Password"
+                      {...register('password', {
+                        required: 'Password is required',
+                        minLength: { value: 8, message: 'Password must be at least 8 characters' },
+                      })}
+                      onFocus={() => handleFocus('password')}
+                      onBlur={handleBlur}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#9a7a5a] hover:text-[#7e2a20]"
+                      onClick={togglePasswordVisibility}
+                    >
+                      {showPassword ? (
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        </svg>
+                      ) : (
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="mt-1 text-xs text-red-600 flex items-center">
+                      <svg className="h-3 w-3 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {errors.password.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Remember me — desktop only */}
+                <div className="hidden lg:flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-[#e0ccb8] accent-[#a33a2b]"
+                  />
+                  <label htmlFor="remember-me" className="ml-2 text-xs text-[#6b5040] sm:text-sm">
+                    Remember me on this device
+                  </label>
+                </div>
+
+                {/* Sign In button */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="relative flex w-full items-center justify-center rounded-xl py-3 font-bold text-white text-sm shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+                  style={{ background: 'linear-gradient(135deg,#8b2e20,#c8813a)' }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Signing in…
+                    </>
+                  ) : (
+                    <>
+                      <span className="mx-auto">Sign In</span>
+                      <svg className="absolute right-5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+
+              </form>
+
+              {/* Help text — desktop only */}
+              <div className="hidden lg:block mt-6 pt-5 border-t border-[#f0e4d4] text-center">
+                <p className="text-xs text-[#9a7a5a]">
+                  For account assistance, please reach the temple administration.
+                </p>
+              </div>
+
             </div>
-          </div>
-        </div>
+          </div>{/* end sign in panel */}
+
+        </div>{/* end inner flex row */}
+      </div>{/* end outer flex col */}
+
+      {/* LandingPage — desktop only (mobile version is inside the scrollable area above) */}
+      <div className="hidden lg:block">
+        <LandingPage showHeader={false} showHero={false} />
       </div>
 
-      </div>
-
-      <LandingPage showHeader={false} showHero={false} />
-      
-      {/* Custom CSS for animations */}
       <style>{`
-        @keyframes float1 {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(10px, 10px); }
-        }
-        @keyframes float2 {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(-15px, 5px); }
-        }
-        @keyframes float3 {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(5px, -15px); }
-        }
-        @keyframes float4 {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(-10px, -10px); }
-        }
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
           20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
-        .animate-float1 { animation: float1 6s ease-in-out infinite; }
-        .animate-float2 { animation: float2 8s ease-in-out infinite; }
-        .animate-float3 { animation: float3 7s ease-in-out infinite; }
-        .animate-float4 { animation: float4 9s ease-in-out infinite; }
-        .animate-fade-in { animation: fade-in 0.6s ease-out; }
-        .animate-fade-in-up { animation: fade-in-up 0.8s ease-out; }
         .animate-shake { animation: shake 0.5s ease-in-out; }
+
+        @keyframes login-hero-marquee-left {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-33.3333%); }
+        }
+        .login-hero-strip {
+          position: relative; z-index: 10; width: 100%;
+          height: 12vh; min-height: 65px; overflow: hidden;
+          border-top: 1px solid #efd9cf; border-bottom: 1px solid #efd9cf;
+          background: linear-gradient(145deg, #fbf5ea, #fffdf8);
+        }
+        .login-hero-marquee-track {
+          display: flex; gap: 1rem; width: max-content; height: 100%;
+          animation: login-hero-marquee-left 18s linear infinite;
+          will-change: transform;
+        }
+        .login-hero-marquee-item {
+          flex: 0 0 auto; width: clamp(90px, 7vw, 140px); height: 100%;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .login-hero-marquee-item img {
+          width: 100%; height: 100%;
+          object-fit: contain; object-position: center; display: block;
+        }
+        @media (max-width: 640px) {
+          .login-hero-strip { height: 9vh; min-height: 52px; }
+          .login-hero-marquee-item { width: 70px; }
+        }
+
+        /* ── Compact LandingPage stats/cards when shown in login mobile context ── */
+        .login-lp-wrap .stats { padding: 1.25rem 0 0.75rem; }
+        .login-lp-wrap .stats-grid { gap: 0.6rem; }
+        .login-lp-wrap .stat-card { padding: 0.85rem 0.9rem; }
+        .login-lp-wrap .stat-icon { width: 32px; height: 32px; margin-bottom: 0.4rem; border-radius: 0.6rem; }
+        .login-lp-wrap .stat-icon svg { width: 16px; height: 16px; }
+        .login-lp-wrap .stat-val { font-size: 0.82rem; margin-bottom: 0.2rem; }
+        .login-lp-wrap .stat-lbl { font-size: 0.58rem; letter-spacing: .18em; }
       `}</style>
     </div>
   );

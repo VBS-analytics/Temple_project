@@ -17,7 +17,7 @@ const baseNavLinks: NavLinkItem[] = [
   { label: 'HOME', href: '/', type: 'route' },
   {
     label: 'SIGNIFICANCE OF KAKKALANI VILLAGE',
-    href: '#our-village-heritage',
+    href: '#significance-of-kakkalani-village',
     type: 'anchor'
   },
   {
@@ -41,7 +41,7 @@ const loginPageNavLinks: NavLinkItem[] = [
   },
   {
     label: 'SIGNIFICANCE OF KAKKALANI VILLAGE',
-    href: '#our-village-heritage',
+    href: '#significance-of-kakkalani-village',
     type: 'anchor',
   },
   {

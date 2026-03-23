@@ -450,7 +450,7 @@ const DonationPage = () => {
                   <textarea
                     id="donation-notes" value={notes}
                     onChange={e => setNotes(e.target.value)}
-                    placeholder="e.g. For Ganesh Puja, in memory of..."
+                    placeholder=""
                     className="dp-input"
                   />
                 </div>

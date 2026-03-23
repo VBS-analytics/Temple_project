@@ -1068,7 +1068,7 @@ const GnanambalContent = () => (
           <div className="kp-hl-title">One of 48 Chozha Shiva Temples</div>
           <div className="kp-hl-text">
             This temple is one among <strong>48 Shiva temples</strong> built by the Chozha King.
-            Shri Manikandan Kurukkal conducted Kumbabishekam at Thiruvarur Thyagaraja Swamy temple.
+            Chozha King conducted Kumbabishekam at Thiruvarur Thyagaraja Swamy temple.
             Post kumbabishekam of Thiruvarur temple in mandala period of 48 days, every day kumbabishekam
             to each of these 48 Shiva temples were conducted. This temple at our village is one among them.
           </div>
