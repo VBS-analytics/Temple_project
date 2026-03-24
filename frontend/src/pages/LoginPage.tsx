@@ -371,11 +371,6 @@ const LoginPage = () => {
               </form>
 
               {/* Help text — desktop only */}
-              <div className="hidden lg:block mt-6 pt-5 border-t border-[#f0e4d4] text-center">
-                <p className="text-xs text-[#9a7a5a]">
-                  For account assistance, please reach the temple administration.
-                </p>
-              </div>
 
             </div>
           </div>{/* end sign in panel */}

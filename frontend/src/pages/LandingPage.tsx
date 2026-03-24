@@ -20,18 +20,10 @@ type TempleImage = { src: string; deity: string; name: string; contain?: boolean
 
 type StatIcon = "location" | "temple" | "heritage" | "blessings";
 
-const quickStats: Array<{ icon: StatIcon; label: string; value: string }> = [
-  { icon: "temple",    label: "Sacred Temples",   value: "5+ Temple & Sacred Sites" },
-  { icon: "blessings", label: "Divine Blessings", value: "Mahaperiyava & Ramana Maharishi" },
-  { icon: "location",  label: "Location",         value: "How to Reach Kakkalani" },
-];
-
-// Village Snapshot data (from AboutKakkalaniVillage page)
-const snapshotStats = [
-  { label: "Location",  value: "10km SE Thiruvarur" },
-  { label: "Temples",   value: "5+ Sacred Sites" },
-  { label: "Heritage",  value: "4–5 Generations" },
-  { label: "Blessings", value: "Mahaperiyava & Ramana Maharishi" },
+const quickStats: Array<{ icon: StatIcon; label: string; value: string; targetId: string }> = [
+  { icon: "temple",    label: "Sacred Temples",   value: "5+ Temple & Sacred Sites", targetId: "temples-sacred-sites" },
+  { icon: "blessings", label: "Divine Blessings", value: "Mahaperiyava & Ramana Maharishi", targetId: "mahaperiyava-ramana-maharishi" },
+  { icon: "location",  label: "Location",         value: "How to Reach Kakkalani", targetId: "how-to-reach-kakkalani" },
 ];
 
 const templeImages: TempleImage[] = [
@@ -126,22 +118,37 @@ type LandingPageProps = {
 
 const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) => {
   const [routesExpanded, setRoutesExpanded] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const location = useLocation();
 
-  useEffect(() => {
-    if (location.hash !== "#significance-of-kakkalani-village") return;
+  const scrollToSection = (targetId: string) => {
+    const section = document.getElementById(targetId);
+    if (!section) return;
+    const headerOffset = showHeader ? 110 : 28;
+    const targetY = section.getBoundingClientRect().top + window.scrollY - headerOffset;
+    window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
+    window.history.replaceState(null, "", `${location.pathname}${location.search}#${targetId}`);
+  };
 
-    const scrollToHeritage = () => {
-      const section = document.getElementById("significance-of-kakkalani-village");
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const targetId = location.hash.replace("#", "");
+
+    const scrollToHashSection = () => {
+      const section = document.getElementById(targetId);
       if (!section) return;
-      const headerOffset = 110;
+      const headerOffset = showHeader ? 110 : 28;
       const targetY = section.getBoundingClientRect().top + window.scrollY - headerOffset;
       window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
     };
 
-    const raf = requestAnimationFrame(scrollToHeritage);
+    const raf = requestAnimationFrame(scrollToHashSection);
     return () => cancelAnimationFrame(raf);
-  }, [location.hash]);
+  }, [location.hash, showHeader]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -151,6 +158,13 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
     document.querySelectorAll(".lr:not(.lv)").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [routesExpanded]);
+
+  useEffect(() => {
+    const handleScroll = () => setShowScrollTop(window.scrollY > 560);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const visibleRoutes = routesExpanded ? howToReachRoutes : howToReachRoutes.slice(0, 2);
 
@@ -332,6 +346,17 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
           padding:1.75rem 1.4rem; text-align:center;
           box-shadow:0 2px 14px rgba(0,0,0,.06); position:relative; overflow:hidden;
           transition:transform .3s, box-shadow .3s;
+        }
+        .stat-card-btn {
+          width:100%;
+          border:1px solid var(--bd);
+          cursor:pointer;
+          font:inherit;
+          appearance:none;
+        }
+        .stat-card-btn:focus-visible {
+          outline:2px solid var(--ac);
+          outline-offset:2px;
         }
         .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(to right,var(--ac),var(--ac2)); }
         .stat-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.1); }
@@ -570,6 +595,36 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
         }
         .expand-btn:hover { background:var(--ac); color:#fff; }
 
+        /* scroll to top button */
+        .scroll-top-btn {
+          position:fixed;
+          right:clamp(14px,2.2vw,28px);
+          bottom:calc(env(safe-area-inset-bottom, 0px) + clamp(18px,2.6vw,34px));
+          width:46px; height:46px;
+          border:none; border-radius:999px;
+          background:linear-gradient(135deg,var(--ac),var(--ac2));
+          color:#fff; cursor:pointer;
+          display:flex; align-items:center; justify-content:center;
+          box-shadow:0 10px 24px rgba(126,42,32,.35);
+          transition:transform .2s, box-shadow .2s;
+          z-index:85;
+        }
+        .scroll-top-btn:hover { transform:translateY(-2px); box-shadow:0 14px 28px rgba(126,42,32,.42); }
+        .scroll-top-btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+        @media(max-width:640px){
+          .scroll-top-btn {
+            width:54px; height:54px;
+            right:14px;
+            bottom:calc(env(safe-area-inset-bottom, 0px) + 20px);
+            border:2px solid rgba(255,255,255,.9);
+            box-shadow:0 12px 28px rgba(126,42,32,.45);
+          }
+          .scroll-top-btn svg { width:22px; height:22px; }
+          .scroll-top-btn--embedded {
+            bottom:calc(env(safe-area-inset-bottom, 0px) + clamp(260px, 32vh, 360px));
+          }
+        }
+
         /* ═══════════════════════════════════════
            FOOTER
         ═══════════════════════════════════════ */
@@ -634,11 +689,17 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
             <div className="wrap">
               <div className="stats-grid">
                 {quickStats.map((s, i) => (
-                  <div key={s.label} className={`stat-card lr ld${i + 1}`}>
+                  <button
+                    key={s.label}
+                    type="button"
+                    className={`stat-card stat-card-btn lr ld${i + 1}`}
+                    onClick={() => scrollToSection(s.targetId)}
+                    aria-label={`Go to ${s.value} section`}
+                  >
                     <span className="stat-icon">{renderStatIcon(s.icon)}</span>
                     <div className="stat-val">{s.value}</div>
                     <div className="stat-lbl">{s.label}</div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -713,7 +774,7 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
               </div>
 
               {/* ── 2. TEMPLES & SACRED SITES — full width text + image grid ── */}
-              <div className="h-section lr ld2">
+              <div id="temples-sacred-sites" className="h-section lr ld2">
                 <div className="h-title-bar">
                   <div className="h-icon"><TempleStatIcon /></div>
                   <h3 className="h-sec-title">Temples & Sacred Sites</h3>
@@ -764,7 +825,7 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
               </div>
 
               {/* ── 3. BLESSINGS & LEGACY — text left, images right ── */}
-              <div className="h-section lr ld3">
+              <div id="mahaperiyava-ramana-maharishi" className="h-section lr ld3">
                 <div className="h-title-bar">
                   <div className="h-icon"><BlessingsStatIcon /></div>
                   <h3 className="h-sec-title">Mahaperiyava & Ramana Maharishi</h3>
@@ -826,7 +887,7 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
           </section>
 
           {/* ═══ HOW TO REACH — compact list ═══ */}
-          <section className="reach top-stripe">
+          <section id="how-to-reach-kakkalani" className="reach top-stripe">
             <div className="wrap">
 
               {/* Simple inline header */}
@@ -868,6 +929,19 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
         </main>
 
         {/* ── FOOTER ── */}
+        {showScrollTop && (
+          <button
+            type="button"
+            className={`scroll-top-btn${!showHeader ? " scroll-top-btn--embedded" : ""}`}
+            onClick={scrollToTop}
+            aria-label="Scroll to top"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 15l-6-6-6 6" />
+            </svg>
+          </button>
+        )}
+
         <footer className="lp-ft">
           <div className="lp-ft-in">
             <div className="ft-brand">Kakkalani Gramam</div>

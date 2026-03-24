@@ -289,7 +289,7 @@ const DonationPage = () => {
     <>
       <style>{css}</style>
       <div className="dp-wrap">
-        <PublicSiteHeader variant="amber" />
+        <PublicSiteHeader variant="amber" navLinkWeight="semibold" />
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 24px 60px' }}>
           
           {/* Header */}
