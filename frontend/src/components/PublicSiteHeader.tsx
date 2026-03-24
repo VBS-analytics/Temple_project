@@ -33,7 +33,7 @@ const baseNavLinks: NavLinkItem[] = [
 ];
 
 const loginPageNavLinks: NavLinkItem[] = [
-  { label: 'HOME', href: '/', type: 'route' },
+  { label: 'LOGIN PAGE', href: '/login', type: 'route' },
   {
     label: 'ABOUT US',
     href: '/about',
@@ -56,25 +56,43 @@ const loginPageNavLinks: NavLinkItem[] = [
   },
 ];
 
-const resolveAnchorTo = (hash: string): To => ({
+const LOGIN_NAV_QUERY_KEY = 'nav';
+const LOGIN_NAV_QUERY_VALUE = 'login';
+const PATRON_CONTACTS = [
+  { name: 'R S Mani', phoneDisplay: '+91 88790 71390', phoneE164: '+918879071390' },
+  { name: 'V Lakshmi Anand', phoneDisplay: '+91 98427 59013', phoneE164: '+919842759013' },
+  { name: 'V Swaminathan', phoneDisplay: '+91 98407 41719', phoneE164: '+919840741719' },
+];
+
+const resolveAnchorTo = (hash: string, includeLoginContext = false): To => ({
   pathname: '/',
+  search: includeLoginContext ? `?${LOGIN_NAV_QUERY_KEY}=${LOGIN_NAV_QUERY_VALUE}` : '',
   hash: hash.startsWith('#') ? hash : `#${hash}`
 });
 
 type PublicSiteHeaderProps = {
   variant?: 'overlay' | 'solid' | 'amber';
   templeWallBorder?: boolean;
+  navLinkWeight?: 'bold' | 'semibold';
 };
 
-const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: PublicSiteHeaderProps) => {
+const PublicSiteHeader = ({
+  variant = 'solid',
+  templeWallBorder = true,
+  navLinkWeight,
+}: PublicSiteHeaderProps) => {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
-  const navLinks = isLoginPage ? loginPageNavLinks : baseNavLinks;
-  const showLoginMarketingLinks = isLoginPage;
+  const loginFlowContext = new URLSearchParams(location.search).get(LOGIN_NAV_QUERY_KEY) === LOGIN_NAV_QUERY_VALUE;
+  const useLoginFlowHeaderLinks = isLoginPage || loginFlowContext;
+  const effectiveNavLinkWeight = navLinkWeight ?? (useLoginFlowHeaderLinks ? 'semibold' : 'bold');
+  const navLinks = useLoginFlowHeaderLinks ? loginPageNavLinks : baseNavLinks;
+  const showLoginMarketingLinks = useLoginFlowHeaderLinks;
   const visibleNavLinks =
     location.pathname === '/' ? navLinks.filter((item) => !(item.type === 'route' && item.href === '/')) : navLinks;
   const mobileNavLinks = visibleNavLinks.length > 0 ? visibleNavLinks : navLinks;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [patronDialogOpen, setPatronDialogOpen] = useState(false);
   const headerClass = clsx(
     'z-30',
     variant === 'overlay'
@@ -83,12 +101,13 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
       ? 'relative sticky top-0 border-b border-[#efd9cf] bg-[#f7f1e6]/95 text-black shadow-[0_10px_24px_-20px_rgba(126,42,32,0.28)] backdrop-blur'
       : 'relative sticky top-0 border-b border-[#90CAF9] bg-[#E3F2FD]/95 text-black shadow-[0_10px_24px_-20px_rgba(21,101,192,0.35)] backdrop-blur'
   );
+  const navWeightClass = effectiveNavLinkWeight === 'semibold' ? 'font-semibold' : 'font-bold';
   const navLinkClass =
     variant === 'overlay'
-      ? 'font-bold text-white transition hover:text-[#f4ba1a]'
+      ? `${navWeightClass} text-white transition hover:text-[#f4ba1a]`
       : variant === 'amber'
-      ? 'font-bold text-black transition hover:text-[#7e2a20]'
-      : 'font-bold text-black transition hover:text-[#1565C0]';
+      ? `${navWeightClass} text-black transition hover:text-[#7e2a20]`
+      : `${navWeightClass} text-black transition hover:text-[#1565C0]`;
   const dropdownClass =
     variant === 'overlay'
       ? 'bg-white/95 text-slate-700'
@@ -102,7 +121,19 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
       ? 'text-[#7e2a20]'
       : 'text-[#1565C0]';
 
-  const resolveLinkTo = (href: string, type: LinkType) => (type === 'route' ? href : resolveAnchorTo(href));
+  const appendLoginContextToPath = (href: string) => {
+    if (!useLoginFlowHeaderLinks) {
+      return href;
+    }
+    const [pathWithQuery, hash = ''] = href.split('#');
+    const [pathname, query = ''] = pathWithQuery.split('?');
+    const params = new URLSearchParams(query);
+    params.set(LOGIN_NAV_QUERY_KEY, LOGIN_NAV_QUERY_VALUE);
+    const search = params.toString();
+    return `${pathname}${search ? `?${search}` : ''}${hash ? `#${hash}` : ''}`;
+  };
+  const resolveLinkTo = (href: string, type: LinkType) =>
+    type === 'route' ? appendLoginContextToPath(href) : resolveAnchorTo(href, useLoginFlowHeaderLinks);
   const scrollToAnchorSection = (hash: string) => {
     const id = hash.replace(/^#/, '');
     const section = document.getElementById(id);
@@ -119,6 +150,12 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
     scrollToAnchorSection(hash);
   };
   const closeMobileMenu = () => setMobileMenuOpen(false);
+  const openPatronDialog = () => {
+    setPatronDialogOpen(true);
+  };
+  const closePatronDialog = () => {
+    setPatronDialogOpen(false);
+  };
   const isNavItemActive = (item: NavLinkItem) => {
     if (item.type === 'route') {
       return location.pathname === item.href;
@@ -139,10 +176,10 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
       : 'text-xs font-semibold uppercase tracking-wide text-black transition hover:text-[#1976D2]';
   const patronButtonClass =
     variant === 'overlay'
-      ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-white/80'
+      ? 'text-xs font-semibold uppercase tracking-wide text-white transition hover:text-[#ffd8c2]'
       : variant === 'amber'
-      ? 'text-xs font-semibold uppercase tracking-wide text-[#a33a2b] transition hover:text-[#7e2a20]'
-      : 'text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:text-[#1976D2]';
+      ? 'text-xs font-semibold uppercase tracking-wide text-[#b64a1f] transition hover:text-[#8f3118]'
+      : 'text-xs font-semibold uppercase tracking-wide text-[#1565C0] transition hover:text-[#0d47a1]';
   useEffect(() => {
     if (!mobileMenuOpen) {
       return;
@@ -157,6 +194,7 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
   useEffect(() => {
     // Close overlays after any route/hash navigation.
     setMobileMenuOpen(false);
+    setPatronDialogOpen(false);
   }, [location.pathname, location.hash]);
 
   useEffect(() => {
@@ -174,7 +212,7 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
     <header className={headerClass}>
       <div className="responsive-layout flex items-center justify-between gap-4 py-4">
         <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
-          <Link to="/" className={clsx('min-w-0 flex-shrink text-left', brandTextClass)}>
+          <Link to={resolveLinkTo('/', 'route')} className={clsx('min-w-0 flex-shrink text-left', brandTextClass)}>
             <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.24em]">
               Kakkalani Village
             </p>
@@ -186,10 +224,11 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
           )}>
             {visibleNavLinks.map((item) => {
               if (item.children?.length) {
+                const parentTo = resolveLinkTo(item.href, item.type);
                 return (
                   <div key={item.label} className="group relative">
                     <Link
-                      to={item.href}
+                      to={parentTo}
                       className={clsx('flex items-center gap-1', navLinkClass)}
                       aria-haspopup="true"
                     >
@@ -211,10 +250,7 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
                       )}
                     >
                       {item.children.map((child) => {
-                        const toValue =
-                          child.type === 'route'
-                            ? child.href
-                            : resolveAnchorTo(child.href);
+                        const toValue = resolveLinkTo(child.href, child.type);
                         return (
                           <Link
                             key={child.label}
@@ -236,10 +272,11 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
               }
 
               if (item.type === 'route') {
+                const routeTo = resolveLinkTo(item.href, item.type);
                 return (
                   <Link
                     key={item.label}
-                    to={item.href}
+                    to={routeTo}
                     className={navLinkClass}
                   >
                     {item.label}
@@ -250,7 +287,7 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
               return (
                 <Link
                   key={item.label}
-                  to={resolveAnchorTo(item.href)}
+                  to={resolveLinkTo(item.href, item.type)}
                   onClick={(event) => handleAnchorClick(event, item.href)}
                   className={navLinkClass}
                 >
@@ -260,12 +297,16 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
             })}
             {showLoginMarketingLinks && (
               <>
-                <Link to="/donation" className={donateButtonClass}>
+                <Link to={resolveLinkTo('/donation', 'route')} className={donateButtonClass}>
                   Donate Now
                 </Link>
-                <a href="tel:+918879071390" className={patronButtonClass}>
+                <button
+                  type="button"
+                  onClick={openPatronDialog}
+                  className={clsx('rounded-full border-0 bg-transparent px-1 py-0.5', patronButtonClass)}
+                >
                   Contact to Become a Patron
-                </a>
+                </button>
               </>
             )}
           </nav>
@@ -389,7 +430,7 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
                 {showLoginMarketingLinks && (
                   <div className="mt-8 space-y-3">
                     <Link
-                      to="/donation"
+                      to={resolveLinkTo('/donation', 'route')}
                       onClick={closeMobileMenu}
                       className={clsx(
                         "block w-full text-center text-sm font-semibold transition",
@@ -402,23 +443,89 @@ const PublicSiteHeader = ({ variant = 'solid', templeWallBorder = true }: Public
                     >
                       Donate Now
                     </Link>
-                    <a
-                      href="tel:+918879071390"
-                      onClick={closeMobileMenu}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileMenu();
+                        openPatronDialog();
+                      }}
                       className={clsx(
-                        "block w-full text-center text-sm font-semibold transition",
+                        "block w-full rounded-full border-0 bg-transparent text-center text-sm font-semibold transition",
                         variant === 'amber'
-                          ? "py-2 text-[#a33a2b] hover:text-[#7e2a20]"
+                          ? "py-2 text-[#b64a1f] hover:text-[#8f3118]"
                           : variant === 'overlay'
-                          ? "py-2 text-white hover:text-white/80"
-                          : "py-2 text-[#1565C0] hover:text-[#1976D2]"
+                          ? "py-2 text-white hover:text-[#ffd8c2]"
+                          : "py-2 text-[#1565C0] hover:text-[#0d47a1]"
                       )}
                     >
                       Contact to Become a Patron
-                    </a>
+                    </button>
                   </div>
                 )}
               </nav>
+            </div>
+          </div>,
+          document.body
+        )}
+      {patronDialogOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[90] bg-[#2b140f]/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Patron contact details">
+            <div className="absolute inset-0" onClick={closePatronDialog} />
+            <div className="relative mx-auto mt-16 w-full max-w-md rounded-2xl border border-[#f0d2a8] bg-[#fffaf3] p-5 shadow-2xl">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#b64a1f]">Contact to Become a Patron</p>
+                  <h3 className="mt-1 text-xl font-bold text-[#3c2419]">Patron Contact Details</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePatronDialog}
+                  className="rounded-full border border-[#f0d2a8] p-2 text-[#b64a1f] transition hover:bg-[#fff1df]"
+                  aria-label="Close patron contact dialog"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <p className="mb-4 text-sm font-semibold text-[#5f4636]">
+                Please call any coordinator below for patron enrollment details.
+              </p>
+
+              <div className="space-y-3">
+                {PATRON_CONTACTS.map((contact) => (
+                  <div
+                    key={contact.phoneE164}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-[#f0d2a8] bg-[#fffefd] px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-[#3c2419]">{contact.name}</p>
+                      <p className="text-sm font-semibold text-[#6b4f3b]">{contact.phoneDisplay}</p>
+                    </div>
+                    <a
+                      href={`tel:${contact.phoneE164}`}
+                      className="rounded-full border border-[#c85b2e] bg-[#c85b2e] px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white transition hover:bg-[#a94722]"
+                    >
+                      Call
+                    </a>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={closePatronDialog}
+                  className="rounded-full bg-gradient-to-r from-[#c85b2e] to-[#a33a2b] px-5 py-1.5 text-sm font-semibold text-white transition hover:brightness-95"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>,
           document.body
