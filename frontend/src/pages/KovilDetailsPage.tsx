@@ -7,6 +7,7 @@ import EnglishTamilToggle from "../components/EnglishTamilToggle";
 const temples = [
   {
     id: "lakshmi-narayanar-temple",
+    tag: "T1",
     name: "Lakshmi Narayanar Temple",
     type: "Vishnu Temple",
     img: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png",
@@ -14,6 +15,7 @@ const temples = [
   },
   {
     id: "aathangarai-pillayar",
+    tag: "T2",
     name: "Aathangarai Pillayar Koil",
     type: "Riverside Temple",
     img: "/images/kovi/pillayar/pillayar-hd.jpg",
@@ -21,6 +23,7 @@ const temples = [
   },
   {
     id: "gnanambal-samedha-kalahasteeswarar",
+    tag: "T3",
     name: "Gnanambal Samedha Kalahasteeswarar Koil",
     type: "Ancient Shiva Temple",
     img: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png",
@@ -28,9 +31,26 @@ const temples = [
   },
   {
     id: "mangala-azhagar-ayyanar-koil",
+    tag: "T4",
     name: "Mangala Azhagar Ayyanar Koil",
     type: "Village Guardian Deity",
     img: "/images/kovi/ayyanar/ayyanar.png",
+    contain: true,
+  },
+  {
+    id: "mazhai-mariamman-temple",
+    tag: "T6",
+    name: "Mazhai Mariamman Temple",
+    type: "Amman Temple",
+    img: "/images/kovi/Mazhai-Mariamman.png",
+    contain: true,
+  },
+  {
+    id: "damodara-pillayar-temple",
+    tag: "T7",
+    name: "Damodra Pillayar Temple",
+    type: "Ganapathy Temple",
+    img: "/images/kovi/Damodara-Pillayar-Temple.png",
     contain: true,
   },
 ];
@@ -627,6 +647,8 @@ const KovilDetailsPage = () => {
       case "aathangarai-pillayar":               return <AathangaraiContent />;
       case "lakshmi-narayanar-temple":           return <LakshmiNarayanarContent />;
       case "mangala-azhagar-ayyanar-koil":       return <AyyanarContent />;
+      case "mazhai-mariamman-temple":            return <MazhaiMariammanContent />;
+      case "damodara-pillayar-temple":           return <DamodaraPillayarContent />;
       default: return null;
     }
   };
@@ -647,7 +669,7 @@ const KovilDetailsPage = () => {
 
             <h1 className="kp-pg-title">Kakkalani <em>Temples</em></h1>
             <p className="kp-pg-desc">
-              Four ancient temples that have sheltered the faith, rituals, and stories of
+              Six ancient temples that have sheltered the faith, rituals, and stories of
               Kakkalani Agraharam across generations.
             </p>
           </div>
@@ -656,14 +678,14 @@ const KovilDetailsPage = () => {
         {/* ── Pill Tab Navigation ── */}
         <div className="kp-wrap kp-tabs-wrap">
           <nav className="kp-tabs">
-            {temples.map((t, i) => (
+            {temples.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 className={`kp-tab${activeTabId === t.id ? " kp-tab--active" : ""}`}
                 onClick={() => setActiveTabId(t.id)}
               >
-                <span className="kp-tab-tag">T{i + 1}</span>
+                <span className="kp-tab-tag">{t.tag}</span>
                 {t.name}
               </button>
             ))}
@@ -1334,6 +1356,215 @@ const GnanambalContent = () => (
                 named as <strong>Mazhai Mariamman</strong>, the deity of fertility and rain, guardian against evil energies.
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
+// ── MAZHAI MARIAMMAN TEMPLE ──────────────────────────────────────────────────
+const MazhaiMariammanContent = () => (
+  <section className="kp-temple-sections">
+    <div className="kp-lakshmi-split">
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">History</span>
+          <h3 className="kp-sec-title">Temple Continuity</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-timeline">
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">Base</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Connected to Kakkalani's Sacred Heritage</div>
+              <div className="kp-tl-text">
+                The significance of this temple and deity is deeply connected with Kakkalani village heritage
+                and also with the sacred history of{" "}
+                <strong>Gnanambal Sametha Kalahastishwarar</strong> temple.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">Now</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Daily Pooja by Local Committee</div>
+              <div className="kp-tl-text">
+                This temple is maintained by a separate village committee, and daily pooja is performed by
+                a dedicated <strong>poojari</strong> staying close to the temple.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2025</div>
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Recent Kumbabishekam</div>
+              <div className="kp-tl-text">
+                Kumbabishekam for this temple was conducted recently in the year <strong>2025</strong>.
+              </div>
+              <div className="kp-hl" style={{ marginTop: ".65rem" }}>
+                <div className="kp-hl-title">Seva Opportunities</div>
+                <div className="kp-hl-text">
+                  Donors are coordinated for seva such as <strong>archana</strong> and{" "}
+                  <strong>abishekam</strong> at this temple.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Image</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              {
+                src: "/images/kovi/Mazhai-Mariamman.png",
+                alt: "Mazhai Mariamman Temple",
+                caption: "Mazhai Mariamman Temple — Kakkalani",
+              },
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+
+    <div className="kp-sec">
+      <div className="kp-sec-hdr">
+        <span className="kp-sec-eyebrow">Location</span>
+        <h3 className="kp-sec-title">Temple Location</h3>
+        <div className="kp-rule" />
+      </div>
+      <div className="kp-deity-row">
+        <div className="kp-deity-dot" />
+        <div>
+          <div className="kp-deity-name">Near Sivan Koil</div>
+          <div className="kp-deity-desc">
+            Mazhai Mariamman Koil is situated about <strong>100 meters</strong> east of Sivan Koil.
+          </div>
+        </div>
+      </div>
+      <div className="kp-deity-row">
+        <div className="kp-deity-dot" />
+        <div>
+          <div className="kp-deity-name">Village Worship Tradition</div>
+          <div className="kp-deity-desc">
+            Rituals continue as part of a living village tradition, with consistent support from local families
+            and devotees.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
+// ── DAMODARA PILLAYAR TEMPLE ─────────────────────────────────────────────────
+const DamodaraPillayarContent = () => (
+  <section className="kp-temple-sections">
+    <div className="kp-lakshmi-split">
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">History</span>
+          <h3 className="kp-sec-title">Temple Milestones</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-timeline">
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">Origin</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Ancestral Temple Foundation</div>
+              <div className="kp-tl-text">
+                It is said that the ancestors of the <strong>Pannai family</strong> established this temple.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">Today</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Local Community Presence</div>
+              <div className="kp-tl-text">
+                Even today, pottery families continue to stay around this temple, preserving a close cultural
+                and devotional link with the shrine.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">2025</div>
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Mandapam Renovation & Kumbabishekam</div>
+              <div className="kp-tl-text">
+                In <strong>2025</strong>, the front-side mandapam was renovated and kumbabishekam was performed
+                by the village Pannai family along with village families.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Image</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              {
+                src: "/images/kovi/Damodara-Pillayar-Temple.png",
+                alt: "Damodra Pillayar Temple",
+                caption: "Damodra Pillayar Temple — Kakkalani Border",
+              },
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+
+    <div className="kp-sec">
+      <div className="kp-sec-hdr">
+        <span className="kp-sec-eyebrow">Location</span>
+        <h3 className="kp-sec-title">Temple Location & Community</h3>
+        <div className="kp-rule" />
+      </div>
+      <div className="kp-deity-row">
+        <div className="kp-deity-dot" />
+        <div>
+          <div className="kp-deity-name">Eastern Border of Kakkalani</div>
+          <div className="kp-deity-desc">
+            Damodra Pillayar Temple is situated about <strong>1 km</strong> east of Gnanambal Sametha
+            Kalahastishwarar temple, at the border of Kakkalani village.
+          </div>
+        </div>
+      </div>
+      <div className="kp-deity-row">
+        <div className="kp-deity-dot" />
+        <div>
+          <div className="kp-deity-name">Village Family Stewardship</div>
+          <div className="kp-deity-desc">
+            The temple continues to be supported by traditional village families, reflecting long-standing
+            community participation in temple upkeep and rituals.
           </div>
         </div>
       </div>

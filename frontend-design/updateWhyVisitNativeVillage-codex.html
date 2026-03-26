@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Why We Should Visit Our Village — Codex UX Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --cream: #f7f1e6;
+  --surface: #fffdf8;
+  --surface-soft: #f8eee2;
+  --surface-glass: rgba(255, 253, 248, 0.86);
+  --text: #2e2018;
+  --text-md: #5f4636;
+  --text-soft: #7a5e4b;
+  --line: #ecd3c7;
+  --line-strong: #dcbcad;
+  --brand: #a33a2b;
+  --brand-deep: #7e2a20;
+  --brand-pale: rgba(163, 58, 43, 0.08);
+  --page-max: 1240px;
+  --sidebar-w: 250px;
+  --header-h: 58px;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at 9% 12%, rgba(163,58,43,0.08), transparent 35%),
+              radial-gradient(circle at 92% 82%, rgba(126,42,32,0.07), transparent 40%),
+              var(--cream);
+  color: var(--text);
+  font-family: "Source Serif 4", Georgia, serif;
+  line-height: 1.78;
+}
+
+/* Header */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 220;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  background: rgba(255, 253, 248, 0.93);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+.header-logo {
+  font: 700 0.83rem/1 "Lora", Georgia, serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+.lang-pill {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+.lang-pill span {
+  padding: 0.27rem 0.7rem;
+  font-size: 0.71rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lang-pill .active { background: var(--brand); color: #fff; }
+.lang-pill .idle { color: var(--text-md); }
+
+.shell {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  min-height: calc(100vh - var(--header-h));
+}
+
+/* Sidebar tabs */
+.sidebar {
+  border-right: 1px solid var(--line);
+  padding: 1rem 0.55rem;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+}
+.sidebar-title {
+  color: var(--text-soft);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  padding: 0 0.7rem 0.7rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.tab-btn {
+  all: unset;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.66rem 0.64rem;
+  border-left: 3px solid transparent;
+  border-radius: 0 10px 10px 0;
+  transition: 0.18s ease;
+}
+.tab-btn:hover { background: var(--brand-pale); }
+.tab-btn.active {
+  border-left-color: var(--brand);
+  background: linear-gradient(90deg, var(--brand-pale), transparent);
+}
+.tab-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.45rem;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: 0.18s ease;
+}
+.tab-btn.active .tab-icon { background: var(--brand); color: #fff; }
+.tab-label {
+  display: block;
+  color: var(--text-md);
+  font-size: 0.81rem;
+  line-height: 1.3;
+  font-weight: 700;
+}
+.tab-meta {
+  display: block;
+  color: var(--text-soft);
+  font-size: 0.69rem;
+  margin-top: 0.15rem;
+  line-height: 1.35;
+}
+
+/* Main */
+.main {
+  padding: 2rem clamp(1rem, 4vw, 3rem) 3rem;
+}
+.page-title {
+  margin: 0;
+  font-family: "Lora", Georgia, serif;
+  font-size: clamp(1.45rem, 3.6vw, 2.2rem);
+  line-height: 1.2;
+  color: var(--text);
+}
+.page-sub {
+  margin: 0.55rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.93rem;
+}
+.page-rule {
+  width: 2.8rem;
+  height: 2.5px;
+  border-radius: 999px;
+  margin: 1.2rem 0 1.8rem;
+  background: linear-gradient(90deg, var(--brand), var(--brand-deep));
+}
+
+.panel { display: none; }
+.panel.active { display: block; animation: fade 0.28s ease; }
+
+/* Blessings accordion (compact; not full box blocks) */
+.acc-item {
+  background: var(--surface-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 0.7rem;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(46, 32, 24, 0.03);
+}
+.acc-trigger {
+  all: unset;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.68rem;
+  padding: 0.85rem 1rem;
+}
+.acc-trigger:hover,
+.acc-item.open .acc-trigger { background: var(--surface-soft); }
+.acc-title {
+  font-family: "Lora", Georgia, serif;
+  font-size: 1rem;
+  font-weight: 600;
+  display: block;
+  color: var(--text);
+  line-height: 1.3;
+}
+.acc-meta {
+  font-size: 0.73rem;
+  color: var(--text-soft);
+  display: block;
+  margin-top: 0.13rem;
+}
+.acc-chevron {
+  margin-left: auto;
+  color: var(--text-soft);
+  transition: transform .2s ease;
+}
+.acc-item.open .acc-chevron { transform: rotate(180deg); color: var(--brand); }
+.acc-body {
+  display: none;
+  border-top: 1px solid var(--line);
+  padding: 0.95rem 1rem 1rem;
+}
+.acc-item.open .acc-body { display: block; }
+
+.copy {
+  margin: 0 0 0.75rem;
+  color: var(--text-md);
+  font-size: 0.98rem;
+  line-height: 1.85;
+}
+.copy:last-child { margin-bottom: 0; }
+.copy strong { color: var(--brand-deep); }
+
+.audio-box {
+  margin-top: 0.85rem;
+  background: var(--surface-soft);
+  border-left: 3px solid var(--brand);
+  border-radius: 0 8px 8px 0;
+  padding: 0.7rem 0.9rem;
+}
+.audio-label {
+  color: var(--brand);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  margin: 0 0 0.38rem;
+}
+.audio-box audio { width: 100%; height: 31px; }
+.note {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 0.8rem;
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  font-style: italic;
+}
+.note svg { margin-top: 0.12rem; color: var(--brand); flex-shrink: 0; }
+
+/* Honors = mixed hero + timeline cards */
+.hero {
+  border: 1px solid var(--line);
+  background: var(--surface-glass);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 1.6rem;
+}
+.hero img {
+  width: 100%;
+  max-height: 430px;
+  object-fit: contain;
+  display: block;
+  background: var(--surface);
+}
+.hero-cap {
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft);
+  padding: 0.8rem 0.95rem;
+}
+.hero-cap h4 {
+  margin: 0 0 0.42rem;
+  font-size: 0.72rem;
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 0.24rem 0.8rem;
+}
+.hero-grid span { font-size: .83rem; color: var(--text-md); }
+
+.timeline {
+  position: relative;
+  margin-left: 0.6rem;
+  padding-left: 1.1rem;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: 2px;
+  background: linear-gradient(var(--brand-pale), var(--line), var(--brand-pale));
+}
+.person {
+  position: relative;
+  padding: 0 0 1rem;
+  margin: 0 0 0.7rem;
+}
+.person::before {
+  content: "";
+  position: absolute;
+  left: -1.26rem;
+  top: 0.6rem;
+  width: 0.56rem;
+  height: 0.56rem;
+  border-radius: 999px;
+  border: 2px solid var(--brand);
+  background: var(--surface);
+}
+.person-card {
+  background: var(--surface-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.person-head {
+  padding: 0.88rem 1rem 0.74rem;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.58rem;
+  align-items: flex-start;
+}
+.person-name {
+  margin: 0;
+  flex: 1;
+  min-width: 220px;
+  font-family: "Lora", Georgia, serif;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+.person-name small {
+  display: block;
+  color: var(--text-soft);
+  font-size: .72rem;
+  margin-top: 0.1rem;
+  font-weight: 400;
+}
+.badge {
+  display: inline-flex;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.badge.red { background: var(--brand); color: #fff; }
+.badge.dark { background: var(--text); color: #fff; }
+.badge.soft {
+  background: var(--surface-soft);
+  color: var(--brand);
+  border: 1px solid var(--line);
+}
+.person-body {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 235px;
+}
+.person-copy { padding: 0.9rem 1rem 1rem; }
+.person-media {
+  border-left: 1px solid var(--line);
+  background: var(--surface-soft);
+  padding: 0.66rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+.person-media.dual {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 0.42rem;
+}
+.person-media img {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  object-fit: contain;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.33rem;
+  margin: 0.66rem 0 0;
+}
+.tag {
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text-md);
+  border-radius: 999px;
+  font-size: .72rem;
+  padding: 0.18rem 0.54rem;
+  font-weight: 600;
+}
+.tiny-list {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.tiny-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--text-md);
+  font-size: .89rem;
+  line-height: 1.55;
+}
+.tiny-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--brand);
+  margin-top: 0.62rem;
+  flex-shrink: 0;
+}
+.quote {
+  margin: 0.88rem 0;
+  padding: 0.8rem 0.95rem;
+  border-left: 3px solid var(--brand);
+  border-radius: 0 7px 7px 0;
+  background: linear-gradient(90deg, var(--brand-pale), transparent);
+}
+.quote p {
+  margin: 0;
+  color: var(--brand-deep);
+  font-family: "Lora", Georgia, serif;
+  font-style: italic;
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+/* Importance (article flow, minimal box feel) */
+.seg { margin-bottom: 1.55rem; }
+.seg .eyebrow {
+  margin: 0 0 0.36rem;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: var(--brand);
+  font-weight: 700;
+}
+.seg h2 {
+  margin: 0 0 .72rem;
+  font-family: "Lora", Georgia, serif;
+  font-size: clamp(1.05rem, 2.3vw, 1.32rem);
+  line-height: 1.3;
+}
+.seg-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+  margin: 1.35rem 0;
+}
+.reasons {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .6rem;
+}
+.reason {
+  border: 1px solid var(--line);
+  background: var(--surface-glass);
+  border-radius: 10px;
+  padding: .75rem .88rem;
+  display: flex;
+  gap: .5rem;
+  font-size: .9rem;
+  color: var(--text-md);
+  line-height: 1.55;
+}
+.reason .tiny-dot { margin-top: .5rem; }
+.reason.wide { grid-column: 1 / -1; }
+.proverb {
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, var(--surface-soft), var(--surface));
+  border-radius: 11px;
+  text-align: center;
+  padding: 1rem;
+  margin: 0.95rem 0 1rem;
+}
+.proverb p {
+  margin: 0;
+  font-family: "Lora", Georgia, serif;
+  color: var(--brand);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* CTA */
+.cta {
+  margin-top: 2.1rem;
+  border-radius: 14px;
+  padding: 1.8rem 1.2rem;
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+  color: #fff;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.cta::after {
+  content: "";
+  position: absolute;
+  right: -1.3rem;
+  bottom: -1.3rem;
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,.11);
+}
+.cta h3 {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 .48rem;
+  font-family: "Lora", Georgia, serif;
+  font-size: 1.15rem;
+}
+.cta p {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 1.1rem;
+  color: rgba(255,255,255,.86);
+  font-size: .9rem;
+}
+.cta-btns {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .55rem;
+}
+.btn {
+  text-decoration: none;
+  font-size: .84rem;
+  font-weight: 700;
+  border-radius: 9px;
+  padding: .52rem 1.14rem;
+}
+.btn.light { background: #fff; color: var(--brand-deep); }
+.btn.outline { border: 2px solid #fff; color: #fff; }
+
+footer {
+  margin-top: 2.2rem;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  color: var(--text-soft);
+  font-size: .78rem;
+  padding: 1.1rem 0 1.3rem;
+}
+
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Responsive */
+@media (max-width: 980px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 0.45rem 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar-title { display: none; }
+  .tab-btn {
+    width: auto;
+    min-width: 155px;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 10px 10px 0 0;
+    align-items: center;
+  }
+  .tab-btn.active {
+    border-left: none;
+    border-bottom-color: var(--brand);
+    background: rgba(163,58,43,0.06);
+  }
+  .tab-meta { display: none; }
+  .main { padding-top: 1.4rem; }
+}
+
+@media (max-width: 760px) {
+  .main { padding-left: 0.9rem; padding-right: 0.9rem; }
+  .hero-grid { grid-template-columns: 1fr; }
+  .person-body { grid-template-columns: 1fr; }
+  .person-media { border-left: none; border-top: 1px solid var(--line); }
+  .reasons { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .tab-btn { min-width: 132px; padding: .58rem .56rem; }
+  .tab-label { font-size: .76rem; }
+  .copy { font-size: .94rem; }
+  .person-name { min-width: 100%; }
+}
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-logo">Kakkalani Village</div>
+    <div class="lang-pill" aria-label="Language selector">
+      <span class="active">English</span>
+      <span class="idle">தமிழ்</span>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar" role="tablist" aria-label="Why visit village sections">
+      <div class="sidebar-title">Sections</div>
+
+      <button class="tab-btn active" data-tab="blessings" role="tab" aria-selected="true">
+        <span class="tab-icon">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8.1 8.8l1.9 2.1 2-2.1"/><path d="M6.3 10.6L4.6 16c-.4 1.3.5 2.6 1.9 2.6h2.2"/><path d="M17.7 10.6l1.7 5.4c.4 1.3-.5 2.6-1.9 2.6h-2.2"/><path d="M10 11.1V19h4v-7.9"/></svg>
+        </span>
+        <span>
+          <span class="tab-label">Blessings of MahaPeriyava & Ramana Maharishi</span>
+          <span class="tab-meta">Two sacred visits to our village</span>
+        </span>
+      </button>
+
+      <button class="tab-btn" data-tab="honors" role="tab" aria-selected="false">
+        <span class="tab-icon">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M8 8l-4 8h16l-4-8"/><path d="M10 16l-1 4h6l-1-4"/></svg>
+        </span>
+        <span>
+          <span class="tab-label">Arunachala Iyer Family Honors</span>
+          <span class="tab-meta">Padma Bhushan, Mahavir Chakra and more</span>
+        </span>
+      </button>
+
+      <button class="tab-btn" data-tab="importance" role="tab" aria-selected="false">
+        <span class="tab-icon">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </span>
+        <span>
+          <span class="tab-label">Importance of Visiting Our Village</span>
+          <span class="tab-meta">Why we must honour our village deities</span>
+        </span>
+      </button>
+    </aside>
+
+    <main class="main">
+      <!-- TAB 1 -->
+      <section id="panel-blessings" class="panel active" role="tabpanel">
+        <h1 class="page-title">Blessings of MahaPeriyava & Ramana Maharishi</h1>
+        <p class="page-sub">Two sacred vijayams that sanctified Kakkalani Village</p>
+        <div class="page-rule"></div>
+
+        <article class="acc-item open" id="acc-1">
+          <button class="acc-trigger" data-acc="acc-1" aria-expanded="true">
+            <span class="tab-icon" style="width:2rem;height:2rem;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8.1 8.8l1.9 2.1 2-2.1"/><path d="M6.3 10.6L4.6 16c-.4 1.3.5 2.6 1.9 2.6h2.2"/><path d="M17.7 10.6l1.7 5.4c.4 1.3-.5 2.6-1.9 2.6h-2.2"/><path d="M10 11.1V19h4v-7.9"/></svg>
+            </span>
+            <span>
+              <span class="acc-title">First Vijayam</span>
+              <span class="acc-meta">Around 1920 · Pichu Iyer Family</span>
+            </span>
+            <svg class="acc-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="acc-body">
+            <p class="copy">
+              Kanchi Shri Mahaperiyava's vijayam to our village was around the year 1920. He visited the Pichu Iyer family during the upanayanam of Shri Mahalingam (grandfather of Dr. Sabesan), stayed in the house, and performed pooja.
+            </p>
+            <p class="copy">
+              Details about this event were shared in an audio by Dr. Sabesan (son of late Mr. Swaminathan alias Balu, Psychology Professor in Annamalai University, and grandson of Mr. Mahalingam).
+            </p>
+
+            <div class="audio-box">
+              <p class="audio-label">Audio Reference — Dr. Sabesan</p>
+              <audio controls>
+                <source src="/audio/AUD-20240518-WA0003.ogx" type="audio/ogg" />
+                Your browser does not support the audio element.
+              </audio>
+            </div>
+          </div>
+        </article>
+
+        <article class="acc-item" id="acc-2">
+          <button class="acc-trigger" data-acc="acc-2" aria-expanded="false">
+            <span class="tab-icon" style="width:2rem;height:2rem;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l2.3 2.2L12 7.4 9.7 5.2 12 3Z"/><path d="M8.2 8.2h7.6l-.9 2.2h-5.8l-.9-2.2Z"/><path d="M7.2 12h9.6v8H7.2z"/><path d="M10.5 20v-4h3v4"/></svg>
+            </span>
+            <span>
+              <span class="acc-title">Second Vijayam</span>
+              <span class="acc-meta">1954 · Pannai Family</span>
+            </span>
+            <svg class="acc-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="acc-body">
+            <p class="copy">
+              Kanchi Shri Mahaperiyava's second vijayam to our village was through the Pannai family in 1954. While elaborate details are not available, Shri R. Vaithyanathan (the senior-most available member from the Pannai family) shared what he could recollect.
+            </p>
+            <p class="copy">
+              During this vijayam, Shri Mahaperiyava stayed for a few days on the plot next to Mangalam Periamma's house, where special hut-type arrangements were made.
+            </p>
+            <div class="note">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span>The location is referenced on the website home page.</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- TAB 2 -->
+      <section id="panel-honors" class="panel" role="tabpanel">
+        <h1 class="page-title">Arunachala Iyer Family Honors</h1>
+        <p class="page-sub">Eminent personalities with national accolades from Kakkalani</p>
+        <div class="page-rule"></div>
+
+        <section class="hero">
+          <img src="/images/WhyVisitNativeVillage/image1.png" alt="Arunachalam Iyer family group photograph" />
+          <div class="hero-cap">
+            <h4>Persons Identified in Photograph</h4>
+            <div class="hero-grid">
+              <span><strong>Center:</strong> Mr A Sundaresan</span>
+              <span><strong>Right (angavastram):</strong> Mr M Ganapathy</span>
+              <span><strong>Left:</strong> Mr A Vaidyanathan</span>
+              <span><strong>Behind Ganapathy:</strong> Dr A Srinivasan</span>
+              <span><strong>Behind Vaidyanathan:</strong> Mr Ramaswamy</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="timeline">
+          <article class="person">
+            <div class="person-card">
+              <header class="person-head">
+                <h3 class="person-name">Mr M Ganapathy (Mahadeva Iyer Ganapati)<small>1903 – 1976</small></h3>
+                <span class="badge red">Padma Bhushan 1954</span>
+              </header>
+              <div class="person-body">
+                <div class="person-copy">
+                  <p class="copy">
+                    Mahadeva Iyer Ganapati (known as M. Ganapati) was an eminent Indian engineer renowned for his leadership in major national infrastructure projects. The Indian government awarded him the inaugural <strong>Padma Bhushan in 1954</strong>. He served as President of the Institution of Engineers (India) for 1973–74.
+                  </p>
+                  <div class="tags">
+                    <span class="tag">Railway Board Gold Medal, 1950</span>
+                    <span class="tag">Viceroy's Prize — Institution of Engineers India, 1953</span>
+                    <span class="tag">Padma Bhushan, 1954</span>
+                  </div>
+                  <ul class="tiny-list">
+                    <li><span class="tiny-dot"></span>Rourkela Steel Plant, Orissa</li>
+                    <li><span class="tiny-dot"></span>Kandla Port</li>
+                    <li><span class="tiny-dot"></span>Malaviya Bridge at Varanasi</li>
+                    <li><span class="tiny-dot"></span>Chittaranjan Locomotive Works (CLW)</li>
+                    <li><span class="tiny-dot"></span>Perambur Integral Coach Factory</li>
+                    <li><span class="tiny-dot"></span>Vivekananda Setu, Kolkata (as Deputy)</li>
+                    <li><span class="tiny-dot"></span>Churchgate Railway Station & Western Railway projects</li>
+                  </ul>
+                </div>
+                <div class="person-media dual">
+                  <img src="/images/WhyVisitNativeVillage/image2.png" alt="Padma Bhushan list reference 1" />
+                  <img src="/images/WhyVisitNativeVillage/image3.png" alt="Padma Bhushan list reference 2" />
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="person">
+            <div class="person-card">
+              <header class="person-head">
+                <h3 class="person-name">Mr Arunachala Srinivasan</h3>
+                <span class="badge red">Padma Bhushan 1974</span>
+              </header>
+              <div class="person-body">
+                <div class="person-copy">
+                  <p class="copy">
+                    Mr Arunachala Srinivasan was awarded the prestigious <strong>Padma Bhushan in 1974</strong>, recognising his outstanding contribution and dedicated service to the nation.
+                  </p>
+                </div>
+                <div class="person-media">
+                  <img src="/images/WhyVisitNativeVillage/image4.png" alt="Mr Arunachala Srinivasan — Padma Bhushan 1974" />
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="person">
+            <div class="person-card">
+              <header class="person-head">
+                <h3 class="person-name">Mr Arunachala Sundaresan</h3>
+                <span class="badge soft">Estate Manager</span>
+              </header>
+              <div class="person-copy">
+                <p class="copy">
+                  Mr Sundaresan was a genius in mathematics and renowned for his exceptional sharp memory. Among his distinguished service, he served as the <em>"Vadabathimangalam Estate Manager"</em> at Thiruvarur.
+                </p>
+                <p class="copy">
+                  Vadabathimangalam estate was one of the largest in Thiruvarur, owned by Mr Thyagaraja Mudaliar — an ardent devotee of Lord Thyagaraja Swamy. Periodically, he would review his assets and compare their value with those of the Thyagaraja Swamy temple. Whatever excess he found, he would immediately transfer to the temple trust.
+                </p>
+                <div class="quote">
+                  <p>"His unwavering principle: his own assets should never exceed those of the temple."</p>
+                </div>
+                <p class="copy">
+                  To manage such an estate with such values, Mr Thyagaraja Mudaliar found in Mr Arunachalam Sundaresan the most able person for the role.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="person">
+            <div class="person-card">
+              <header class="person-head">
+                <h3 class="person-name">Mr Vaidyanathan Ganesan<small>Grandson of Mr Arunachalam</small></h3>
+                <span class="badge dark">Mahavir Chakra 1960</span>
+              </header>
+              <div class="person-body">
+                <div class="person-copy">
+                  <p class="copy">
+                    Mr Vaidyanathan Ganesan made a supreme sacrifice and was awarded the prestigious <strong>Peacetime Mahavir Chakra in 1960</strong> — one of India's highest military honours.
+                  </p>
+                </div>
+                <div class="person-media">
+                  <img src="/images/WhyVisitNativeVillage/image5.png" alt="Mr Vaidyanathan Ganesan — Mahavir Chakra 1960" />
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </section>
+
+      <!-- TAB 3 -->
+      <section id="panel-importance" class="panel" role="tabpanel">
+        <h1 class="page-title">Importance of Visiting Our Village</h1>
+        <p class="page-sub">நமது கிராம தெய்வங்களைப் பார்ப்பதோ / சேவை செய்வதோ ஏன் முக்கியம்?</p>
+        <div class="page-rule"></div>
+
+        <section class="seg">
+          <p class="eyebrow">Our Sacred Duty</p>
+          <h2>Importance of Visit and Offer Service to Our Village Deities</h2>
+          <p class="copy">
+            Just as we must never forget the sacrifices and efforts of our parents, who shaped our lives and guided us to where we are today, we must also remember our duty towards our <strong>Kuladeivam</strong> (Family deity) and <strong>Grama Devathas</strong> (Village deities). They have an important place in Hinduism and are like our local guardians and protectors. Hence, worshipping them is vital for one's good life. Such worship and traditions must be inculcated in our children and future generations for their benefit.
+          </p>
+        </section>
+
+        <div class="seg-rule"></div>
+
+        <section class="seg">
+          <p class="eyebrow">Village Significance</p>
+          <h2>Kakkalani — Its Name and Religious Significance</h2>
+          <p class="copy">
+            Our village Kakkalani is located within 10 km from the famous <strong>Thiruvarur Thyagaraja Swami Temple</strong>, where Lord Shiva showers his blessings in the form of a <strong>Maragadha Lingam</strong> worshipped by Lord Indra himself. Nithya pooja is offered on all four kalams every day.
+          </p>
+          <p class="copy">
+            One of our generous donors and village members, Shri R. Srinivasan (Vasu), was blessed with an opportunity to offer physical service at the place where daily poojas are performed to this Lingam.
+          </p>
+          <p class="copy">
+            Our village is blessed to be in close proximity to this temple, enjoying its positive spiritual vibrations.
+          </p>
+        </section>
+
+        <div class="seg-rule"></div>
+
+        <section class="seg">
+          <p class="eyebrow">Divine Grace</p>
+          <h2>Blessings of Great Souls</h2>
+          <p class="copy">
+            Shri Kanchi Mahaperiyava came to this village twice and visited all three temples, sanctifying them with his divine presence. Both the Pichu Iyer family and the Pannai Family are blessed — and through them, the entire village is blessed by Mahaperiyava.
+          </p>
+          <p class="copy">
+            A member of the Pannai family was blessed with the opportunity to stay at the Ashram of Shri Ramana Maharishi and render service to him. He was later brought back and stayed in the village till his last breath. During Mahaperiyava's second visit, he acknowledged this person as apart from all others — in a siddha state due to his association with Shri Ramana Maharishi.
+          </p>
+          <p class="copy">
+            Shri <strong>Arunachala Sastrigal</strong>, a renowned Sanskrit scholar and Vedic pandit from our village, was well recognised by His Holiness Kanchi Mahaperiyava.
+          </p>
+        </section>
+
+        <div class="seg-rule"></div>
+
+        <section class="seg">
+          <p class="eyebrow">Our Responsibilities</p>
+          <h2>Why We Must Visit & Serve</h2>
+          <div class="reasons">
+            <article class="reason"><span class="tiny-dot"></span><span>Many eminent personalities with accolades have come from this small village. All these achievements were possible because of Eashwara Krupai & village deities' blessings.</span></article>
+            <article class="reason"><span class="tiny-dot"></span><span>When we stand before the deities in our village temples, we also receive the blessings of the great souls who once worshipped there.</span></article>
+            <article class="reason"><span class="tiny-dot"></span><span>It is our duty to share this sacred knowledge with our families and the younger generation, and to ensure that daily poojas and Naivedhyam continue in our village temples by actively participating in these efforts.</span></article>
+            <article class="reason"><span class="tiny-dot"></span><span>For many families, the village deity also serves as their Kuladeivam, strengthening their spiritual bond with the village.</span></article>
+            <article class="reason wide"><span class="tiny-dot"></span><span>If all the village temples are looked after properly, the village too will become prosperous.</span></article>
+          </div>
+          <div class="quote" style="margin-top:1.05rem;">
+            <p>"Let us take this opportunity to visit our temples, offer our service, and seek the blessings of our village deities. By doing so, we preserve our traditions, honour our ancestors, and pass on this sacred heritage to our future generations."</p>
+          </div>
+        </section>
+
+        <div class="seg-rule"></div>
+
+        <section class="seg">
+          <p class="eyebrow">Tamil</p>
+          <h2>நமது கிராம தெய்வங்களைப் பார்ப்பதோ / சேவை செய்வதோ ஏன் முக்கியம்?</h2>
+          <div class="proverb"><p>"கோவில் விளங்கக் குடி விளங்கும்"</p></div>
+          <p class="copy">
+            பல முயற்சிகள், தியாகங்கள் செய்து நம்மை வளர்த்து ஆளாக்கி இன்று இந்த உயர்ந்த நிலையில் நாம் இருப்பதற்கு காரணமான நமது பெற்றோரை அவர்களின் வயோதிக காலத்தில் பேணி காக்க நாம் எப்படி தவறக்கூடாதோ அது போல நமது குல தெய்வங்களையும், கிராம தெய்வங்களையும் வழிபடுவதையும், சேவை செய்வதையும் மறந்து விடக்கூடாது. சனாதன தர்மத்தின்படி அவர்கள் நம்மை காப்பாற்றும் உள்ளூர் பாதுகாவலராகவே கருதப்படுகிறார்கள். எனவே நமது நல்வாழ்வுக்கு அவர்களை வழிபடுவது சால சிறந்தது.
+          </p>
+          <p class="copy">
+            இங்கே நமது கிராமமான கக்கழனி இந்த பெயரையும், புகழையும் எவ்வாறு பெற்றது என்ற வரலாற்று சிறப்பை முதலில் காண்போம்.
+          </p>
+          <p class="copy">
+            இந்த கிராமம், பஞ்ச பூத ஸ்தலங்களில் பிருத்வி ஸ்தலமாகவும், தேவார பாடல்கள் பாடபெற்ற உலக பிரசித்தி பெற்ற மரகதலிங்கமாக இருந்து, இந்தரனாலேயே பூஜிக்கப்பட்டதுமான சிவனார் கோயில் கொண்டுள்ள திருவாரூர் தியாகராஜ கோயிலிலிருந்து 10 கிலோ மீட்டர் தொலைவில் உள்ளது. இந்த சிவனுக்கு தினமும் நாலு கால பூஜையும் நைவேத்யத்துடன் சிறப்பாக நடைபெறுகிறது. நமது கிராமம் இந்த புகழ் பெற்ற சிவ கோயிலின் அருகாமையில் அமைய பெற்றதால் இங்கும் அத்தனை நேர்மறை ஆன்மீக அதிர்வுகள் அமைய பெற்ற இடமாக உள்ளது.
+          </p>
+          <p class="copy">
+            பல்வேறு ஆவணங்கள் பதிவுகள், அங்குள்ள மூத்த தலைவர்கள், மற்றும் மக்களுடன் நடத்திய உரையாடல்கள் மூலமாக நாம் அறிய வந்த விஷயங்கள்: பல புகழுக்கு சொந்தக்காரர்களும் விருதுகளை வென்றவர்களும் இந்த மண்ணின் மைந்தர்கள்.
+          </p>
+        </section>
+      </section>
+
+      <section class="cta">
+        <h3>Explore the Sacred Temples of Kakkalani</h3>
+        <p>From Lakshmi Narayanar Perumal Koil to Kalahastiswarar</p>
+        <div class="cta-btns">
+          <a href="/kovi-details" class="btn light">About Kovil</a>
+          <a href="/" class="btn outline">Return Home</a>
+        </div>
+      </section>
+
+      <footer>
+        © 2026 Kakkalani Gramam. Built with <span style="color:var(--brand)">❤</span> for the community.
+      </footer>
+    </main>
+  </div>
+
+<script>
+  const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+  const panels = Array.from(document.querySelectorAll('.panel'));
+
+  function switchTab(tabId) {
+    tabs.forEach((btn) => {
+      const active = btn.dataset.tab === tabId;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    panels.forEach((panel) => {
+      panel.classList.toggle('active', panel.id === `panel-${tabId}`);
+    });
+  }
+
+  tabs.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      switchTab(btn.dataset.tab);
+      btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  });
+
+  document.querySelectorAll('[data-acc]').forEach((trigger) => {
+    trigger.addEventListener('click', () => {
+      const id = trigger.getAttribute('data-acc');
+      const item = document.getElementById(id);
+      if (!item) return;
+      item.classList.toggle('open');
+      trigger.setAttribute('aria-expanded', item.classList.contains('open') ? 'true' : 'false');
+    });
+  });
+</script>
+</body>
+</html>

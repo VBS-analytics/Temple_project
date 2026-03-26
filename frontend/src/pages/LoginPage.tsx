@@ -31,12 +31,28 @@ const loginMarqueeSlides = [
   { src: '/images/kovi/ayyanar/ayyanar-hd.jpg', alt: 'Ayyanar temple deity' },
 ];
 
+const mobileSlides = [
+  { src: '/images/landing-page-image.jpg', alt: 'Kakkalani Village aerial view', fit: 'cover' },
+  { src: '/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png', alt: 'Lakshmi Narayanar', fit: 'contain' },
+  { src: '/images/kovi/pillayar/pillayar-hd.jpg', alt: 'Aathagarai Pillayar', fit: 'contain' },
+  { src: '/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png', alt: 'Kalahasteeswarar', fit: 'contain' },
+  { src: '/images/kovi/ayyanar/ayyanar-hd.jpg', alt: 'Ayyanar', fit: 'contain' },
+];
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % mobileSlides.length);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, []);
 
   const {
     register,
@@ -109,24 +125,17 @@ const LoginPage = () => {
   return (
     <div>
       {/*
-        ══════════════════════════════════════════════════════════
         LOGIN SECTION
-          Mobile (< lg):
-            – Scrollable: sticky header + marquee + village map
-              image + LandingPage content + spacer
-            – Fixed bottom panel: compact Sign In form (~30vh)
-          Desktop (lg+):  Design A – Split Panel
-            – Left 80 %: village map image
-            – Right 20 %: full Sign In form
-        ══════════════════════════════════════════════════════════
+          Mobile: Scrollable header + slideshow + LandingPage + fixed Sign In panel at bottom
+          Desktop (lg+): Split panel — 80% village map image | 20% Sign In form
       */}
 
       {/* ═══ OUTER FLEX COL — header + marquee + content row ═══ */}
       <div className="flex flex-col min-h-screen">
         <PublicSiteHeader variant="amber" />
 
-        {/* Deity image marquee strip */}
-        <section className="login-hero-strip" aria-label="Temple highlights">
+        {/* Deity image marquee strip — desktop only */}
+        <section className="login-hero-strip hidden lg:block" aria-label="Temple highlights">
           <div className="login-hero-marquee-track">
             {[...loginMarqueeSlides, ...loginMarqueeSlides, ...loginMarqueeSlides].map((slide, index) => (
               <div className="login-hero-marquee-item" key={`${slide.src}-${index}`}>
@@ -143,14 +152,42 @@ const LoginPage = () => {
         {/* ═══ INNER CONTAINER — flex-col mobile / flex-row desktop ═══ */}
         <div className="flex flex-col flex-1 min-h-0 lg:flex-row">
 
-          {/* ── MOBILE ONLY: village map image in normal document flow ── */}
+          {/* ── MOBILE ONLY: image slideshow ── */}
           <div
-            className="lg:hidden flex-shrink-0 w-full bg-cover bg-center"
-            style={{
-              backgroundImage: "url('/images/landing-page-image.jpg')",
-              height: 'clamp(220px, 70vw, 420px)',
-            }}
-          />
+            className="lg:hidden relative flex-shrink-0 w-full overflow-hidden"
+            style={{ height: 'clamp(220px, 70vw, 420px)' }}
+          >
+            {mobileSlides.map((slide, i) => (
+              <div
+                key={slide.src}
+                className="absolute inset-0 transition-opacity duration-700"
+                style={{
+                  backgroundImage: `url('${slide.src}')`,
+                  backgroundSize: slide.fit === 'contain' ? 'contain' : 'cover',
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundColor: slide.fit === 'contain' ? '#fbf5ea' : 'transparent',
+                  opacity: i === currentSlide ? 1 : 0,
+                }}
+              />
+            ))}
+            {/* Dot indicators */}
+            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
+              {mobileSlides.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setCurrentSlide(i)}
+                  className="h-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: i === currentSlide ? '18px' : '6px',
+                    background: i === currentSlide ? '#fff' : 'rgba(255,255,255,0.5)',
+                  }}
+                  aria-label={`Slide ${i + 1}`}
+                />
+              ))}
+            </div>
+          </div>
 
           {/* ── MOBILE ONLY: LandingPage content (scrollable, compact wrapper) ── */}
           <div className="lg:hidden login-lp-wrap">
