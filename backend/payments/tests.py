@@ -28,6 +28,7 @@ from pooja.models import (
 )
 from payments.models import PassbookEntry
 from payments.models import (
+    AccountCatalogue,
     CombinePaymentMapping,
     Donation,
     ExpenseCategory,
@@ -765,6 +766,75 @@ class ExpenseCategoryApiTests(TestCase):
         list_response = self.client.get(self.url)
         self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(list_response.json()["detail"], EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
+
+
+class AccountCatalogueApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("account-catalogues-list")
+        self.admin = User.objects.create_user(
+            phone_number="+919100000111",
+            name="Account Catalogue Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.read_only_admin = User.objects.create_superuser(
+            phone_number="+91 9999999998",
+            name="Read Only Account Catalogue Admin",
+            password="adminpass1",
+        )
+        self.donor = User.objects.create_user(
+            phone_number="+919100000112",
+            name="Regular Donor",
+            password="secret",
+        )
+
+    def test_admin_can_create_and_list_name_value_catalogues(self):
+        self.client.force_authenticate(self.admin)
+        create_response = self.client.post(
+            self.url,
+            {
+                "name": "General Donation Inflow",
+                "value": "GENERAL_DONATION",
+                "display_order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        AccountCatalogue.objects.create(name="Opening Balance", value="OPENING_BAL", display_order=2)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        payload = list_response.json()
+        rows = {(item["name"], item["value"]) for item in payload}
+        self.assertIn(("General Donation Inflow", "GENERAL_DONATION"), rows)
+        self.assertIn(("Opening Balance", "OPENING_BAL"), rows)
+
+    def test_read_only_admin_can_list_but_cannot_modify(self):
+        catalogue = AccountCatalogue.objects.create(name="Opening Balance", value="OPENING_BAL")
+        detail_url = reverse("account-catalogues-detail", args=[catalogue.id])
+        self.client.force_authenticate(self.read_only_admin)
+
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        create_response = self.client.post(
+            self.url,
+            {"name": "Blocked Catalogue", "value": "BLOCKED"},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        update_response = self.client.patch(detail_url, {"name": "Blocked Update"}, format="json")
+        self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_non_admin_cannot_access_account_catalogues(self):
+        self.client.force_authenticate(self.donor)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class PaymentRecordDeleteAccessTests(TestCase):

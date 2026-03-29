@@ -113,7 +113,7 @@ const AppLayout = () => {
     },
     {
       to: "/admin/donor-pooja-details",
-      label: "Donor Pooja Details",
+      label: "Donor Family Details",
       show: Boolean(user && isAdmin(user.role)),
     },
     {
@@ -125,6 +125,11 @@ const AppLayout = () => {
       to: "/admin/expenses",
       label: "Expense Tracker",
       show: canViewExpenseTracker(user),
+    },
+    {
+      to: "/admin/account-statement",
+      label: "Account Statement",
+      show: canViewPaymentStatement(user) && canViewExpenseTracker(user),
     },
     {
       to: "/payments/statement",

@@ -91,6 +91,13 @@ interface ExpenseCategoryEntry {
   is_active: boolean;
 }
 
+interface AccountCatalogueEntry {
+  id: number;
+  name: string;
+  value: string;
+  display_order: number;
+}
+
 type DayOptionFormValues = {
   code: string;
   description: string;
@@ -153,11 +160,11 @@ const AdminMasterPage = () => {
   const [draggingHeaderId, setDraggingHeaderId] = useState<number | null>(null);
   const [draggingPoojaId, setDraggingPoojaId] = useState<number | null>(null);
   const [draggingPoojaParentId, setDraggingPoojaParentId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily' | 'expense'>('pooja');
+  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily' | 'expense' | 'account'>('pooja');
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -182,6 +189,13 @@ const AdminMasterPage = () => {
   const [editingExpenseCategoryName, setEditingExpenseCategoryName] = useState('');
   const [editingExpenseCategoryGroup, setEditingExpenseCategoryGroup] = useState<ExpenseCategoryEntry['group_key']>('poojari');
   const [isExpenseCategorySaving, setIsExpenseCategorySaving] = useState(false);
+  const [accountCatalogues, setAccountCatalogues] = useState<AccountCatalogueEntry[]>([]);
+  const [newAccountCatalogueName, setNewAccountCatalogueName] = useState('');
+  const [newAccountCatalogueValue, setNewAccountCatalogueValue] = useState('');
+  const [editingAccountCatalogueId, setEditingAccountCatalogueId] = useState<number | null>(null);
+  const [editingAccountCatalogueName, setEditingAccountCatalogueName] = useState('');
+  const [editingAccountCatalogueValue, setEditingAccountCatalogueValue] = useState('');
+  const [isAccountCatalogueSaving, setIsAccountCatalogueSaving] = useState(false);
   const [isDailyLoading, setIsDailyLoading] = useState(false);
   const [dailyError, setDailyError] = useState('');
   const [dailySchedule, setDailySchedule] = useState(STATIC_DAILY_HEADER_TEXT);
@@ -669,6 +683,90 @@ const AdminMasterPage = () => {
     }
   };
 
+  const startEditingAccountCatalogue = (entry: AccountCatalogueEntry) => {
+    setEditingAccountCatalogueId(entry.id);
+    setEditingAccountCatalogueName(entry.name);
+    setEditingAccountCatalogueValue(entry.value ?? '');
+  };
+
+  const cancelEditingAccountCatalogue = () => {
+    setEditingAccountCatalogueId(null);
+    setEditingAccountCatalogueName('');
+    setEditingAccountCatalogueValue('');
+  };
+
+  const handleAddAccountCatalogue = async () => {
+    const trimmedName = newAccountCatalogueName.trim();
+    const trimmedValue = newAccountCatalogueValue.trim();
+    if (!trimmedName || !trimmedValue) {
+      setNotice('Enter both account catalogue name and value before saving.');
+      return;
+    }
+    setIsAccountCatalogueSaving(true);
+    try {
+      await api.post('/payments/account-catalogues/', {
+        name: trimmedName,
+        value: trimmedValue,
+      });
+      setNewAccountCatalogueName('');
+      setNewAccountCatalogueValue('');
+      setNotice(`Account catalogue ${trimmedName} added successfully.`);
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error adding account catalogue: ${errorMessage}`);
+    } finally {
+      setIsAccountCatalogueSaving(false);
+    }
+  };
+
+  const handleUpdateAccountCatalogue = async (entry: AccountCatalogueEntry) => {
+    const trimmedName = editingAccountCatalogueName.trim();
+    const trimmedValue = editingAccountCatalogueValue.trim();
+    if (!trimmedName || !trimmedValue) {
+      setNotice('Enter both account catalogue name and value before saving.');
+      return;
+    }
+    if (trimmedName === entry.name && trimmedValue === (entry.value ?? '')) {
+      cancelEditingAccountCatalogue();
+      return;
+    }
+    setIsAccountCatalogueSaving(true);
+    try {
+      await api.patch(`/payments/account-catalogues/${entry.id}/`, {
+        name: trimmedName,
+        value: trimmedValue,
+      });
+      setNotice(`Account catalogue ${trimmedName} updated successfully.`);
+      cancelEditingAccountCatalogue();
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating account catalogue: ${errorMessage}`);
+    } finally {
+      setIsAccountCatalogueSaving(false);
+    }
+  };
+
+  const handleDeleteAccountCatalogue = async (entry: AccountCatalogueEntry) => {
+    const confirmDelete = window.confirm(`Delete account catalogue "${entry.name}"?`);
+    if (!confirmDelete) return;
+    setIsAccountCatalogueSaving(true);
+    try {
+      await api.delete(`/payments/account-catalogues/${entry.id}/`);
+      setNotice(`Account catalogue ${entry.name} deleted successfully.`);
+      if (editingAccountCatalogueId === entry.id) {
+        cancelEditingAccountCatalogue();
+      }
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error deleting account catalogue: ${errorMessage}`);
+    } finally {
+      setIsAccountCatalogueSaving(false);
+    }
+  };
+
   const fetchAllPages = async <T,>(initialUrl: string): Promise<T[]> => {
     const results: T[] = [];
     let nextUrl: string | null = initialUrl;
@@ -713,10 +811,11 @@ const AdminMasterPage = () => {
     
     setIsSyncing(true);
     try {
-      const [newPoojaOptions, rawDayOptions, rawExpenseCategories] = await Promise.all([
+      const [newPoojaOptions, rawDayOptions, rawExpenseCategories, rawAccountCatalogues] = await Promise.all([
         fetchAllPages<PoojaOption>('/pooja/options/?page_size=200'),
         fetchAllPages<DayOption>('/pooja/day-options/?page_size=200'),
         fetchAllPages<ExpenseCategoryEntry>('/payments/expense-categories/?page_size=200').catch(() => []),
+        fetchAllPages<AccountCatalogueEntry>('/payments/account-catalogues/?page_size=200').catch(() => []),
       ]);
       
       // Clear editing states if items don't exist in new data
@@ -739,6 +838,15 @@ const AdminMasterPage = () => {
           .sort((a, b) => {
             const groupDiff = a.group_key.localeCompare(b.group_key);
             if (groupDiff !== 0) return groupDiff;
+            const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            return a.name.localeCompare(b.name);
+          }),
+      );
+      setAccountCatalogues(
+        rawAccountCatalogues
+          .slice()
+          .sort((a, b) => {
             const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
             if (orderDiff !== 0) return orderDiff;
             return a.name.localeCompare(b.name);
@@ -1471,6 +1579,21 @@ const AdminMasterPage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Expense Categories
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('account')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'account'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
+                    </svg>
+                    Account Catalogue
                   </div>
                 </button>
               </nav>
@@ -2524,6 +2647,132 @@ const AdminMasterPage = () => {
                                   type="button"
                                   onClick={() => handleDeleteExpenseCategory(entry)}
                                   disabled={isExpenseCategorySaving}
+                                  className="text-xs font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-40"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+          {activeTab === 'account' && (
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-900">Account Catalogue</h2>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>{accountCatalogues.length} entries</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr,1fr,auto]">
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="Enter account catalogue name"
+                    value={newAccountCatalogueName}
+                    onChange={(event) => setNewAccountCatalogueName(event.target.value)}
+                  />
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="Enter account catalogue value"
+                    value={newAccountCatalogueValue}
+                    onChange={(event) => setNewAccountCatalogueValue(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddAccountCatalogue}
+                    disabled={isAccountCatalogueSaving}
+                    className="flex items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isAccountCatalogueSaving ? 'Saving...' : 'Add Catalogue'}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <p>These catalogue entries are available for account statement grouping and future report mapping.</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Value</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {accountCatalogues.map((entry) => {
+                        const isEditing = editingAccountCatalogueId === entry.id;
+                        return (
+                          <tr key={entry.id}>
+                            <td className="px-4 py-3">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                                  value={editingAccountCatalogueName}
+                                  onChange={(event) => setEditingAccountCatalogueName(event.target.value)}
+                                />
+                              ) : (
+                                <span className="font-medium text-slate-900">{entry.name}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                                  value={editingAccountCatalogueValue}
+                                  onChange={(event) => setEditingAccountCatalogueValue(event.target.value)}
+                                />
+                              ) : (
+                                <span className="font-medium text-slate-700">{entry.value || '—'}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-3">
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateAccountCatalogue(entry)}
+                                      disabled={isAccountCatalogueSaving}
+                                      className="text-xs font-semibold text-orange-600 transition hover:text-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditingAccountCatalogue}
+                                      disabled={isAccountCatalogueSaving}
+                                      className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingAccountCatalogue(entry)}
+                                    disabled={isAccountCatalogueSaving}
+                                    className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAccountCatalogue(entry)}
+                                  disabled={isAccountCatalogueSaving}
                                   className="text-xs font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-40"
                                 >
                                   Delete

@@ -219,6 +219,20 @@ class ExpenseCategory(models.Model):
         return self.name
 
 
+class AccountCatalogue(models.Model):
+    name = models.CharField(max_length=128, unique=True)
+    value = models.CharField(max_length=255, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("display_order", "name", "id")
+
+    def __str__(self):
+        return self.name
+
+
 class ExpenseRecord(models.Model):
     transaction_date = models.DateField()
     category = models.CharField(max_length=128)
