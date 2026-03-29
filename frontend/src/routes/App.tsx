@@ -11,6 +11,7 @@ import PaymentStatementPage from "../pages/payments/PaymentStatementPage";
 import RegisterPage from "../pages/RegisterPage";
 import CombinePaymentDonorPage from "../pages/admin/CombinePaymentDonorPage";
 import AdminMasterPage from "../pages/admin/AdminMasterPage";
+import AccountStatementPage from "../pages/admin/AccountStatementPage";
 import DonorDetailsPage from "../pages/admin/DonorDetailsPage";
 import ExpensesPage from "../pages/admin/ExpensesPage";
 import PoojaDetailsPage from "../pages/admin/PoojaDetailsPage";
@@ -64,6 +65,20 @@ const ExpenseTrackerRoute = () => {
     return <Navigate to="/admin/master" replace />;
   }
   return <ExpensesPage />;
+};
+
+const AccountStatementRoute = () => {
+  const user = useAuthStore((state) => state.user);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!isAdmin(user.role)) {
+    return <Navigate to="/profile" replace />;
+  }
+  if (!canViewPaymentStatement(user) || !canViewExpenseTracker(user)) {
+    return <Navigate to="/admin/master" replace />;
+  }
+  return <AccountStatementPage />;
 };
 
 const App = () => (
@@ -127,6 +142,7 @@ const App = () => (
         />
         <Route path="/reports" element={<ReportPage />} />
         <Route path="/admin/expenses" element={<ExpenseTrackerRoute />} />
+        <Route path="/admin/account-statement" element={<AccountStatementRoute />} />
         <Route path="/admin/donor-pooja-details" element={<DonorPoojaDetails />} />
         <Route path="/admin/donor-pooja-registrations" element={<DonorPoojaDetails />} />
       </Route>

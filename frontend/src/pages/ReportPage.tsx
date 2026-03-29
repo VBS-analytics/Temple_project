@@ -323,14 +323,27 @@ const createFamilyWorkbook = (donors: DonorRecord[]): XLSX.WorkBook => {
   return workbook;
 };
 
-const POOJA_REPORT_HEADERS = [
+const POOJA_REPORT_HEADERS_NO_PHONE = [
+  'S.no',
+  'Temple Donor ID',
+  'Name',
+] as const;
+
+const POOJA_REPORT_HEADERS_WITH_PHONE = [
   'S.no',
   'Temple Donor ID',
   'Name',
   'Phone',
 ] as const;
 
-const POOJA_REPORT_HEADERS_WITH_DATE = [
+const POOJA_REPORT_HEADERS_WITH_DATE_NO_PHONE = [
+  'S.no',
+  'Temple Donor ID',
+  'Name',
+  'Pooja Date',
+] as const;
+
+const POOJA_REPORT_HEADERS_WITH_DATE_AND_PHONE = [
   'S.no',
   'Temple Donor ID',
   'Name',
@@ -338,12 +351,15 @@ const POOJA_REPORT_HEADERS_WITH_DATE = [
   'Pooja Date',
 ] as const;
 
-type BasePoojaReportHeader = (typeof POOJA_REPORT_HEADERS)[number];
-type PoojaReportHeader = (typeof POOJA_REPORT_HEADERS_WITH_DATE)[number];
-type PoojaReportRow = Record<BasePoojaReportHeader, string | number> & {
+type PoojaReportHeader = (typeof POOJA_REPORT_HEADERS_WITH_DATE_AND_PHONE)[number];
+type PoojaReportRow = {
+  'S.no': string | number;
+  'Temple Donor ID': string | number;
+  Name: string | number;
+  Phone?: string | number;
   'Pooja Date'?: string | number;
 };
-type PoojaReportFormat = 'pdf' | 'excel';
+type PoojaReportFormat = 'pdf' | 'excel' | 'copy';
 
 const POOJA_REPORT_KEYS = [
   'saturdayNavagraha',
@@ -376,6 +392,8 @@ const POOJA_REPORTS: Record<
     errorMessage: string;
     poojaOptionName: string;
     includePoojaDateColumn: boolean;
+    includePhoneColumn: boolean;
+    allowCopy: boolean;
   }
 > = {
   saturdayNavagraha: {
@@ -387,6 +405,8 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Saturday Navagraha Pooja report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.saturdayNavagraha,
     includePoojaDateColumn: false,
+    includePhoneColumn: false,
+    allowCopy: true,
   },
   pradosha: {
     endpoint: 'pooja/registrations/pradosha-pooja-report/',
@@ -397,6 +417,8 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Pradosha Pooja report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.pradosha,
     includePoojaDateColumn: false,
+    includePhoneColumn: false,
+    allowCopy: true,
   },
   tillOil: {
     endpoint: 'pooja/registrations/till-oil-for-lamps-report/',
@@ -407,6 +429,8 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Till Oil for Lamps report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.tillOil,
     includePoojaDateColumn: false,
+    includePhoneColumn: false,
+    allowCopy: true,
   },
   nityaNeivedhyam: {
     endpoint: 'pooja/registrations/nitya-neivedhyam-report/',
@@ -417,6 +441,8 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Nitya Neivedhyam report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.nityaNeivedhyam,
     includePoojaDateColumn: false,
+    includePhoneColumn: false,
+    allowCopy: true,
   },
   gauSamrakshana: {
     endpoint: 'pooja/registrations/gau-samrakshana-seva-report/',
@@ -427,6 +453,8 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Gau Samrakshana report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.gauSamrakshana,
     includePoojaDateColumn: false,
+    includePhoneColumn: false,
+    allowCopy: true,
   },
   postPrasadam: {
     endpoint: 'pooja/registrations/post-prasadam-report/',
@@ -437,6 +465,8 @@ const POOJA_REPORTS: Record<
     errorMessage: 'Unable to download the Post Prasadam report right now.',
     poojaOptionName: POOJA_OPTION_NAMES.postPrasadam,
     includePoojaDateColumn: false,
+    includePhoneColumn: true,
+    allowCopy: false,
   },
 };
 
@@ -567,11 +597,48 @@ const buildPoojaReportRows = (registrations: PoojaReportEntry[]): PoojaReportRow
     'Pooja Date': displayValue(registration.pooja_date),
   }));
 
-const getPoojaReportHeaders = (includePoojaDateColumn: boolean): PoojaReportHeader[] =>
-  includePoojaDateColumn ? [...POOJA_REPORT_HEADERS_WITH_DATE] : [...POOJA_REPORT_HEADERS];
+const getPoojaReportHeaders = (
+  includePoojaDateColumn: boolean,
+  includePhoneColumn: boolean,
+): PoojaReportHeader[] => {
+  if (includePoojaDateColumn) {
+    return includePhoneColumn
+      ? [...POOJA_REPORT_HEADERS_WITH_DATE_AND_PHONE]
+      : [...POOJA_REPORT_HEADERS_WITH_DATE_NO_PHONE];
+  }
+  return includePhoneColumn ? [...POOJA_REPORT_HEADERS_WITH_PHONE] : [...POOJA_REPORT_HEADERS_NO_PHONE];
+};
 
 const getPoojaPdfColumnWidths = (headers: PoojaReportHeader[]) =>
-  headers.includes('Pooja Date') ? ['auto', 'auto', '*', '*', 'auto'] : ['auto', 'auto', '*', '*'];
+  headers.map((header) => (header === 'Name' ? '*' : 'auto'));
+
+const formatPoojaReportCellValue = (value: string | number | undefined) =>
+  value === undefined || value === null || value === '' ? '—' : String(value);
+
+const buildPoojaReportCopyText = (
+  title: string,
+  headers: PoojaReportHeader[],
+  rows: PoojaReportRow[],
+) => {
+  const generatedOn = new Date().toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  const headerLine = headers.join('\t');
+  const bodyLines = rows.map((row) =>
+    headers.map((header) => formatPoojaReportCellValue(row[header])).join('\t'),
+  );
+
+  return [
+    title,
+    `Records: ${rows.length}`,
+    `Generated on: ${generatedOn}`,
+    '',
+    headerLine,
+    ...bodyLines,
+  ].join('\n');
+};
 
 const CART_SNAPSHOT_HEADERS: string[] = [
   'S.no',
@@ -904,6 +971,26 @@ const triggerBlobDownload = (blob: Blob, filename: string) => {
   }, 1000);
 };
 
+const copyTextToClipboard = async (text: string) => {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === 'undefined') {
+    throw new Error('Clipboard is not available in this environment.');
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.opacity = '0';
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textArea);
+};
+
 const extractFilenameFromContentDisposition = (value?: string | null) => {
   if (!value) {
     return null;
@@ -1130,12 +1217,19 @@ const ReportPage = () => {
   const [exportingDonorFeedback, setExportingDonorFeedback] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [exportingOpeningBalance, setExportingOpeningBalance] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTabKey>('database');
 
   useEffect(() => {
     loadPdfMake().catch((err) => console.error('pdfMake preload failed', err));
   }, []);
+
+  useEffect(() => {
+    if (!actionStatus) return;
+    const timeoutId = window.setTimeout(() => setActionStatus(null), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [actionStatus]);
 
   const ensureReportDownloadAccess = useCallback(() => {
     if (canDownloadReports(user)) {
@@ -1716,6 +1810,7 @@ const ReportPage = () => {
       if (!ensureReportDownloadAccess()) return;
       const report = POOJA_REPORTS[key];
       setExportError(null);
+      setActionStatus(null);
       setExportingReports((prev) => ({ ...prev, [key]: true }));
       try {
         const { data } = await api.get(report.endpoint);
@@ -1742,8 +1837,24 @@ const ReportPage = () => {
           return;
         }
 
-        const headerKeys = getPoojaReportHeaders(report.includePoojaDateColumn);
+        const headerKeys = getPoojaReportHeaders(
+          report.includePoojaDateColumn,
+          report.includePhoneColumn,
+        );
         const filenameBase = `${report.filenamePrefix}-${formatFilenameDate(new Date())}`;
+
+        if (format === 'copy') {
+          if (!report.allowCopy) {
+            setExportError('Copy is not enabled for this report.');
+            return;
+          }
+          const copyText = buildPoojaReportCopyText(report.label, headerKeys, rows);
+          await copyTextToClipboard(copyText);
+          setActionStatus(
+            `Copied ${rows.length} record${rows.length === 1 ? '' : 's'} from ${report.label}.`,
+          );
+          return;
+        }
 
         if (format === 'excel') {
           const workbook = XLSX.utils.book_new();
@@ -2054,6 +2165,20 @@ const ReportPage = () => {
                 </div>
               </div>
             )}
+
+            {actionStatus && (
+              <div className="mt-6 p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-7.25 7.25a1 1 0 01-1.414 0l-3.75-3.75a1 1 0 111.414-1.414l3.043 3.043 6.543-6.543a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-emerald-800 mb-1">Copied</h3>
+                    <p className="text-sm text-emerald-700">{actionStatus}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2088,6 +2213,15 @@ const ReportPage = () => {
                   Excel Format
                 </button>
               </div>
+
+              {pendingReportMeta.allowCopy && (
+                <button
+                  onClick={() => handleFormatSelection('copy')}
+                  className="w-full border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-semibold py-3 px-6 rounded-xl transition-all duration-200"
+                >
+                  Copy Details
+                </button>
+              )}
 
               <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
                 PDF provides a print-ready layout while Excel downloads raw data for further analysis

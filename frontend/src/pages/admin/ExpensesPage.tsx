@@ -926,7 +926,7 @@ const EntryForm = ({
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
         </div>
         <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>
-          {editingExpense ? `Edit Entry #${editingExpense.id}` : 'New Entry'}
+          {editingExpense ? `Edit Entry #${editingExpense.id}` : 'New Expense Entry'}
         </span>
       </div>
 

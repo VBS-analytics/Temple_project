@@ -2,7 +2,14 @@
 
 from django.contrib import admin
 
-from .models import Donation, ExpenseCategory, ExpenseRecord, PaymentRecord, PassbookEntry
+from .models import (
+    AccountCatalogue,
+    Donation,
+    ExpenseCategory,
+    ExpenseRecord,
+    PaymentRecord,
+    PassbookEntry,
+)
 
 
 @admin.register(PaymentRecord)
@@ -23,6 +30,12 @@ class ExpenseRecordAdmin(admin.ModelAdmin):
 class ExpenseCategoryAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "group_key", "display_order", "is_active", "updated_at")
     list_filter = ("group_key", "is_active")
+    search_fields = ("name",)
+
+
+@admin.register(AccountCatalogue)
+class AccountCatalogueAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "value", "display_order", "updated_at")
     search_fields = ("name",)
 
 

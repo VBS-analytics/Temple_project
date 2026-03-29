@@ -29,6 +29,7 @@ from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import (
+    AccountCatalogue,
     CombinePaymentMapping,
     Donation,
     ExpenseCategory,
@@ -38,6 +39,7 @@ from .models import (
     PaymentStatus,
 )
 from .serializers import (
+    AccountCatalogueSerializer,
     DonationSerializer,
     ExpenseCategorySerializer,
     ExpenseRecordSerializer,
@@ -481,6 +483,15 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
         if active_param and active_param.strip().lower() in {"1", "true", "yes"}:
             queryset = queryset.filter(is_active=True)
         return queryset
+
+
+class AccountCatalogueViewSet(viewsets.ModelViewSet):
+    serializer_class = AccountCatalogueSerializer
+    permission_classes = (IsAdminRole,)
+    pagination_class = None
+
+    def get_queryset(self):
+        return AccountCatalogue.objects.all().order_by("display_order", "name", "id")
 
 
 class CombinePaymentMappingView(APIView):
