@@ -113,7 +113,7 @@ const AppLayout = () => {
     },
     {
       to: "/admin/donor-pooja-details",
-      label: "Donor Family Details",
+      label: "Ubhayam Message",
       show: Boolean(user && isAdmin(user.role)),
     },
     {
