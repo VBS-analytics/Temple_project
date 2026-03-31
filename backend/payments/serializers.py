@@ -6,7 +6,15 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from .models import AccountCatalogue, Donation, ExpenseCategory, ExpenseRecord, PaymentRecord, PassbookEntry
+from .models import (
+    AdditionIncomeRecord,
+    Donation,
+    ExpenseCategory,
+    ExpenseRecord,
+    IncomeCategory,
+    PassbookEntry,
+    PaymentRecord,
+)
 from pooja.services.calendar import get_calendar_service
 
 
@@ -195,6 +203,28 @@ class ExpenseRecordSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_by", "created_by_name", "created_at", "updated_at")
 
 
+class AdditionIncomeRecordSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.name", read_only=True)
+
+    class Meta:
+        model = AdditionIncomeRecord
+        fields = (
+            "id",
+            "transaction_date",
+            "category",
+            "amount",
+            "transaction_no",
+            "comments",
+            "remarks",
+            "notes",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_by", "created_by_name", "created_at", "updated_at")
+
+
 class ExpenseCategorySerializer(serializers.ModelSerializer):
     group_label = serializers.CharField(source="get_group_key_display", read_only=True)
 
@@ -213,13 +243,12 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at", "group_label")
 
 
-class AccountCatalogueSerializer(serializers.ModelSerializer):
+class IncomeCategorySerializer(serializers.ModelSerializer):
     class Meta:
-        model = AccountCatalogue
+        model = IncomeCategory
         fields = (
             "id",
             "name",
-            "value",
             "display_order",
             "created_at",
             "updated_at",

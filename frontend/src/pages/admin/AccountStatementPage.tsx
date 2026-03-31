@@ -26,11 +26,22 @@ type ExpenseRecordEntry = {
   remarks?: string | null;
 };
 
+type AdditionIncomeRecordEntry = {
+  id: number;
+  transaction_date?: string | null;
+  category?: string | null;
+  amount: string | number;
+  transaction_no?: string | null;
+  created_by_name?: string | null;
+  comments?: string | null;
+  remarks?: string | null;
+};
+
 type StatementRow = {
   key: string;
   date: Date;
   dateLabel: string;
-  type: 'payment' | 'expense';
+  type: 'payment' | 'income' | 'expense';
   details: string;
   reference: string;
   inflow: number;
@@ -130,6 +141,7 @@ const AccountStatementPage = () => {
   const [selectedMonth, setSelectedMonth] = useState(() => monthOptions[0]?.value ?? '');
   const [allPayments, setAllPayments] = useState<PaymentRecordEntry[]>([]);
   const [monthExpenses, setMonthExpenses] = useState<ExpenseRecordEntry[]>([]);
+  const [monthAdditionIncomes, setMonthAdditionIncomes] = useState<AdditionIncomeRecordEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -151,11 +163,17 @@ const AccountStatementPage = () => {
     return extractResults<ExpenseRecordEntry>(response.data);
   }, []);
 
+  const fetchAdditionIncomesForMonth = useCallback(async (month: string): Promise<AdditionIncomeRecordEntry[]> => {
+    const response = await api.get('payments/addition-incomes/', { params: { month } });
+    return extractResults<AdditionIncomeRecordEntry>(response.data);
+  }, []);
+
   const loadStatementData = useCallback(
     async (refreshPayments: boolean) => {
       if (!selectedMonth) {
         setAllPayments([]);
         setMonthExpenses([]);
+        setMonthAdditionIncomes([]);
         return;
       }
 
@@ -163,15 +181,17 @@ const AccountStatementPage = () => {
       setError('');
       try {
         const shouldFetchPayments = refreshPayments || allPayments.length === 0;
-        const [payments, expenses] = await Promise.all([
+        const [payments, expenses, additionIncomes] = await Promise.all([
           shouldFetchPayments ? fetchAllPayments() : Promise.resolve(allPayments),
           fetchExpensesForMonth(selectedMonth),
+          fetchAdditionIncomesForMonth(selectedMonth),
         ]);
 
         if (shouldFetchPayments) {
           setAllPayments(payments);
         }
         setMonthExpenses(expenses);
+        setMonthAdditionIncomes(additionIncomes);
       } catch (loadError: any) {
         const detail =
           loadError?.response?.data?.detail ??
@@ -182,11 +202,12 @@ const AccountStatementPage = () => {
           setAllPayments([]);
         }
         setMonthExpenses([]);
+        setMonthAdditionIncomes([]);
       } finally {
         setLoading(false);
       }
     },
-    [selectedMonth, allPayments, fetchAllPayments, fetchExpensesForMonth],
+    [selectedMonth, allPayments, fetchAllPayments, fetchExpensesForMonth, fetchAdditionIncomesForMonth],
   );
 
   useEffect(() => {
@@ -252,19 +273,45 @@ const AccountStatementPage = () => {
       })
       .filter((row): row is StatementRow => row !== null);
 
-    return [...paymentRows, ...expenseRows].sort((left, right) => right.date.getTime() - left.date.getTime());
-  }, [allPayments, monthExpenses, selectedMonth]);
+    const additionIncomeRows: StatementRow[] = monthAdditionIncomes
+      .map<StatementRow | null>((income) => {
+        const incomeDate = parseDateValue(income.transaction_date);
+        if (!incomeDate) {
+          return null;
+        }
+        const category = normalizeText(income.category) || 'Additional Income';
+        const createdBy = normalizeText(income.created_by_name);
+        const details = createdBy ? `${category} (${createdBy})` : `${category} (Additional Income)`;
+        const reference = normalizeText(income.transaction_no) || `Income #${income.id}`;
+
+        return {
+          key: `income-${income.id}`,
+          date: incomeDate,
+          dateLabel: formatDateLabel(incomeDate),
+          type: 'income',
+          details,
+          reference,
+          inflow: parseAmount(income.amount),
+          outflow: 0,
+        };
+      })
+      .filter((row): row is StatementRow => row !== null);
+
+    return [...paymentRows, ...additionIncomeRows, ...expenseRows].sort((left, right) => left.date.getTime() - right.date.getTime());
+  }, [allPayments, monthAdditionIncomes, monthExpenses, selectedMonth]);
 
   const totals = useMemo(() => {
     const inflow = statementRows.reduce((sum, row) => sum + row.inflow, 0);
     const outflow = statementRows.reduce((sum, row) => sum + row.outflow, 0);
     const paymentCount = statementRows.filter((row) => row.type === 'payment').length;
+    const additionIncomeCount = statementRows.filter((row) => row.type === 'income').length;
     const expenseCount = statementRows.filter((row) => row.type === 'expense').length;
     return {
       inflow,
       outflow,
       net: inflow - outflow,
       paymentCount,
+      additionIncomeCount,
       expenseCount,
     };
   }, [statementRows]);
@@ -281,7 +328,7 @@ const AccountStatementPage = () => {
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">Account Statement</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Month-wise ledger of donor pooja payments and admin expense entries.
+              Month-wise ledger of donor pooja payments, addition income, and admin expense entries.
             </p>
           </div>
 
@@ -316,7 +363,9 @@ const AccountStatementPage = () => {
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-emerald-700">Inflow</p>
             <p className="text-base font-semibold text-emerald-900">{formatCurrency(totals.inflow)}</p>
-            <p className="text-xs text-emerald-700">{totals.paymentCount} donor payment{totals.paymentCount === 1 ? '' : 's'}</p>
+            <p className="text-xs text-emerald-700">
+              {totals.paymentCount} donor payment{totals.paymentCount === 1 ? '' : 's'} + {totals.additionIncomeCount} addition income entr{totals.additionIncomeCount === 1 ? 'y' : 'ies'}
+            </p>
           </div>
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-rose-700">Outflow</p>
@@ -331,7 +380,7 @@ const AccountStatementPage = () => {
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-amber-700">Transactions</p>
             <p className="text-base font-semibold text-amber-900">{statementRows.length}</p>
-            <p className="text-xs text-amber-700">Payment + Expense entries</p>
+            <p className="text-xs text-amber-700">Payment + Addition Income + Expense entries</p>
           </div>
         </div>
 
@@ -347,7 +396,7 @@ const AccountStatementPage = () => {
 
         {!error && !loading && statementRows.length === 0 && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            No payment or expense transactions found for {selectedMonthLabel}.
+            No payment, addition income, or expense transactions found for {selectedMonthLabel}.
           </div>
         )}
 
@@ -374,10 +423,12 @@ const AccountStatementPage = () => {
                           className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
                             row.type === 'payment'
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                              : row.type === 'income'
+                                ? 'border-sky-200 bg-sky-50 text-sky-800'
                               : 'border-rose-200 bg-rose-50 text-rose-800'
                           }`}
                         >
-                          {row.type === 'payment' ? 'Donor Payment' : 'Admin Expense'}
+                          {row.type === 'payment' ? 'Donor Payment' : row.type === 'income' ? 'Addition Income' : 'Admin Expense'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-800">{row.details}</td>

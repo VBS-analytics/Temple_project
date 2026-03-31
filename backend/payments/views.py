@@ -29,20 +29,22 @@ from accounts.models import DonorProfile, User, UserRole
 from common.permissions import IsAdminRole
 from pooja.models import PoojaCartSnapshot, RecurringPoojaPlan, RecurrenceKind
 from .models import (
-    AccountCatalogue,
+    AdditionIncomeRecord,
     CombinePaymentMapping,
     Donation,
     ExpenseCategory,
     ExpenseRecord,
+    IncomeCategory,
     PaymentRecord,
     PassbookEntry,
     PaymentStatus,
 )
 from .serializers import (
-    AccountCatalogueSerializer,
+    AdditionIncomeRecordSerializer,
     DonationSerializer,
     ExpenseCategorySerializer,
     ExpenseRecordSerializer,
+    IncomeCategorySerializer,
     PassbookEntrySerializer,
     PaymentRecordSerializer,
 )
@@ -467,6 +469,36 @@ class ExpenseRecordViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
 
+class AdditionIncomeRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = AdditionIncomeRecordSerializer
+    permission_classes = (IsAdminRole,)
+    pagination_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not can_view_expense_tracker(request.user):
+            raise PermissionDenied(EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
+
+    def get_queryset(self):
+        queryset = AdditionIncomeRecord.objects.all().order_by("-transaction_date", "-id")
+
+        month_param = self.request.query_params.get("month")
+        if month_param:
+            try:
+                year, month = map(int, month_param.split("-", 1))
+                if month < 1 or month > 12:
+                    raise ValueError
+            except ValueError:
+                queryset = queryset.none()
+            else:
+                queryset = queryset.filter(transaction_date__year=year, transaction_date__month=month)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseCategorySerializer
     permission_classes = (IsAdminRole,)
@@ -485,13 +517,18 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class AccountCatalogueViewSet(viewsets.ModelViewSet):
-    serializer_class = AccountCatalogueSerializer
+class IncomeCategoryViewSet(viewsets.ModelViewSet):
+    serializer_class = IncomeCategorySerializer
     permission_classes = (IsAdminRole,)
     pagination_class = None
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not can_view_expense_tracker(request.user):
+            raise PermissionDenied(EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
+
     def get_queryset(self):
-        return AccountCatalogue.objects.all().order_by("display_order", "name", "id")
+        return IncomeCategory.objects.all().order_by("display_order", "name", "id")
 
 
 class CombinePaymentMappingView(APIView):

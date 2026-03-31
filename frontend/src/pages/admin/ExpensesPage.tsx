@@ -14,6 +14,8 @@ type ExpenseRecordResponse = {
   notes?: string;
 };
 
+type AdditionIncomeRecordResponse = ExpenseRecordResponse;
+
 type PoojaOptionTotal = {
   pooja_option_name: string;
   option_code: string;
@@ -34,6 +36,7 @@ type PoojaOptionPaidTotal = {
 };
 
 type ExpenseRecord = Omit<ExpenseRecordResponse, 'amount'> & { amount: number };
+type AdditionIncomeRecord = Omit<AdditionIncomeRecordResponse, 'amount'> & { amount: number };
 type MonthOption = { label: string; value: string };
 type ExpenseCategoryGroupKey = 'poojari' | 'coordinator' | 'bank' | 'other';
 type ExpenseCategoryGroup = {
@@ -51,6 +54,11 @@ type ExpenseCategoryMaster = {
   display_order?: number;
   is_active: boolean;
 };
+type IncomeCategoryMaster = {
+  id: number;
+  name: string;
+  display_order?: number;
+};
 type ExpenseFormPayload = {
   transaction_date: string;
   category: string;
@@ -60,6 +68,8 @@ type ExpenseFormPayload = {
   remarks?: string;
 };
 type SaveExpenseResult = { ok: boolean; error?: string };
+type AdditionIncomeFormPayload = ExpenseFormPayload;
+type SaveAdditionIncomeResult = SaveExpenseResult;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORY_GROUPS: ExpenseCategoryGroup[] = [
@@ -314,6 +324,30 @@ const useExpenseCategories = () => {
         params: { active: 'true', ordering: 'group_key,display_order,name' },
       });
       const rows = extractResults<ExpenseCategoryMaster>(data);
+      setCategories(Array.isArray(rows) ? rows : []);
+    } catch {
+      setCategories([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { categories, loading, refresh: fetch };
+};
+
+const useIncomeCategories = () => {
+  const [categories, setCategories] = useState<IncomeCategoryMaster[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/payments/income-categories/', {
+        params: { ordering: 'display_order,name' },
+      });
+      const rows = extractResults<IncomeCategoryMaster>(data);
       setCategories(Array.isArray(rows) ? rows : []);
     } catch {
       setCategories([]);
@@ -766,6 +800,99 @@ const useExpenses = () => {
   };
 };
 
+const useAdditionIncomes = (monthOptions: MonthOption[], selectedMonth: string) => {
+  const [monthlyAdditionIncomes, setMonthlyAdditionIncomes] = useState<AdditionIncomeRecord[]>([]);
+  const [monthlyAdditionIncomeLoading, setMonthlyAdditionIncomeLoading] = useState(false);
+  const [monthlyAdditionIncomeStatus, setMonthlyAdditionIncomeStatus] = useState('');
+  const [isSavingAdditionIncome, setIsSavingAdditionIncome] = useState(false);
+
+  const fetchMonthlyAdditionIncomes = useCallback(async (month: string) => {
+    if (!month) {
+      setMonthlyAdditionIncomes([]);
+      setMonthlyAdditionIncomeStatus('Pick a month to load additional income totals.');
+      return;
+    }
+    setMonthlyAdditionIncomeLoading(true);
+    try {
+      const { data } = await api.get('/payments/addition-incomes/', { params: { month } });
+      const records = normalizeExpenseRecords(extractResults<AdditionIncomeRecordResponse>(data));
+      setMonthlyAdditionIncomes(records);
+      const label = monthOptions.find((o) => o.value === month)?.label ?? month;
+      const total = records.reduce((s, r) => s + r.amount, 0);
+      setMonthlyAdditionIncomeStatus(
+        records.length
+          ? `${records.length} additional income entr${records.length === 1 ? 'y' : 'ies'} · ${formatCurrency(total)} for ${label}`
+          : `No additional income recorded yet for ${label}.`,
+      );
+    } catch {
+      setMonthlyAdditionIncomes([]);
+      setMonthlyAdditionIncomeStatus('Unable to load monthly additional income data.');
+    } finally {
+      setMonthlyAdditionIncomeLoading(false);
+    }
+  }, [monthOptions]);
+
+  const saveAdditionIncome = useCallback(async (payload: AdditionIncomeFormPayload): Promise<SaveAdditionIncomeResult> => {
+    setIsSavingAdditionIncome(true);
+    try {
+      await api.post('/payments/addition-incomes/', payload);
+      await fetchMonthlyAdditionIncomes(selectedMonth);
+      return { ok: true };
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Unable to save additional income.');
+      setMonthlyAdditionIncomeStatus(message);
+      return { ok: false, error: message };
+    } finally {
+      setIsSavingAdditionIncome(false);
+    }
+  }, [fetchMonthlyAdditionIncomes, selectedMonth]);
+
+  const updateAdditionIncome = useCallback(async (incomeId: number, payload: AdditionIncomeFormPayload): Promise<SaveAdditionIncomeResult> => {
+    setIsSavingAdditionIncome(true);
+    try {
+      await api.patch(`/payments/addition-incomes/${incomeId}/`, payload);
+      await fetchMonthlyAdditionIncomes(selectedMonth);
+      return { ok: true };
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Unable to update additional income.');
+      setMonthlyAdditionIncomeStatus(message);
+      return { ok: false, error: message };
+    } finally {
+      setIsSavingAdditionIncome(false);
+    }
+  }, [fetchMonthlyAdditionIncomes, selectedMonth]);
+
+  const deleteAdditionIncome = useCallback(async (incomeId: number): Promise<SaveAdditionIncomeResult> => {
+    setIsSavingAdditionIncome(true);
+    try {
+      await api.delete(`/payments/addition-incomes/${incomeId}/`);
+      await fetchMonthlyAdditionIncomes(selectedMonth);
+      return { ok: true };
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Unable to delete additional income.');
+      setMonthlyAdditionIncomeStatus(message);
+      return { ok: false, error: message };
+    } finally {
+      setIsSavingAdditionIncome(false);
+    }
+  }, [fetchMonthlyAdditionIncomes, selectedMonth]);
+
+  useEffect(() => {
+    fetchMonthlyAdditionIncomes(selectedMonth);
+  }, [selectedMonth, fetchMonthlyAdditionIncomes]);
+
+  return {
+    monthlyAdditionIncomes,
+    monthlyAdditionIncomeLoading,
+    monthlyAdditionIncomeStatus,
+    isSavingAdditionIncome,
+    fetchMonthlyAdditionIncomes,
+    saveAdditionIncome,
+    updateAdditionIncome,
+    deleteAdditionIncome,
+  };
+};
+
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
   bg: 'transparent',
@@ -820,8 +947,8 @@ const EntryForm = ({
   selectedMonthLabel,
   categoryGroups,
 }: {
-  onCreate: (p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
-  onUpdate: (expenseId: number, p: ExpenseFormPayload) => Promise<SaveExpenseResult>;
+  onCreate: (payload: ExpenseFormPayload) => Promise<SaveExpenseResult>; // eslint-disable-line no-unused-vars
+  onUpdate: (expenseId: number, payload: ExpenseFormPayload) => Promise<SaveExpenseResult>; // eslint-disable-line no-unused-vars
   editingExpense: ExpenseRecord | null;
   onCancelEdit: () => void;
   isSaving: boolean;
@@ -1099,6 +1226,275 @@ const EntryForm = ({
   );
 };
 
+const AdditionIncomeEntryForm = ({
+  onCreate,
+  onUpdate,
+  editingIncome,
+  onCancelEdit,
+  isSaving,
+  isReadOnly,
+  selectedMonth,
+  selectedMonthLabel,
+  categoryOptions,
+}: {
+  onCreate: (payload: AdditionIncomeFormPayload) => Promise<SaveAdditionIncomeResult>; // eslint-disable-line no-unused-vars
+  onUpdate: (incomeId: number, payload: AdditionIncomeFormPayload) => Promise<SaveAdditionIncomeResult>; // eslint-disable-line no-unused-vars
+  editingIncome: AdditionIncomeRecord | null;
+  onCancelEdit: () => void;
+  isSaving: boolean;
+  isReadOnly: boolean;
+  selectedMonth: string;
+  selectedMonthLabel: string;
+  categoryOptions: string[];
+}) => {
+  const [vals, setVals] = useState({
+    date: '',
+    category: '',
+    amount: '',
+    transactionNo: '',
+    comments: '',
+    remarks: '',
+  });
+  const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const set = (k: keyof typeof vals, v: string) => setVals((p) => ({ ...p, [k]: v }));
+  const formDisabled = isSaving || isReadOnly;
+  const selectedMonthMinDate = selectedMonth ? `${selectedMonth}-01` : undefined;
+  const selectedMonthMaxDate = useMemo(() => {
+    if (!selectedMonth) return undefined;
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return undefined;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    if (!status) return;
+    const timerId = window.setTimeout(() => setStatus(null), 5000);
+    return () => window.clearTimeout(timerId);
+  }, [status]);
+
+  useEffect(() => {
+    if (!editingIncome) {
+      setVals({ date: '', category: '', amount: '', transactionNo: '', comments: '', remarks: '' });
+      setShowNotes(false);
+      return;
+    }
+    setVals({
+      date: editingIncome.transaction_date ?? '',
+      category: editingIncome.category ?? '',
+      amount: editingIncome.amount != null ? String(editingIncome.amount) : '',
+      transactionNo: editingIncome.transaction_no ?? '',
+      comments: editingIncome.comments ?? '',
+      remarks: editingIncome.remarks ?? '',
+    });
+    if (editingIncome.comments || editingIncome.remarks) setShowNotes(true);
+  }, [editingIncome]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (isReadOnly) {
+      setStatus({ msg: 'This admin account has read-only access.', ok: false });
+      return;
+    }
+    if (!vals.date || !vals.category || !vals.amount) {
+      setStatus({ msg: 'Fill in all three fields to continue.', ok: false });
+      return;
+    }
+    if (!vals.date.startsWith(`${selectedMonth}-`)) {
+      setStatus({ msg: `Transaction date must be within ${selectedMonthLabel}.`, ok: false });
+      return;
+    }
+    const payload: AdditionIncomeFormPayload = {
+      transaction_date: vals.date,
+      category: vals.category,
+      amount: Number(vals.amount),
+      transaction_no: vals.transactionNo.trim(),
+      comments: vals.comments.trim(),
+      remarks: vals.remarks.trim(),
+    };
+    const result = editingIncome ? await onUpdate(editingIncome.id, payload) : await onCreate(payload);
+    if (result.ok) {
+      setStatus({ msg: `${editingIncome ? 'Updated' : 'Saved'} ${formatCurrency(Number(vals.amount))} for "${vals.category}"`, ok: true });
+      setVals({ date: '', category: '', amount: '', transactionNo: '', comments: '', remarks: '' });
+      if (editingIncome) onCancelEdit();
+    } else {
+      setStatus({ msg: result.error || 'Save failed. Please try again.', ok: false });
+    }
+  };
+
+  const field: CSSProperties = {
+    width: '100%', padding: '10px 13px', border: `1.5px solid ${C.border}`, borderRadius: 10,
+    background: C.surfaceInset, fontFamily: C.fNunito, fontSize: 14, color: C.ink,
+    outline: 'none', boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+      <div style={{ padding: '14px 20px', background: C.primaryGhost, borderBottom: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+        </div>
+        <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>
+          {editingIncome ? `Edit Entry #${editingIncome.id}` : 'New Addition Income Entry'}
+        </span>
+      </div>
+
+      <form onSubmit={submit} style={{ padding: '20px' }}>
+        {isReadOnly && (
+          <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, background: C.surfaceInset, border: `1px solid ${C.border}`, fontFamily: C.fNunito, fontSize: 12, color: C.inkMuted }}>
+            This admin account has read-only access. Additional income creation is disabled.
+          </div>
+        )}
+
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontFamily: C.fNunito, fontSize: 10, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>Required</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+              Date
+            </label>
+            <input
+              type="date"
+              value={vals.date}
+              onChange={e => set('date', e.target.value)}
+              min={selectedMonthMinDate}
+              max={selectedMonthMaxDate}
+              onKeyDown={e => { if (e.key !== 'Tab') e.preventDefault(); }}
+              onPaste={e => e.preventDefault()}
+              onDrop={e => e.preventDefault()}
+              disabled={formDisabled}
+              style={{ ...field, cursor: 'pointer', fontSize: 13 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+              Amount (₹)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={vals.amount}
+              onChange={e => set('amount', e.target.value)}
+              onKeyDown={e => {
+                const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','.'];
+                if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+              }}
+              disabled={formDisabled}
+              placeholder="0.00"
+              style={{ ...field, fontFamily: C.fMono, fontSize: 15, fontWeight: 500 }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+            Category
+          </label>
+          <select value={vals.category} onChange={e => set('category', e.target.value)} disabled={formDisabled} style={{ ...field, appearance: 'none', cursor: 'pointer' }}>
+            <option value="">Choose a category…</option>
+            {categoryOptions.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ height: 1, background: C.border, margin: '0 0 14px' }} />
+
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ fontFamily: C.fNunito, fontSize: 10, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>Optional</span>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+            Transaction No
+          </label>
+          <input
+            type="text"
+            value={vals.transactionNo}
+            onChange={e => set('transactionNo', e.target.value)}
+            disabled={formDisabled}
+            placeholder="Enter transaction number"
+            style={field}
+          />
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <button
+            type="button"
+            onClick={() => setShowNotes((p) => !p)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: showNotes ? C.primary : C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase' }}
+          >
+            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ transform: showNotes ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            {showNotes ? 'Hide Notes' : 'Add Notes (comments & remarks)'}
+          </button>
+
+          {showNotes && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Comments
+                </label>
+                <textarea
+                  value={vals.comments}
+                  onChange={e => set('comments', e.target.value)}
+                  disabled={formDisabled}
+                  placeholder="Add comments"
+                  rows={2}
+                  style={{ ...field, resize: 'vertical' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Remarks
+                </label>
+                <textarea
+                  value={vals.remarks}
+                  onChange={e => set('remarks', e.target.value)}
+                  disabled={formDisabled}
+                  placeholder="Add remarks"
+                  rows={2}
+                  style={{ ...field, resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button type="submit" disabled={formDisabled} style={{ width: '100%', padding: '12px', background: formDisabled ? C.inkFaint : C.primary, color: '#fff', border: 'none', borderRadius: 10, fontFamily: C.fNunito, fontSize: 14, fontWeight: 800, cursor: formDisabled ? 'not-allowed' : 'pointer', letterSpacing: '0.02em', transition: 'background 0.15s' }}>
+          {isReadOnly ? 'Read-only access' : isSaving ? (editingIncome ? 'Updating…' : 'Saving…') : (editingIncome ? '✓  Update Income' : '✓  Save Income')}
+        </button>
+
+        {editingIncome && (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            disabled={formDisabled}
+            style={{ width: '100%', marginTop: 8, padding: '10px', background: 'transparent', color: C.inkMid, border: `1.5px solid ${C.borderStrong}`, borderRadius: 10, fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, cursor: formDisabled ? 'not-allowed' : 'pointer' }}
+          >
+            Cancel Edit
+          </button>
+        )}
+
+        {status && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: status.ok ? C.okBg : C.errBg, border: `1px solid ${status.ok ? C.okBorder : C.errBorder}`, color: status.ok ? C.ok : C.err, fontFamily: C.fNunito, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>{status.ok ? '✓' : '!'}</span>
+            {status.msg}
+          </div>
+        )}
+      </form>
+    </div>
+  );
+};
+
 // ── Records panel ─────────────────────────────────────────────────────────────
 const RecordsPanel = ({
   expenses,
@@ -1115,8 +1511,8 @@ const RecordsPanel = ({
   readOnly: boolean;
   editingExpenseId: number | null;
   deletingExpenseId: number | null;
-  onEdit: (expense: ExpenseRecord) => void;
-  onDelete: (expense: ExpenseRecord) => void;
+  onEdit: (expense: ExpenseRecord) => void; // eslint-disable-line no-unused-vars
+  onDelete: (expense: ExpenseRecord) => void; // eslint-disable-line no-unused-vars
   categoryGroups: ExpenseCategoryGroup[];
 }) => {
   const total = useMemo(() => expenses.reduce((s, r) => s + r.amount, 0), [expenses]);
@@ -1235,12 +1631,139 @@ const RecordsPanel = ({
   );
 };
 
+const AdditionIncomeRecordsPanel = ({
+  incomes,
+  loading,
+  readOnly,
+  editingIncomeId,
+  deletingIncomeId,
+  onEdit,
+  onDelete,
+}: {
+  incomes: AdditionIncomeRecord[];
+  loading: boolean;
+  readOnly: boolean;
+  editingIncomeId: number | null;
+  deletingIncomeId: number | null;
+  onEdit: (income: AdditionIncomeRecord) => void; // eslint-disable-line no-unused-vars
+  onDelete: (income: AdditionIncomeRecord) => void; // eslint-disable-line no-unused-vars
+}) => {
+  const total = useMemo(() => incomes.reduce((s, r) => s + r.amount, 0), [incomes]);
+
+  if (loading) return (
+    <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, padding: 40, textAlign: 'center', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+      <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin .8s linear infinite', margin: '0 auto 12px' }} />
+      <p style={{ fontFamily: C.fNunito, fontSize: 14, color: C.inkMuted, margin: 0 }}>Loading records…</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
+  if (!incomes.length) return (
+    <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, padding: '56px 32px', textAlign: 'center', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+      <div style={{ width: 56, height: 56, borderRadius: '50%', background: C.primaryGhost, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+        <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke={C.inkFaint} strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </div>
+      <p style={{ fontFamily: C.fNunito, fontSize: 18, fontWeight: 800, color: C.inkMid, margin: '0 0 6px' }}>No additional income this month</p>
+      <p style={{ fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted, margin: 0 }}>No additional income recorded for this period.</p>
+    </div>
+  );
+
+  return (
+    <div style={{ background: C.surface, borderRadius: 16, border: `1.5px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+      <div style={{ padding: '14px 20px', background: C.primaryGhost, borderBottom: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: C.fNunito, fontSize: 15, fontWeight: 800, color: C.ink }}>Transactions</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.primary }}>{formatCurrency(total)}</span>
+          <span style={{ fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, background: C.border, padding: '2px 8px', borderRadius: 20 }}>{incomes.length} entries</span>
+        </div>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: C.surfaceInset }}>
+              {['#', 'Date', 'Category', 'Txn No', 'Amount', ''].map((h, i) => (
+                <th key={i} style={{ padding: '9px 14px', textAlign: i === 4 ? 'right' : 'left', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, color: C.inkMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {incomes.map((income, i) => {
+              const isEditingRow = editingIncomeId === income.id;
+              const isDeletingRow = deletingIncomeId === income.id;
+              return (
+                <tr key={income.id} style={{ background: isEditingRow ? '#FFF7ED' : i % 2 === 0 ? C.surface : '#F8FAFC' }}>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}`, width: 36 }}>{i + 1}</td>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 12, color: C.inkMid, borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>{formatDisplayDate(income.transaction_date)}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.surfaceInset}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primaryGhost, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
+                        ➕
+                      </div>
+                      <div>
+                        <p style={{ fontFamily: C.fNunito, fontSize: 13, fontWeight: 700, color: C.ink, margin: 0, whiteSpace: 'nowrap' }}>{income.category}</p>
+                        <p style={{ fontFamily: C.fNunito, fontSize: 10, color: C.inkMuted, margin: 0 }}>Additional income</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 12, color: C.inkMuted, borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>
+                    {income.transaction_no || '—'}
+                  </td>
+                  <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'right', borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>
+                    {formatCurrency(income.amount)}
+                  </td>
+                  <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.surfaceInset}`, whiteSpace: 'nowrap' }}>
+                    {!readOnly && (
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(income)}
+                          disabled={isDeletingRow}
+                          style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.borderStrong}`, background: isEditingRow ? C.primaryGhost : '#fff', color: isEditingRow ? C.primary : C.inkMid, fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, cursor: isDeletingRow ? 'not-allowed' : 'pointer' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(income)}
+                          disabled={isDeletingRow}
+                          style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontFamily: C.fNunito, fontSize: 11, fontWeight: 700, cursor: isDeletingRow ? 'not-allowed' : 'pointer', opacity: isDeletingRow ? 0.7 : 1 }}
+                        >
+                          {isDeletingRow ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: C.primaryGhost }}>
+              <td colSpan={4} style={{ padding: '11px 14px', fontFamily: C.fNunito, fontSize: 12, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Total — {incomes.length} {incomes.length === 1 ? 'entry' : 'entries'}
+              </td>
+              <td style={{ padding: '11px 14px', fontFamily: C.fMono, fontSize: 15, fontWeight: 700, color: C.primary, textAlign: 'right' }}>
+                {formatCurrency(total)}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 // ── Monthly Tracker ───────────────────────────────────────────────────────────
 const MonthlyTracker = ({
   expenses, monthOptions, selectedMonth, onMonthChange, onRefresh, statusMessage, isLoading, categoryGroups,
 }: {
   expenses: ExpenseRecord[]; monthOptions: MonthOption[]; selectedMonth: string;
-  onMonthChange: (v: string) => void; onRefresh: () => void; statusMessage: string; isLoading: boolean;
+  onMonthChange: (value: string) => void; onRefresh: () => void; statusMessage: string; isLoading: boolean; // eslint-disable-line no-unused-vars
   categoryGroups: ExpenseCategoryGroup[];
 }) => {
   const total = useMemo(() => expenses.reduce((s, r) => s + r.amount, 0), [expenses]);
@@ -1351,8 +1874,11 @@ const MonthlyTracker = ({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const ExpensesPage = () => {
   const [activeTab, setActiveTab] = useState<'statement' | 'data' | 'tracking'>('statement');
+  const [dataEntryTab, setDataEntryTab] = useState<'expense' | 'income'>('expense');
   const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
+  const [editingIncome, setEditingIncome] = useState<AdditionIncomeRecord | null>(null);
+  const [deletingIncomeId, setDeletingIncomeId] = useState<number | null>(null);
   const authUser = useAuthStore((state) => state.user);
   const readOnlyAdmin = isReadOnlyAdmin(authUser);
 
@@ -1370,12 +1896,31 @@ const ExpensesPage = () => {
     deleteExpense,
   } = useExpenses();
   const { categories: expenseCategories } = useExpenseCategories();
+  const { categories: incomeCategories } = useIncomeCategories();
+  const {
+    monthlyAdditionIncomes,
+    monthlyAdditionIncomeLoading,
+    monthlyAdditionIncomeStatus,
+    isSavingAdditionIncome,
+    saveAdditionIncome,
+    updateAdditionIncome,
+    deleteAdditionIncome,
+  } = useAdditionIncomes(monthOptions, selectedMonth);
   const { totals: poojaOptionTotals, loading: poojaOptionLoading } = usePoojaOptionTotals(selectedMonth);
   const { totals: poojaPaidOptionTotals, loading: poojaPaidOptionLoading } = usePoojaPaidOptionTotals(selectedMonth);
   const expenseCategoryGroups = useMemo(() => {
     const dynamicGroups = buildExpenseCategoryGroups(expenseCategories);
     return dynamicGroups.length ? dynamicGroups : EXPENSE_CATEGORY_GROUPS;
   }, [expenseCategories]);
+  const incomeCategoryOptions = useMemo(
+    () =>
+      incomeCategories
+        .slice()
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name))
+        .map((entry) => entry.name)
+        .filter((name, index, arr) => arr.indexOf(name) === index),
+    [incomeCategories],
+  );
   const statementRows = useMemo(() => {
     const poojaRows = buildPoojaCardSummaries(poojaOptionTotals);
     const paidRows = buildPoojaPaidCardSummaries(poojaPaidOptionTotals);
@@ -1416,6 +1961,13 @@ const ExpensesPage = () => {
     }
   }, [monthlyExpenses, editingExpense]);
 
+  useEffect(() => {
+    if (!editingIncome) return;
+    if (!monthlyAdditionIncomes.some((income) => income.id === editingIncome.id)) {
+      setEditingIncome(null);
+    }
+  }, [monthlyAdditionIncomes, editingIncome]);
+
   const handleCreate = async (payload: ExpenseFormPayload) => {
     const result = await saveExpense(payload);
     if (result.ok) setActiveTab('data');
@@ -1443,6 +1995,35 @@ const ExpensesPage = () => {
       setEditingExpense(null);
     }
     setDeletingExpenseId(null);
+  };
+
+  const handleCreateAdditionIncome = async (payload: AdditionIncomeFormPayload) => {
+    const result = await saveAdditionIncome(payload);
+    if (result.ok) setActiveTab('data');
+    return result;
+  };
+
+  const handleUpdateAdditionIncome = async (incomeId: number, payload: AdditionIncomeFormPayload) => {
+    const result = await updateAdditionIncome(incomeId, payload);
+    if (result.ok) {
+      setActiveTab('data');
+      setEditingIncome(null);
+    }
+    return result;
+  };
+
+  const handleDeleteAdditionIncome = async (income: AdditionIncomeRecord) => {
+    if (readOnlyAdmin) return;
+    const confirmDelete = window.confirm(
+      `Delete additional income "${income.category}" (${formatCurrency(income.amount)}) on ${formatDisplayDate(income.transaction_date)}?`,
+    );
+    if (!confirmDelete) return;
+    setDeletingIncomeId(income.id);
+    const result = await deleteAdditionIncome(income.id);
+    if (result.ok && editingIncome?.id === income.id) {
+      setEditingIncome(null);
+    }
+    setDeletingIncomeId(null);
   };
 
   return (
@@ -1510,34 +2091,99 @@ const ExpensesPage = () => {
               </select>
             </div>
 
+            <div style={{ marginBottom: 16, display: 'inline-flex', background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 4, gap: 4, boxShadow: '0 1px 4px rgba(15,23,42,0.08)' }}>
+              {[
+                { key: 'expense', label: 'Expense' },
+                { key: 'income', label: 'Addition Income' },
+              ].map(({ key, label }) => {
+                const active = dataEntryTab === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setDataEntryTab(key as 'expense' | 'income')}
+                    style={{
+                      padding: '8px 18px',
+                      borderRadius: 9,
+                      border: 'none',
+                      background: active ? C.primary : 'transparent',
+                      color: active ? '#fff' : C.inkMuted,
+                      fontFamily: C.fNunito,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      boxShadow: active ? '0 2px 8px rgba(230,81,0,0.25)' : 'none',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* ── Entry form + transactions ── */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
-              <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
-                <EntryForm
-                  onCreate={handleCreate}
-                  onUpdate={handleUpdate}
-                  editingExpense={editingExpense}
-                  onCancelEdit={() => setEditingExpense(null)}
-                  isSaving={isSavingExpense}
-                  isReadOnly={readOnlyAdmin}
-                  selectedMonth={selectedMonth}
-                  selectedMonthLabel={selectedMonthLabel}
-                  categoryGroups={expenseCategoryGroups}
-                />
-              </div>
-              <div style={{ flex: '1 1 400px', minWidth: 0 }}>
-                <RecordsPanel
-                  expenses={monthlyExpenses}
-                  loading={monthlyLoading}
-                  readOnly={readOnlyAdmin}
-                  editingExpenseId={editingExpense?.id ?? null}
-                  deletingExpenseId={deletingExpenseId}
-                  onEdit={(expense) => setEditingExpense(expense)}
-                  onDelete={handleDelete}
-                  categoryGroups={expenseCategoryGroups}
-                />
-              </div>
+              {dataEntryTab === 'expense' ? (
+                <>
+                  <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
+                    <EntryForm
+                      onCreate={handleCreate}
+                      onUpdate={handleUpdate}
+                      editingExpense={editingExpense}
+                      onCancelEdit={() => setEditingExpense(null)}
+                      isSaving={isSavingExpense}
+                      isReadOnly={readOnlyAdmin}
+                      selectedMonth={selectedMonth}
+                      selectedMonthLabel={selectedMonthLabel}
+                      categoryGroups={expenseCategoryGroups}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
+                    <RecordsPanel
+                      expenses={monthlyExpenses}
+                      loading={monthlyLoading}
+                      readOnly={readOnlyAdmin}
+                      editingExpenseId={editingExpense?.id ?? null}
+                      deletingExpenseId={deletingExpenseId}
+                      onEdit={(expense) => setEditingExpense(expense)}
+                      onDelete={handleDelete}
+                      categoryGroups={expenseCategoryGroups}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ flex: '0 0 340px', maxWidth: '100%' }}>
+                    <AdditionIncomeEntryForm
+                      onCreate={handleCreateAdditionIncome}
+                      onUpdate={handleUpdateAdditionIncome}
+                      editingIncome={editingIncome}
+                      onCancelEdit={() => setEditingIncome(null)}
+                      isSaving={isSavingAdditionIncome}
+                      isReadOnly={readOnlyAdmin}
+                      selectedMonth={selectedMonth}
+                      selectedMonthLabel={selectedMonthLabel}
+                      categoryOptions={incomeCategoryOptions}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
+                    <AdditionIncomeRecordsPanel
+                      incomes={monthlyAdditionIncomes}
+                      loading={monthlyAdditionIncomeLoading}
+                      readOnly={readOnlyAdmin}
+                      editingIncomeId={editingIncome?.id ?? null}
+                      deletingIncomeId={deletingIncomeId}
+                      onEdit={(income) => setEditingIncome(income)}
+                      onDelete={handleDeleteAdditionIncome}
+                    />
+                  </div>
+                </>
+              )}
             </div>
+            {dataEntryTab === 'income' && monthlyAdditionIncomeStatus && (
+              <p style={{ marginTop: 12, fontFamily: C.fNunito, fontSize: 13, color: C.inkMuted }}>{monthlyAdditionIncomeStatus}</p>
+            )}
           </>
         )}
 

@@ -3,10 +3,11 @@
 from django.contrib import admin
 
 from .models import (
-    AccountCatalogue,
+    AdditionIncomeRecord,
     Donation,
     ExpenseCategory,
     ExpenseRecord,
+    IncomeCategory,
     PaymentRecord,
     PassbookEntry,
 )
@@ -26,6 +27,13 @@ class ExpenseRecordAdmin(admin.ModelAdmin):
     search_fields = ("transaction_no", "category", "comments", "remarks", "created_by__name", "created_by__phone_number")
 
 
+@admin.register(AdditionIncomeRecord)
+class AdditionIncomeRecordAdmin(admin.ModelAdmin):
+    list_display = ("id", "transaction_no", "category", "amount", "transaction_date", "created_by", "created_at")
+    list_filter = ("category", "transaction_date")
+    search_fields = ("transaction_no", "category", "comments", "remarks", "created_by__name", "created_by__phone_number")
+
+
 @admin.register(ExpenseCategory)
 class ExpenseCategoryAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "group_key", "display_order", "is_active", "updated_at")
@@ -33,9 +41,9 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
     search_fields = ("name",)
 
 
-@admin.register(AccountCatalogue)
-class AccountCatalogueAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "value", "display_order", "updated_at")
+@admin.register(IncomeCategory)
+class IncomeCategoryAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "display_order", "updated_at")
     search_fields = ("name",)
 
 

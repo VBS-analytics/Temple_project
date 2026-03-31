@@ -28,11 +28,12 @@ from pooja.models import (
 )
 from payments.models import PassbookEntry
 from payments.models import (
-    AccountCatalogue,
+    AdditionIncomeRecord,
     CombinePaymentMapping,
     Donation,
     ExpenseCategory,
     ExpenseRecord,
+    IncomeCategory,
     PaymentRecord,
     PaymentStatus,
 )
@@ -692,6 +693,127 @@ class ExpenseRecordApiTests(TestCase):
         self.assertTrue(ExpenseRecord.objects.filter(id=expense.id).exists())
 
 
+class AdditionIncomeRecordApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("addition-income-records-list")
+        self.admin = User.objects.create_user(
+            phone_number="+919100000021",
+            name="Addition Income Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.donor = User.objects.create_user(
+            phone_number="+919100000022",
+            name="Addition Income Donor",
+            password="secret",
+        )
+        self.read_only_admin = User.objects.create_superuser(
+            phone_number="+91 9999999998",
+            name="Read Only Addition Income Admin",
+            password="adminpass1",
+        )
+        self.hidden_expense_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Hidden Addition Income Admin",
+            password="adminpass2",
+        )
+
+    def test_admin_can_create_addition_income_record(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            self.url,
+            {
+                "transaction_date": "2026-01-18",
+                "category": "General Donation",
+                "amount": "2500.00",
+                "transaction_no": "TXN-INC-001",
+                "comments": "Received by cash",
+                "remarks": "Verified by admin",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = AdditionIncomeRecord.objects.get(pk=response.json()["id"])
+        self.assertEqual(created.created_by_id, self.admin.id)
+        self.assertEqual(created.amount, Decimal("2500.00"))
+        self.assertEqual(created.transaction_no, "TXN-INC-001")
+
+    def test_non_admin_cannot_list_or_create_addition_income(self):
+        self.client.force_authenticate(self.donor)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        create_response = self.client.post(
+            self.url,
+            {
+                "transaction_date": "2026-01-18",
+                "category": "General Donation",
+                "amount": "2500.00",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_hidden_admin_cannot_access_addition_income(self):
+        self.client.force_authenticate(self.hidden_expense_admin)
+        list_response = self.client.get(self.url)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(list_response.json()["detail"], EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
+
+    def test_admin_can_update_and_delete_addition_income_record(self):
+        self.client.force_authenticate(self.admin)
+        income = AdditionIncomeRecord.objects.create(
+            transaction_date=date(2026, 1, 18),
+            category="General Donation",
+            amount=Decimal("2500.00"),
+            transaction_no="TXN-INC-OLD",
+            comments="old comment",
+            remarks="old remark",
+            created_by=self.admin,
+        )
+        detail_url = reverse("addition-income-records-detail", args=[income.id])
+        update_response = self.client.patch(
+            detail_url,
+            {
+                "category": "Updated Donation",
+                "amount": "3000.00",
+                "transaction_no": "TXN-INC-NEW",
+            },
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        income.refresh_from_db()
+        self.assertEqual(income.category, "Updated Donation")
+        self.assertEqual(income.amount, Decimal("3000.00"))
+        self.assertEqual(income.transaction_no, "TXN-INC-NEW")
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(AdditionIncomeRecord.objects.filter(id=income.id).exists())
+
+    def test_read_only_admin_can_list_but_cannot_modify_addition_income(self):
+        income = AdditionIncomeRecord.objects.create(
+            transaction_date=date(2026, 1, 18),
+            category="General Donation",
+            amount=Decimal("2500.00"),
+            created_by=self.admin,
+        )
+        detail_url = reverse("addition-income-records-detail", args=[income.id])
+        self.client.force_authenticate(self.read_only_admin)
+
+        list_response = self.client.get(self.url, {"month": "2026-01"})
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        update_response = self.client.patch(detail_url, {"category": "Blocked"}, format="json")
+        self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(AdditionIncomeRecord.objects.filter(id=income.id).exists())
+
+
 class ExpenseCategoryApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -768,51 +890,51 @@ class ExpenseCategoryApiTests(TestCase):
         self.assertEqual(list_response.json()["detail"], EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
 
 
-class AccountCatalogueApiTests(TestCase):
+class IncomeCategoryApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.url = reverse("account-catalogues-list")
+        self.url = reverse("income-categories-list")
         self.admin = User.objects.create_user(
-            phone_number="+919100000111",
-            name="Account Catalogue Admin",
+            phone_number="+919100000151",
+            name="Income Category Admin",
             password="secret",
             role=UserRole.ADMIN,
             is_staff=True,
         )
         self.read_only_admin = User.objects.create_superuser(
-            phone_number="+91 9999999998",
-            name="Read Only Account Catalogue Admin",
+            phone_number="+91 9999999918",
+            name="Read Only Income Category Admin",
             password="adminpass1",
         )
-        self.donor = User.objects.create_user(
-            phone_number="+919100000112",
-            name="Regular Donor",
-            password="secret",
+        self.hidden_expense_admin = User.objects.create_superuser(
+            phone_number="+91 9999999917",
+            name="Hidden Income Category Admin",
+            password="adminpass2",
         )
 
-    def test_admin_can_create_and_list_name_value_catalogues(self):
+    def test_admin_can_create_and_list_income_categories(self):
         self.client.force_authenticate(self.admin)
         create_response = self.client.post(
             self.url,
             {
-                "name": "General Donation Inflow",
-                "value": "GENERAL_DONATION",
+                "name": "General Donation",
                 "display_order": 1,
             },
             format="json",
         )
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
-        AccountCatalogue.objects.create(name="Opening Balance", value="OPENING_BAL", display_order=2)
+        IncomeCategory.objects.create(name="Interest Income", display_order=2)
+
         list_response = self.client.get(self.url)
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         payload = list_response.json()
-        rows = {(item["name"], item["value"]) for item in payload}
-        self.assertIn(("General Donation Inflow", "GENERAL_DONATION"), rows)
-        self.assertIn(("Opening Balance", "OPENING_BAL"), rows)
+        names = [item["name"] for item in payload]
+        self.assertIn("General Donation", names)
+        self.assertIn("Interest Income", names)
 
     def test_read_only_admin_can_list_but_cannot_modify(self):
-        catalogue = AccountCatalogue.objects.create(name="Opening Balance", value="OPENING_BAL")
-        detail_url = reverse("account-catalogues-detail", args=[catalogue.id])
+        category = IncomeCategory.objects.create(name="Test Income Category")
+        detail_url = reverse("income-categories-detail", args=[category.id])
         self.client.force_authenticate(self.read_only_admin)
 
         list_response = self.client.get(self.url)
@@ -820,7 +942,7 @@ class AccountCatalogueApiTests(TestCase):
 
         create_response = self.client.post(
             self.url,
-            {"name": "Blocked Catalogue", "value": "BLOCKED"},
+            {"name": "Blocked Income Category"},
             format="json",
         )
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
@@ -831,10 +953,11 @@ class AccountCatalogueApiTests(TestCase):
         delete_response = self.client.delete(detail_url)
         self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_non_admin_cannot_access_account_catalogues(self):
-        self.client.force_authenticate(self.donor)
+    def test_hidden_admin_cannot_access_income_category_master(self):
+        self.client.force_authenticate(self.hidden_expense_admin)
         list_response = self.client.get(self.url)
         self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(list_response.json()["detail"], EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE)
 
 
 class PaymentRecordDeleteAccessTests(TestCase):
