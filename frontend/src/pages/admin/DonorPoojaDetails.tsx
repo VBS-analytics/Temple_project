@@ -206,25 +206,10 @@ const toDateKey = (value: Date) => {
 
 const formatMessageDateLabel = (value: Date) =>
   value.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'numeric',
+    day: '2-digit',
+    month: '2-digit',
     year: '2-digit',
   });
-
-const getRelativeTamilDateLabel = (value: Date) => {
-  const today = new Date();
-  const todayKey = toDateKey(today);
-  if (toDateKey(value) === todayKey) {
-    return 'இன்று';
-  }
-
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (toDateKey(value) === toDateKey(tomorrow)) {
-    return 'நாளை';
-  }
-  return '';
-};
 
 const splitAddressForCopy = (address: string) => {
   if (address === EMPTY_VALUE) {
@@ -422,6 +407,37 @@ const formatDonorRowForCopy = (row: DonorPoojaDetailRow) => {
   return lines.join('\n');
 };
 
+const formatDonorDetailsForMessageCopy = (row: DonorPoojaDetailRow) => {
+  const lines: string[] = [];
+
+  if (row.donorId !== EMPTY_VALUE) {
+    lines.push(row.donorId);
+  }
+  if (row.donorHeaderText !== EMPTY_VALUE) {
+    lines.push(row.donorHeaderText);
+  }
+  if (row.gothram !== EMPTY_VALUE) {
+    lines.push(`${row.gothram} கோத்திரம்`);
+  }
+
+  const donorLine = formatStarRasiNameLine(row.donorName, row.tamilStar, row.rasi);
+  if (donorLine) {
+    lines.push(`* ${donorLine}`);
+  }
+
+  row.familyMemberDetails.forEach((member) => {
+    const memberName = normalizeText(member.name);
+    const memberStar = normalizeText(member.tamil_star);
+    const memberRasi = normalizeText(member.rasi);
+    const memberLine = formatStarRasiNameLine(memberName, memberStar, memberRasi);
+    if (memberLine) {
+      lines.push(`* ${memberLine}`);
+    }
+  });
+
+  return lines.join('\n');
+};
+
 const copyToClipboard = async (text: string) => {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -446,7 +462,7 @@ const DonorPoojaDetails = () => {
   const [copyStatus, setCopyStatus] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [lastCopiedRowId, setLastCopiedRowId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'records' | 'messageCopy'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'messageCopy'>('messageCopy');
   const [messageDate, setMessageDate] = useState(() => toDateInputValue(new Date()));
   const [dailyMessageHeaders, setDailyMessageHeaders] = useState<Record<string, string>>({});
   const [specialAnnouncements, setSpecialAnnouncements] = useState<Record<string, string>>({});
@@ -873,13 +889,7 @@ const DonorPoojaDetails = () => {
   }, [donorRowsForMessageDate, selectedRows]);
 
   const messageDateLabel = useMemo(() => formatMessageDateLabel(parsedMessageDate), [parsedMessageDate]);
-  const relativeTamilDateLabel = useMemo(
-    () => getRelativeTamilDateLabel(parsedMessageDate),
-    [parsedMessageDate],
-  );
-  const messageDateHeadline = relativeTamilDateLabel
-    ? `${relativeTamilDateLabel} (${messageDateLabel})`
-    : messageDateLabel;
+  const messageDateHeadline = messageDateLabel;
 
   const scheduleCopyPreview = useMemo(() => {
     const scheduleBaseLines = [messageDateHeadline];
@@ -891,19 +901,20 @@ const DonorPoojaDetails = () => {
       return scheduleBaseLines.join('\n');
     }
 
-    return messageTargetRows
+    const donorLines = messageTargetRows
       .map((row, index) => {
         const lines: string[] = [];
-        if (messageTargetRows.length > 1) {
-          lines.push(`${index + 1}. ${row.donorName}`);
-        }
-        lines.push(...scheduleBaseLines);
+        const donorHeading =
+          messageTargetRows.length > 1 ? `${index + 1}. ${row.donorName}` : row.donorName;
+        lines.push(donorHeading);
         if (row.donorHeaderText !== EMPTY_VALUE) {
           lines.push(row.donorHeaderText);
         }
         return lines.join('\n');
       })
       .join('\n\n');
+
+    return `${scheduleBaseLines.join('\n')}\n${donorLines}`;
   }, [messageTargetRows, messageDateHeadline, dailyHeaderForMessage]);
 
   const addressCopyPreview = useMemo(() => {
@@ -914,9 +925,20 @@ const DonorPoojaDetails = () => {
     return messageTargetRows
       .map((row, index) => {
         const prefix = messageTargetRows.length > 1 ? `${index + 1}.` : '1.';
-        const lines = [`${prefix}${row.donorName}`, ...splitAddressForCopy(row.address)];
+        const lines = [`${prefix} ${row.donorName}`, ...splitAddressForCopy(row.address)];
         return lines.join('\n');
       })
+      .join('\n\n');
+  }, [messageTargetRows]);
+
+  const donorDetailsCopyPreview = useMemo(() => {
+    if (messageTargetRows.length === 0) {
+      return '';
+    }
+
+    return messageTargetRows
+      .map((row) => formatDonorDetailsForMessageCopy(row))
+      .filter((block) => block.trim().length > 0)
       .join('\n\n');
   }, [messageTargetRows]);
 
@@ -941,6 +963,18 @@ const DonorPoojaDetails = () => {
       setCopyStatus(`Copied donor name and address for ${messageTargetRows.length} donor${messageTargetRows.length > 1 ? 's' : ''}`);
     } catch (copyError: any) {
       setCopyStatus(copyError?.message || 'Failed to copy donor address block');
+    }
+  };
+
+  const handleCopyDonorDetailsMessage = async () => {
+    if (!donorDetailsCopyPreview) {
+      return;
+    }
+    try {
+      await copyToClipboard(donorDetailsCopyPreview);
+      setCopyStatus(`Copied donor details for ${messageTargetRows.length} donor${messageTargetRows.length > 1 ? 's' : ''}`);
+    } catch (copyError: any) {
+      setCopyStatus(copyError?.message || 'Failed to copy donor details');
     }
   };
 
@@ -971,7 +1005,7 @@ const DonorPoojaDetails = () => {
         <div className="space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">Donor Records</h2>
+              <h2 className="text-xl font-semibold text-slate-900">Ubhayam Message Records</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Search, select, and copy donor family details in a readable layout.
               </p>
@@ -985,7 +1019,7 @@ const DonorPoojaDetails = () => {
                       : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  Family Records
+                  Donor &amp; Family Records
                 </button>
                 <button
                   type="button"
@@ -1283,24 +1317,6 @@ const DonorPoojaDetails = () => {
                     Select Date
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMessageDate(toDateInputValue(new Date()))}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Today
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        setMessageDate(toDateInputValue(tomorrow));
-                      }}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Tomorrow
-                    </button>
                     <input
                       type="date"
                       value={messageDate}
@@ -1317,7 +1333,7 @@ const DonorPoojaDetails = () => {
                     disabled={!scheduleCopyPreview}
                     className="rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Copy Schedule
+                    Copy Group Msg
                   </button>
                   <button
                     type="button"
@@ -1325,7 +1341,15 @@ const DonorPoojaDetails = () => {
                     disabled={!addressCopyPreview}
                     className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Copy Name + Address
+                    Copy Co-ordinator Msg
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyDonorDetailsMessage}
+                    disabled={!donorDetailsCopyPreview}
+                    className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Copy Donor Details
                   </button>
                 </div>
               </div>
@@ -1345,20 +1369,25 @@ const DonorPoojaDetails = () => {
 
             {!messageTemplateLoading && !messageCalendarLoading && !messageTemplateError && !messageCalendarError && (
               <>
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid gap-4 xl:grid-cols-3">
                   <article className="rounded-xl border border-blue-100 bg-blue-50/30 p-4">
-                    <h3 className="text-sm font-semibold text-blue-900">
-                      Daily Pooja Header Text + Donor Header Text
-                    </h3>
+                    <h3 className="text-sm font-semibold text-blue-900">Group Message</h3>
                     <pre className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-blue-100 bg-white p-3 text-sm leading-relaxed text-slate-800">
                       {scheduleCopyPreview || 'No message preview available for selected date and donor.'}
                     </pre>
                   </article>
 
                   <article className="rounded-xl border border-amber-100 bg-amber-50/30 p-4">
-                    <h3 className="text-sm font-semibold text-amber-900">Donor Name + Address Preview</h3>
+                    <h3 className="text-sm font-semibold text-amber-900">Co-ordinator Message</h3>
                     <pre className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-amber-100 bg-white p-3 text-sm leading-relaxed text-slate-800">
                       {addressCopyPreview || 'No donor address preview available.'}
+                    </pre>
+                  </article>
+
+                  <article className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
+                    <h3 className="text-sm font-semibold text-emerald-900">Donor Details</h3>
+                    <pre className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-emerald-100 bg-white p-3 text-sm leading-relaxed text-slate-800">
+                      {donorDetailsCopyPreview || 'No donor details preview available.'}
                     </pre>
                   </article>
                 </div>
