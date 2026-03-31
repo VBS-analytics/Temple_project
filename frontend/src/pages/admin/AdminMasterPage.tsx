@@ -91,6 +91,12 @@ interface ExpenseCategoryEntry {
   is_active: boolean;
 }
 
+interface IncomeCategoryEntry {
+  id: number;
+  name: string;
+  display_order: number;
+}
+
 type DayOptionFormValues = {
   code: string;
   description: string;
@@ -157,7 +163,9 @@ const AdminMasterPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily' | 'expense'>('pooja');
+  const [activeTab, setActiveTab] = useState<
+    'pooja' | 'english' | 'tamil' | 'rasi' | 'gothra' | 'daily' | 'expense' | 'income'
+  >('pooja');
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -182,6 +190,11 @@ const AdminMasterPage = () => {
   const [editingExpenseCategoryName, setEditingExpenseCategoryName] = useState('');
   const [editingExpenseCategoryGroup, setEditingExpenseCategoryGroup] = useState<ExpenseCategoryEntry['group_key']>('poojari');
   const [isExpenseCategorySaving, setIsExpenseCategorySaving] = useState(false);
+  const [incomeCategories, setIncomeCategories] = useState<IncomeCategoryEntry[]>([]);
+  const [newIncomeCategoryName, setNewIncomeCategoryName] = useState('');
+  const [editingIncomeCategoryId, setEditingIncomeCategoryId] = useState<number | null>(null);
+  const [editingIncomeCategoryName, setEditingIncomeCategoryName] = useState('');
+  const [isIncomeCategorySaving, setIsIncomeCategorySaving] = useState(false);
   const [isDailyLoading, setIsDailyLoading] = useState(false);
   const [dailyError, setDailyError] = useState('');
   const [dailySchedule, setDailySchedule] = useState(STATIC_DAILY_HEADER_TEXT);
@@ -669,6 +682,83 @@ const AdminMasterPage = () => {
     }
   };
 
+  const startEditingIncomeCategory = (entry: IncomeCategoryEntry) => {
+    setEditingIncomeCategoryId(entry.id);
+    setEditingIncomeCategoryName(entry.name);
+  };
+
+  const cancelEditingIncomeCategory = () => {
+    setEditingIncomeCategoryId(null);
+    setEditingIncomeCategoryName('');
+  };
+
+  const handleAddIncomeCategory = async () => {
+    const trimmed = newIncomeCategoryName.trim();
+    if (!trimmed) {
+      setNotice('Enter an income category name before saving.');
+      return;
+    }
+    setIsIncomeCategorySaving(true);
+    try {
+      await api.post('/payments/income-categories/', {
+        name: trimmed,
+      });
+      setNewIncomeCategoryName('');
+      setNotice(`Income category ${trimmed} added successfully.`);
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error adding income category: ${errorMessage}`);
+    } finally {
+      setIsIncomeCategorySaving(false);
+    }
+  };
+
+  const handleUpdateIncomeCategory = async (entry: IncomeCategoryEntry) => {
+    const trimmed = editingIncomeCategoryName.trim();
+    if (!trimmed) {
+      setNotice('Enter an income category name before saving.');
+      return;
+    }
+    if (trimmed === entry.name) {
+      cancelEditingIncomeCategory();
+      return;
+    }
+    setIsIncomeCategorySaving(true);
+    try {
+      await api.patch(`/payments/income-categories/${entry.id}/`, {
+        name: trimmed,
+      });
+      setNotice(`Income category ${trimmed} updated successfully.`);
+      cancelEditingIncomeCategory();
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating income category: ${errorMessage}`);
+    } finally {
+      setIsIncomeCategorySaving(false);
+    }
+  };
+
+  const handleDeleteIncomeCategory = async (entry: IncomeCategoryEntry) => {
+    const confirmDelete = window.confirm(`Delete income category "${entry.name}"?`);
+    if (!confirmDelete) return;
+    setIsIncomeCategorySaving(true);
+    try {
+      await api.delete(`/payments/income-categories/${entry.id}/`);
+      setNotice(`Income category ${entry.name} deleted successfully.`);
+      if (editingIncomeCategoryId === entry.id) {
+        cancelEditingIncomeCategory();
+      }
+      await load();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error deleting income category: ${errorMessage}`);
+    } finally {
+      setIsIncomeCategorySaving(false);
+    }
+  };
+
   const fetchAllPages = async <T,>(initialUrl: string): Promise<T[]> => {
     const results: T[] = [];
     let nextUrl: string | null = initialUrl;
@@ -713,10 +803,11 @@ const AdminMasterPage = () => {
     
     setIsSyncing(true);
     try {
-      const [newPoojaOptions, rawDayOptions, rawExpenseCategories] = await Promise.all([
+      const [newPoojaOptions, rawDayOptions, rawExpenseCategories, rawIncomeCategories] = await Promise.all([
         fetchAllPages<PoojaOption>('/pooja/options/?page_size=200'),
         fetchAllPages<DayOption>('/pooja/day-options/?page_size=200'),
         fetchAllPages<ExpenseCategoryEntry>('/payments/expense-categories/?page_size=200').catch(() => []),
+        fetchAllPages<IncomeCategoryEntry>('/payments/income-categories/?page_size=200').catch(() => []),
       ]);
       
       // Clear editing states if items don't exist in new data
@@ -739,6 +830,15 @@ const AdminMasterPage = () => {
           .sort((a, b) => {
             const groupDiff = a.group_key.localeCompare(b.group_key);
             if (groupDiff !== 0) return groupDiff;
+            const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            return a.name.localeCompare(b.name);
+          }),
+      );
+      setIncomeCategories(
+        rawIncomeCategories
+          .slice()
+          .sort((a, b) => {
             const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
             if (orderDiff !== 0) return orderDiff;
             return a.name.localeCompare(b.name);
@@ -784,6 +884,13 @@ const AdminMasterPage = () => {
       setEditingExpenseCategoryGroup('poojari');
     }
   }, [editingExpenseCategoryId, expenseCategories]);
+
+  useEffect(() => {
+    if (editingIncomeCategoryId && !incomeCategories.some((entry) => entry.id === editingIncomeCategoryId)) {
+      setEditingIncomeCategoryId(null);
+      setEditingIncomeCategoryName('');
+    }
+  }, [editingIncomeCategoryId, incomeCategories]);
 
   const resetEnglishDayForm = () => {
     dayForm.reset({ code: '', description: '', category: 'weekday' });
@@ -1470,6 +1577,21 @@ const AdminMasterPage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Expense Categories
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('income')}
+                  className={`py-4 px-4 sm:px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'income'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+                    </svg>
+                    Income Categories
                   </div>
                 </button>
               </nav>
@@ -2523,6 +2645,113 @@ const AdminMasterPage = () => {
                                   type="button"
                                   onClick={() => handleDeleteExpenseCategory(entry)}
                                   disabled={isExpenseCategorySaving}
+                                  className="text-xs font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-40"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+          {activeTab === 'income' && (
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-900">Income Categories</h2>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>{incomeCategories.length} entries</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.5fr,auto]">
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="Enter new income category name"
+                    value={newIncomeCategoryName}
+                    onChange={(event) => setNewIncomeCategoryName(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddIncomeCategory}
+                    disabled={isIncomeCategorySaving}
+                    className="flex items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isIncomeCategorySaving ? 'Saving...' : 'Add Category'}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <p>Use these categories for income master data.</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {incomeCategories.map((entry) => {
+                        const isEditing = editingIncomeCategoryId === entry.id;
+                        return (
+                          <tr key={entry.id}>
+                            <td className="px-4 py-3">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                                  value={editingIncomeCategoryName}
+                                  onChange={(event) => setEditingIncomeCategoryName(event.target.value)}
+                                />
+                              ) : (
+                                <span className="font-medium text-slate-900">{entry.name}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-3">
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateIncomeCategory(entry)}
+                                      disabled={isIncomeCategorySaving}
+                                      className="text-xs font-semibold text-orange-600 transition hover:text-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditingIncomeCategory}
+                                      disabled={isIncomeCategorySaving}
+                                      className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingIncomeCategory(entry)}
+                                    disabled={isIncomeCategorySaving}
+                                    className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteIncomeCategory(entry)}
+                                  disabled={isIncomeCategorySaving}
                                   className="text-xs font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-40"
                                 >
                                   Delete

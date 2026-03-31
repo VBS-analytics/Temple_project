@@ -219,9 +219,8 @@ class ExpenseCategory(models.Model):
         return self.name
 
 
-class AccountCatalogue(models.Model):
+class IncomeCategory(models.Model):
     name = models.CharField(max_length=128, unique=True)
-    value = models.CharField(max_length=255, blank=True)
     display_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -231,6 +230,30 @@ class AccountCatalogue(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class AdditionIncomeRecord(models.Model):
+    transaction_date = models.DateField()
+    category = models.CharField(max_length=128)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_no = models.CharField(max_length=128, blank=True)
+    comments = models.TextField(blank=True)
+    remarks = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="addition_income_records",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-transaction_date", "-created_at")
+
+    def __str__(self):
+        return f"Addition Income {self.pk} - {self.category or 'anonymous'}"
 
 
 class ExpenseRecord(models.Model):

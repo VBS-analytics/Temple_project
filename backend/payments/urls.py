@@ -4,13 +4,14 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    AccountCatalogueViewSet,
+    AdditionIncomeRecordViewSet,
     CombinePaymentAccessView,
     CombinePaymentMappingView,
     DonationCreateView,
     ExpenseCategoryViewSet,
     ExpenseRecordViewSet,
     GeneralDonationExportView,
+    IncomeCategoryViewSet,
     PaymentDetailsExportView,
     PaymentRecordViewSet,
     PassbookEntryViewSet,
@@ -19,8 +20,9 @@ from .views import (
 router = DefaultRouter()
 router.register('records', PaymentRecordViewSet, basename='payment-records')
 router.register('expenses', ExpenseRecordViewSet, basename='expense-records')
+router.register('addition-incomes', AdditionIncomeRecordViewSet, basename='addition-income-records')
 router.register('expense-categories', ExpenseCategoryViewSet, basename='expense-categories')
-router.register('account-catalogues', AccountCatalogueViewSet, basename='account-catalogues')
+router.register('income-categories', IncomeCategoryViewSet, basename='income-categories')
 router.register('passbook-entries', PassbookEntryViewSet, basename='passbook-entries')
 
 urlpatterns = router.urls

@@ -6,6 +6,7 @@ import api, { extractResults } from '../../lib/api';
 interface DonorPoojaProfile {
   donor_id?: string | null;
   notes?: string | null;
+  tamil_name?: string | null;
   gothra?: string | null;
   rasi?: string | null;
   tamil_star?: string | null;
@@ -39,6 +40,7 @@ interface DonorPoojaDetailRow {
   donorId: string;
   donorPhoneNumber: string;
   donorName: string;
+  donorSarman: string;
   donorHeaderText: string;
   gothram: string;
   rasi: string;
@@ -410,17 +412,15 @@ const formatDonorRowForCopy = (row: DonorPoojaDetailRow) => {
 const formatDonorDetailsForMessageCopy = (row: DonorPoojaDetailRow) => {
   const lines: string[] = [];
 
-  if (row.donorId !== EMPTY_VALUE) {
-    lines.push(row.donorId);
-  }
-  if (row.donorHeaderText !== EMPTY_VALUE) {
-    lines.push(row.donorHeaderText);
-  }
   if (row.gothram !== EMPTY_VALUE) {
     lines.push(`${row.gothram} கோத்திரம்`);
   }
 
-  const donorLine = formatStarRasiNameLine(row.donorName, row.tamilStar, row.rasi);
+  const donorNameWithSarman =
+    row.donorName !== EMPTY_VALUE && row.donorSarman !== EMPTY_VALUE
+      ? `${row.donorName}(${row.donorSarman})`
+      : row.donorName;
+  const donorLine = formatStarRasiNameLine(donorNameWithSarman, row.tamilStar, row.rasi);
   if (donorLine) {
     lines.push(`* ${donorLine}`);
   }
@@ -668,6 +668,7 @@ const DonorPoojaDetails = () => {
         const donorId = normalizeText(profile?.donor_id);
         const donorPhoneNumber = normalizeText(record.user?.phone_number);
         const donorName = normalizeText(record.user?.name);
+        const donorSarman = normalizeText(profile?.tamil_name);
         const donorHeaderText = normalizeText(profile?.notes);
         const gothram = normalizeText(profile?.gothra);
         const rasi = normalizeText(profile?.rasi);
@@ -681,6 +682,7 @@ const DonorPoojaDetails = () => {
           donorId,
           donorPhoneNumber,
           donorName,
+          donorSarman,
           donorHeaderText,
           gothram,
           rasi,
