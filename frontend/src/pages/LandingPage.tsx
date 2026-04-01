@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PublicSiteHeader from "../components/PublicSiteHeader";
 
@@ -33,8 +33,7 @@ const templeImages: TempleImage[] = [
   { src: "/images/kovi/ayyanar/ayyanar.png", deity: "", name: "Ayyanar Koil", templeTabId: "mangala-azhagar-ayyanar-koil", contain: true  },
 ];
 
-const landingHeroSlides = [
-  { src: "/images/new-landing-page.jpg", alt: "Kakkalani Village map, Tamil Nadu", fit: "contain" as const },
+const landingTempleMarqueeSlides = [
   { src: "/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png", alt: "Lakshmi Narayanar temple deity", fit: "contain" as const },
   { src: "/images/kovi/pillayar/pillayar-hd.jpg", alt: "Aathagarai Pillayar temple deity", fit: "contain" as const },
   { src: "/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png", alt: "Kalahasteeswarar temple deity", fit: "contain" as const },
@@ -42,6 +41,11 @@ const landingHeroSlides = [
   { src: "/images/kovi/Damodara-Pillayar-Temple.png", alt: "Damodara Pillayar temple deity", fit: "contain" as const },
   { src: "/images/kovi/Mazhai-Mariamman.png", alt: "Mazhai Mariamman temple deity", fit: "contain" as const },
 ];
+
+const landingMapHero = {
+  src: "/images/new-landing-page.jpg",
+  alt: "Kakkalani Village map, Tamil Nadu",
+};
 
 // ── ICONS ────────────────────────────────────────────────────────────────────
 
@@ -122,7 +126,6 @@ type LandingPageProps = {
 const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) => {
   const [routesExpanded, setRoutesExpanded] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
   const location = useLocation();
 
   const scrollToSection = (targetId: string) => {
@@ -170,31 +173,7 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (!showHero) return;
-    const timer = window.setInterval(() => {
-      setCurrentHeroSlide((prev) => (prev + 1) % landingHeroSlides.length);
-    }, 3500);
-    return () => window.clearInterval(timer);
-  }, [showHero]);
-
   const visibleRoutes = routesExpanded ? howToReachRoutes : howToReachRoutes.slice(0, 2);
-  const activeHeroSlide = landingHeroSlides[currentHeroSlide];
-  const isLandingMapSlide = activeHeroSlide.src === "/images/new-landing-page.jpg";
-  const isTempleHeroSlide = !isLandingMapSlide && activeHeroSlide.fit === "contain";
-  const heroSectionStyle = (isLandingMapSlide
-    ? {
-        aspectRatio: "3 / 2",
-        height: "auto",
-        minHeight: "0",
-      }
-    : {
-        ["--hero-height-desktop" as string]: "clamp(360px, 72vh, 860px)",
-        ["--hero-min-height-desktop" as string]: "340px",
-        ["--hero-height-mobile" as string]: "clamp(260px, 52vh, 420px)",
-        ["--hero-min-height-mobile" as string]: "240px",
-      }) as CSSProperties;
-
   return (
     <>
       <style>{`
@@ -313,43 +292,67 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
         ═══════════════════════════════════════ */
         .landing-hero {
           width:100%;
-          height:var(--hero-height-desktop, clamp(360px, 72vh, 860px));
-          min-height:var(--hero-min-height-desktop, 340px);
           overflow:hidden;
           position:relative;
           margin-bottom:1.5rem;
-          background:linear-gradient(145deg,var(--bg3),var(--bg2));
+          background:var(--bg2);
+        }
+        .temple-marquee-bar {
+          width:100%;
+          height:153px;
+          overflow:hidden;
+          border-top:1px solid #efd9cf;
+          border-bottom:1px solid #efd9cf;
+          background:#fffdf8;
+          display:flex;
+          align-items:center;
+        }
+        .temple-marquee-track {
+          display:flex;
+          align-items:center;
+          width:max-content;
+          height:100%;
+          gap:.55rem;
+          padding:.35rem .2rem;
+          will-change:transform;
+          animation:temple-marquee-scroll 30s linear infinite;
+        }
+        .temple-marquee-item {
+          flex:0 0 auto;
+          height:calc(100% - .7rem);
+          aspect-ratio:.9 / 1;
+          border-radius:.15rem;
+          border:1px solid var(--bd);
+          background:var(--bg2);
+          overflow:hidden;
+          box-shadow:0 1px 4px rgba(0,0,0,.1);
           display:flex;
           align-items:center;
           justify-content:center;
         }
-        .landing-hero-image {
+        .temple-marquee-image {
           width:100%;
           height:100%;
-          object-position:center;
           display:block;
+          object-fit:cover;
         }
-        .landing-hero-dots {
-          position:absolute;
-          left:0;
-          right:0;
-          bottom:10px;
-          display:flex;
-          justify-content:center;
-          gap:6px;
+        .landing-map-frame {
+          width:100%;
+          background:#f4eadc;
         }
-        .landing-hero-dot {
-          width:7px;
-          height:7px;
-          border-radius:999px;
-          border:none;
-          background:rgba(255,255,255,.6);
-          cursor:pointer;
-          padding:0;
+        .landing-map-image {
+          width:100%;
+          height:auto;
+          display:block;
+          object-fit:contain;
+          object-position:center top;
         }
-        .landing-hero-dot.active {
-          width:20px;
-          background:#fff;
+        @keyframes temple-marquee-scroll {
+          from { transform:translateX(0); }
+          to { transform:translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .temple-marquee-track { animation:none; }
         }
 
         /* ═══════════════════════════════════════
@@ -657,10 +660,12 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
            RESPONSIVE MISC
         ═══════════════════════════════════════ */
         @media(max-width:640px){
-          .landing-hero {
-            height:var(--hero-height-mobile, clamp(260px, 52vh, 420px));
-            min-height:var(--hero-min-height-mobile, 240px);
+          .temple-marquee-bar { height:124px; }
+          .temple-marquee-track {
+            gap:.4rem;
+            padding:.25rem .15rem;
           }
+          .temple-marquee-item { height:calc(100% - .5rem); }
           .stats-grid { grid-template-columns:1fr 1fr; }
           .bless-imgs { flex-direction:row; }
           .bless-img-wrap { flex:1; aspect-ratio:4/5.1; }
@@ -679,36 +684,39 @@ const LandingPage = ({ showHeader = true, showHero = true }: LandingPageProps) =
         <main>
 
           {showHero && (
-            <section className="landing-hero" style={heroSectionStyle}>
-              <img
-                src={activeHeroSlide.src}
-                alt={activeHeroSlide.alt}
-                className="landing-hero-image"
-                loading={currentHeroSlide === 0 ? "eager" : "lazy"}
-                style={{
-                  objectFit: activeHeroSlide.fit,
-                  width: isTempleHeroSlide ? "84%" : "100%",
-                  height: isTempleHeroSlide ? "84%" : "100%",
-                  margin: isTempleHeroSlide ? "auto" : "0",
-                  backgroundColor: activeHeroSlide.fit === "contain" ? "#fbf5ea" : "transparent",
-                }}
-              />
-              <div className="landing-hero-dots">
-                {landingHeroSlides.map((slide, index) => (
-                  <button
-                    key={slide.src}
-                    type="button"
-                    onClick={() => setCurrentHeroSlide(index)}
-                    className={`landing-hero-dot ${index === currentHeroSlide ? "active" : ""}`}
-                    aria-label={`Slide ${index + 1}`}
-                  />
-                ))}
+            <section className="landing-hero" aria-label="Temple marquee and village map">
+              <div className="temple-marquee-bar" aria-label="Temple images right to left marquee">
+                <div className="temple-marquee-track">
+                  {[...landingTempleMarqueeSlides, ...landingTempleMarqueeSlides].map((slide, index) => {
+                    const isDuplicate = index >= landingTempleMarqueeSlides.length;
+                    return (
+                      <div key={`${slide.src}-${index}`} className="temple-marquee-item" aria-hidden={isDuplicate}>
+                        <img
+                          src={slide.src}
+                          alt={isDuplicate ? "" : slide.alt}
+                          className="temple-marquee-image"
+                          loading={index < 2 ? "eager" : "lazy"}
+                          style={{ objectFit: slide.fit === "contain" ? "contain" : "cover" }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="landing-map-frame">
+                <img
+                  src={landingMapHero.src}
+                  alt={landingMapHero.alt}
+                  className="landing-map-image"
+                  loading="eager"
+                />
               </div>
               {/* Hidden image preloads keep transitions smooth. */}
               <div className="hidden" aria-hidden="true">
-                {landingHeroSlides.map((slide) => (
+                {landingTempleMarqueeSlides.map((slide) => (
                   <img key={`preload-${slide.src}`} src={slide.src} alt="" loading="lazy" />
                 ))}
+                <img src={landingMapHero.src} alt="" loading="lazy" />
               </div>
             </section>
           )}
