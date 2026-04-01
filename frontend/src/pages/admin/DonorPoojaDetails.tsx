@@ -384,6 +384,22 @@ const formatStarRasiNameLine = (name: string, tamilStar: string, rasi: string) =
   return parts.join(' - ');
 };
 
+const formatDonorHeadingForMessageCopy = (row: DonorPoojaDetailRow) => {
+  const donorId = row.donorId !== EMPTY_VALUE ? row.donorId : '';
+  const donorName = row.donorName !== EMPTY_VALUE ? row.donorName : '';
+
+  if (donorId && donorName) {
+    return `${donorId}, ${donorName}`;
+  }
+  if (donorId) {
+    return donorId;
+  }
+  if (donorName) {
+    return donorName;
+  }
+  return EMPTY_VALUE;
+};
+
 const formatDonorRowForCopy = (row: DonorPoojaDetailRow) => {
   const lines: string[] = [];
 
@@ -411,6 +427,10 @@ const formatDonorRowForCopy = (row: DonorPoojaDetailRow) => {
 
 const formatDonorDetailsForMessageCopy = (row: DonorPoojaDetailRow) => {
   const lines: string[] = [];
+
+  if (row.donorId !== EMPTY_VALUE) {
+    lines.push(row.donorId);
+  }
 
   if (row.gothram !== EMPTY_VALUE) {
     lines.push(`${row.gothram} கோத்திரம்`);
@@ -904,10 +924,9 @@ const DonorPoojaDetails = () => {
     }
 
     const donorLines = messageTargetRows
-      .map((row, index) => {
+      .map((row) => {
         const lines: string[] = [];
-        const donorHeading =
-          messageTargetRows.length > 1 ? `${index + 1}. ${row.donorName}` : row.donorName;
+        const donorHeading = formatDonorHeadingForMessageCopy(row);
         lines.push(donorHeading);
         if (row.donorHeaderText !== EMPTY_VALUE) {
           lines.push(row.donorHeaderText);
@@ -925,9 +944,18 @@ const DonorPoojaDetails = () => {
     }
 
     return messageTargetRows
-      .map((row, index) => {
-        const prefix = messageTargetRows.length > 1 ? `${index + 1}.` : '1.';
-        const lines = [`${prefix} ${row.donorName}`, ...splitAddressForCopy(row.address)];
+      .map((row) => {
+        const lines: string[] = [];
+        if (row.donorId !== EMPTY_VALUE) {
+          lines.push(row.donorId);
+        }
+        if (row.donorName !== EMPTY_VALUE) {
+          lines.push(row.donorName);
+        }
+        if (lines.length === 0) {
+          lines.push(EMPTY_VALUE);
+        }
+        lines.push(...splitAddressForCopy(row.address));
         return lines.join('\n');
       })
       .join('\n\n');

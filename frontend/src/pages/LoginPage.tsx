@@ -24,8 +24,7 @@ const countryCodeOptions: CountryOption[] = countryDialCodes.map((entry) => ({
 const defaultCountry =
   countryCodeOptions.find((option) => option.iso.toUpperCase() === 'IN') ?? countryCodeOptions[0];
 
-const mobileSlides = [
-  { src: '/images/new-landing-page.jpg', alt: 'Kakkalani Village aerial view', fit: 'contain' },
+const templeMarqueeSlides = [
   { src: '/images/kovi/lakshmi-narayanar/lakshmi-narayanar.png', alt: 'Lakshmi Narayanar', fit: 'contain' },
   { src: '/images/kovi/pillayar/pillayar-hd.jpg', alt: 'Aathagarai Pillayar', fit: 'contain' },
   { src: '/images/kovi/kalahasteeswarar/kalahasteeswarar-hd.png', alt: 'Kalahasteeswarar', fit: 'contain' },
@@ -34,20 +33,17 @@ const mobileSlides = [
   { src: '/images/kovi/Mazhai-Mariamman.png', alt: 'Mazhai Mariamman', fit: 'contain' },
 ];
 
+const landingMapHero = {
+  src: '/images/new-landing-page.jpg',
+  alt: 'Kakkalani Village map, Tamil Nadu',
+};
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % mobileSlides.length);
-    }, 3500);
-    return () => clearInterval(timer);
-  }, []);
 
   const {
     register,
@@ -116,69 +112,54 @@ const LoginPage = () => {
   const handleFocus = (fieldName: string) => setIsFocused(fieldName);
   const handleBlur = () => setIsFocused(null);
   const togglePasswordVisibility = () => setShowPassword((v) => !v);
-  const activeSlide = mobileSlides[currentSlide];
-  const isLandingMapSlide = activeSlide.src === '/images/new-landing-page.jpg';
-  const mobileSlideHeight = 'clamp(340px, 78vw, 600px)';
-  const desktopSlideFrameStyle = isLandingMapSlide
-    ? ({ aspectRatio: '3 / 2', height: 'auto', minHeight: '620px' } as const)
-    : ({ height: 'clamp(320px, 56vh, 620px)' } as const);
+  const desktopMapFrameStyle = {
+    aspectRatio: '3 / 2',
+  } as const;
 
   return (
     <div>
       {/*
         LOGIN SECTION
-          Mobile: Scrollable header + slideshow + LandingPage + fixed Sign In panel at bottom
-          Desktop (lg+): Split panel — 80% village map image | 20% Sign In form
+          Mobile: Scrollable header + temple marquee + LandingPage + fixed Sign In panel at bottom
+          Desktop (lg+): Split panel — 80% village map | 20% Sign In form
       */}
 
       {/* ═══ OUTER FLEX COL — header + marquee + content row ═══ */}
       <div className="flex flex-col min-h-screen lg:min-h-0">
         <PublicSiteHeader variant="amber" />
+        <div className="login-temple-marquee-bar" aria-label="Temple images right to left marquee">
+          <div className="login-temple-marquee-track">
+            {[...templeMarqueeSlides, ...templeMarqueeSlides].map((slide, index) => {
+              const isDuplicate = index >= templeMarqueeSlides.length;
+              return (
+                <div key={`top-${slide.src}-${index}`} className="login-temple-marquee-item" aria-hidden={isDuplicate}>
+                  <img
+                    src={slide.src}
+                    alt={isDuplicate ? '' : slide.alt}
+                    className="login-temple-marquee-image"
+                    style={{ objectFit: slide.fit === 'contain' ? 'contain' : 'cover' }}
+                    loading={index < 2 ? 'eager' : 'lazy'}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* ═══ INNER CONTAINER — flex-col mobile / flex-row desktop ═══ */}
         <div className="flex flex-col flex-1 min-h-0 lg:flex-row lg:flex-none">
 
-          {/* ── MOBILE ONLY: image slideshow ── */}
+          {/* ── MOBILE ONLY: map ── */}
           <div
-            className="lg:hidden relative flex-shrink-0 w-full overflow-hidden"
-            style={{ height: mobileSlideHeight }}
+            className="lg:hidden relative flex-shrink-0 w-full overflow-hidden bg-[#fbf5ea]"
+            style={{ aspectRatio: '3 / 2' }}
           >
-            {mobileSlides.map((slide, i) => (
-              <div
-                key={slide.src}
-                className="absolute inset-0 transition-opacity duration-700 flex items-center justify-center bg-[#fbf5ea]"
-                style={{ opacity: i === currentSlide ? 1 : 0 }}
-              >
-                <img
-                  src={slide.src}
-                  alt={slide.alt}
-                  className="block object-contain"
-                  style={{
-                    width: slide.src === '/images/new-landing-page.jpg' ? '100%' : 'auto',
-                    maxWidth: slide.src === '/images/new-landing-page.jpg' ? '100%' : '68%',
-                    height: '100%',
-                    maxHeight: '100%',
-                  }}
-                  loading={i === 0 ? 'eager' : 'lazy'}
-                />
-              </div>
-            ))}
-            {/* Dot indicators */}
-            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
-              {mobileSlides.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setCurrentSlide(i)}
-                  className="h-1.5 rounded-full transition-all duration-300"
-                  style={{
-                    width: i === currentSlide ? '18px' : '6px',
-                    background: i === currentSlide ? '#fff' : 'rgba(255,255,255,0.5)',
-                  }}
-                  aria-label={`Slide ${i + 1}`}
-                />
-              ))}
-            </div>
+            <img
+              src={landingMapHero.src}
+              alt={landingMapHero.alt}
+              className="w-full h-full object-contain object-center"
+              loading="eager"
+            />
           </div>
 
           {/* ── MOBILE ONLY: LandingPage content (scrollable, compact wrapper) ── */}
@@ -189,47 +170,18 @@ const LoginPage = () => {
           {/* ── MOBILE ONLY: spacer so content clears the fixed panel ── */}
           <div className="lg:hidden h-[300px]" />
 
-          {/* ── DESKTOP ONLY: left 80 % image panel ── */}
+          {/* ── DESKTOP ONLY: left 80 % map panel ── */}
           <div className="hidden lg:block lg:w-4/5">
             <div
               className="relative overflow-hidden bg-[#fbf5ea]"
-              style={desktopSlideFrameStyle}
+              style={desktopMapFrameStyle}
             >
-              {mobileSlides.map((slide, i) => (
-                <div
-                  key={`desktop-${slide.src}`}
-                  className="absolute inset-0 transition-opacity duration-700 flex items-center justify-center bg-[#fbf5ea]"
-                  style={{ opacity: i === currentSlide ? 1 : 0 }}
-                >
-                  <img
-                    src={slide.src}
-                    alt={slide.alt}
-                    className="block object-contain"
-                    style={{
-                      width: slide.src === '/images/new-landing-page.jpg' ? '100%' : 'auto',
-                      maxWidth: slide.src === '/images/new-landing-page.jpg' ? '100%' : '62%',
-                      height: '100%',
-                      maxHeight: '100%',
-                    }}
-                    loading={i === 0 ? 'eager' : 'lazy'}
-                  />
-                </div>
-              ))}
-              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
-                {mobileSlides.map((_, i) => (
-                  <button
-                    key={`desktop-dot-${i}`}
-                    type="button"
-                    onClick={() => setCurrentSlide(i)}
-                    className="h-1.5 rounded-full transition-all duration-300"
-                    style={{
-                      width: i === currentSlide ? '18px' : '6px',
-                      background: i === currentSlide ? '#fff' : 'rgba(255,255,255,0.5)',
-                    }}
-                    aria-label={`Slide ${i + 1}`}
-                  />
-                ))}
-              </div>
+              <img
+                src={landingMapHero.src}
+                alt={landingMapHero.alt}
+                className="w-full h-full object-contain object-center"
+                loading="eager"
+              />
             </div>
           </div>
 
@@ -247,7 +199,7 @@ const LoginPage = () => {
               'px-5 pb-6 pt-4',
               // Desktop: static right column
               'lg:static lg:w-1/5',
-              'lg:flex lg:items-center lg:justify-center',
+              'lg:flex lg:items-start lg:justify-start',
               'lg:min-h-0 lg:rounded-none lg:shadow-none',
               'lg:px-6 lg:py-10',
             ].join(' ')}
@@ -257,7 +209,7 @@ const LoginPage = () => {
             {/* Accent bar — mobile only */}
             <div className="h-0.5 bg-gradient-to-r from-[#7e2a20] via-[#c8813a] to-[#f0d060] rounded-full mb-3 lg:hidden" />
 
-            <div className="w-full">
+            <div className="w-full lg:mt-4">
 
               {/* Logo row — desktop only */}
               <div className="hidden lg:flex items-center gap-3 mb-5">
@@ -451,6 +403,61 @@ const LoginPage = () => {
       </div>
 
       <style>{`
+        @keyframes loginTempleMarqueeScroll {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        .login-temple-marquee-bar {
+          width: 100%;
+          height: 153px;
+          overflow: hidden;
+          border-top: 1px solid #efd9cf;
+          border-bottom: 1px solid #efd9cf;
+          background: #fffdf8;
+          display: flex;
+          align-items: center;
+        }
+        .login-temple-marquee-track {
+          display: flex;
+          align-items: center;
+          width: max-content;
+          height: 100%;
+          gap: .55rem;
+          padding: .35rem .2rem;
+          will-change: transform;
+          animation: loginTempleMarqueeScroll 30s linear infinite;
+        }
+        .login-temple-marquee-item {
+          flex: 0 0 auto;
+          height: calc(100% - .7rem);
+          aspect-ratio: .9 / 1;
+          border-radius: .15rem;
+          border: 1px solid rgba(126,42,32,.25);
+          background: #fff;
+          overflow: hidden;
+          box-shadow: 0 1px 4px rgba(0,0,0,.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .login-temple-marquee-image {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .login-temple-marquee-track { animation: none; }
+        }
+        @media (max-width: 640px) {
+          .login-temple-marquee-bar { height: 124px; }
+          .login-temple-marquee-track {
+            gap: .4rem;
+            padding: .25rem .15rem;
+          }
+          .login-temple-marquee-item { height: calc(100% - .5rem); }
+        }
+
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
