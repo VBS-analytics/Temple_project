@@ -569,7 +569,10 @@ const PoojaPauseCancelPage = () => {
     const actionLoading = planActionState[plan.id];
     const canPause = !isCancelled;
     const canCancel = !isPaused && isActive;
-    const canResume = isPaused;
+    // Temporary support: allow resume action for canceled plans as well,
+    // so admins can reactivate, repair dues, and then re-cancel from the
+    // intended effective month.
+    const canResume = isPaused || isCancelled;
     const canRerun = !isCancelled;
     const pauseStillActive = isPaused && Boolean(plan.pause_until && plan.pause_until >= todayIso());
     const rerunLabelDonorName = (plan.donor_name ?? '').trim() || 'this donor';
