@@ -781,6 +781,17 @@ def _chrt_plan_filter() -> Q:
     return Q(day_option__code="CHRT") | Q(one_time_date__isnull=False)
 
 
+def _is_explicit_chrt_due_note(note: str | None) -> bool:
+    """
+    Identify dues that are explicitly CHRT-generated.
+
+    Keep this narrow so we don't treat generic monthly dues as CHRT just because
+    their notes contain the substring "CHRT" in explanatory text.
+    """
+    normalized = (note or "").strip().lower()
+    return normalized.startswith("chrt") or "preferred date" in normalized
+
+
 def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
     """Clean up incorrectly generated CHRT dues that are before their preferred month.
     
@@ -816,75 +827,38 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
             if preferred_month < donor_preferred_months[donor_id]:
                 donor_preferred_months[donor_id] = preferred_month
     
-    # Delete or correct any dues that appear before the preferred month
+    # Delete explicit CHRT dues that appear before the preferred month.
+    # Do not rewrite generic monthly dues here; historical months may contain
+    # amounts from plans that are later canceled.
     deleted_count = 0
     adjusted_count = 0
     for donor_id, preferred_month in donor_preferred_months.items():
-        # Remove explicitly labelled CHRT dues in earlier months
-        deleted, _ = PaymentRecord.objects.filter(
-            donor_id=donor_id,
-            registration__isnull=True,
-            status=PaymentStatus.PENDING,
-            notes__icontains='CHRT',
-            payment_month__lt=preferred_month,
-        ).delete()
-        deleted_count += deleted
-        if deleted > 0:
+        candidate_dues = list(
+            PaymentRecord.objects.filter(
+                donor_id=donor_id,
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+                payment_month__lt=preferred_month,
+            )
+        )
+        explicit_chrt_due_ids = [due.pk for due in candidate_dues if _is_explicit_chrt_due_note(due.notes)]
+        if explicit_chrt_due_ids:
+            deleted, _ = PaymentRecord.objects.filter(pk__in=explicit_chrt_due_ids).delete()
+            deleted_count += deleted
+        if explicit_chrt_due_ids:
             LOGGER.info(
-                "Cleaned up %d stale CHRT dues for donor %s (preferred month: %s)",
-                deleted,
+                "Cleaned up %d stale explicit CHRT dues for donor %s (preferred month: %s)",
+                len(explicit_chrt_due_ids),
                 donor_id,
                 preferred_month.isoformat(),
             )
 
-        # Fix combined monthly dues that accidentally included CHRT amount
-        incorrect_dues = PaymentRecord.objects.filter(
-            donor_id=donor_id,
-            registration__isnull=True,
-            status=PaymentStatus.PENDING,
-            payment_month__lt=preferred_month,
-        )
-
-        if incorrect_dues.exists():
-            non_chrt_total = (
-                RecurringPoojaPlan.objects.filter(
-                    donor_id=donor_id,
-                    is_active=True,
-                    recurrence_kind=RecurrenceKind.RECURRING,
-                )
-                .exclude(_chrt_plan_filter())
-                .aggregate(total=Sum("amount"))
-                .get("total")
-                or Decimal("0.00")
-            )
-
-            for due in incorrect_dues:
-                if non_chrt_total <= 0:
-                    removed, _ = due.delete()
-                    deleted_count += removed
-                    LOGGER.info(
-                        "Removed stale mixed due %s for donor %s (no non-CHRT recurring amount)",
-                        due.pk,
-                        donor_id,
-                    )
-                    continue
-
-                if due.amount != non_chrt_total or "CHRT" in (due.notes or ""):
-                    due.amount = non_chrt_total
-                    due.notes = "Monthly recurring pooja contribution due (corrected to exclude CHRT)"
-                    due.save(update_fields=["amount", "notes", "updated_at"])
-                    adjusted_count += 1
-                    LOGGER.info(
-                        "Adjusted mixed due %s for donor %s to ₹%.2f (preferred month: %s)",
-                        due.pk,
-                        donor_id,
-                        float(non_chrt_total),
-                        preferred_month.isoformat(),
-                    )
+        # Historical monthly dues are intentionally left untouched here.
+        # They may legitimately include amounts from plans that were active at the time.
     
     # ------------------------------------------------------------------
-    # If a donor no longer has any active CHRT plans, ensure pending dues
-    # no longer carry stale CHRT contributions in any month.
+    # If a donor no longer has any active CHRT plans, remove explicit CHRT rows
+    # and collapse duplicates, but never rewrite historical due amounts.
     # ------------------------------------------------------------------
     donor_ids_with_pending = set(
         PaymentRecord.objects.filter(
@@ -932,26 +906,36 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
             if not dues:
                 continue
 
-            keeper = dues[0]
-            duplicates = dues[1:]
+            explicit_chrt_dues = [due for due in dues if _is_explicit_chrt_due_note(due.notes)]
+            non_chrt_dues = [due for due in dues if not _is_explicit_chrt_due_note(due.notes)]
 
-            if non_chrt_total <= 0:
-                # Donor may have canceled recurring plans. Preserve historical
-                # non-CHRT dues and only remove explicitly CHRT-tagged rows.
-                chrt_dues = [d.pk for d in dues if "CHRT" in (d.notes or "").upper()]
-                if chrt_dues:
-                    removed, _ = PaymentRecord.objects.filter(pk__in=chrt_dues).delete()
+            if non_chrt_dues:
+                # Keep first generic monthly due row for this month as-is.
+                keeper = non_chrt_dues[0]
+                duplicate_ids = [d.pk for d in non_chrt_dues[1:]] + [d.pk for d in explicit_chrt_dues]
+                if duplicate_ids:
+                    removed, _ = PaymentRecord.objects.filter(pk__in=duplicate_ids).delete()
                     deleted_count += removed
                 continue
 
-            if keeper.amount != non_chrt_total or "CHRT" in (keeper.notes or ""):
-                keeper.amount = non_chrt_total
-                keeper.notes = "Monthly recurring pooja contribution due (normalized after CHRT removal)"
-                keeper.save(update_fields=["amount", "notes", "updated_at"])
+            # Only explicit CHRT dues exist for this month.
+            if non_chrt_total <= 0:
+                explicit_ids = [d.pk for d in explicit_chrt_dues]
+                if explicit_ids:
+                    removed, _ = PaymentRecord.objects.filter(pk__in=explicit_ids).delete()
+                    deleted_count += removed
+                continue
+
+            # Preserve existing amount; only convert note + dedupe.
+            keeper = explicit_chrt_dues[0]
+            if _is_explicit_chrt_due_note(keeper.notes):
+                keeper.notes = "Monthly recurring pooja contribution due"
+                keeper.save(update_fields=["notes", "updated_at"])
                 adjusted_count += 1
 
-            if duplicates:
-                removed, _ = PaymentRecord.objects.filter(pk__in=[d.pk for d in duplicates]).delete()
+            duplicate_ids = [d.pk for d in explicit_chrt_dues[1:]]
+            if duplicate_ids:
+                removed, _ = PaymentRecord.objects.filter(pk__in=duplicate_ids).delete()
                 deleted_count += removed
 
     return deleted_count + adjusted_count

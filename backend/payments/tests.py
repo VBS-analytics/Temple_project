@@ -687,6 +687,82 @@ class ChrtCleanupSafetyTests(TestCase):
         )
         self.assertEqual(remaining_months, [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)])
 
+    def test_cleanup_does_not_normalize_historical_months_to_current_active_total(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000008",
+            name="Cleanup Normalize Safety Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="REGSAFE2",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+
+        # Active monthly plan (₹500)
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="R8A", name="Recurring 8 Active"),
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("500.00"),
+            is_active=True,
+        )
+
+        # Canceled plan effective from Apr 2026 (₹2500)
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="R8C", name="Recurring 8 Canceled"),
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=None,
+            amount=Decimal("2500.00"),
+            is_active=False,
+            pause_from=date(2026, 4, 1),
+            pause_until=date.max,
+            metadata={
+                "canceled_at": "2026-04-03",
+                "cancel_effective_from": "2026-04-01",
+            },
+        )
+
+        # Historical dues should stay ₹3000 and must not be normalized to active ₹500.
+        for month_start in (date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)):
+            PaymentRecord.objects.create(
+                donor=donor,
+                amount=Decimal("3000.00"),
+                mode="pending",
+                status=PaymentStatus.PENDING,
+                payment_month=month_start,
+                notes="Monthly recurring pooja contribution due",
+                registration=None,
+            )
+
+        _clean_stale_chrt_dues(today=date(2026, 4, 3))
+
+        amounts_by_month = list(
+            PaymentRecord.objects.filter(
+                donor=donor,
+                status=PaymentStatus.PENDING,
+                registration__isnull=True,
+            )
+            .order_by("payment_month")
+            .values_list("payment_month", "amount")
+        )
+        self.assertEqual(
+            amounts_by_month,
+            [
+                (date(2026, 1, 1), Decimal("3000.00")),
+                (date(2026, 2, 1), Decimal("3000.00")),
+                (date(2026, 3, 1), Decimal("3000.00")),
+            ],
+        )
+
 
 class ExpenseRecordApiTests(TestCase):
     def setUp(self):
