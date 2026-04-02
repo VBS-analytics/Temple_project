@@ -763,6 +763,56 @@ class ChrtCleanupSafetyTests(TestCase):
             ],
         )
 
+    def test_cleanup_merges_duplicate_generic_month_rows_without_dropping_total(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000009",
+            name="Cleanup Duplicate Month Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="REGSAFE3",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="R9A", name="Recurring 9 Active"),
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("1000.00"),
+            is_active=True,
+        )
+
+        # Legacy split rows for Jan 2026 (₹1000 + ₹1000) should be merged to ₹2000,
+        # not collapsed to a single ₹1000 row.
+        for amount in (Decimal("1000.00"), Decimal("1000.00")):
+            PaymentRecord.objects.create(
+                donor=donor,
+                amount=amount,
+                mode="pending",
+                status=PaymentStatus.PENDING,
+                payment_month=date(2026, 1, 1),
+                notes="Monthly recurring pooja contribution due",
+                registration=None,
+            )
+
+        _clean_stale_chrt_dues(today=date(2026, 4, 3))
+
+        jan_rows = list(
+            PaymentRecord.objects.filter(
+                donor=donor,
+                status=PaymentStatus.PENDING,
+                registration__isnull=True,
+                payment_month=date(2026, 1, 1),
+            ).order_by("id")
+        )
+        self.assertEqual(len(jan_rows), 1)
+        self.assertEqual(jan_rows[0].amount, Decimal("2000.00"))
+        self.assertEqual(jan_rows[0].notes, "Monthly recurring pooja contribution due")
+
 
 class ExpenseRecordApiTests(TestCase):
     def setUp(self):
