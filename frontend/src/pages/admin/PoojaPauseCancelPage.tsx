@@ -171,6 +171,29 @@ const PAUSE_REASON_OPTIONS = [
   "Continue the pooja with Samy's names",
 ];
 
+const PAUSE_REASON_NO_POOJA_NO_PAYMENT = 'No Pooja and No Payment';
+const PAUSE_REASON_USE_FOR_TEMPLE = 'No Pooja and use money for temple purpose';
+const PAUSE_REASON_CONTINUE_SAMY = "Continue the pooja with Samy's names";
+const PAUSE_REASON_SECTION_ORDER = [
+  'paused_no_pooja_no_payment',
+  'paused_use_for_temple',
+  'paused_continue_samy',
+  'cancelled',
+  'paused_other',
+  'other',
+] as const;
+
+type PlanSectionKey = typeof PAUSE_REASON_SECTION_ORDER[number];
+
+const PAUSE_REASON_SECTION_LABELS: Record<PlanSectionKey, string> = {
+  paused_no_pooja_no_payment: 'Paused Pooja · No Pooja and No Payment',
+  paused_use_for_temple: 'Paused Pooja · No Pooja and use money for temple purpose',
+  paused_continue_samy: "Paused Pooja · Continue the pooja with Samy's names",
+  cancelled: 'Canceled Pooja',
+  paused_other: 'Paused Pooja · Other reason',
+  other: 'Other recurring plans',
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return '—';
   const parsed = new Date(value);
@@ -223,6 +246,41 @@ const isCancelledPlan = (plan: RecurringPlan) => {
 const isPausedPlan = (plan: RecurringPlan) => {
   if (isCancelledPlan(plan)) return false;
   return Boolean(plan.pause_from || plan.pause_until);
+};
+
+const normalizePauseReason = (value?: string | null) =>
+  (value ?? '')
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getPauseReasonSection = (plan: RecurringPlan): PlanSectionKey => {
+  if (isCancelledPlan(plan)) return 'cancelled';
+  if (!isPausedPlan(plan)) return 'other';
+  const metadata = isRecord(plan.metadata) ? plan.metadata : {};
+  const pauseReasonValue = typeof metadata.pause_reason === 'string' ? metadata.pause_reason : null;
+  const normalizedReason = normalizePauseReason(pauseReasonValue);
+  if (
+    normalizedReason === normalizePauseReason(PAUSE_REASON_NO_POOJA_NO_PAYMENT)
+    || (normalizedReason.includes('no pooja') && normalizedReason.includes('no payment'))
+  ) {
+    return 'paused_no_pooja_no_payment';
+  }
+  if (
+    normalizedReason === normalizePauseReason(PAUSE_REASON_USE_FOR_TEMPLE)
+    || normalizedReason.includes('temple purpose')
+  ) {
+    return 'paused_use_for_temple';
+  }
+  if (
+    normalizedReason === normalizePauseReason(PAUSE_REASON_CONTINUE_SAMY)
+    || normalizedReason.includes('samy')
+    || normalizedReason.includes('swamy')
+  ) {
+    return 'paused_continue_samy';
+  }
+  return 'paused_other';
 };
 
 const extractErrorMessage = (error: unknown) => {
@@ -436,6 +494,25 @@ const PoojaPauseCancelPage = () => {
 
   const selectedDonor = donors.find((d) => d.id === selectedDonorId);
   const isShowingAllPaused = selectedDonorId === null;
+  const plansBySection = useMemo(() => {
+    const grouped: Record<PlanSectionKey, RecurringPlan[]> = {
+      paused_no_pooja_no_payment: [],
+      paused_use_for_temple: [],
+      paused_continue_samy: [],
+      cancelled: [],
+      paused_other: [],
+      other: [],
+    };
+    plans.forEach((plan) => {
+      grouped[getPauseReasonSection(plan)].push(plan);
+    });
+    return grouped;
+  }, [plans]);
+
+  const plansToRender = useMemo(() => {
+    if (!isShowingAllPaused) return plans;
+    return PAUSE_REASON_SECTION_ORDER.flatMap((section) => plansBySection[section]);
+  }, [isShowingAllPaused, plans, plansBySection]);
 
   return (
     <div className="space-y-8">
@@ -514,11 +591,15 @@ const PoojaPauseCancelPage = () => {
             </span>
           </div>
 
-          <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
-            {plans.map((plan) => {
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">
+            {plansToRender.map((plan, index) => {
               const isPaused = isPausedPlan(plan);
               const isActive = plan.is_active;
               const isCancelled = isCancelledPlan(plan);
+              const sectionKey = getPauseReasonSection(plan);
+              const previousSectionKey = index > 0 ? getPauseReasonSection(plansToRender[index - 1]) : null;
+              const showSectionHeader = isShowingAllPaused && (index === 0 || sectionKey !== previousSectionKey);
+              const sectionPlanCount = plansBySection[sectionKey].length;
               const memberNames = getPlanMemberNames(plan.metadata);
               const isPauseFormOpen = activePausePlanId === plan.id;
               const isCancelFormOpen = activeCancelPlanId === plan.id;
@@ -538,7 +619,20 @@ const PoojaPauseCancelPage = () => {
                   : 'border-l-emerald-400';
 
               return (
-                <div key={plan.id} className={`border-l-[3px] px-5 py-4 transition-colors ${accentClass}`}>
+                <div key={plan.id}>
+                  {showSectionHeader && (
+                    <div className="bg-slate-50 px-5 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                          {PAUSE_REASON_SECTION_LABELS[sectionKey]}
+                        </p>
+                        <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+                          {sectionPlanCount} {sectionPlanCount === 1 ? 'plan' : 'plans'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div className={`border-l-[3px] px-5 py-4 transition-colors ${accentClass}`}>
 
                   {/* ── Plan Header Row ──────────────────────────────────── */}
                   <div className="flex items-start justify-between gap-4">
@@ -812,6 +906,7 @@ const PoojaPauseCancelPage = () => {
                     </div>
                   )}
 
+                  </div>
                 </div>
               );
             })}
