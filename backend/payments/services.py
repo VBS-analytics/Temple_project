@@ -41,6 +41,34 @@ def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
     return anchor
 
 
+def _parse_iso_date(value: str | None) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value.split("T", 1)[0].strip())
+    except ValueError:
+        return None
+
+
+def _plan_cancel_effective_month(plan: RecurringPoojaPlan) -> Optional[date]:
+    """
+    Return the first month from which a plan cancellation is effective.
+
+    For canceled plans we freeze passbook backfill before this month so
+    historical rows are not rewritten during regeneration.
+    """
+    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+    cancel_effective_from = metadata.get("cancel_effective_from")
+    if isinstance(cancel_effective_from, str):
+        parsed = _parse_iso_date(cancel_effective_from)
+        if parsed:
+            return parsed.replace(day=1)
+
+    if plan.pause_from and plan.pause_until == date.max:
+        return plan.pause_from.replace(day=1)
+    return None
+
+
 def passbook_guard_active() -> bool:
     """Expose whether passbook regeneration is already running (used by signals to prevent recursion)."""
     return getattr(_thread_local, "passbook_in_progress", False)
@@ -175,12 +203,20 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             return value.replace(month=value.month + 1, day=1)
 
         earliest_plan_month = None
+        historical_freeze_month = None
         for plan in RecurringPoojaPlan.objects.filter(
             donor_id=donor_id,
             recurrence_kind=RecurrenceKind.RECURRING,
         ).filter(
             Q(is_active=True) | Q(pause_from__isnull=False) | Q(pause_until__isnull=False)
         ):
+            cancel_effective_month = _plan_cancel_effective_month(plan)
+            if cancel_effective_month and (
+                historical_freeze_month is None
+                or cancel_effective_month < historical_freeze_month
+            ):
+                historical_freeze_month = cancel_effective_month
+
             # Skip CHRT and one-time/dated plans; they are handled elsewhere.
             if plan.one_time_date:
                 continue
@@ -198,6 +234,9 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         if earliest_plan_month:
             cursor = max(earliest_plan_month, anchor_date.replace(day=1))
             while cursor <= current_month:
+                if historical_freeze_month and cursor < historical_freeze_month:
+                    cursor = _next_month(cursor)
+                    continue
                 existing = monthly_dues_by_month.get(cursor)
                 existing_amount = existing["amount"] if existing else Decimal("0.00")
                 target_amount = _calculate_recurring_month_total_for_donor(donor_id, cursor)
@@ -250,6 +289,8 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             )
 
         for month_start, chrt_total_for_month in chrt_amounts_by_month.items():
+            if historical_freeze_month and month_start < historical_freeze_month:
+                continue
             base_non_chrt = _calculate_recurring_month_total_for_donor(donor_id, month_start)
             target_amount = base_non_chrt + chrt_total_for_month
             existing = monthly_dues_by_month.get(month_start)
