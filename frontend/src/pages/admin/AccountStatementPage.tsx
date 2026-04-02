@@ -41,7 +41,7 @@ type StatementRow = {
   key: string;
   date: Date;
   dateLabel: string;
-  type: 'payment' | 'income' | 'expense';
+  type: 'payment' | 'income' | 'expense' | 'opening_balance';
   details: string;
   reference: string;
   inflow: number;
@@ -84,6 +84,29 @@ const formatDateLabel = (value: Date) =>
     month: 'short',
     year: 'numeric',
   });
+
+const DECEMBER_2025_OPENING_BALANCE_ROWS: StatementRow[] = [
+  {
+    key: 'opening-balance-kumbabishekam-2025-12',
+    date: new Date(2025, 11, 1),
+    dateLabel: formatDateLabel(new Date(2025, 11, 1)),
+    type: 'opening_balance',
+    details: 'Kumbabishekam SB account balance',
+    reference: 'Manual Opening Balance',
+    inflow: 9091,
+    outflow: 0,
+  },
+  {
+    key: 'opening-balance-normal-2025-12',
+    date: new Date(2025, 11, 1),
+    dateLabel: formatDateLabel(new Date(2025, 11, 1)),
+    type: 'opening_balance',
+    details: 'Normal account SB account balance',
+    reference: 'Manual Opening Balance',
+    inflow: 216770,
+    outflow: 0,
+  },
+];
 
 const parseDateValue = (value?: string | null) => {
   if (!value) {
@@ -297,7 +320,12 @@ const AccountStatementPage = () => {
       })
       .filter((row): row is StatementRow => row !== null);
 
-    return [...paymentRows, ...additionIncomeRows, ...expenseRows].sort((left, right) => left.date.getTime() - right.date.getTime());
+    const manualOpeningBalanceRows =
+      selectedMonth === '2025-12' ? DECEMBER_2025_OPENING_BALANCE_ROWS : [];
+
+    return [...manualOpeningBalanceRows, ...paymentRows, ...additionIncomeRows, ...expenseRows].sort(
+      (left, right) => left.date.getTime() - right.date.getTime(),
+    );
   }, [allPayments, monthAdditionIncomes, monthExpenses, selectedMonth]);
 
   const totals = useMemo(() => {
@@ -360,6 +388,11 @@ const AccountStatementPage = () => {
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-violet-700">Opening Balance</p>
+            <p className="text-base font-semibold text-violet-900">{formatCurrency(0)}</p>
+            <p className="text-xs text-violet-700">Manual setup pending</p>
+          </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-emerald-700">Inflow</p>
             <p className="text-base font-semibold text-emerald-900">{formatCurrency(totals.inflow)}</p>
@@ -376,11 +409,6 @@ const AccountStatementPage = () => {
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-indigo-700">Net Balance</p>
             <p className="text-base font-semibold text-indigo-900">{formatCurrency(totals.net)}</p>
             <p className="text-xs text-indigo-700">{selectedMonthLabel}</p>
-          </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-amber-700">Transactions</p>
-            <p className="text-base font-semibold text-amber-900">{statementRows.length}</p>
-            <p className="text-xs text-amber-700">Payment + Addition Income + Expense entries</p>
           </div>
         </div>
 
@@ -403,7 +431,7 @@ const AccountStatementPage = () => {
         {!error && !loading && statementRows.length > 0 && (
           <div className="mt-4 overflow-hidden rounded-xl border border-amber-200">
             <div className="overflow-x-auto">
-              <table className="min-w-[72rem] w-full table-fixed divide-y divide-amber-200">
+              <table className="min-w-[80rem] w-full table-fixed divide-y divide-amber-200">
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="w-44 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Date</th>
@@ -412,6 +440,7 @@ const AccountStatementPage = () => {
                     <th className="w-56 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Reference</th>
                     <th className="w-40 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">Inflow</th>
                     <th className="w-40 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">Outflow</th>
+                    <th className="w-40 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">Balance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-amber-100 bg-white">
@@ -425,10 +454,18 @@ const AccountStatementPage = () => {
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                               : row.type === 'income'
                                 ? 'border-sky-200 bg-sky-50 text-sky-800'
-                              : 'border-rose-200 bg-rose-50 text-rose-800'
+                              : row.type === 'expense'
+                                ? 'border-rose-200 bg-rose-50 text-rose-800'
+                                : 'border-violet-200 bg-violet-50 text-violet-800'
                           }`}
                         >
-                          {row.type === 'payment' ? 'Donor Payment' : row.type === 'income' ? 'Addition Income' : 'Admin Expense'}
+                          {row.type === 'payment'
+                            ? 'Donor Payment'
+                            : row.type === 'income'
+                              ? 'Addition Income'
+                              : row.type === 'expense'
+                                ? 'Admin Expense'
+                                : 'Opening Balance'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-800">{row.details}</td>
@@ -439,6 +476,7 @@ const AccountStatementPage = () => {
                       <td className="px-4 py-3 text-right text-sm font-semibold text-rose-800">
                         {row.outflow > 0 ? formatCurrency(row.outflow) : '—'}
                       </td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-slate-700">—</td>
                     </tr>
                   ))}
                 </tbody>

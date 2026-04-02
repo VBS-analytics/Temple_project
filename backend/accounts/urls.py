@@ -13,8 +13,10 @@ from .views import (
     FamilyMemberView,
     GothraOptionViewSet,
     LoginView,
+    NakshatraOptionViewSet,
     PasswordResetView,
     ProfileView,
+    RasiOptionViewSet,
     RegisterView,
     RequestOtpView,
     VerifyOtpView,
@@ -23,6 +25,8 @@ from .views import (
 
 router = DefaultRouter()
 router.register('gothra-options', GothraOptionViewSet, basename='gothra-options')
+router.register('nakshatra-options', NakshatraOptionViewSet, basename='nakshatra-options')
+router.register('rasi-options', RasiOptionViewSet, basename='rasi-options')
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),

@@ -3,7 +3,16 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import DonorFeedback, DonorProfile, FamilyMember, GothraOption, OtpToken, User
+from .models import (
+    DonorFeedback,
+    DonorProfile,
+    FamilyMember,
+    GothraOption,
+    NakshatraOption,
+    OtpToken,
+    RasiOption,
+    User,
+)
 
 
 @admin.register(User)
@@ -62,6 +71,18 @@ class FamilyMemberAdmin(admin.ModelAdmin):
 
 @admin.register(GothraOption)
 class GothraOptionAdmin(admin.ModelAdmin):
+    list_display = ("name", "display_order", "created_at")
+    ordering = ("display_order", "name")
+
+
+@admin.register(NakshatraOption)
+class NakshatraOptionAdmin(admin.ModelAdmin):
+    list_display = ("name", "display_order", "created_at")
+    ordering = ("display_order", "name")
+
+
+@admin.register(RasiOption)
+class RasiOptionAdmin(admin.ModelAdmin):
     list_display = ("name", "display_order", "created_at")
     ordering = ("display_order", "name")
 

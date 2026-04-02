@@ -231,6 +231,38 @@ const getPauseReasonLabel = (metadata?: Record<string, unknown>) => {
   return null;
 };
 
+const CANCELLED_PAUSE_SENTINEL = '9999-12-31';
+
+const isCancelledPlan = (plan: RecurringPlan) => {
+  if (plan.is_active) return false;
+  const metadata = isRecord(plan.metadata) ? plan.metadata : {};
+  const canceledAt = metadata.canceled_at;
+  const cancelEffectiveFrom = metadata.cancel_effective_from;
+  if (typeof canceledAt === 'string' && canceledAt.trim().length > 0) return true;
+  if (typeof cancelEffectiveFrom === 'string' && cancelEffectiveFrom.trim().length > 0) return true;
+  return plan.pause_until === CANCELLED_PAUSE_SENTINEL && Boolean(plan.pause_from);
+};
+
+const isPausedPlan = (plan: RecurringPlan) => {
+  if (isCancelledPlan(plan)) return false;
+  return Boolean(plan.pause_from || plan.pause_until);
+};
+
+const getPlanStatus = (plan: RecurringPlan): 'active' | 'paused' | 'cancelled' => {
+  if (isCancelledPlan(plan)) return 'cancelled';
+  if (plan.is_active && plan.recurrence_kind === 'recurring') return 'active';
+  return 'paused';
+};
+
+const getPlanCancelEffectiveFrom = (plan: RecurringPlan) => {
+  const metadata = isRecord(plan.metadata) ? plan.metadata : {};
+  const cancelEffectiveFrom = metadata.cancel_effective_from;
+  if (typeof cancelEffectiveFrom === 'string' && cancelEffectiveFrom.trim().length > 0) {
+    return cancelEffectiveFrom;
+  }
+  return plan.pause_from ?? null;
+};
+
 const extractErrorMessage = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const responseData = error.response?.data;
@@ -803,6 +835,10 @@ const DonorProfile = () => {
     () => recurrencePlans.filter((plan) => plan.recurrence_kind === 'recurring' && !isCHRTPlan(plan)),
     [recurrencePlans],
   );
+  const activeRecurringPlans = useMemo(
+    () => recurringPlansToShow.filter((plan) => getPlanStatus(plan) === 'active'),
+    [recurringPlansToShow],
+  );
   const chrtPlansToShow = useMemo(
     () => recurrencePlans.filter((plan) => isCHRTPlan(plan)),
     [recurrencePlans],
@@ -846,8 +882,8 @@ const DonorProfile = () => {
     (!hasInitialRecurrenceLoaded && recurrenceLoading) ||
     (!hasInitialRegistrationsLoaded && registrationsLoading);
   const recurringPlansTotalAmount = useMemo(
-    () => recurringPlansToShow.reduce((sum, plan) => sum + parseDecimalValue(plan.amount), 0),
-    [recurringPlansToShow],
+    () => activeRecurringPlans.reduce((sum, plan) => sum + parseDecimalValue(plan.amount), 0),
+    [activeRecurringPlans],
   );
   const getInitials = (name?: string | null) => {
     if (!name) return 'U';
@@ -1088,7 +1124,7 @@ const DonorProfile = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-extrabold uppercase text-black">Active Plans</p>
-                        <p className="mt-2 text-2xl leading-none font-black text-black sm:text-[32px]">{recurringPlansToShow.length}</p>
+                        <p className="mt-2 text-2xl leading-none font-black text-black sm:text-[32px]">{activeRecurringPlans.length}</p>
                       </div>
                       <div className="text-3xl">🔄</div>
                     </div>
@@ -1619,7 +1655,7 @@ const DonorProfile = () => {
                     <div>
                       <p className="text-xs font-bold uppercase text-emerald-600">Total Monthly Contribution</p>
                       <p className="mt-2 text-2xl font-bold text-slate-900 sm:text-4xl">₹ {formatPlanAmount(recurringPlansTotalAmount)}</p>
-                      <p className="mt-1 text-sm text-slate-600">Across {recurringPlansToShow.length} active plan{recurringPlansToShow.length !== 1 ? 's' : ''}</p>
+                      <p className="mt-1 text-sm text-slate-600">Across {activeRecurringPlans.length} active plan{activeRecurringPlans.length !== 1 ? 's' : ''}</p>
                       <p className="mt-1 text-sm font-semibold text-red-600">
                         {recurringPlansToShow.length} Recurring Pooja{recurringPlansToShow.length !== 1 ? 's' : ''}
                       </p>
@@ -1644,7 +1680,11 @@ const DonorProfile = () => {
                     {recurringPlansToShow.map((plan) => {
                       const memberNames = getPlanMemberNames(plan.metadata);
                       const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
-                      const isPlanActive = plan.is_active && plan.recurrence_kind === 'recurring';
+                      const planStatus = getPlanStatus(plan);
+                      const isPlanActive = planStatus === 'active';
+                      const isPlanPaused = planStatus === 'paused';
+                      const isPlanCancelled = planStatus === 'cancelled';
+                      const cancelEffectiveFrom = getPlanCancelEffectiveFrom(plan);
                       const scheduleLabel = formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency);
                       const registeredOn = plan.origin_registration_created_at
                         ? formatDate(plan.origin_registration_created_at)
@@ -1667,8 +1707,8 @@ const DonorProfile = () => {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">{plan.pooja_option_code || 'Pooja'}</span>
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isPlanActive ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                                  {isPlanActive ? 'Active' : 'Paused'}
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isPlanActive ? 'bg-emerald-100 text-emerald-700' : isPlanCancelled ? 'bg-rose-100 text-rose-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {isPlanActive ? 'Active' : isPlanCancelled ? 'Cancelled' : 'Paused'}
                                 </span>
                               </div>
                               <h3 className="text-lg font-bold text-slate-900">{plan.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
@@ -1765,7 +1805,13 @@ const DonorProfile = () => {
                           </div>
                         )}
 
-                        {(plan.pause_from || plan.pause_until) && (
+                        {isPlanCancelled ? (
+                          <div className="mb-4 rounded-lg bg-rose-50 p-3 ring-1 ring-rose-200">
+                            <p className="text-xs font-semibold text-rose-800">
+                              Cancelled from {formatDate(cancelEffectiveFrom)}.
+                            </p>
+                          </div>
+                        ) : isPlanPaused && (
                           <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
                             <p className="text-xs font-semibold text-orange-800">
                               {plan.pause_from && plan.pause_until
@@ -1868,7 +1914,11 @@ const DonorProfile = () => {
                         {chrtPlansToShow.map((plan) => {
                           const memberNames = getPlanMemberNames(plan.metadata);
                           const pauseReasonLabel = getPauseReasonLabel(plan.metadata);
-                          const isPlanActive = plan.is_active && plan.recurrence_kind === 'recurring';
+                          const planStatus = getPlanStatus(plan);
+                          const isPlanActive = planStatus === 'active';
+                          const isPlanPaused = planStatus === 'paused';
+                          const isPlanCancelled = planStatus === 'cancelled';
+                          const cancelEffectiveFrom = getPlanCancelEffectiveFrom(plan);
                           const scheduleLabel = formatPlanFrequencyLabel(plan.recurrence_kind, plan.recurrence_frequency);
                           const registeredOn = plan.origin_registration_created_at
                             ? formatDate(plan.origin_registration_created_at)
@@ -1894,10 +1944,10 @@ const DonorProfile = () => {
                                     <span className="inline-block rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">CHRT</span>
                                     <span
                                       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                        isPlanActive ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
+                                        isPlanActive ? 'bg-emerald-100 text-emerald-700' : isPlanCancelled ? 'bg-rose-100 text-rose-700' : 'bg-orange-100 text-orange-700'
                                       }`}
                                     >
-                                      {isPlanActive ? 'Active' : 'Paused'}
+                                      {isPlanActive ? 'Active' : isPlanCancelled ? 'Cancelled' : 'Paused'}
                                     </span>
                                   </div>
                                   <h3 className="text-lg font-bold text-slate-900">{plan.pooja_option_name?.trim() || 'Unnamed pooja'}</h3>
@@ -1994,7 +2044,13 @@ const DonorProfile = () => {
                                 </div>
                               )}
 
-                              {(plan.pause_from || plan.pause_until) && (
+                              {isPlanCancelled ? (
+                                <div className="mb-4 rounded-lg bg-rose-50 p-3 ring-1 ring-rose-200">
+                                  <p className="text-xs font-semibold text-rose-800">
+                                    Cancelled from {formatDate(cancelEffectiveFrom)}.
+                                  </p>
+                                </div>
+                              ) : isPlanPaused && (
                                 <div className="mb-4 rounded-lg bg-orange-50 p-3 ring-1 ring-orange-200">
                                   <p className="text-xs font-semibold text-orange-800">
                                     {plan.pause_from && plan.pause_until

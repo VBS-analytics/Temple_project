@@ -15,7 +15,16 @@ from rest_framework.views import APIView
 from openpyxl import Workbook
 from payments.models import CombinePaymentMapping, PaymentRecord, PaymentStatus
 
-from .models import DonorFeedback, DonorProfile, FamilyMember, GothraOption, User, UserRole
+from .models import (
+    DonorFeedback,
+    DonorProfile,
+    FamilyMember,
+    GothraOption,
+    NakshatraOption,
+    RasiOption,
+    User,
+    UserRole,
+)
 from .access import can_download_reports, REPORT_DOWNLOAD_ACCESS_DENIED_MESSAGE
 from .serializers import (
     AdminDonorUserUpdateSerializer,
@@ -31,6 +40,8 @@ from .serializers import (
     RegisterSerializer,
     UserSerializer,
     GothraOptionSerializer,
+    NakshatraOptionSerializer,
+    RasiOptionSerializer,
 )
 
 
@@ -474,4 +485,24 @@ class GothraOptionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         max_order = GothraOption.objects.aggregate(Max("display_order")).get("display_order__max") or 0
+        serializer.save(display_order=max_order + 1)
+
+
+class NakshatraOptionViewSet(viewsets.ModelViewSet):
+    queryset = NakshatraOption.objects.order_by("display_order", "name")
+    serializer_class = NakshatraOptionSerializer
+    permission_classes = (GothraOptionPermission,)
+
+    def perform_create(self, serializer):
+        max_order = NakshatraOption.objects.aggregate(Max("display_order")).get("display_order__max") or 0
+        serializer.save(display_order=max_order + 1)
+
+
+class RasiOptionViewSet(viewsets.ModelViewSet):
+    queryset = RasiOption.objects.order_by("display_order", "name")
+    serializer_class = RasiOptionSerializer
+    permission_classes = (GothraOptionPermission,)
+
+    def perform_create(self, serializer):
+        max_order = RasiOption.objects.aggregate(Max("display_order")).get("display_order__max") or 0
         serializer.save(display_order=max_order + 1)

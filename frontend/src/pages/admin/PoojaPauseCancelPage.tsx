@@ -208,6 +208,23 @@ const formatPlanFrequencyLabel = (frequency?: string | null) => {
   return `${label} recurring`;
 };
 
+const CANCELLED_PAUSE_SENTINEL = '9999-12-31';
+
+const isCancelledPlan = (plan: RecurringPlan) => {
+  if (plan.is_active) return false;
+  const metadata = isRecord(plan.metadata) ? plan.metadata : {};
+  const canceledAt = metadata.canceled_at;
+  const cancelEffectiveFrom = metadata.cancel_effective_from;
+  if (typeof canceledAt === 'string' && canceledAt.trim().length > 0) return true;
+  if (typeof cancelEffectiveFrom === 'string' && cancelEffectiveFrom.trim().length > 0) return true;
+  return plan.pause_until === CANCELLED_PAUSE_SENTINEL && Boolean(plan.pause_from);
+};
+
+const isPausedPlan = (plan: RecurringPlan) => {
+  if (isCancelledPlan(plan)) return false;
+  return Boolean(plan.pause_from || plan.pause_until);
+};
+
 const extractErrorMessage = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const responseData = error.response?.data;
@@ -229,7 +246,7 @@ const extractErrorMessage = (error: unknown) => {
 
 /* ─── Status badge ─────────────────────────────────────────────────────── */
 const PlanStatusBadge = ({ plan }: { plan: RecurringPlan }) => {
-  if (!plan.is_active && !plan.pause_from && !plan.pause_until) {
+  if (isCancelledPlan(plan)) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 px-2.5 py-0.5 text-xs font-semibold text-rose-600">
         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
@@ -237,7 +254,7 @@ const PlanStatusBadge = ({ plan }: { plan: RecurringPlan }) => {
       </span>
     );
   }
-  if (plan.pause_from || plan.pause_until) {
+  if (isPausedPlan(plan)) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -321,7 +338,7 @@ const PoojaPauseCancelPage = () => {
       const recurringPlans = allPlans.filter((plan) => plan.recurrence_kind === 'recurring');
       setPlans(
         showingAllPaused
-          ? recurringPlans.filter((plan) => Boolean(plan.pause_from || plan.pause_until))
+          ? recurringPlans.filter((plan) => isPausedPlan(plan) || isCancelledPlan(plan))
           : recurringPlans,
       );
     } catch (error) {
@@ -481,7 +498,7 @@ const PoojaPauseCancelPage = () => {
           </svg>
           <p className="text-sm font-medium text-slate-400">
             {isShowingAllPaused
-              ? 'No paused recurring plans found.'
+              ? 'No paused or cancelled recurring plans found.'
               : `No recurring plans found for ${selectedDonor?.name}`}
           </p>
         </div>
@@ -490,7 +507,7 @@ const PoojaPauseCancelPage = () => {
           {/* Plans count header */}
           <div className="mb-4 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-              {isShowingAllPaused ? 'All Paused Recurring Plans' : 'Recurring Plans'}
+              {isShowingAllPaused ? 'Paused & Cancelled Recurring Plans' : 'Recurring Plans'}
             </p>
             <span className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
               {plans.length} {plans.length === 1 ? 'plan' : 'plans'}
@@ -499,14 +516,18 @@ const PoojaPauseCancelPage = () => {
 
           <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
             {plans.map((plan) => {
-              const isPaused = Boolean(plan.pause_from || plan.pause_until);
+              const isPaused = isPausedPlan(plan);
               const isActive = plan.is_active;
-              const isCancelled = !isActive && !isPaused;
+              const isCancelled = isCancelledPlan(plan);
               const memberNames = getPlanMemberNames(plan.metadata);
               const isPauseFormOpen = activePausePlanId === plan.id;
               const isCancelFormOpen = activeCancelPlanId === plan.id;
               const actionLoading = planActionState[plan.id];
-              const pauseStillActive = Boolean(plan.pause_until && plan.pause_until >= todayIso());
+              const canPause = !isCancelled;
+              const canCancel = !isPaused && isActive;
+              const canResume = isPaused;
+              const canRerun = !isCancelled;
+              const pauseStillActive = isPaused && Boolean(plan.pause_until && plan.pause_until >= todayIso());
               const rerunLabelDonorName = (plan.donor_name ?? '').trim() || 'this donor';
 
               /* left-border accent color by status */
@@ -577,91 +598,101 @@ const PoojaPauseCancelPage = () => {
                   )}
 
                   {/* ── Action Buttons ───────────────────────────────────── */}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {/* Pause / Update pause */}
-                    <button
-                      type="button"
-                      onClick={() => togglePauseForm(plan.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        isPauseFormOpen
-                          ? 'border-amber-300 bg-amber-50 text-amber-700'
-                          : 'border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-700'
-                      }`}
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-                      </svg>
-                      {isPauseFormOpen ? 'Hide pause' : isPaused ? 'Update pause' : 'Pause'}
-                    </button>
-
-                    {/* Cancel / Resume */}
-                    {!isPaused && isActive ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleCancelForm(plan.id)}
-                        disabled={actionLoading === 'cancel'}
-                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                          isCancelFormOpen
-                            ? 'border-rose-300 bg-rose-50 text-rose-700'
-                            : 'border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600'
-                        }`}
-                      >
-                        {actionLoading === 'cancel' ? (
-                          <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                        ) : (
+                  {(canPause || canCancel || canResume || canRerun) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {/* Pause / Update pause */}
+                      {canPause && (
+                        <button
+                          type="button"
+                          onClick={() => togglePauseForm(plan.id)}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            isPauseFormOpen
+                              ? 'border-amber-300 bg-amber-50 text-amber-700'
+                              : 'border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-700'
+                          }`}
+                        >
                           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
                           </svg>
-                        )}
-                        {actionLoading === 'cancel' ? 'Cancelling…' : isCancelFormOpen ? 'Hide cancel' : 'Cancel plan'}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleResumePlan(plan.id)}
-                        disabled={actionLoading === 'resume'}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-emerald-300 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {actionLoading === 'resume' ? (
-                          <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                        ) : (
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                          </svg>
-                        )}
-                        {actionLoading === 'resume' ? 'Resuming…' : 'Resume'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRerunDonorDue(plan.id)}
-                      disabled={actionLoading === 'rerun' || pauseStillActive}
-                      title={pauseStillActive ? 'Re-run is available only after pause end date.' : undefined}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {actionLoading === 'rerun' ? (
-                        <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                      ) : (
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 1114.11 3.401M19.5 12v4.5m0 0H15" />
-                        </svg>
+                          {isPauseFormOpen ? 'Hide pause' : isPaused ? 'Update pause' : 'Pause'}
+                        </button>
                       )}
-                      {actionLoading === 'rerun'
-                        ? `Re-running for ${rerunLabelDonorName}…`
-                        : pauseStillActive
-                          ? `Re-run for ${rerunLabelDonorName} after pause end`
-                          : `Re-run due for ${rerunLabelDonorName}`}
-                    </button>
-                  </div>
+
+                      {/* Cancel */}
+                      {canCancel && (
+                        <button
+                          type="button"
+                          onClick={() => toggleCancelForm(plan.id)}
+                          disabled={actionLoading === 'cancel'}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                            isCancelFormOpen
+                              ? 'border-rose-300 bg-rose-50 text-rose-700'
+                              : 'border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600'
+                          }`}
+                        >
+                          {actionLoading === 'cancel' ? (
+                            <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                          {actionLoading === 'cancel' ? 'Cancelling…' : isCancelFormOpen ? 'Hide cancel' : 'Cancel plan'}
+                        </button>
+                      )}
+
+                      {/* Resume (paused only, not cancelled) */}
+                      {canResume && (
+                        <button
+                          type="button"
+                          onClick={() => handleResumePlan(plan.id)}
+                          disabled={actionLoading === 'resume'}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-emerald-300 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {actionLoading === 'resume' ? (
+                            <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                            </svg>
+                          )}
+                          {actionLoading === 'resume' ? 'Resuming…' : 'Resume'}
+                        </button>
+                      )}
+
+                      {canRerun && (
+                        <button
+                          type="button"
+                          onClick={() => handleRerunDonorDue(plan.id)}
+                          disabled={actionLoading === 'rerun' || pauseStillActive}
+                          title={pauseStillActive ? 'Re-run is available only after pause end date.' : undefined}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {actionLoading === 'rerun' ? (
+                            <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 1114.11 3.401M19.5 12v4.5m0 0H15" />
+                            </svg>
+                          )}
+                          {actionLoading === 'rerun'
+                            ? `Re-running for ${rerunLabelDonorName}…`
+                            : pauseStillActive
+                              ? `Re-run for ${rerunLabelDonorName} after pause end`
+                              : `Re-run due for ${rerunLabelDonorName}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── Cancel Form ─────────────────────────────────────── */}
                   {isCancelFormOpen && !isPaused && isActive && (
@@ -690,7 +721,7 @@ const PoojaPauseCancelPage = () => {
                   )}
 
                   {/* ── Pause Form ───────────────────────────────────────── */}
-                  {isPauseFormOpen && (
+                  {isPauseFormOpen && canPause && (
                     <div className="mt-4 rounded-xl border border-amber-200 p-4">
                       <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700">Pause Settings</p>
                       <div className="space-y-3">
