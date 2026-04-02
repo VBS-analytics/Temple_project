@@ -78,19 +78,15 @@ def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
     """
     Compute the anchor date used for monthly due generation.
 
-    Dues should never appear before the registration date chosen when the plan
-    was created, even if the computed pooja start date falls in an earlier month.
+    Business rule: recurring dues are anchored to the registration creation date
+    (origin registration when available), not the scheduled start_date.
     """
-    anchor = (
-        plan.start_date
-        or (timezone.localtime(plan.created_at).date() if plan.created_at else None)
-    )
     origin_registration = getattr(plan, "origin_registration", None)
     if origin_registration and origin_registration.created_at:
-        origin_created_date = timezone.localtime(origin_registration.created_at).date()
-        if anchor is None or origin_created_date > anchor:
-            anchor = origin_created_date
-    return anchor
+        return timezone.localtime(origin_registration.created_at).date()
+    if plan.created_at:
+        return timezone.localtime(plan.created_at).date()
+    return plan.start_date
 
 
 def _extract_tamil_star_labels(plan: RecurringPoojaPlan) -> list[str]:
@@ -656,10 +652,17 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None, don
     for donor_id, donor_data in donors_to_process.items():
         plans = donor_data['plans']
 
-        # Find the last successful payment for this donor
+        # Find the last successful payment for this donor.
+        # Ignore future-dated payment_month values so they do not suppress
+        # current-month due creation for reused test donors.
         last_payment = (
             PaymentRecord.objects
-            .filter(donor_id=donor_id, status=PaymentStatus.SUCCESS)
+            .filter(
+                donor_id=donor_id,
+                status=PaymentStatus.SUCCESS,
+                payment_month__isnull=False,
+                payment_month__lte=current_month,
+            )
             .order_by('-payment_month', '-created_at')
             .first()
         )
@@ -933,8 +936,12 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
             duplicates = dues[1:]
 
             if non_chrt_total <= 0:
-                removed, _ = PaymentRecord.objects.filter(pk__in=[d.pk for d in dues]).delete()
-                deleted_count += removed
+                # Donor may have canceled recurring plans. Preserve historical
+                # non-CHRT dues and only remove explicitly CHRT-tagged rows.
+                chrt_dues = [d.pk for d in dues if "CHRT" in (d.notes or "").upper()]
+                if chrt_dues:
+                    removed, _ = PaymentRecord.objects.filter(pk__in=chrt_dues).delete()
+                    deleted_count += removed
                 continue
 
             if keeper.amount != non_chrt_total or "CHRT" in (keeper.notes or ""):

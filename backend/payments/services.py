@@ -27,18 +27,15 @@ def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
     """
     Compute the recurring-due anchor date for passbook generation.
 
-    Dues should not be shown before the origin registration date when one exists.
+    Business rule: recurring dues are anchored to registration creation date
+    (origin registration when available), not scheduled start_date.
     """
-    anchor = (
-        plan.start_date
-        or (timezone.localtime(plan.created_at).date() if plan.created_at else None)
-    )
     origin_registration = getattr(plan, "origin_registration", None)
     if origin_registration and origin_registration.created_at:
-        origin_created_date = timezone.localtime(origin_registration.created_at).date()
-        if anchor is None or origin_created_date > anchor:
-            anchor = origin_created_date
-    return anchor
+        return timezone.localtime(origin_registration.created_at).date()
+    if plan.created_at:
+        return timezone.localtime(plan.created_at).date()
+    return plan.start_date
 
 
 def _parse_iso_date(value: str | None) -> Optional[date]:
