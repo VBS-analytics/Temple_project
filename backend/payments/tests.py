@@ -499,6 +499,87 @@ class PassbookOrderingTests(TestCase):
         self.assertEqual(jan_entries[1].closing_due, Decimal("0.00"))
 
 
+class PassbookCancellationFreezeTests(TestCase):
+    def test_cancel_from_month_freezes_older_month_due_backfill(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000005",
+            name="Cancel Freeze Donor",
+            password="secret",
+        )
+        pooja_option = PoojaOption.objects.create(code="R4", name="Recurring 4")
+        day_option = PoojaDayOption.objects.create(
+            code="REGULAR_CANCEL_TEST",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+
+        # Active baseline plan
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 1, 1),
+            amount=Decimal("500.00"),
+            is_active=True,
+        )
+
+        # Canceled plan effective from Apr 2026 (historical months before Apr must stay as-is)
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="R5", name="Recurring 5"),
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=None,
+            amount=Decimal("2500.00"),
+            is_active=False,
+            pause_from=date(2026, 4, 1),
+            pause_until=date.max,
+            metadata={
+                "canceled_at": "2026-04-02",
+                "cancel_effective_from": "2026-04-01",
+            },
+        )
+
+        # Existing historical dues already stored in records.
+        # Jan must remain ₹500, even though active-plan total for Jan would be ₹3000.
+        for payment_month, amount in (
+            (date(2026, 1, 1), Decimal("500.00")),
+            (date(2026, 2, 1), Decimal("3000.00")),
+            (date(2026, 3, 1), Decimal("3000.00")),
+            (date(2026, 4, 1), Decimal("500.00")),
+        ):
+            PaymentRecord.objects.create(
+                donor=donor,
+                amount=amount,
+                mode="pending",
+                status=PaymentStatus.PENDING,
+                payment_month=payment_month,
+                notes="Monthly recurring pooja contribution due",
+                registration=None,
+            )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 4, 2)):
+            regenerate_donor_passbook(donor.id, ensure_dues=False)
+
+        jan_due_entry = (
+            PassbookEntry.objects.filter(
+                donor=donor,
+                entry_date=date(2026, 1, 1),
+                entry_type="due",
+            )
+            .order_by("id")
+            .first()
+        )
+
+        self.assertIsNotNone(jan_due_entry)
+        self.assertEqual(jan_due_entry.due_amount, Decimal("500.00"))
+
+
 class ExpenseRecordApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
