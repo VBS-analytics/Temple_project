@@ -910,8 +910,19 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
             non_chrt_dues = [due for due in dues if not _is_explicit_chrt_due_note(due.notes)]
 
             if non_chrt_dues:
-                # Keep first generic monthly due row for this month as-is.
+                # Preserve the month-wise generic due total even when historical
+                # rows exist as multiple entries (legacy per-plan rows).
                 keeper = non_chrt_dues[0]
+                merged_non_chrt_total = sum(
+                    (due.amount or Decimal("0.00")) for due in non_chrt_dues
+                )
+                if keeper.amount != merged_non_chrt_total:
+                    keeper.amount = merged_non_chrt_total
+                    if not keeper.notes or _is_explicit_chrt_due_note(keeper.notes):
+                        keeper.notes = "Monthly recurring pooja contribution due"
+                    keeper.save(update_fields=["amount", "notes", "updated_at"])
+                    adjusted_count += 1
+
                 duplicate_ids = [d.pk for d in non_chrt_dues[1:]] + [d.pk for d in explicit_chrt_dues]
                 if duplicate_ids:
                     removed, _ = PaymentRecord.objects.filter(pk__in=duplicate_ids).delete()
@@ -926,11 +937,26 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
                     deleted_count += removed
                 continue
 
-            # Preserve existing amount; only convert note + dedupe.
+            # Preserve month total; convert note + dedupe.
             keeper = explicit_chrt_dues[0]
+            merged_explicit_total = sum(
+                (due.amount or Decimal("0.00")) for due in explicit_chrt_dues
+            )
+            amount_changed = False
+            notes_changed = False
+            if keeper.amount != merged_explicit_total:
+                keeper.amount = merged_explicit_total
+                amount_changed = True
             if _is_explicit_chrt_due_note(keeper.notes):
                 keeper.notes = "Monthly recurring pooja contribution due"
-                keeper.save(update_fields=["notes", "updated_at"])
+                notes_changed = True
+            if amount_changed or notes_changed:
+                update_fields = ["updated_at"]
+                if amount_changed:
+                    update_fields.append("amount")
+                if notes_changed:
+                    update_fields.append("notes")
+                keeper.save(update_fields=update_fields)
                 adjusted_count += 1
 
             duplicate_ids = [d.pk for d in explicit_chrt_dues[1:]]
