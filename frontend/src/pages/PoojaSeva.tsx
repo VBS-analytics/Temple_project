@@ -159,55 +159,41 @@ const PoojaSevasContent = () => {
           One Day Abishekam
         </h3>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-900">Pillayar Koil 1 day abishekam</h4>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-900">Shivan Koil (for Lord Shiva + Ambal)</h4>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-900">Kasi Viswanathar 1 day abishekam</h4>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-900">Subramanya swamy 1 day abishekam</h4>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-900">Ayyanar 1 day abishekam</h4>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-900">Perumal Koil 1 day abishekam</h4>
-              </div>
-            </div>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b-2 border-green-200 bg-green-50">
+                <th className="text-left p-3 font-semibold text-green-900">Pooja Description</th>
+                <th className="text-right p-3 font-semibold text-green-900">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              <tr className="hover:bg-green-50/50">
+                <td className="p-3 text-slate-700">Pillayar Koil 1 day abishekam</td>
+                <td className="p-3 text-right font-semibold text-slate-900">Rs 500</td>
+              </tr>
+              <tr className="hover:bg-green-50/50">
+                <td className="p-3 text-slate-700">Shivan Koil (for Lord Shiva + Ambal)</td>
+                <td className="p-3 text-right font-semibold text-slate-900">Rs 1000</td>
+              </tr>
+              <tr className="hover:bg-green-50/50">
+                <td className="p-3 text-slate-700">Kasi Viswanathar 1 day abishekam</td>
+                <td className="p-3 text-right font-semibold text-slate-900">Rs 500</td>
+              </tr>
+              <tr className="hover:bg-green-50/50">
+                <td className="p-3 text-slate-700">Subramanya swamy 1 day abishekam</td>
+                <td className="p-3 text-right font-semibold text-slate-900">Rs 500</td>
+              </tr>
+              <tr className="hover:bg-green-50/50">
+                <td className="p-3 text-slate-700">Ayyanar 1 day abishekam</td>
+                <td className="p-3 text-right font-semibold text-slate-900">Rs 500</td>
+              </tr>
+              <tr className="hover:bg-green-50/50">
+                <td className="p-3 text-slate-700">Perumal Koil 1 day abishekam</td>
+                <td className="p-3 text-right font-semibold text-slate-900">Rs 500</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
       {/* Special Poojas */}

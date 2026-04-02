@@ -3,9 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import api, { extractResults } from '../../lib/api';
-import { nakshatraOptions } from '../../data/nakshatraOptions';
-import { rasiOptions } from '../../data/familyAttributes';
-import { GothraOptionPayload, useMasterDataStore } from '../../store/masterData';
+import {
+  GothraOptionPayload,
+  NakshatraOptionPayload,
+  RasiOptionPayload,
+  useMasterDataStore,
+} from '../../store/masterData';
 import { DailyScheduleEntry, STATIC_DAILY_HEADER_TEXT } from '../../data/dailyHeaderText';
 
 const generateHeaderCode = (name: string) => {
@@ -180,9 +183,25 @@ const AdminMasterPage = () => {
   const updateGothraOption = useMasterDataStore((state) => state.updateGothraOption);
   const isGothraSaving = useMasterDataStore((state) => state.isGothraSaving);
   const isGothraLoading = useMasterDataStore((state) => state.isGothraLoading);
+  const nakshatraOptions = useMasterDataStore((state) => state.nakshatraOptions);
+  const nakshatraOptionEntries = useMasterDataStore((state) => state.nakshatraOptionEntries);
+  const loadNakshatraOptions = useMasterDataStore((state) => state.loadNakshatraOptions);
+  const updateNakshatraOption = useMasterDataStore((state) => state.updateNakshatraOption);
+  const isNakshatraSaving = useMasterDataStore((state) => state.isNakshatraSaving);
+  const isNakshatraLoading = useMasterDataStore((state) => state.isNakshatraLoading);
+  const rasiOptions = useMasterDataStore((state) => state.rasiOptions);
+  const rasiOptionEntries = useMasterDataStore((state) => state.rasiOptionEntries);
+  const loadRasiOptions = useMasterDataStore((state) => state.loadRasiOptions);
+  const updateRasiOption = useMasterDataStore((state) => state.updateRasiOption);
+  const isRasiSaving = useMasterDataStore((state) => state.isRasiSaving);
+  const isRasiLoading = useMasterDataStore((state) => state.isRasiLoading);
   const [newGothraName, setNewGothraName] = useState('');
   const [editingGothraId, setEditingGothraId] = useState<number | null>(null);
   const [editingGothraName, setEditingGothraName] = useState('');
+  const [editingNakshatraId, setEditingNakshatraId] = useState<number | null>(null);
+  const [editingNakshatraName, setEditingNakshatraName] = useState('');
+  const [editingRasiId, setEditingRasiId] = useState<number | null>(null);
+  const [editingRasiName, setEditingRasiName] = useState('');
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryEntry[]>([]);
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState('');
   const [newExpenseCategoryGroup, setNewExpenseCategoryGroup] = useState<ExpenseCategoryEntry['group_key']>('poojari');
@@ -583,6 +602,66 @@ const AdminMasterPage = () => {
     }
   };
 
+  const startEditingNakshatra = (entry: NakshatraOptionPayload) => {
+    setEditingNakshatraId(entry.id);
+    setEditingNakshatraName(entry.name);
+  };
+
+  const cancelEditingNakshatra = () => {
+    setEditingNakshatraId(null);
+    setEditingNakshatraName('');
+  };
+
+  const handleUpdateNakshatra = async (entry: NakshatraOptionPayload) => {
+    const trimmed = editingNakshatraName.trim();
+    if (!trimmed) {
+      setNotice('Enter a nakshatra name before saving.');
+      return;
+    }
+    if (trimmed === entry.name) {
+      cancelEditingNakshatra();
+      return;
+    }
+    try {
+      await updateNakshatraOption(entry.id, trimmed);
+      setNotice(`Nakshatra ${trimmed} updated successfully.`);
+      cancelEditingNakshatra();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating nakshatra: ${errorMessage}`);
+    }
+  };
+
+  const startEditingRasi = (entry: RasiOptionPayload) => {
+    setEditingRasiId(entry.id);
+    setEditingRasiName(entry.name);
+  };
+
+  const cancelEditingRasi = () => {
+    setEditingRasiId(null);
+    setEditingRasiName('');
+  };
+
+  const handleUpdateRasi = async (entry: RasiOptionPayload) => {
+    const trimmed = editingRasiName.trim();
+    if (!trimmed) {
+      setNotice('Enter a rasi name before saving.');
+      return;
+    }
+    if (trimmed === entry.name) {
+      cancelEditingRasi();
+      return;
+    }
+    try {
+      await updateRasiOption(entry.id, trimmed);
+      setNotice(`Rasi ${trimmed} updated successfully.`);
+      cancelEditingRasi();
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      setNotice(`Error updating rasi: ${errorMessage}`);
+    }
+  };
+
   const startEditingExpenseCategory = (entry: ExpenseCategoryEntry) => {
     setEditingExpenseCategoryId(entry.id);
     setEditingExpenseCategoryName(entry.name);
@@ -863,6 +942,14 @@ const AdminMasterPage = () => {
   }, [loadGothraOptions]);
 
   useEffect(() => {
+    loadNakshatraOptions();
+  }, [loadNakshatraOptions]);
+
+  useEffect(() => {
+    loadRasiOptions();
+  }, [loadRasiOptions]);
+
+  useEffect(() => {
     loadDailyMessages();
   }, [loadDailyMessages]);
 
@@ -876,6 +963,20 @@ const AdminMasterPage = () => {
       setEditingGothraName('');
     }
   }, [editingGothraId, gothraOptionEntries]);
+
+  useEffect(() => {
+    if (editingNakshatraId && !nakshatraOptionEntries.some((entry) => entry.id === editingNakshatraId)) {
+      setEditingNakshatraId(null);
+      setEditingNakshatraName('');
+    }
+  }, [editingNakshatraId, nakshatraOptionEntries]);
+
+  useEffect(() => {
+    if (editingRasiId && !rasiOptionEntries.some((entry) => entry.id === editingRasiId)) {
+      setEditingRasiId(null);
+      setEditingRasiName('');
+    }
+  }, [editingRasiId, rasiOptionEntries]);
 
   useEffect(() => {
     if (editingExpenseCategoryId && !expenseCategories.some((entry) => entry.id === editingExpenseCategoryId)) {
@@ -2351,27 +2452,71 @@ const AdminMasterPage = () => {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-slate-500">
-                    All 27 Tamil nakshatras listed for quick reference.
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    Static list
-                  </p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <p>Nakshatra entries are persisted in master data.</p>
+                  {isNakshatraLoading && <p className="text-slate-400">Refreshing nakshatra list…</p>}
                 </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {nakshatraOptions.map((star, index) => (
-                    <div
-                      key={star}
-                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
-                    >
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
-                        {index + 1}
-                      </span>
-                      <span>{star}</span>
-                    </div>
-                  ))}
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {nakshatraOptionEntries.map((entry, index) => {
+                    const isEditing = editingNakshatraId === entry.id;
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                      >
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                              value={editingNakshatraName}
+                              onChange={(event) => setEditingNakshatraName(event.target.value)}
+                            />
+                          ) : (
+                            <span className="block truncate">{entry.name}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateNakshatra(entry)}
+                                disabled={isNakshatraSaving}
+                                className="text-xs font-semibold text-orange-600 transition hover:text-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingNakshatra}
+                                disabled={isNakshatraSaving}
+                                className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEditingNakshatra(entry)}
+                              className="text-xs font-semibold text-slate-500 transition hover:text-slate-800"
+                              aria-label={`Edit nakshatra ${entry.name}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
+                                <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2388,27 +2533,71 @@ const AdminMasterPage = () => {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-slate-500">
-                    Tamil day codes reference the 12 rasis by default.
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    Read-only list
-                  </p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div className="flex flex-col gap-1 text-xs text-slate-500">
+                  <p>Rasi entries are persisted in master data.</p>
+                  {isRasiLoading && <p className="text-slate-400">Refreshing rasi list…</p>}
                 </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {rasiOptions.map((rasi, index) => (
-                    <div
-                      key={rasi}
-                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
-                    >
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
-                        {index + 1}
-                      </span>
-                      <span>{rasi}</span>
-                    </div>
-                  ))}
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {rasiOptionEntries.map((entry, index) => {
+                    const isEditing = editingRasiId === entry.id;
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                      >
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500 shadow-inner">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                              value={editingRasiName}
+                              onChange={(event) => setEditingRasiName(event.target.value)}
+                            />
+                          ) : (
+                            <span className="block truncate">{entry.name}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateRasi(entry)}
+                                disabled={isRasiSaving}
+                                className="text-xs font-semibold text-orange-600 transition hover:text-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingRasi}
+                                disabled={isRasiSaving}
+                                className="text-xs font-semibold text-slate-500 transition hover:text-slate-700 disabled:opacity-40"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEditingRasi(entry)}
+                              className="text-xs font-semibold text-slate-500 transition hover:text-slate-800"
+                              aria-label={`Edit rasi ${entry.name}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L4 13.172V16h2.828l10.586-10.586a2 2 0 000-2.828z" />
+                                <path d="M5 13l-1 3 3-1L16.586 5.414l-2-2L5 13z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

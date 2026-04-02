@@ -164,13 +164,22 @@ const formatDailyHeaderForCopy = (
   const normalizedDayOptionValue = (dayOptionValue ?? '').toLowerCase();
   const hasPradosham = normalizedDayOptionValue.includes('pradosham (trayodashi)');
   const containsSankatachaturti = normalizedDayOptionValue.includes('on sankatachaturti day of month');
+  const containsSecondAshtami = normalizedDayOptionValue.includes('2 ashtami');
+  const containsFirstTuesday = normalizedDayOptionValue.includes('1st tuesday');
+  const containsLastSaturday = normalizedDayOptionValue.includes('last sat day of month');
   const specialForPradosham = hasPradosham ? specialAnnouncements.ADMSG3 : undefined;
   const specialForSankatachaturti = containsSankatachaturti ? specialAnnouncements.ADMSG1 : undefined;
+  const specialForSecondAshtami = containsSecondAshtami ? specialAnnouncements.ADMSG2 : undefined;
+  const specialForFirstTuesday = containsFirstTuesday ? specialAnnouncements.ADMSG5 : undefined;
+  const specialForLastSaturday = containsLastSaturday ? specialAnnouncements.ADMSG4 : undefined;
   const headerSegments = [
     baseHeader,
     specialForSunday,
     specialForPradosham,
     specialForSankatachaturti,
+    specialForSecondAshtami,
+    specialForFirstTuesday,
+    specialForLastSaturday,
   ].filter(Boolean);
   return headerSegments.length > 0 ? headerSegments.join('\n') : EMPTY_VALUE;
 };
