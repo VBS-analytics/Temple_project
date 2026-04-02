@@ -26,6 +26,7 @@ from pooja.models import (
     RecurrenceKind,
     RecurringPoojaPlan,
 )
+from pooja.services.recurrence import _clean_stale_chrt_dues
 from payments.models import PassbookEntry
 from payments.models import (
     AdditionIncomeRecord,
@@ -578,6 +579,113 @@ class PassbookCancellationFreezeTests(TestCase):
 
         self.assertIsNotNone(jan_due_entry)
         self.assertEqual(jan_due_entry.due_amount, Decimal("500.00"))
+
+
+class RecurringDueGenerationEdgeCaseTests(TestCase):
+    def test_future_success_payment_month_does_not_block_current_month_due(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000006",
+            name="Future Payment Donor",
+            password="secret",
+        )
+        pooja_option = PoojaOption.objects.create(code="R6", name="Recurring 6")
+        day_option = PoojaDayOption.objects.create(
+            code="REGFUTPAY",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 4, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("1000.00"),
+            is_active=True,
+        )
+
+        # Future-month success payment should not suppress April due generation.
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("1000.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="FUTURE-TXN-1",
+            payment_month=date(2026, 5, 1),
+        )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 4, 2)):
+            regenerate_donor_passbook(donor.id)
+
+        april_due = PaymentRecord.objects.filter(
+            donor=donor,
+            registration__isnull=True,
+            status=PaymentStatus.PENDING,
+            payment_month=date(2026, 4, 1),
+        ).first()
+
+        self.assertIsNotNone(april_due)
+        self.assertEqual(april_due.amount, Decimal("1000.00"))
+
+
+class ChrtCleanupSafetyTests(TestCase):
+    def test_cleanup_preserves_non_chrt_historical_dues_for_canceled_plan(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000007",
+            name="Cleanup Safety Donor",
+            password="secret",
+        )
+        pooja_option = PoojaOption.objects.create(code="R7", name="Recurring 7")
+        day_option = PoojaDayOption.objects.create(
+            code="REGSAFE",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=None,
+            amount=Decimal("1000.00"),
+            is_active=False,
+            pause_from=date(2026, 4, 1),
+            pause_until=date.max,
+            metadata={
+                "canceled_at": "2026-04-03",
+                "cancel_effective_from": "2026-04-01",
+            },
+        )
+
+        for month_start in (date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)):
+            PaymentRecord.objects.create(
+                donor=donor,
+                amount=Decimal("1000.00"),
+                mode="pending",
+                status=PaymentStatus.PENDING,
+                payment_month=month_start,
+                notes="Monthly recurring pooja contribution due",
+                registration=None,
+            )
+
+        _clean_stale_chrt_dues(today=date(2026, 4, 3))
+
+        remaining_months = list(
+            PaymentRecord.objects.filter(
+                donor=donor,
+                status=PaymentStatus.PENDING,
+                registration__isnull=True,
+            )
+            .order_by("payment_month")
+            .values_list("payment_month", flat=True)
+        )
+        self.assertEqual(remaining_months, [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)])
 
 
 class ExpenseRecordApiTests(TestCase):

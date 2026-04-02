@@ -1445,4 +1445,3 @@ const DonorPoojaDetails = () => {
 };
 
 export default DonorPoojaDetails;
-

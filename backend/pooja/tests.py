@@ -2216,7 +2216,7 @@ class RecurringMonthlyDueBackfillTests(TestCase):
         """
         current_date = date(2026, 2, 3)
 
-        RecurringPoojaPlan.objects.create(
+        plan = RecurringPoojaPlan.objects.create(
             donor=self.donor,
             pooja_option=self.pooja_option,
             day_option=self.day_option,
@@ -2226,6 +2226,9 @@ class RecurringMonthlyDueBackfillTests(TestCase):
             next_occurrence=date(2026, 1, 1),
             amount=Decimal("200.00"),
             is_active=True,
+        )
+        RecurringPoojaPlan.objects.filter(pk=plan.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 1, 1, 9, 0)),
         )
 
         process_recurring_plans(today=current_date)
@@ -2257,10 +2260,10 @@ class RecurringMonthlyDueBackfillTests(TestCase):
         self.assertEqual(entries[2].due_amount, Decimal("200.00"))
         self.assertEqual(entries[-1].closing_due, Decimal("400.00"))
 
-    def test_future_start_date_does_not_create_due_in_registration_created_month(self):
+    def test_future_start_date_still_creates_due_from_registration_created_month(self):
         """
-        If a recurring plan starts in a future month, dues must start from the plan's
-        start month, even when the originating registration was created earlier.
+        If a recurring plan has a future start_date, dues should still start from the
+        registration created month.
         """
         february_run_date = date(2026, 2, 20)
         march_start = date(2026, 3, 1)
@@ -2297,7 +2300,11 @@ class RecurringMonthlyDueBackfillTests(TestCase):
             status=PaymentStatus.PENDING,
             registration__isnull=True,
         )
-        self.assertFalse(february_due.exists(), "February due must not be created before March start_date.")
+        self.assertEqual(
+            february_due.count(),
+            1,
+            "February due should be created from registration created month.",
+        )
 
         process_recurring_plans(today=date(2026, 3, 20))
 
