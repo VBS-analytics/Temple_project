@@ -47,6 +47,20 @@ def _parse_iso_date(value: str | None) -> Optional[date]:
         return None
 
 
+def _is_chrt_registration(registration: PoojaRegistration) -> bool:
+    day_option = getattr(registration, "day_option", None)
+    code = ((getattr(day_option, "code", "") or "").strip()).upper()
+    if code == "CHRT":
+        return True
+
+    description = ((getattr(day_option, "description", "") or "").strip()).lower()
+    if "preferred date" in description or "chrt" in description:
+        return True
+
+    notes = ((registration.additional_notes or "").strip()).lower()
+    return "preferred date" in notes or "chrt" in notes
+
+
 def _plan_cancel_effective_month(plan: RecurringPoojaPlan) -> Optional[date]:
     """
     Return the first month from which a plan cancellation is effective.
@@ -157,7 +171,9 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         # Get all payment and registration records for this donor
         payment_records = PaymentRecord.objects.filter(donor=donor).order_by("created_at")
         registration_records = list(
-            PoojaRegistration.objects.filter(donor__id=donor_id).order_by("created_at")
+            PoojaRegistration.objects.filter(donor__id=donor_id)
+            .select_related("day_option")
+            .order_by("created_at")
         )
 
         # Track which months already have registrations to avoid double-counting
@@ -272,12 +288,17 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         #   non-CHRT monthly recurring total + sum(CHRT plan amounts in that month)
         # and we only bump when current consolidated amount is lower.
         # ------------------------------------------------------------------
-        chrt_amounts_by_month: dict[date, Decimal] = {}
+        chrt_plan_amounts_by_month: dict[date, Decimal] = {}
         chrt_plans = RecurringPoojaPlan.objects.filter(
             donor_id=donor_id,
             is_active=True,
             recurrence_kind=RecurrenceKind.RECURRING,
         ).filter(Q(day_option__code="CHRT") | Q(one_time_date__isnull=False))
+        chrt_plan_origin_registration_ids = {
+            plan.origin_registration_id
+            for plan in chrt_plans
+            if plan.origin_registration_id
+        }
 
         for plan in chrt_plans:
             preferred_date = plan.one_time_date or plan.start_date or (plan.created_at.date() if plan.created_at else None)
@@ -289,11 +310,33 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             plan_amount = Decimal(str(plan.amount or "0.00"))
             if plan_amount <= 0:
                 continue
-            chrt_amounts_by_month[preferred_month] = (
-                chrt_amounts_by_month.get(preferred_month, Decimal("0.00")) + plan_amount
+            chrt_plan_amounts_by_month[preferred_month] = (
+                chrt_plan_amounts_by_month.get(preferred_month, Decimal("0.00")) + plan_amount
             )
 
-        for month_start, chrt_total_for_month in chrt_amounts_by_month.items():
+        chrt_registration_amounts_by_month: dict[date, Decimal] = {}
+        for registration in registration_records:
+            if registration.id in chrt_plan_origin_registration_ids:
+                continue
+            if not _is_chrt_registration(registration):
+                continue
+            preferred_date = registration.start_date or (
+                registration.created_at.date() if registration.created_at else None
+            )
+            if not preferred_date:
+                continue
+            preferred_month = preferred_date.replace(day=1)
+            if preferred_month < anchor_date.replace(day=1) or preferred_month > current_month:
+                continue
+            reg_amount = Decimal(str(registration.total_amount or "0.00"))
+            if reg_amount <= 0:
+                continue
+            chrt_registration_amounts_by_month[preferred_month] = (
+                chrt_registration_amounts_by_month.get(preferred_month, Decimal("0.00")) + reg_amount
+            )
+
+        all_chrt_months = set(chrt_plan_amounts_by_month.keys()) | set(chrt_registration_amounts_by_month.keys())
+        for month_start in all_chrt_months:
             existing = monthly_dues_by_month.get(month_start)
             if (
                 historical_freeze_month
@@ -302,8 +345,16 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             ):
                 months_with_monthly_due.add(month_start)
                 continue
+            plan_chrt_total_for_month = chrt_plan_amounts_by_month.get(month_start, Decimal("0.00"))
+            registration_chrt_total_for_month = chrt_registration_amounts_by_month.get(month_start, Decimal("0.00"))
             base_non_chrt = _calculate_recurring_month_total_for_donor(donor_id, month_start)
-            target_amount = base_non_chrt + chrt_total_for_month
+            target_amount = base_non_chrt + plan_chrt_total_for_month
+            if existing is not None or base_non_chrt > 0 or plan_chrt_total_for_month > 0:
+                target_amount += registration_chrt_total_for_month
+            elif registration_chrt_total_for_month > 0:
+                # Pure registration-only CHRT months (no consolidated recurring due)
+                # should continue to appear as registration-based rows.
+                continue
             existing_amount = existing["amount"] if existing else Decimal("0.00")
             if existing_amount < target_amount:
                 monthly_dues_by_month[month_start] = {
