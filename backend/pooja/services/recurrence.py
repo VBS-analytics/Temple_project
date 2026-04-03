@@ -145,6 +145,20 @@ def _plan_is_eligible_for_month(plan: RecurringPoojaPlan, month_start: date) -> 
     anchor = _plan_due_anchor_date(plan)
     if not anchor or anchor.replace(day=1) > month_start:
         return False
+    
+    # Check if plan is cancelled and exclude from months on/after cancellation date
+    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+    cancel_effective_from = metadata.get("cancel_effective_from")
+    if isinstance(cancel_effective_from, str):
+        try:
+            cancel_date = date.fromisoformat(cancel_effective_from.split("T", 1)[0].strip())
+            cancel_month = cancel_date.replace(day=1)
+            if month_start >= cancel_month:
+                # Plan is cancelled from this month onwards
+                return False
+        except (ValueError, AttributeError):
+            pass
+    
     if plan.is_active:
         return True
     if not plan.pause_from:
@@ -876,18 +890,6 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
         if has_active_chrt:
             continue
 
-        non_chrt_total = (
-            RecurringPoojaPlan.objects.filter(
-                donor_id=donor_id,
-                is_active=True,
-                recurrence_kind=RecurrenceKind.RECURRING,
-            )
-            .exclude(_chrt_plan_filter())
-            .aggregate(total=Sum("amount"))
-            .get("total")
-            or Decimal("0.00")
-        )
-
         stale_dues = (
             PaymentRecord.objects.filter(
                 donor_id=donor_id,
@@ -909,43 +911,17 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
             explicit_chrt_dues = [due for due in dues if _is_explicit_chrt_due_note(due.notes)]
             non_chrt_dues = [due for due in dues if not _is_explicit_chrt_due_note(due.notes)]
 
-            if non_chrt_dues:
-                # Preserve the month-wise generic due total even when historical
-                # rows exist as multiple entries (legacy per-plan rows).
-                keeper = non_chrt_dues[0]
-                merged_non_chrt_total = sum(
-                    (due.amount or Decimal("0.00")) for due in non_chrt_dues
-                )
-                if keeper.amount != merged_non_chrt_total:
-                    keeper.amount = merged_non_chrt_total
-                    if not keeper.notes or _is_explicit_chrt_due_note(keeper.notes):
-                        keeper.notes = "Monthly recurring pooja contribution due"
-                    keeper.save(update_fields=["amount", "notes", "updated_at"])
-                    adjusted_count += 1
-
-                duplicate_ids = [d.pk for d in non_chrt_dues[1:]] + [d.pk for d in explicit_chrt_dues]
-                if duplicate_ids:
-                    removed, _ = PaymentRecord.objects.filter(pk__in=duplicate_ids).delete()
-                    deleted_count += removed
-                continue
-
-            # Only explicit CHRT dues exist for this month.
-            if non_chrt_total <= 0:
-                explicit_ids = [d.pk for d in explicit_chrt_dues]
-                if explicit_ids:
-                    removed, _ = PaymentRecord.objects.filter(pk__in=explicit_ids).delete()
-                    deleted_count += removed
-                continue
-
-            # Preserve month total; convert note + dedupe.
-            keeper = explicit_chrt_dues[0]
-            merged_explicit_total = sum(
-                (due.amount or Decimal("0.00")) for due in explicit_chrt_dues
+            # For historical safety, preserve the entire month total irrespective of
+            # legacy note text (generic vs explicit CHRT). This prevents accidental
+            # drops like 2000 -> 1000 during dedupe.
+            keeper = non_chrt_dues[0] if non_chrt_dues else explicit_chrt_dues[0]
+            merged_month_total = sum(
+                (due.amount or Decimal("0.00")) for due in dues
             )
             amount_changed = False
             notes_changed = False
-            if keeper.amount != merged_explicit_total:
-                keeper.amount = merged_explicit_total
+            if keeper.amount != merged_month_total:
+                keeper.amount = merged_month_total
                 amount_changed = True
             if _is_explicit_chrt_due_note(keeper.notes):
                 keeper.notes = "Monthly recurring pooja contribution due"
@@ -959,7 +935,7 @@ def _clean_stale_chrt_dues(today: Optional[date] = None) -> int:
                 keeper.save(update_fields=update_fields)
                 adjusted_count += 1
 
-            duplicate_ids = [d.pk for d in explicit_chrt_dues[1:]]
+            duplicate_ids = [d.pk for d in dues if d.pk != keeper.pk]
             if duplicate_ids:
                 removed, _ = PaymentRecord.objects.filter(pk__in=duplicate_ids).delete()
                 deleted_count += removed
