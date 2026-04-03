@@ -675,6 +675,113 @@ class PassbookCancellationFreezeTests(TestCase):
         self.assertEqual(jan_due_entries[0].due_amount, Decimal("1500.00"))
 
 
+class PassbookChrtRegistrationMergeTests(TestCase):
+    def setUp(self):
+        self.recurring_day_option = PoojaDayOption.objects.create(
+            code="REG_CHRT_MERGE",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+        self.chrt_day_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CHRT",
+            defaults={
+                "description": "Choose your preferred date",
+                "category": DayOptionCategory.CODE,
+            },
+        )
+
+    def test_orphan_chrt_registration_amount_is_added_into_existing_monthly_due(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000012",
+            name="CHRT Merge Donor",
+            password="secret",
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM1", name="Recurring Base"),
+            day_option=self.recurring_day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("1500.00"),
+            is_active=True,
+        )
+
+        # CHRT registration without an originating recurring CHRT plan.
+        PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM2", name="Mahashivrathri"),
+            day_option=self.chrt_day_option,
+            start_date=date(2026, 2, 15),
+            total_amount=Decimal("1500.00"),
+        )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 4, 3)):
+            regenerate_donor_passbook(donor.id, ensure_dues=False)
+
+        feb_due_entries = list(
+            PassbookEntry.objects.filter(
+                donor=donor,
+                entry_type="due",
+                entry_date__year=2026,
+                entry_date__month=2,
+            ).order_by("entry_date", "id")
+        )
+
+        self.assertEqual(len(feb_due_entries), 1)
+        self.assertEqual(feb_due_entries[0].entry_date, date(2026, 2, 1))
+        self.assertEqual(feb_due_entries[0].due_amount, Decimal("3000.00"))
+
+    def test_april_chrt_registration_is_added_to_april_recurring_due(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000013",
+            name="CHRT April Merge Donor",
+            password="secret",
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM3", name="Recurring Base 2"),
+            day_option=self.recurring_day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("200.00"),
+            is_active=True,
+        )
+
+        # Registered in March, preferred for April.
+        registration = PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM4", name="Gen Donation"),
+            day_option=self.chrt_day_option,
+            start_date=date(2026, 4, 1),
+            total_amount=Decimal("100.00"),
+        )
+        PoojaRegistration.objects.filter(pk=registration.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 3, 1, 10, 0, 0))
+        )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 4, 3)):
+            regenerate_donor_passbook(donor.id, ensure_dues=False)
+
+        april_due = (
+            PassbookEntry.objects.filter(
+                donor=donor,
+                entry_type="due",
+                entry_date=date(2026, 4, 1),
+            )
+            .order_by("id")
+            .first()
+        )
+
+        self.assertIsNotNone(april_due)
+        self.assertEqual(april_due.due_amount, Decimal("300.00"))
+
+
 class RecurringDueGenerationEdgeCaseTests(TestCase):
     def test_future_success_payment_month_does_not_block_current_month_due(self):
         donor = User.objects.create_user(
