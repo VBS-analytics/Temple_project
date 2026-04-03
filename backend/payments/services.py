@@ -338,24 +338,40 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         all_chrt_months = set(chrt_plan_amounts_by_month.keys()) | set(chrt_registration_amounts_by_month.keys())
         for month_start in all_chrt_months:
             existing = monthly_dues_by_month.get(month_start)
+            existing_amount = existing["amount"] if existing else Decimal("0.00")
+            plan_chrt_total_for_month = chrt_plan_amounts_by_month.get(month_start, Decimal("0.00"))
+            registration_chrt_total_for_month = chrt_registration_amounts_by_month.get(month_start, Decimal("0.00"))
+            total_chrt_for_month = plan_chrt_total_for_month + registration_chrt_total_for_month
+
+            # Pure registration-only CHRT months (no consolidated recurring due)
+            # should continue to appear as registration-based rows.
             if (
+                existing is None
+                and plan_chrt_total_for_month <= 0
+                and registration_chrt_total_for_month > 0
+            ):
+                continue
+
+            base_non_chrt = _calculate_recurring_month_total_for_donor(donor_id, month_start)
+
+            frozen_historical_existing = bool(
                 historical_freeze_month
                 and month_start < historical_freeze_month
                 and existing is not None
-            ):
-                months_with_monthly_due.add(month_start)
-                continue
-            plan_chrt_total_for_month = chrt_plan_amounts_by_month.get(month_start, Decimal("0.00"))
-            registration_chrt_total_for_month = chrt_registration_amounts_by_month.get(month_start, Decimal("0.00"))
-            base_non_chrt = _calculate_recurring_month_total_for_donor(donor_id, month_start)
-            target_amount = base_non_chrt + plan_chrt_total_for_month
-            if existing is not None or base_non_chrt > 0 or plan_chrt_total_for_month > 0:
-                target_amount += registration_chrt_total_for_month
-            elif registration_chrt_total_for_month > 0:
-                # Pure registration-only CHRT months (no consolidated recurring due)
-                # should continue to appear as registration-based rows.
-                continue
-            existing_amount = existing["amount"] if existing else Decimal("0.00")
+            )
+            if frozen_historical_existing:
+                # Historical freeze: never recalculate non-CHRT historical dues.
+                # But if the existing frozen amount exactly matches current non-CHRT
+                # baseline, we can safely add missing CHRT for this month.
+                if total_chrt_for_month <= 0 or existing_amount != base_non_chrt:
+                    months_with_monthly_due.add(month_start)
+                    continue
+                target_amount = existing_amount + total_chrt_for_month
+            else:
+                target_amount = base_non_chrt + plan_chrt_total_for_month
+                if existing is not None or base_non_chrt > 0 or plan_chrt_total_for_month > 0:
+                    target_amount += registration_chrt_total_for_month
+
             if existing_amount < target_amount:
                 monthly_dues_by_month[month_start] = {
                     "record": existing["record"] if existing else None,

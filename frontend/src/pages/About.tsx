@@ -169,6 +169,14 @@ const aboutUsAcknowledgements: string[] = [
   "Shri Radhakrishna Sastrigal from our village, for bringing 20 known contacts from outside Kakkalani village families as regular members in our group.",
   "We sincerely thanks Mr Ravichandran for spontaneously giving return advance of Rs 50,000/- in the year of 2022 to start this group. With this support only we are what we are today.",
   "We sincerely thanks Mr Chander Mahalingam helping us develop this webpage and application totally at his own expense.",
+  "We sincerely thank Mrs Hamsika Vignesh,for landscaping our village with important locations. This is hosted in the login page. It becomes a recap for those who have visited village already and gives a realistic picture for those who never visited our village so far.Hamsika has not got opportunity to visit our village yet.She is married to Mr Vignesh Ganesh(son of Mr Ganesh J(L) & Raji Ganesh), grandson of Mrs Jayaraman from Sambashivan Iyer family)",
+];
+
+const aboutUsProjects: string[] = [
+  "Organising regular temple poojas, annual functions, and festival support with volunteers.",
+  "Coordinating prasadam distribution and donor/community participation for temple activities.",
+  "Supporting cleanliness and infrastructure-related improvements around the temple areas.",
+  "Building and maintaining the group website and donor platform for transparent coordination.",
 ];
 
 // --- Reusable UI Components ----------------------------------------------
@@ -285,7 +293,7 @@ type AboutPageProps = {
 export default function AboutPage({ embedded = false }: AboutPageProps) {
   const location = useLocation();
   const [activeSection, setActiveSection] = useState<
-    "about" | "founder" | "committee" | "family-tree"
+    "about" | "founder" | "committee" | "family-tree" | "projects" | "sincere-thanks"
   >("about");
 
   useEffect(() => {
@@ -293,6 +301,8 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
     if (hash === "founder-members") { setActiveSection("founder"); return; }
     if (hash === "committee-members") { setActiveSection("committee"); return; }
     if (hash === "family-tree") { setActiveSection("family-tree"); return; }
+    if (hash === "projects") { setActiveSection("projects"); return; }
+    if (hash === "sincere-thanks") { setActiveSection("sincere-thanks"); return; }
     setActiveSection("about");
   }, [location.hash]);
 
@@ -338,13 +348,15 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
 
             {/* Navigation Tabs */}
             <div className="w-full max-w-4xl mx-auto">
-              <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
                 {(
                   [
-                    { key: "about",       label: "About Us"          },
+                    { key: "about",       label: "About our group & its objectives." },
                     { key: "founder",     label: "Founder Members"    },
                     { key: "committee",   label: "Committee Members"  },
                     { key: "family-tree", label: "Family Tree"        },
+                    { key: "projects",    label: "Projects done by this group so far" },
+                    { key: "sincere-thanks", label: "Sincere thanks" },
                   ] as { key: typeof activeSection; label: string }[]
                 ).map(({ key, label }) => (
                   <button
@@ -395,23 +407,6 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
                     ))}
                   </ul>
                 </div>
-
-                <div className="mt-8 sm:mt-10 pt-6 sm:pt-8 border-t border-[#efd9cf]">
-                  <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-[#2e2018] mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3">
-                    <span className="w-1 sm:w-1.5 h-6 sm:h-8 rounded-full flex-shrink-0" style={{ background: "linear-gradient(to bottom, #a33a2b, #7e2a20)" }} />
-                    <span className="break-words">Sincere Thanks</span>
-                  </h3>
-                  <ol className="space-y-3 sm:space-y-4 mt-4">
-                    {aboutUsAcknowledgements.map((acknowledgement, idx) => (
-                      <li key={idx} className="flex items-start gap-3 sm:gap-4 text-[#5f4636]">
-                        <span className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full text-white flex items-center justify-center text-xs font-bold" style={{ background: "linear-gradient(135deg, #a33a2b, #7e2a20)" }}>
-                          {idx + 1}
-                        </span>
-                        <span className="text-sm sm:text-base leading-relaxed flex-1 break-words">{acknowledgement}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
               </section>
             )}
 
@@ -436,6 +431,50 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
             {activeSection === "family-tree" && (
               <section id="family-tree">
                 <FamilyTreePage embedded />
+              </section>
+            )}
+
+            {activeSection === "projects" && (
+              <section
+                id="projects"
+                className="bg-[#fffdf8] rounded-2xl sm:rounded-3xl shadow-sm border border-[#efd9cf] hover:shadow-xl hover:border-[#a33a2b] transition-all duration-500 p-4 sm:p-6 md:p-8 lg:p-12"
+              >
+                <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-[#2e2018] mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3">
+                  <span className="w-1 sm:w-1.5 h-6 sm:h-8 rounded-full flex-shrink-0" style={{ background: "linear-gradient(to bottom, #a33a2b, #7e2a20)" }} />
+                  <span className="break-words">Projects done by this group so far</span>
+                </h3>
+                <ul className="space-y-3 sm:space-y-4 mt-4">
+                  {aboutUsProjects.map((project, idx) => (
+                    <li key={idx} className="flex items-start gap-3 sm:gap-4 text-[#5f4636]">
+                      <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5" style={{ background: "#efd9cf", color: "#7e2a20" }}>
+                        ✓
+                      </span>
+                      <span className="text-sm sm:text-base leading-relaxed break-words flex-1">{project}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {activeSection === "sincere-thanks" && (
+              <section
+                id="sincere-thanks"
+                className="bg-[#fffdf8] rounded-2xl sm:rounded-3xl shadow-sm border border-[#efd9cf] hover:shadow-xl hover:border-[#a33a2b] transition-all duration-500 p-4 sm:p-6 md:p-8 lg:p-12"
+              >
+                <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-[#2e2018] mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3">
+                  <span className="w-1 sm:w-1.5 h-6 sm:h-8 rounded-full flex-shrink-0" style={{ background: "linear-gradient(to bottom, #a33a2b, #7e2a20)" }} />
+                  <span className="break-words">Sincere thanks</span>
+                </h3>
+                <ol className="space-y-3 sm:space-y-4 mt-4">
+                  {aboutUsAcknowledgements.map((acknowledgement, idx) => (
+                    <li key={idx} className="flex items-start gap-3 sm:gap-4 text-[#5f4636]">
+                      <span className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full text-white flex items-center justify-center text-xs font-bold" style={{ background: "linear-gradient(135deg, #a33a2b, #7e2a20)" }}>
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm sm:text-base leading-relaxed flex-1 break-words">{acknowledgement}</span>
+                    </li>
+                  ))}
+                </ol>
               </section>
             )}
           </div>

@@ -781,6 +781,79 @@ class PassbookChrtRegistrationMergeTests(TestCase):
         self.assertIsNotNone(april_due)
         self.assertEqual(april_due.due_amount, Decimal("300.00"))
 
+    def test_frozen_historical_month_still_gets_missing_chrt_when_base_matches(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000014",
+            name="CHRT Frozen Merge Donor",
+            password="secret",
+        )
+
+        # Active recurring contribution.
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM5", name="Recurring Active"),
+            day_option=self.recurring_day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("1500.00"),
+            is_active=True,
+        )
+        # Canceled plan effective from April enables historical freeze.
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM6", name="Recurring Canceled"),
+            day_option=self.recurring_day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=None,
+            amount=Decimal("500.00"),
+            is_active=False,
+            pause_from=date(2026, 4, 1),
+            pause_until=date.max,
+            metadata={
+                "canceled_at": "2026-04-02",
+                "cancel_effective_from": "2026-04-01",
+            },
+        )
+
+        # Existing frozen historical due for Feb (recurring only, CHRT missing).
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("1500.00"),
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=date(2026, 2, 1),
+            notes="Monthly recurring pooja contribution due",
+            registration=None,
+        )
+
+        # CHRT registration preferred for Feb should be merged on top.
+        PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="CRM7", name="Mahashivrathri"),
+            day_option=self.chrt_day_option,
+            start_date=date(2026, 2, 15),
+            total_amount=Decimal("1500.00"),
+        )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 4, 3)):
+            regenerate_donor_passbook(donor.id, ensure_dues=False)
+
+        feb_due = (
+            PassbookEntry.objects.filter(
+                donor=donor,
+                entry_type="due",
+                entry_date=date(2026, 2, 1),
+            )
+            .order_by("id")
+            .first()
+        )
+        self.assertIsNotNone(feb_due)
+        self.assertEqual(feb_due.due_amount, Decimal("3000.00"))
+
 
 class RecurringDueGenerationEdgeCaseTests(TestCase):
     def test_future_success_payment_month_does_not_block_current_month_due(self):
