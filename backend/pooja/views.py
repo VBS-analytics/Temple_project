@@ -12,7 +12,7 @@ from typing import Any
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, Exists, F, Max, OuterRef, Prefetch, Q, Sum
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -1356,6 +1356,10 @@ class RecurringPoojaPlanViewSet(
         pause_reason = pause_metadata.get("pause_reason")
         pause_handling_amount = pause_metadata.get("pause_handling_amount")
         pause_until = plan.pause_until
+        was_canceled = (
+            pause_until == date.max
+            or isinstance(pause_metadata.get("cancel_effective_from"), str)
+        )
         today = timezone.localdate()
         reactivated = self._reactivate_plan(
             plan,
@@ -1381,6 +1385,22 @@ class RecurringPoojaPlanViewSet(
                 and amount_to_reverse > Decimal("0.00")
             ):
                 _debit_monthly_donation(plan.donor, amount_to_reverse)
+        if reactivated and was_canceled:
+            earliest_month = (
+                PaymentRecord.objects.filter(
+                    donor_id=plan.donor_id,
+                    payment_month__isnull=False,
+                )
+                .aggregate(first_month=Min("payment_month"))
+                .get("first_month")
+            )
+            recalculate_pending_dues_for_donor_window(
+                donor_id=plan.donor_id,
+                window_start=earliest_month or today,
+                window_end=today,
+                today=today,
+                skip_success_months=False,
+            )
         serializer = self.get_serializer(plan)
         return Response(serializer.data)
 
