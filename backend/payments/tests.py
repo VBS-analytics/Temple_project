@@ -813,6 +813,62 @@ class ChrtCleanupSafetyTests(TestCase):
         self.assertEqual(jan_rows[0].amount, Decimal("2000.00"))
         self.assertEqual(jan_rows[0].notes, "Monthly recurring pooja contribution due")
 
+    def test_cleanup_merges_mixed_generic_and_chrt_noted_rows_without_amount_loss(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000010",
+            name="Cleanup Mixed Note Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="REGSAFE4",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="R10A", name="Recurring 10 Active"),
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 4, 1),
+            amount=Decimal("1000.00"),
+            is_active=True,
+        )
+
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("1000.00"),
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=date(2026, 1, 1),
+            notes="Monthly recurring pooja contribution due",
+            registration=None,
+        )
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("1000.00"),
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=date(2026, 1, 1),
+            notes="CHRT (Preferred Date) pooja contribution due",
+            registration=None,
+        )
+
+        _clean_stale_chrt_dues(today=date(2026, 4, 3))
+
+        jan_rows = list(
+            PaymentRecord.objects.filter(
+                donor=donor,
+                status=PaymentStatus.PENDING,
+                registration__isnull=True,
+                payment_month=date(2026, 1, 1),
+            ).order_by("id")
+        )
+        self.assertEqual(len(jan_rows), 1)
+        self.assertEqual(jan_rows[0].amount, Decimal("2000.00"))
+        self.assertEqual(jan_rows[0].notes, "Monthly recurring pooja contribution due")
+
 
 class ExpenseRecordApiTests(TestCase):
     def setUp(self):
