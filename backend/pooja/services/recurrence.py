@@ -216,6 +216,7 @@ def recalculate_pending_dues_for_donor_window(
     window_end: date,
     *,
     today: Optional[date] = None,
+    skip_success_months: bool = True,
 ) -> Dict[str, int]:
     """Recalculate donor pending monthly dues in a month window.
 
@@ -233,7 +234,7 @@ def recalculate_pending_dues_for_donor_window(
     stats = {"months_processed": 0, "due_updated": 0, "due_deleted": 0, "due_created": 0}
     for month_start in _month_range(start_month, end_month):
         stats["months_processed"] += 1
-        if PaymentRecord.objects.filter(
+        if skip_success_months and PaymentRecord.objects.filter(
             donor_id=donor_id,
             payment_month=month_start,
             status=PaymentStatus.SUCCESS,

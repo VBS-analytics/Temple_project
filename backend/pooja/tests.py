@@ -1528,7 +1528,7 @@ class RecurringPoojaPlanPauseTests(TestCase):
             role=UserRole.ADMIN,
             is_staff=True,
         )
-        DonorProfile.objects.create(user=self.user)
+        DonorProfile.objects.get_or_create(user=self.user)
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
         self.admin_client = APIClient()
@@ -1675,6 +1675,106 @@ class RecurringPoojaPlanPauseTests(TestCase):
         self.assertEqual(resume_response.status_code, 200)
         profile = DonorProfile.objects.get(user=self.user)
         self.assertEqual(profile.custom_number, 0)
+
+    def test_resume_then_cancel_keeps_pre_cancel_month_dues_unchanged(self):
+        today = date(2026, 4, 3)
+        month_jan = date(2026, 1, 1)
+        month_feb = date(2026, 2, 1)
+        month_mar = date(2026, 3, 1)
+        month_apr = date(2026, 4, 1)
+        created_at_jan = timezone.make_aware(datetime(2026, 1, 5, 9, 0, 0))
+
+        canceled_plan = RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=PoojaOption.objects.create(code="RP2", name="Recurring Cancelled"),
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=month_jan,
+            next_occurrence=None,
+            amount=Decimal("1000.00"),
+            is_active=False,
+            pause_from=month_apr,
+            pause_until=date.max,
+            metadata={
+                "canceled_at": "2026-04-03",
+                "cancel_effective_from": "2026-04-01",
+            },
+        )
+        RecurringPoojaPlan.objects.filter(pk=canceled_plan.pk).update(created_at=created_at_jan)
+        canceled_plan.refresh_from_db()
+        # Existing active plan contributes another ₹1000/month.
+        active_plan = RecurringPoojaPlan.objects.create(
+            donor=self.user,
+            pooja_option=PoojaOption.objects.create(code="RP3", name="Recurring Active"),
+            day_option=self.day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=month_jan,
+            next_occurrence=month_apr,
+            amount=Decimal("1000.00"),
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.filter(pk=active_plan.pk).update(created_at=created_at_jan)
+
+        for month_start in (month_jan, month_feb, month_mar, month_apr):
+            PaymentRecord.objects.create(
+                donor=self.user,
+                amount=Decimal("1000.00"),
+                mode="pending",
+                status=PaymentStatus.PENDING,
+                payment_month=month_start,
+                notes="Monthly recurring pooja contribution due",
+                registration=None,
+            )
+
+        for month_start, txn_ref in (
+            (month_jan, "TXN-JAN"),
+            (month_feb, "TXN-FEB"),
+            (month_mar, "TXN-MAR"),
+        ):
+            PaymentRecord.objects.create(
+                donor=self.user,
+                amount=Decimal("2000.00"),
+                mode=PaymentMode.UPI,
+                status=PaymentStatus.SUCCESS,
+                payment_month=month_start,
+                transaction_reference=txn_ref,
+                registration=None,
+            )
+
+        resume_url = reverse("pooja-recurrence-plans-resume", kwargs={"pk": canceled_plan.id})
+        cancel_url = reverse("pooja-recurrence-plans-cancel", kwargs={"pk": canceled_plan.id})
+
+        with patch("pooja.views.timezone.localdate", return_value=today):
+            resume_response = self.admin_client.post(resume_url, {}, format="json")
+            self.assertEqual(resume_response.status_code, 200)
+
+            cancel_response = self.admin_client.post(
+                cancel_url,
+                {"cancel_from": month_apr.isoformat()},
+                format="json",
+            )
+            self.assertEqual(cancel_response.status_code, 200)
+
+        pending_amounts = list(
+            PaymentRecord.objects.filter(
+                donor=self.user,
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+            )
+            .order_by("payment_month")
+            .values_list("payment_month", "amount")
+        )
+        self.assertEqual(
+            pending_amounts,
+            [
+                (month_jan, Decimal("2000.00")),
+                (month_feb, Decimal("2000.00")),
+                (month_mar, Decimal("2000.00")),
+                (month_apr, Decimal("1000.00")),
+            ],
+        )
 
     def test_rerun_due_rejects_when_pause_is_still_active(self):
         plan = self._create_plan()
