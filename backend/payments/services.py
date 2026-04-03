@@ -231,10 +231,18 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
         if earliest_plan_month:
             cursor = max(earliest_plan_month, anchor_date.replace(day=1))
             while cursor <= current_month:
-                if historical_freeze_month and cursor < historical_freeze_month:
+                existing = monthly_dues_by_month.get(cursor)
+                # Historical freeze means: never rewrite an existing past-month row.
+                # But if a past month is missing entirely, create a consolidated row
+                # so passbook does not fall back to split registration-wise dues.
+                if (
+                    historical_freeze_month
+                    and cursor < historical_freeze_month
+                    and existing is not None
+                ):
+                    months_with_monthly_due.add(cursor)
                     cursor = _next_month(cursor)
                     continue
-                existing = monthly_dues_by_month.get(cursor)
                 existing_amount = existing["amount"] if existing else Decimal("0.00")
                 target_amount = _calculate_recurring_month_total_for_donor(donor_id, cursor)
                 if target_amount <= 0:
@@ -286,11 +294,16 @@ def regenerate_donor_passbook(donor_id: int, ensure_dues: bool = True) -> None:
             )
 
         for month_start, chrt_total_for_month in chrt_amounts_by_month.items():
-            if historical_freeze_month and month_start < historical_freeze_month:
+            existing = monthly_dues_by_month.get(month_start)
+            if (
+                historical_freeze_month
+                and month_start < historical_freeze_month
+                and existing is not None
+            ):
+                months_with_monthly_due.add(month_start)
                 continue
             base_non_chrt = _calculate_recurring_month_total_for_donor(donor_id, month_start)
             target_amount = base_non_chrt + chrt_total_for_month
-            existing = monthly_dues_by_month.get(month_start)
             existing_amount = existing["amount"] if existing else Decimal("0.00")
             if existing_amount < target_amount:
                 monthly_dues_by_month[month_start] = {

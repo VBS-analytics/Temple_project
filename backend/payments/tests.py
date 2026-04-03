@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
@@ -22,6 +22,7 @@ from pooja.models import (
     DayOptionCategory,
     PoojaDayOption,
     PoojaOption,
+    PoojaRegistration,
     RecurrenceFrequency,
     RecurrenceKind,
     RecurringPoojaPlan,
@@ -579,6 +580,99 @@ class PassbookCancellationFreezeTests(TestCase):
 
         self.assertIsNotNone(jan_due_entry)
         self.assertEqual(jan_due_entry.due_amount, Decimal("500.00"))
+
+    def test_freeze_still_backfills_missing_historical_month_without_split_due_rows(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000011",
+            name="Freeze Missing Month Donor",
+            password="secret",
+        )
+        day_option = PoojaDayOption.objects.create(
+            code="REG_MISSING_MONTH",
+            description="Regular",
+            category=DayOptionCategory.CODE,
+        )
+
+        jan1 = date(2026, 1, 1)
+        jan14 = date(2026, 1, 14)
+        apr1 = date(2026, 4, 1)
+        jan1_dt = timezone.make_aware(datetime(2026, 1, 1, 9, 0, 0))
+        jan14_dt = timezone.make_aware(datetime(2026, 1, 14, 9, 0, 0))
+
+        reg_a = PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="RM1", name="Recurring Missing 1"),
+            day_option=day_option,
+            start_date=jan1,
+            total_amount=Decimal("500.00"),
+        )
+        reg_b = PoojaRegistration.objects.create(
+            donor=donor,
+            pooja_option=PoojaOption.objects.create(code="RM2", name="Recurring Missing 2"),
+            day_option=day_option,
+            start_date=jan14,
+            total_amount=Decimal("1000.00"),
+        )
+        PoojaRegistration.objects.filter(pk=reg_a.pk).update(created_at=jan1_dt)
+        PoojaRegistration.objects.filter(pk=reg_b.pk).update(created_at=jan14_dt)
+
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=reg_a.pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=jan1,
+            next_occurrence=None,
+            amount=Decimal("500.00"),
+            is_active=False,
+            pause_from=apr1,
+            pause_until=date.max,
+            origin_registration=reg_a,
+            metadata={
+                "canceled_at": "2026-04-02",
+                "cancel_effective_from": "2026-04-01",
+            },
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=reg_b.pooja_option,
+            day_option=day_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=jan14,
+            next_occurrence=apr1,
+            amount=Decimal("1000.00"),
+            is_active=True,
+            origin_registration=reg_b,
+        )
+
+        # Intentionally keep January without a registration-null pending due row.
+        # Legacy donors can still have successful payments plus registration rows.
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("1500.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="RM-JAN-SUCCESS",
+            payment_month=jan1,
+        )
+
+        with patch("payments.services.timezone.localdate", return_value=date(2026, 4, 2)):
+            regenerate_donor_passbook(donor.id, ensure_dues=False)
+
+        jan_due_entries = list(
+            PassbookEntry.objects.filter(
+                donor=donor,
+                entry_type="due",
+                entry_date__year=2026,
+                entry_date__month=1,
+            ).order_by("entry_date", "id")
+        )
+
+        self.assertEqual(len(jan_due_entries), 1)
+        self.assertEqual(jan_due_entries[0].entry_date, jan1)
+        self.assertEqual(jan_due_entries[0].due_amount, Decimal("1500.00"))
 
 
 class RecurringDueGenerationEdgeCaseTests(TestCase):
