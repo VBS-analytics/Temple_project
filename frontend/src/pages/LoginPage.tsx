@@ -225,10 +225,10 @@ const LoginPage = () => {
               </div>
 
               {/* Heading */}
-              <h2 className="text-xl font-bold text-[#3d1a0a] mb-1 lg:text-2xl">Sign In</h2>
+              <h2 className="text-xl font-bold text-[#3d1a0a] mb-1 lg:text-2xl">Login In</h2>
               <p className="text-xs text-[#8a6a50] mb-3 lg:hidden">Enter your details to continue</p>
               <p className="hidden lg:block text-sm text-[#8a6a50] mb-5">
-                Sign in to manage poojas, payments &amp; donor records.
+                Login in to manage poojas, payments &amp; donor records.
               </p>
 
               {/* API error */}
@@ -379,7 +379,7 @@ const LoginPage = () => {
                     </>
                   ) : (
                     <>
-                      <span className="mx-auto">Sign In</span>
+                      <span className="mx-auto">Login In</span>
                       <svg className="absolute right-5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                       </svg>

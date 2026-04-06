@@ -78,8 +78,8 @@ passbook_regen_job() {
 }
 
 # Control whether optional background jobs run.
-# Default disabled to avoid re-importing opening balances on every restart.
-RUN_STARTUP_JOBS="${RUN_STARTUP_JOBS:-0}"
+# Default enabled so opening balance import runs on startup unless explicitly disabled.
+RUN_STARTUP_JOBS="${RUN_STARTUP_JOBS:-1}"
 if [ "$RUN_STARTUP_JOBS" = "1" ]; then
   echo "[4/6] Running startup jobs..."
   startup_jobs

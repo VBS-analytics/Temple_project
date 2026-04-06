@@ -11,6 +11,7 @@ type PaymentRecordEntry = {
   status?: string | null;
   mode?: string | null;
   transaction_reference?: string | null;
+  payment_month?: string | null;
   created_at?: string | null;
   notes?: string | null;
 };
@@ -112,12 +113,29 @@ const parseDateValue = (value?: string | null) => {
   if (!value) {
     return null;
   }
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    const parsedDateOnly = new Date(year, month - 1, day);
+    if (Number.isNaN(parsedDateOnly.getTime())) {
+      return null;
+    }
+    return parsedDateOnly;
+  }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return null;
   }
   return parsed;
 };
+
+const getPaymentLedgerMonthDate = (payment: PaymentRecordEntry) =>
+  parseDateValue(payment.payment_month) ?? parseDateValue(payment.created_at);
+
+const getPaymentDisplayDate = (payment: PaymentRecordEntry) =>
+  parseDateValue(payment.created_at) ?? getPaymentLedgerMonthDate(payment);
 
 const buildMonthOptions = (): MonthOption[] => {
   const start = new Date(2025, 11, 1);
@@ -162,15 +180,17 @@ const normalizeNextUrl = (nextValue: unknown): string | null => {
 const AccountStatementPage = () => {
   const monthOptions = useMemo(buildMonthOptions, []);
   const [selectedMonth, setSelectedMonth] = useState(() => monthOptions[0]?.value ?? '');
-  const [allPayments, setAllPayments] = useState<PaymentRecordEntry[]>([]);
+  const [monthPayments, setMonthPayments] = useState<PaymentRecordEntry[]>([]);
   const [monthExpenses, setMonthExpenses] = useState<ExpenseRecordEntry[]>([]);
   const [monthAdditionIncomes, setMonthAdditionIncomes] = useState<AdditionIncomeRecordEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchAllPayments = useCallback(async (): Promise<PaymentRecordEntry[]> => {
+  const fetchPaymentsForMonth = useCallback(async (month: string): Promise<PaymentRecordEntry[]> => {
     const results: PaymentRecordEntry[] = [];
-    let nextUrl: string | null = 'payments/records/?page_size=500';
+    const firstResponse = await api.get('payments/records/', { params: { month } });
+    results.push(...extractResults<PaymentRecordEntry>(firstResponse.data));
+    let nextUrl: string | null = normalizeNextUrl(firstResponse.data?.next);
 
     while (nextUrl) {
       const response = await api.get(nextUrl);
@@ -191,66 +211,61 @@ const AccountStatementPage = () => {
     return extractResults<AdditionIncomeRecordEntry>(response.data);
   }, []);
 
-  const loadStatementData = useCallback(
-    async (refreshPayments: boolean) => {
-      if (!selectedMonth) {
-        setAllPayments([]);
-        setMonthExpenses([]);
-        setMonthAdditionIncomes([]);
-        return;
-      }
+  const loadStatementData = useCallback(async () => {
+    if (!selectedMonth) {
+      setMonthPayments([]);
+      setMonthExpenses([]);
+      setMonthAdditionIncomes([]);
+      return;
+    }
 
-      setLoading(true);
-      setError('');
-      try {
-        const shouldFetchPayments = refreshPayments || allPayments.length === 0;
-        const [payments, expenses, additionIncomes] = await Promise.all([
-          shouldFetchPayments ? fetchAllPayments() : Promise.resolve(allPayments),
-          fetchExpensesForMonth(selectedMonth),
-          fetchAdditionIncomesForMonth(selectedMonth),
-        ]);
-
-        if (shouldFetchPayments) {
-          setAllPayments(payments);
-        }
-        setMonthExpenses(expenses);
-        setMonthAdditionIncomes(additionIncomes);
-      } catch (loadError: any) {
-        const detail =
-          loadError?.response?.data?.detail ??
-          loadError?.message ??
-          'Unable to load account statement data.';
-        setError(typeof detail === 'string' ? detail : 'Unable to load account statement data.');
-        if (refreshPayments) {
-          setAllPayments([]);
-        }
-        setMonthExpenses([]);
-        setMonthAdditionIncomes([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [selectedMonth, allPayments, fetchAllPayments, fetchExpensesForMonth, fetchAdditionIncomesForMonth],
-  );
+    setLoading(true);
+    setError('');
+    try {
+      const [payments, expenses, additionIncomes] = await Promise.all([
+        fetchPaymentsForMonth(selectedMonth),
+        fetchExpensesForMonth(selectedMonth),
+        fetchAdditionIncomesForMonth(selectedMonth),
+      ]);
+      setMonthPayments(payments);
+      setMonthExpenses(expenses);
+      setMonthAdditionIncomes(additionIncomes);
+    } catch (loadError: any) {
+      const detail =
+        loadError?.response?.data?.detail ??
+        loadError?.message ??
+        'Unable to load account statement data.';
+      setError(typeof detail === 'string' ? detail : 'Unable to load account statement data.');
+      setMonthPayments([]);
+      setMonthExpenses([]);
+      setMonthAdditionIncomes([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMonth, fetchPaymentsForMonth, fetchExpensesForMonth, fetchAdditionIncomesForMonth]);
 
   useEffect(() => {
-    void loadStatementData(false);
+    void loadStatementData();
   }, [loadStatementData]);
 
   const statementRows = useMemo<StatementRow[]>(() => {
-    const paymentRows: StatementRow[] = allPayments
+    const paymentRows: StatementRow[] = monthPayments
       .filter((payment) => {
-        if ((payment.status ?? '').toLowerCase() !== 'success') {
+        if ((payment.status ?? '').trim().toLowerCase() !== 'success') {
           return false;
         }
-        const paymentDate = parseDateValue(payment.created_at);
-        if (!paymentDate) {
+        const paymentLedgerMonthDate = getPaymentLedgerMonthDate(payment);
+        if (!paymentLedgerMonthDate) {
           return false;
         }
-        return toMonthKey(paymentDate) === selectedMonth;
+        if (toMonthKey(paymentLedgerMonthDate) !== selectedMonth) {
+          return false;
+        }
+        const paymentDisplayDate = getPaymentDisplayDate(payment);
+        return paymentDisplayDate !== null;
       })
       .map((payment) => {
-        const paymentDate = parseDateValue(payment.created_at) ?? new Date(0);
+        const paymentDate = getPaymentDisplayDate(payment) ?? new Date(0);
         const donorName = normalizeText(payment.donor_name) || `Donor #${payment.donor}`;
         const poojaName = normalizeText(payment.pooja_option) || 'Pooja Payment';
         const mode = normalizeText(payment.mode).toUpperCase();
@@ -326,7 +341,7 @@ const AccountStatementPage = () => {
     return [...manualOpeningBalanceRows, ...paymentRows, ...additionIncomeRows, ...expenseRows].sort(
       (left, right) => left.date.getTime() - right.date.getTime(),
     );
-  }, [allPayments, monthAdditionIncomes, monthExpenses, selectedMonth]);
+  }, [monthPayments, monthAdditionIncomes, monthExpenses, selectedMonth]);
 
   const totals = useMemo(() => {
     const inflow = statementRows.reduce((sum, row) => sum + row.inflow, 0);
@@ -378,7 +393,7 @@ const AccountStatementPage = () => {
             </select>
             <button
               type="button"
-              onClick={() => void loadStatementData(true)}
+              onClick={() => void loadStatementData()}
               disabled={loading}
               className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
