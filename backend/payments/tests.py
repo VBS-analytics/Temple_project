@@ -1724,3 +1724,107 @@ class PaymentRecordDeleteAccessTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(PaymentRecord.objects.filter(id=self.success_payment.id).exists())
+
+
+class PaymentRecordMonthFilterTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            phone_number="+919300000001",
+            name="Month Filter Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.donor = User.objects.create_user(
+            phone_number="+919300000002",
+            name="Month Filter Donor",
+            password="secret",
+        )
+        self.url = reverse("payment-records-list")
+
+        # Included in Jan via payment_month, even though created in Feb.
+        self.jan_by_payment_month = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("101.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="JAN-BY-PAYMENT-MONTH",
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.filter(pk=self.jan_by_payment_month.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 2, 12, 10, 0, 0))
+        )
+
+        # Included in Jan via created_at fallback when payment_month is null.
+        self.jan_by_created_at = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("102.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="JAN-BY-CREATED-AT",
+            payment_month=None,
+        )
+        PaymentRecord.objects.filter(pk=self.jan_by_created_at.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 1, 20, 9, 30, 0))
+        )
+
+        # Included in Feb (payment_month takes precedence over created_at month).
+        self.feb_by_payment_month = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("201.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="FEB-BY-PAYMENT-MONTH",
+            payment_month=date(2026, 2, 1),
+        )
+        PaymentRecord.objects.filter(pk=self.feb_by_payment_month.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 1, 13, 8, 0, 0))
+        )
+
+        # Included in Feb via created_at fallback when payment_month is null.
+        self.feb_by_created_at = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("202.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="FEB-BY-CREATED-AT",
+            payment_month=None,
+        )
+        PaymentRecord.objects.filter(pk=self.feb_by_created_at.pk).update(
+            created_at=timezone.make_aware(datetime(2026, 2, 13, 11, 0, 0))
+        )
+
+    def _result_ids(self, response):
+        payload = response.json()
+        rows = payload.get("results", payload) if isinstance(payload, dict) else payload
+        return {entry["id"] for entry in rows}
+
+    def test_month_filter_uses_payment_month_with_created_at_fallback(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.url, {"month": "2026-01"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = self._result_ids(response)
+        self.assertIn(self.jan_by_payment_month.id, ids)
+        self.assertIn(self.jan_by_created_at.id, ids)
+        self.assertNotIn(self.feb_by_payment_month.id, ids)
+        self.assertNotIn(self.feb_by_created_at.id, ids)
+
+    def test_month_filter_for_february_returns_february_records_only(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.url, {"month": "2026-02"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = self._result_ids(response)
+        self.assertNotIn(self.jan_by_payment_month.id, ids)
+        self.assertNotIn(self.jan_by_created_at.id, ids)
+        self.assertIn(self.feb_by_payment_month.id, ids)
+        self.assertIn(self.feb_by_created_at.id, ids)
+
+    def test_invalid_month_filter_returns_no_records(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.url, {"month": "2026-13"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._result_ids(response), set())

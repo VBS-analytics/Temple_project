@@ -1,6 +1,6 @@
 """Payment API views."""
 
-from datetime import date
+from datetime import date, datetime, time
 from calendar import monthrange
 from decimal import Decimal, ROUND_CEILING
 from io import BytesIO
@@ -341,6 +341,23 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
 
         if has_filters:
             qs = qs.filter(filters)
+
+        month_param = self.request.query_params.get("month")
+        if month_param:
+            month_start = _parse_month_key(month_param)
+            if month_start is None:
+                qs = qs.none()
+            else:
+                month_end = _shift_month(month_start, 1)
+                month_start_dt = timezone.make_aware(datetime.combine(month_start, time.min))
+                month_end_dt = timezone.make_aware(datetime.combine(month_end, time.min))
+                qs = qs.filter(
+                    Q(payment_month__gte=month_start, payment_month__lt=month_end)
+                    | (
+                        Q(payment_month__isnull=True)
+                        & Q(created_at__gte=month_start_dt, created_at__lt=month_end_dt)
+                    )
+                )
 
         if self.request.user.role == UserRole.ADMIN:
             return qs

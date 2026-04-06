@@ -143,6 +143,7 @@ const POOJA_CARD_CONFIG: Array<{
     iconBg: '#FFFBEB',
   },
 ];
+const SPECIAL_POOJA_LABEL = 'Special Pooja';
 type PoojaCardSummary = (typeof POOJA_CARD_CONFIG)[number] & { total: number; count: number; matchCodes: string[] };
 type StatementRow = {
   key: string;
@@ -228,20 +229,48 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const normalizePoojaKey = (value: string | undefined | null) => (value || '').trim().toLowerCase();
+
+const matchesPoojaCardConfig = (
+  row: Pick<PoojaOptionTotal, 'pooja_option_name' | 'option_code' | 'parent_code' | 'parent_name'>,
+  cfg: (typeof POOJA_CARD_CONFIG)[number],
+) => {
+  const name = normalizePoojaKey(row.pooja_option_name);
+  const optionCode = normalizePoojaKey(row.option_code);
+  const parentCode = normalizePoojaKey(row.parent_code);
+  const parentName = normalizePoojaKey(row.parent_name);
+  return (
+    cfg.nameContains.some((kw) => name.includes(kw)) ||
+    cfg.optionCodeContains.some((kw) => optionCode.includes(kw)) ||
+    cfg.parentCodeContains.some((kw) => parentCode.includes(kw)) ||
+    cfg.parentNameContains.some((kw) => parentName.includes(kw))
+  );
+};
+
+const getPoojaCardConfigIndex = (
+  row: Pick<PoojaOptionTotal, 'pooja_option_name' | 'option_code' | 'parent_code' | 'parent_name'>,
+) => POOJA_CARD_CONFIG.findIndex((cfg) => matchesPoojaCardConfig(row, cfg));
+
+const mapPaidTotalToOptionTotal = (row: PoojaOptionPaidTotal): PoojaOptionTotal => ({
+  pooja_option_name: row.pooja_option_name,
+  option_code: row.option_code,
+  parent_code: row.parent_code,
+  parent_name: row.parent_name,
+  total_amount: row.paid_amount,
+  registration_count: row.paid_donor_count,
+});
+
+const isSpecialPoojaOptionRow = (
+  row: Pick<PoojaOptionTotal, 'pooja_option_name' | 'option_code' | 'parent_code' | 'parent_name'>,
+) => {
+  const idx = getPoojaCardConfigIndex(row);
+  return idx >= 0 && POOJA_CARD_CONFIG[idx].label === SPECIAL_POOJA_LABEL;
+};
+
 const buildPoojaCardSummaries = (totals: PoojaOptionTotal[]): PoojaCardSummary[] => {
   const buckets: PoojaOptionTotal[][] = POOJA_CARD_CONFIG.map(() => []);
   for (const row of totals) {
-    const name = row.pooja_option_name.toLowerCase();
-    const optionCode = (row.option_code || '').toLowerCase();
-    const parentCode = (row.parent_code || '').toLowerCase();
-    const parentName = (row.parent_name || '').toLowerCase();
-    const idx = POOJA_CARD_CONFIG.findIndex(
-      (cfg) =>
-        cfg.nameContains.some((kw) => name.includes(kw)) ||
-        cfg.optionCodeContains.some((kw) => optionCode.includes(kw)) ||
-        cfg.parentCodeContains.some((kw) => parentCode.includes(kw)) ||
-        cfg.parentNameContains.some((kw) => parentName.includes(kw)),
-    );
+    const idx = getPoojaCardConfigIndex(row);
     if (idx >= 0) buckets[idx].push(row);
   }
 
@@ -255,16 +284,7 @@ const buildPoojaCardSummaries = (totals: PoojaOptionTotal[]): PoojaCardSummary[]
 };
 
 const buildPoojaPaidCardSummaries = (totals: PoojaOptionPaidTotal[]): PoojaCardSummary[] =>
-  buildPoojaCardSummaries(
-    totals.map((row) => ({
-      pooja_option_name: row.pooja_option_name,
-      option_code: row.option_code,
-      parent_code: row.parent_code,
-      parent_name: row.parent_name,
-      total_amount: row.paid_amount,
-      registration_count: row.paid_donor_count,
-    })),
-  );
+  buildPoojaCardSummaries(totals.map(mapPaidTotalToOptionTotal));
 
 // ── Pooja option totals hook (filtered by active recurring plans in selected month) ─
 const usePoojaOptionTotals = (month: string) => {
@@ -1924,18 +1944,61 @@ const ExpensesPage = () => {
   const statementRows = useMemo(() => {
     const poojaRows = buildPoojaCardSummaries(poojaOptionTotals);
     const paidRows = buildPoojaPaidCardSummaries(poojaPaidOptionTotals);
-    const paidByLabel = new Map(paidRows.map((row) => [row.label, row.total]));
-    const rows = poojaRows.map((row) => {
-      const donorAmountReceived = paidByLabel.get(row.label) ?? 0;
-      return {
-        key: `pooja-${row.label}`,
-        label: row.label,
-        total: row.total,
-        donorAmountReceived,
-        difference: row.total - donorAmountReceived,
-        amountPaid: null,
-      };
-    });
+    const paidByLabel = new Map(
+      paidRows
+        .filter((row) => row.label !== SPECIAL_POOJA_LABEL)
+        .map((row) => [row.label, row.total]),
+    );
+
+    const nonSpecialPoojaRows: StatementRow[] = poojaRows
+      .filter((row) => row.label !== SPECIAL_POOJA_LABEL)
+      .map((row) => {
+        const donorAmountReceived = paidByLabel.get(row.label) ?? 0;
+        return {
+          key: `pooja-${row.label}`,
+          label: row.label,
+          total: row.total,
+          donorAmountReceived,
+          difference: row.total - donorAmountReceived,
+          amountPaid: null,
+        };
+      });
+
+    const specialPaidByCode = new Map<string, number>();
+    const specialPaidByName = new Map<string, number>();
+    for (const row of poojaPaidOptionTotals) {
+      if (!isSpecialPoojaOptionRow(mapPaidTotalToOptionTotal(row))) continue;
+      const paidAmount = Number(row.paid_amount);
+      const codeKey = normalizePoojaKey(row.option_code);
+      const nameKey = normalizePoojaKey(row.pooja_option_name);
+      if (codeKey) specialPaidByCode.set(codeKey, (specialPaidByCode.get(codeKey) ?? 0) + paidAmount);
+      if (nameKey) specialPaidByName.set(nameKey, (specialPaidByName.get(nameKey) ?? 0) + paidAmount);
+    }
+
+    const specialPoojaRows: StatementRow[] = poojaOptionTotals
+      .filter((row) => isSpecialPoojaOptionRow(row))
+      .slice()
+      .sort((a, b) => a.pooja_option_name.localeCompare(b.pooja_option_name))
+      .map((row, index) => {
+        const total = Number(row.total_amount);
+        const codeKey = normalizePoojaKey(row.option_code);
+        const nameKey = normalizePoojaKey(row.pooja_option_name);
+        const donorAmountReceived =
+          (codeKey ? specialPaidByCode.get(codeKey) : undefined)
+          ?? (nameKey ? specialPaidByName.get(nameKey) : undefined)
+          ?? 0;
+        return {
+          key: `pooja-special-${row.option_code || nameKey || index}`,
+          label: row.pooja_option_name || `${SPECIAL_POOJA_LABEL} ${index + 1}`,
+          total,
+          donorAmountReceived,
+          difference: total - donorAmountReceived,
+          amountPaid: null,
+        };
+      });
+
+    const rows: StatementRow[] = [...nonSpecialPoojaRows, ...specialPoojaRows];
+
     rows.push(
       ...monthlyExpenses.map((expense) => ({
         key: `expense-${expense.id}`,
