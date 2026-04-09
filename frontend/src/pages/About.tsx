@@ -16,6 +16,11 @@ type Member = {
   image?: string;
 };
 
+type AboutProject = {
+  text: string;
+  images?: { src: string; alt: string }[];
+};
+
 // --- Assets --------------------------------------------------------------
 const AVATAR_PLACEHOLDER =
   "data:image/svg+xml;utf8," +
@@ -172,11 +177,74 @@ const aboutUsAcknowledgements: string[] = [
   "We sincerely thank Mrs Hamsika Vignesh,for landscaping our village with important locations. This is hosted in the login page. It becomes a recap for those who have visited village already and gives a realistic picture for those who never visited our village so far.Hamsika has not got opportunity to visit our village yet.She is married to Mr Vignesh Ganesh(son of Mr Ganesh J(L) & Raji Ganesh), grandson of Mrs Jayaraman from Sambashivan Iyer family)",
 ];
 
-const aboutUsProjects: string[] = [
-  "Organising regular temple poojas, annual functions, and festival support with volunteers.",
-  "Coordinating prasadam distribution and donor/community participation for temple activities.",
-  "Supporting cleanliness and infrastructure-related improvements around the temple areas.",
-  "Building and maintaining the group website and donor platform for transparent coordination.",
+const aboutUsProjects: AboutProject[] = [
+  {
+    text: "Built a permanent G.I. metal bridge in 2025 across the canal to reach Attangarai Pillayar Koil, replacing the temporary bamboo bridge used earlier. Total expense: Rs 52,500.",
+    images: [
+      {
+        src: "/images/about-projects/project-000.jpg",
+        alt: "Old broken shutter gate crossing near Attangarai Pillayar Koil",
+      },
+      {
+        src: "/images/about-projects/project-001.jpg",
+        alt: "Temporary bamboo bridge used to cross the canal",
+      },
+      {
+        src: "/images/about-projects/project-002.jpg",
+        alt: "Permanent G.I. metal bridge installed in 2025",
+      },
+    ],
+  },
+  {
+    text: "Covered the Perumal Koil mandapam roof support structure with poly vinyl sheet to prevent pigeon nesting and pigeon droppings inside the mandapam.",
+    images: [
+      {
+        src: "/images/about-projects/project-003.jpg",
+        alt: "Perumal Koil mandapam with covered roof structure",
+      },
+      {
+        src: "/images/about-projects/project-004.jpg",
+        alt: "Inside view of covered mandapam roof beams",
+      },
+    ],
+  },
+  {
+    text: "Completed repair and repainting works: grill door at Perumal Koil, grill door and entrance gate at Shivan Koil, grill gap closure and roof extension repair at Ayyanar Koil, and grill door of the Madapalli room. Total expense: Rs 47,500 (including Rs 35,000 donated by donor Mr Amar G).",
+    images: [
+      {
+        src: "/images/about-projects/project-005.jpg",
+        alt: "Repaired grill door at Perumal Koil",
+      },
+      {
+        src: "/images/about-projects/project-006.jpg",
+        alt: "Repaired grill door at Shivan Koil",
+      },
+      {
+        src: "/images/about-projects/project-007.jpg",
+        alt: "Ayyanar Koil grill gap closure work",
+      },
+      {
+        src: "/images/about-projects/project-008.jpg",
+        alt: "Ayyanar Koil roof extension repair and repainting",
+      },
+      {
+        src: "/images/about-projects/project-009.jpg",
+        alt: "Repaired grill door of Madapalli room",
+      },
+    ],
+  },
+  {
+    text: "Carried out regular replacement of electrical fittings in temples wherever required.",
+  },
+  {
+    text: "Started Cow Samrakshana Seva in the village by supporting upkeep of a non-milking cow. Out of Rs 4,500 monthly cost, members currently contribute Rs 3,000 per month.",
+  },
+  {
+    text: "Coordinated pooja materials for members living across India and abroad, handed them over to the Kurukkal, and arranged prasadam collection and delivery to respective members after pooja.",
+  },
+  {
+    text: "Executed all the above projects through active participation of group members.",
+  },
 ];
 
 // --- Reusable UI Components ----------------------------------------------
@@ -449,7 +517,26 @@ export default function AboutPage({ embedded = false }: AboutPageProps) {
                       <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5" style={{ background: "#efd9cf", color: "#7e2a20" }}>
                         ✓
                       </span>
-                      <span className="text-sm sm:text-base leading-relaxed break-words flex-1">{project}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm sm:text-base leading-relaxed break-words block">{project.text}</span>
+                        {project.images && project.images.length > 0 && (
+                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {project.images.map((image, imageIdx) => (
+                              <figure
+                                key={`${idx}-${imageIdx}`}
+                                className="rounded-xl overflow-hidden border border-[#efd9cf] bg-[#f8eee2]"
+                              >
+                                <img
+                                  src={image.src}
+                                  alt={image.alt}
+                                  loading="lazy"
+                                  className="w-full h-44 sm:h-48 object-cover"
+                                />
+                              </figure>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

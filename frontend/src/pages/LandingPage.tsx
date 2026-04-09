@@ -43,7 +43,7 @@ const landingTempleMarqueeSlides = [
 ];
 
 const landingMapHero = {
-  src: "/images/new-landing-page.jpg",
+  src: "/images/UPDATED LANDSCAPE PLAN.jpg",
   alt: "Kakkalani Village map, Tamil Nadu",
 };
 
