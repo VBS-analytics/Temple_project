@@ -38,6 +38,14 @@ const temples = [
     contain: true,
   },
   {
+    id: "raja-ganapathy-temple",
+    tag: "T5",
+    name: "Raja Ganapathy Temple",
+    type: "Ganapathy Temple",
+    img: "/images/kovi/raja-ganapathy/raja-ganapathy-3.png",
+    contain: true,
+  },
+  {
     id: "mazhai-mariamman-temple",
     tag: "T6",
     name: "Mazhai Mariamman Temple",
@@ -647,6 +655,7 @@ const KovilDetailsPage = () => {
       case "aathangarai-pillayar":               return <AathangaraiContent />;
       case "lakshmi-narayanar-temple":           return <LakshmiNarayanarContent />;
       case "mangala-azhagar-ayyanar-koil":       return <AyyanarContent />;
+      case "raja-ganapathy-temple":              return <RajaGanapathyContent />;
       case "mazhai-mariamman-temple":            return <MazhaiMariammanContent />;
       case "damodara-pillayar-temple":           return <DamodaraPillayarContent />;
       default: return null;
@@ -669,7 +678,7 @@ const KovilDetailsPage = () => {
 
             <h1 className="kp-pg-title">Kakkalani <em>Temples</em></h1>
             <p className="kp-pg-desc">
-              Six ancient temples that have sheltered the faith, rituals, and stories of
+              Seven temples that have sheltered the faith, rituals, and stories of
               Kakkalani Agraharam across generations.
             </p>
           </div>
@@ -1356,6 +1365,125 @@ const GnanambalContent = () => (
                 named as <strong>Mazhai Mariamman</strong>, the deity of fertility and rain, guardian against evil energies.
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
+// ── RAJA GANAPATHY TEMPLE ────────────────────────────────────────────────────
+const RajaGanapathyContent = () => (
+  <section className="kp-temple-sections">
+    <div className="kp-lakshmi-split">
+      <div className="kp-sec">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Location & Heritage</span>
+          <h3 className="kp-sec-title">Temple Presence in Village Entry Route</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-timeline">
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">Route</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Arrival Through Adiyakkamangalam Side</div>
+              <div className="kp-tl-text">
+                When devotees come from <strong>Adiyakkamangalam</strong> via <strong>Semangalam</strong> and
+                cross the <strong>Kaduvaiyaru river</strong>, they reach the Kakkalani bus-stop area.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">First</div>
+              <div className="kp-tl-line" />
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">First Temple at the Entrance</div>
+              <div className="kp-tl-text">
+                The first shrine encountered on this route is the small and beautiful{" "}
+                <strong>Raja Ganapathy Temple</strong>, making it an important welcome point for devotees
+                entering the village.
+              </div>
+            </div>
+          </div>
+          <div className="kp-tl-item">
+            <div className="kp-tl-left">
+              <div className="kp-tl-year">Care</div>
+            </div>
+            <div className="kp-tl-body">
+              <div className="kp-tl-title">Family Stewardship</div>
+              <div className="kp-tl-text">
+                This temple is built and maintained by <strong>Mr. Chokkalingam family</strong>, who continue
+                to preserve it with devotion and responsibility.
+              </div>
+              <div className="kp-hl" style={{ marginTop: ".65rem" }}>
+                <div className="kp-hl-title">Community Value</div>
+                <div className="kp-hl-text">
+                  The shrine stands as a living symbol of family-led temple care and daily spiritual continuity.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="kp-sec kp-lakshmi-gallery">
+        <div className="kp-sec-hdr">
+          <span className="kp-sec-eyebrow">Gallery</span>
+          <h3 className="kp-sec-title">Temple Images</h3>
+          <div className="kp-rule" />
+        </div>
+        <div className="kp-gallery-contain">
+          <ImageSlideshow
+            images={[
+              {
+                src: "/images/kovi/raja-ganapathy/raja-ganapathy-1.png",
+                alt: "Raja Ganapathy Temple entrance and mandapam view",
+                caption: "Raja Ganapathy Temple - Main entrance view",
+              },
+              {
+                src: "/images/kovi/raja-ganapathy/raja-ganapathy-3.png",
+                alt: "Raja Ganapathy Temple front gate view",
+                caption: "Raja Ganapathy Temple - Front gate view",
+              },
+              {
+                src: "/images/kovi/raja-ganapathy/raja-ganapathy-2.png",
+                alt: "Raja Ganapathy deity decorated with flowers",
+                caption: "Raja Ganapathy deity darshan",
+              },
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+
+    <div className="kp-sec">
+      <div className="kp-sec-hdr">
+        <span className="kp-sec-eyebrow">Temple Significance</span>
+        <h3 className="kp-sec-title">Why This Temple Matters</h3>
+        <div className="kp-rule" />
+      </div>
+      <div className="kp-deity-row">
+        <div className="kp-deity-dot" />
+        <div>
+          <div className="kp-deity-name">Gateway Shrine of Kakkalani</div>
+          <div className="kp-deity-desc">
+            Located near the bus-stop approach, this temple naturally becomes the first point of worship for
+            many visitors entering Kakkalani.
+          </div>
+        </div>
+      </div>
+      <div className="kp-deity-row">
+        <div className="kp-deity-dot" />
+        <div>
+          <div className="kp-deity-name">Sustained by Devotion</div>
+          <div className="kp-deity-desc">
+            The temple's upkeep through dedicated family involvement reflects the village's long-standing
+            tradition of preserving sacred spaces through personal responsibility.
           </div>
         </div>
       </div>
