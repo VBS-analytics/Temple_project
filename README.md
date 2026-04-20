@@ -89,7 +89,7 @@ python manage.py import_opening_balances opening-balance-december.xlsx
 
 Use `--dry-run` to validate that the sheet parses cleanly without mutating data, `--sheet` to specify an alternate tab, or `--name-column`/`--phone-column`/`--balance-column` when your headers differ. The command matches donors by phone digits (falling back to the last ten digits for formatting differences) and reports any rows it could not match so you can resolve them before persisting.
 
-The backend entrypoint now automatically runs `import_opening_balances` (using `/app/opening-balance-december.xlsx` by default) before regenerating passbooks, so rebuilding containers keeps the workbook data in sync. Override the workbook path with `OPENING_BALANCE_WORKBOOK=/path/to/your.xlsx` when you need a different file.
+The backend entrypoint supports running `import_opening_balances` (using `/app/opening-balance-december.xlsx` by default) before regenerating passbooks, but startup import is disabled by default to prevent accidental balance rewrites during routine redeploys. Enable it only when needed with `RUN_STARTUP_JOBS=1`, and override the workbook path with `OPENING_BALANCE_WORKBOOK=/path/to/your.xlsx` when you need a different file.
 
 ## Repository Layout
 

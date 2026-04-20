@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { utils as xlsxUtils, writeFile as writeXlsxFile } from 'xlsx';
 
 import api, { extractResults } from '../../lib/api';
 
@@ -47,6 +48,16 @@ type StatementRow = {
   reference: string;
   inflow: number;
   outflow: number;
+};
+
+type StatementDisplayRow = StatementRow & {
+  balance: number;
+};
+
+type MonthData = {
+  payments: PaymentRecordEntry[];
+  expenses: ExpenseRecordEntry[];
+  additionIncomes: AdditionIncomeRecordEntry[];
 };
 
 type MonthOption = {
@@ -131,11 +142,8 @@ const parseDateValue = (value?: string | null) => {
   return parsed;
 };
 
-const getPaymentLedgerMonthDate = (payment: PaymentRecordEntry) =>
+const getPaymentLedgerDate = (payment: PaymentRecordEntry) =>
   parseDateValue(payment.payment_month) ?? parseDateValue(payment.created_at);
-
-const getPaymentDisplayDate = (payment: PaymentRecordEntry) =>
-  parseDateValue(payment.created_at) ?? getPaymentLedgerMonthDate(payment);
 
 const buildMonthOptions = (): MonthOption[] => {
   const start = new Date(2025, 11, 1);
@@ -177,14 +185,201 @@ const normalizeNextUrl = (nextValue: unknown): string | null => {
   return path;
 };
 
+const sanitizeFilename = (value: string) => value.replace(/[\\/:*?"<>|]+/g, '_').trim();
+
+const LEDGER_CARRY_FORWARD_START_MONTH = '2026-01';
+const LEDGER_CARRY_FORWARD_START_OPENING_BALANCE = 216770;
+const EMPTY_MONTH_DATA: MonthData = {
+  payments: [],
+  expenses: [],
+  additionIncomes: [],
+};
+
+const parseMonthKeyDate = (value: string): Date | null => {
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+  return new Date(year, month - 1, 1);
+};
+
+const compareMonthKeys = (left: string, right: string) => {
+  const leftDate = parseMonthKeyDate(left);
+  const rightDate = parseMonthKeyDate(right);
+  if (!leftDate || !rightDate) {
+    return left.localeCompare(right);
+  }
+  if (leftDate.getFullYear() === rightDate.getFullYear()) {
+    return leftDate.getMonth() - rightDate.getMonth();
+  }
+  return leftDate.getFullYear() - rightDate.getFullYear();
+};
+
+const listMonthKeysInclusive = (startMonth: string, endMonth: string): string[] => {
+  const startDate = parseMonthKeyDate(startMonth);
+  const endDate = parseMonthKeyDate(endMonth);
+  if (!startDate || !endDate) {
+    return [];
+  }
+  if (startDate.getTime() > endDate.getTime()) {
+    return [];
+  }
+
+  const keys: string[] = [];
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  while (cursor.getTime() <= endDate.getTime()) {
+    keys.push(toMonthKey(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return keys;
+};
+
+const getRequiredMonthKeysForSelection = (selectedMonth: string) => {
+  if (!selectedMonth) {
+    return [];
+  }
+  if (compareMonthKeys(selectedMonth, LEDGER_CARRY_FORWARD_START_MONTH) < 0) {
+    return [selectedMonth];
+  }
+  return listMonthKeysInclusive(LEDGER_CARRY_FORWARD_START_MONTH, selectedMonth);
+};
+
+const summarizeRows = (rows: StatementRow[]) => {
+  let inflow = 0;
+  let outflow = 0;
+  let paymentCount = 0;
+  let additionIncomeCount = 0;
+  let expenseCount = 0;
+
+  rows.forEach((row) => {
+    inflow += row.inflow;
+    outflow += row.outflow;
+    if (row.type === 'payment') {
+      paymentCount += 1;
+    } else if (row.type === 'income') {
+      additionIncomeCount += 1;
+    } else if (row.type === 'expense') {
+      expenseCount += 1;
+    }
+  });
+
+  return {
+    inflow,
+    outflow,
+    paymentCount,
+    additionIncomeCount,
+    expenseCount,
+  };
+};
+
+const buildStatementRowsForMonth = (monthKey: string, monthData: MonthData): StatementRow[] => {
+  const paymentRows: StatementRow[] = monthData.payments
+    .filter((payment) => {
+      const normalizedStatus = (payment.status ?? '').trim().toLowerCase();
+      const amount = parseAmount(payment.amount);
+      const hasReference = normalizeText(payment.transaction_reference).length > 0;
+      const isFailedLike = normalizedStatus === 'failed' || normalizedStatus === 'refunded';
+      const isPaidLike = normalizedStatus === 'success' || (hasReference && amount > 0);
+      if (isFailedLike || !isPaidLike) {
+        return false;
+      }
+      const paymentLedgerDate = getPaymentLedgerDate(payment);
+      if (!paymentLedgerDate) {
+        return false;
+      }
+      return toMonthKey(paymentLedgerDate) === monthKey;
+    })
+    .map((payment) => {
+      const paymentDate = getPaymentLedgerDate(payment) ?? new Date(0);
+      const donorName = normalizeText(payment.donor_name) || `Donor #${payment.donor}`;
+      const poojaName = normalizeText(payment.pooja_option) || 'Pooja Payment';
+      const mode = normalizeText(payment.mode).toUpperCase();
+      const modeLabel = mode ? ` · ${mode}` : '';
+      const details = `${poojaName} (${donorName})${modeLabel}`;
+      const reference = normalizeText(payment.transaction_reference) || `Payment #${payment.id}`;
+
+      return {
+        key: `payment-${payment.id}`,
+        date: paymentDate,
+        dateLabel: formatDateLabel(paymentDate),
+        type: 'payment',
+        details,
+        reference,
+        inflow: parseAmount(payment.amount),
+        outflow: 0,
+      };
+    });
+
+  const expenseRows: StatementRow[] = monthData.expenses
+    .map<StatementRow | null>((expense) => {
+      const expenseDate = parseDateValue(expense.transaction_date);
+      if (!expenseDate) {
+        return null;
+      }
+      const category = normalizeText(expense.category) || 'Expense';
+      const createdBy = normalizeText(expense.created_by_name);
+      const details = createdBy ? `${category} (${createdBy})` : category;
+      const reference = normalizeText(expense.transaction_no) || `Expense #${expense.id}`;
+
+      return {
+        key: `expense-${expense.id}`,
+        date: expenseDate,
+        dateLabel: formatDateLabel(expenseDate),
+        type: 'expense',
+        details,
+        reference,
+        inflow: 0,
+        outflow: parseAmount(expense.amount),
+      };
+    })
+    .filter((row): row is StatementRow => row !== null);
+
+  const additionIncomeRows: StatementRow[] = monthData.additionIncomes
+    .map<StatementRow | null>((income) => {
+      const incomeDate = parseDateValue(income.transaction_date);
+      if (!incomeDate) {
+        return null;
+      }
+      const category = normalizeText(income.category) || 'Additional Income';
+      const createdBy = normalizeText(income.created_by_name);
+      const details = createdBy ? `${category} (${createdBy})` : `${category} (Additional Income)`;
+      const reference = normalizeText(income.transaction_no) || `Income #${income.id}`;
+
+      return {
+        key: `income-${income.id}`,
+        date: incomeDate,
+        dateLabel: formatDateLabel(incomeDate),
+        type: 'income',
+        details,
+        reference,
+        inflow: parseAmount(income.amount),
+        outflow: 0,
+      };
+    })
+    .filter((row): row is StatementRow => row !== null);
+
+  const manualOpeningBalanceRows =
+    monthKey === '2025-12' ? DECEMBER_2025_OPENING_BALANCE_ROWS : [];
+
+  return [...manualOpeningBalanceRows, ...paymentRows, ...additionIncomeRows, ...expenseRows].sort(
+    (left, right) => left.date.getTime() - right.date.getTime(),
+  );
+};
+
 const AccountStatementPage = () => {
   const monthOptions = useMemo(buildMonthOptions, []);
   const [selectedMonth, setSelectedMonth] = useState(() => monthOptions[0]?.value ?? '');
-  const [monthPayments, setMonthPayments] = useState<PaymentRecordEntry[]>([]);
-  const [monthExpenses, setMonthExpenses] = useState<ExpenseRecordEntry[]>([]);
-  const [monthAdditionIncomes, setMonthAdditionIncomes] = useState<AdditionIncomeRecordEntry[]>([]);
+  const [monthDataByKey, setMonthDataByKey] = useState<Record<string, MonthData>>({});
   const [loading, setLoading] = useState(false);
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const [error, setError] = useState('');
+  const activeRequestIdRef = useRef(0);
+  const monthDataByKeyRef = useRef<Record<string, MonthData>>({});
 
   const fetchPaymentsForMonth = useCallback(async (month: string): Promise<PaymentRecordEntry[]> => {
     const results: PaymentRecordEntry[] = [];
@@ -211,158 +406,206 @@ const AccountStatementPage = () => {
     return extractResults<AdditionIncomeRecordEntry>(response.data);
   }, []);
 
+  const fetchAllDataForMonth = useCallback(
+    async (month: string): Promise<MonthData> => {
+      const [payments, expenses, additionIncomes] = await Promise.all([
+        fetchPaymentsForMonth(month),
+        fetchExpensesForMonth(month),
+        fetchAdditionIncomesForMonth(month),
+      ]);
+      return {
+        payments,
+        expenses,
+        additionIncomes,
+      };
+    },
+    [fetchPaymentsForMonth, fetchExpensesForMonth, fetchAdditionIncomesForMonth],
+  );
+
   const loadStatementData = useCallback(async () => {
     if (!selectedMonth) {
-      setMonthPayments([]);
-      setMonthExpenses([]);
-      setMonthAdditionIncomes([]);
       return;
     }
 
+    const requestId = activeRequestIdRef.current + 1;
+    activeRequestIdRef.current = requestId;
     setLoading(true);
     setError('');
     try {
-      const [payments, expenses, additionIncomes] = await Promise.all([
-        fetchPaymentsForMonth(selectedMonth),
-        fetchExpensesForMonth(selectedMonth),
-        fetchAdditionIncomesForMonth(selectedMonth),
-      ]);
-      setMonthPayments(payments);
-      setMonthExpenses(expenses);
-      setMonthAdditionIncomes(additionIncomes);
+      const requiredMonthKeys = getRequiredMonthKeysForSelection(selectedMonth);
+      const cachedMonthData = monthDataByKeyRef.current;
+      const missingMonthKeys = requiredMonthKeys.filter((monthKey) => !cachedMonthData[monthKey]);
+
+      if (missingMonthKeys.length > 0) {
+        const fetchedMonthEntries = await Promise.all(
+          missingMonthKeys.map(async (monthKey) => [monthKey, await fetchAllDataForMonth(monthKey)] as const),
+        );
+        if (activeRequestIdRef.current !== requestId) {
+          return;
+        }
+        const mergedMonthData = { ...cachedMonthData };
+        fetchedMonthEntries.forEach(([monthKey, monthData]) => {
+          mergedMonthData[monthKey] = monthData;
+        });
+        monthDataByKeyRef.current = mergedMonthData;
+        setMonthDataByKey(mergedMonthData);
+      }
+
+      if (activeRequestIdRef.current !== requestId) {
+        return;
+      }
     } catch (loadError: any) {
+      if (activeRequestIdRef.current !== requestId) {
+        return;
+      }
       const detail =
         loadError?.response?.data?.detail ??
         loadError?.message ??
         'Unable to load account statement data.';
       setError(typeof detail === 'string' ? detail : 'Unable to load account statement data.');
-      setMonthPayments([]);
-      setMonthExpenses([]);
-      setMonthAdditionIncomes([]);
     } finally {
-      setLoading(false);
+      if (activeRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
-  }, [selectedMonth, fetchPaymentsForMonth, fetchExpensesForMonth, fetchAdditionIncomesForMonth]);
+  }, [selectedMonth, fetchAllDataForMonth]);
 
   useEffect(() => {
     void loadStatementData();
   }, [loadStatementData]);
 
-  const statementRows = useMemo<StatementRow[]>(() => {
-    const paymentRows: StatementRow[] = monthPayments
-      .filter((payment) => {
-        if ((payment.status ?? '').trim().toLowerCase() !== 'success') {
-          return false;
-        }
-        const paymentLedgerMonthDate = getPaymentLedgerMonthDate(payment);
-        if (!paymentLedgerMonthDate) {
-          return false;
-        }
-        if (toMonthKey(paymentLedgerMonthDate) !== selectedMonth) {
-          return false;
-        }
-        const paymentDisplayDate = getPaymentDisplayDate(payment);
-        return paymentDisplayDate !== null;
-      })
-      .map((payment) => {
-        const paymentDate = getPaymentDisplayDate(payment) ?? new Date(0);
-        const donorName = normalizeText(payment.donor_name) || `Donor #${payment.donor}`;
-        const poojaName = normalizeText(payment.pooja_option) || 'Pooja Payment';
-        const mode = normalizeText(payment.mode).toUpperCase();
-        const modeLabel = mode ? ` · ${mode}` : '';
-        const details = `${poojaName} (${donorName})${modeLabel}`;
-        const reference =
-          normalizeText(payment.transaction_reference) ||
-          `Payment #${payment.id}`;
+  const selectedMonthData = monthDataByKey[selectedMonth] ?? EMPTY_MONTH_DATA;
 
-        return {
-          key: `payment-${payment.id}`,
-          date: paymentDate,
-          dateLabel: formatDateLabel(paymentDate),
-          type: 'payment',
-          details,
-          reference,
-          inflow: parseAmount(payment.amount),
-          outflow: 0,
-        };
-      });
+  const statementRows = useMemo<StatementRow[]>(
+    () => buildStatementRowsForMonth(selectedMonth, selectedMonthData),
+    [selectedMonth, selectedMonthData],
+  );
 
-    const expenseRows: StatementRow[] = monthExpenses
-      .map<StatementRow | null>((expense) => {
-        const expenseDate = parseDateValue(expense.transaction_date);
-        if (!expenseDate) {
-          return null;
-        }
-        const category = normalizeText(expense.category) || 'Expense';
-        const createdBy = normalizeText(expense.created_by_name);
-        const details = createdBy ? `${category} (${createdBy})` : category;
-        const reference = normalizeText(expense.transaction_no) || `Expense #${expense.id}`;
+  const openingBalance = useMemo(() => {
+    if (!selectedMonth) {
+      return 0;
+    }
+    if (compareMonthKeys(selectedMonth, LEDGER_CARRY_FORWARD_START_MONTH) < 0) {
+      return 0;
+    }
 
-        return {
-          key: `expense-${expense.id}`,
-          date: expenseDate,
-          dateLabel: formatDateLabel(expenseDate),
-          type: 'expense',
-          details,
-          reference,
-          inflow: 0,
-          outflow: parseAmount(expense.amount),
-        };
-      })
-      .filter((row): row is StatementRow => row !== null);
+    const previousMonthKeys = listMonthKeysInclusive(LEDGER_CARRY_FORWARD_START_MONTH, selectedMonth).slice(0, -1);
+    let runningOpeningBalance = LEDGER_CARRY_FORWARD_START_OPENING_BALANCE;
+    previousMonthKeys.forEach((monthKey) => {
+      const previousMonthRows = buildStatementRowsForMonth(monthKey, monthDataByKey[monthKey] ?? EMPTY_MONTH_DATA);
+      const previousMonthSummary = summarizeRows(previousMonthRows);
+      runningOpeningBalance += previousMonthSummary.inflow - previousMonthSummary.outflow;
+    });
+    return runningOpeningBalance;
+  }, [selectedMonth, monthDataByKey]);
 
-    const additionIncomeRows: StatementRow[] = monthAdditionIncomes
-      .map<StatementRow | null>((income) => {
-        const incomeDate = parseDateValue(income.transaction_date);
-        if (!incomeDate) {
-          return null;
-        }
-        const category = normalizeText(income.category) || 'Additional Income';
-        const createdBy = normalizeText(income.created_by_name);
-        const details = createdBy ? `${category} (${createdBy})` : `${category} (Additional Income)`;
-        const reference = normalizeText(income.transaction_no) || `Income #${income.id}`;
-
-        return {
-          key: `income-${income.id}`,
-          date: incomeDate,
-          dateLabel: formatDateLabel(incomeDate),
-          type: 'income',
-          details,
-          reference,
-          inflow: parseAmount(income.amount),
-          outflow: 0,
-        };
-      })
-      .filter((row): row is StatementRow => row !== null);
-
-    const manualOpeningBalanceRows =
-      selectedMonth === '2025-12' ? DECEMBER_2025_OPENING_BALANCE_ROWS : [];
-
-    return [...manualOpeningBalanceRows, ...paymentRows, ...additionIncomeRows, ...expenseRows].sort(
-      (left, right) => left.date.getTime() - right.date.getTime(),
-    );
-  }, [monthPayments, monthAdditionIncomes, monthExpenses, selectedMonth]);
+  const statementRowsWithBalance = useMemo<StatementDisplayRow[]>(() => {
+    let runningBalance = openingBalance;
+    return statementRows.map((row) => {
+      runningBalance += row.inflow - row.outflow;
+      return {
+        ...row,
+        balance: runningBalance,
+      };
+    });
+  }, [statementRows, openingBalance]);
 
   const totals = useMemo(() => {
-    const inflow = statementRows.reduce((sum, row) => sum + row.inflow, 0);
-    const outflow = statementRows.reduce((sum, row) => sum + row.outflow, 0);
-    const paymentCount = statementRows.filter((row) => row.type === 'payment').length;
-    const additionIncomeCount = statementRows.filter((row) => row.type === 'income').length;
-    const expenseCount = statementRows.filter((row) => row.type === 'expense').length;
+    const summary = summarizeRows(statementRows);
     return {
-      inflow,
-      outflow,
-      net: inflow - outflow,
-      paymentCount,
-      additionIncomeCount,
-      expenseCount,
+      opening: openingBalance,
+      inflow: summary.inflow,
+      outflow: summary.outflow,
+      net: openingBalance + summary.inflow - summary.outflow,
+      paymentCount: summary.paymentCount,
+      additionIncomeCount: summary.additionIncomeCount,
+      expenseCount: summary.expenseCount,
     };
-  }, [statementRows]);
+  }, [statementRows, openingBalance]);
 
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((option) => option.value === selectedMonth)?.label ?? selectedMonth,
     [monthOptions, selectedMonth],
   );
+
+  const openingBalanceLabel = useMemo(() => {
+    if (!selectedMonth) {
+      return '';
+    }
+    const monthComparison = compareMonthKeys(selectedMonth, LEDGER_CARRY_FORWARD_START_MONTH);
+    if (monthComparison === 0) {
+      return 'Manual carry-forward seed';
+    }
+    if (monthComparison > 0) {
+      return 'Carry-forward from previous month';
+    }
+    return 'Manual setup pending';
+  }, [selectedMonth]);
+
+  const handleDownloadReport = useCallback(async () => {
+    if (!selectedMonth || downloadingReport) {
+      return;
+    }
+
+    setError('');
+    setDownloadingReport(true);
+    try {
+      const workbook = xlsxUtils.book_new();
+
+      const summaryRows = [
+        ['Metric', 'Value'],
+        ['Month', selectedMonthLabel],
+        ['Opening Balance', Number(totals.opening.toFixed(2))],
+        ['Inflow', Number(totals.inflow.toFixed(2))],
+        ['Outflow', Number(totals.outflow.toFixed(2))],
+        ['Net Balance', Number(totals.net.toFixed(2))],
+      ];
+      const summarySheet = xlsxUtils.aoa_to_sheet(summaryRows);
+      xlsxUtils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+      const transactionsRows = [
+        ['Date', 'Type', 'Details', 'Reference', 'Inflow', 'Outflow', 'Balance'],
+        ...statementRowsWithBalance.map((row) => [
+          row.dateLabel,
+          row.type === 'payment'
+            ? 'Donor Payment'
+            : row.type === 'income'
+              ? 'Addition Income'
+              : row.type === 'expense'
+                ? 'Admin Expense'
+                : 'Opening Balance',
+          row.details,
+          row.reference,
+          row.inflow > 0 ? Number(row.inflow.toFixed(2)) : '',
+          row.outflow > 0 ? Number(row.outflow.toFixed(2)) : '',
+          Number(row.balance.toFixed(2)),
+        ]),
+      ];
+      const transactionsSheet = xlsxUtils.aoa_to_sheet(transactionsRows);
+      xlsxUtils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+
+      const fallbackFilename = `account-statement-${selectedMonth}.xlsx`;
+      const downloadFilename = sanitizeFilename(fallbackFilename) || fallbackFilename;
+      writeXlsxFile(workbook, downloadFilename);
+    } catch (downloadError: any) {
+      const detail =
+        downloadError?.response?.data?.detail ??
+        downloadError?.message ??
+        'Unable to download account statement report.';
+      setError(typeof detail === 'string' ? detail : 'Unable to download account statement report.');
+    } finally {
+      setDownloadingReport(false);
+    }
+  }, [
+    selectedMonth,
+    selectedMonthLabel,
+    statementRowsWithBalance,
+    totals.opening,
+    totals.inflow,
+    totals.outflow,
+    totals.net,
+    downloadingReport,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -399,14 +642,22 @@ const AccountStatementPage = () => {
             >
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
+            <button
+              type="button"
+              onClick={() => void handleDownloadReport()}
+              disabled={downloadingReport || loading || !selectedMonth}
+              className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {downloadingReport ? 'Preparing…' : 'Download Report'}
+            </button>
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-violet-700">Opening Balance</p>
-            <p className="text-base font-semibold text-violet-900">{formatCurrency(0)}</p>
-            <p className="text-xs text-violet-700">Manual setup pending</p>
+            <p className="text-base font-semibold text-violet-900">{formatCurrency(totals.opening)}</p>
+            <p className="text-xs text-violet-700">{openingBalanceLabel}</p>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-emerald-700">Inflow</p>
@@ -437,13 +688,13 @@ const AccountStatementPage = () => {
           </div>
         )}
 
-        {!error && !loading && statementRows.length === 0 && (
+        {!error && !loading && statementRowsWithBalance.length === 0 && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             No payment, addition income, or expense transactions found for {selectedMonthLabel}.
           </div>
         )}
 
-        {!error && !loading && statementRows.length > 0 && (
+        {!error && !loading && statementRowsWithBalance.length > 0 && (
           <div className="mt-4 overflow-hidden rounded-xl border border-amber-200">
             <div className="overflow-x-auto">
               <table className="min-w-[80rem] w-full table-fixed divide-y divide-amber-200">
@@ -459,7 +710,7 @@ const AccountStatementPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-amber-100 bg-white">
-                  {statementRows.map((row) => (
+                  {statementRowsWithBalance.map((row) => (
                     <tr key={row.key} className="odd:bg-white even:bg-amber-50/20">
                       <td className="px-4 py-3 text-sm text-slate-700">{row.dateLabel}</td>
                       <td className="px-4 py-3">
@@ -491,7 +742,9 @@ const AccountStatementPage = () => {
                       <td className="px-4 py-3 text-right text-sm font-semibold text-rose-800">
                         {row.outflow > 0 ? formatCurrency(row.outflow) : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-slate-700">—</td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-slate-700">
+                        {formatCurrency(row.balance)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

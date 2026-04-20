@@ -250,6 +250,51 @@ class ImportOpeningBalancesCommandTests(TestCase):
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
+class OpeningBalanceMutationGuardTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.donor = User.objects.create_user(
+            phone_number="8333333333",
+            name="Guarded Donor",
+            password="donorpass",
+        )
+        self.admin = User.objects.create_superuser(
+            phone_number="9333333333",
+            name="Guarded Admin",
+            password="adminpass",
+        )
+        self.profile = DonorProfile.objects.get(user=self.donor)
+        self.profile.custom_number = 50
+        self.profile.save(update_fields=["custom_number"])
+
+    def test_donor_profile_update_rejects_custom_number(self):
+        self.client.force_authenticate(self.donor)
+        response = self.client.put(
+            reverse("profile"),
+            {"custom_number": 999},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("custom_number", response.json())
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.custom_number, 50)
+
+    def test_admin_donor_update_rejects_custom_number(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            reverse("donor-detail", args=[self.donor.id]),
+            {"profile": {"custom_number": 888}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("custom_number", response.json())
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.custom_number, 50)
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
 class AdminAccessPolicyTests(TestCase):
     def test_read_only_admin_access_rules(self):
         read_only_admin = User.objects.create_superuser(

@@ -632,6 +632,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             f for f in DonorProfileSerializer.Meta.fields
             if f
             not in (
+                "custom_number",
                 "opening_balance",
                 "current_month_due",
                 "current_month_payments",
