@@ -210,6 +210,115 @@ class PaymentDetailsExportContentTests(TestCase):
         self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
 
 
+class AccountStatementExportTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("account-statement-export")
+        self.admin = User.objects.create_user(
+            phone_number="+919500000001",
+            name="Account Statement Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.hidden_admin = User.objects.create_superuser(
+            phone_number="+91 9999999997",
+            name="Hidden Statement Admin",
+            password="adminpass2",
+        )
+        self.donor = User.objects.create_user(
+            phone_number="+919500000002",
+            name="Statement Donor",
+            password="secret",
+        )
+
+    def _load_workbook(self, response):
+        payload = b"".join(response.streaming_content)
+        return load_workbook(filename=BytesIO(payload))
+
+    def test_hidden_admin_cannot_download_account_statement_export(self):
+        self.client.force_authenticate(self.hidden_admin)
+        response = self.client.get(self.url, {"month": "2026-01"})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_export_uses_payment_month_and_includes_summary_totals(self):
+        jan_created_at = timezone.make_aware(datetime(2026, 1, 20, 9, 30, 0))
+        feb_created_at = timezone.make_aware(datetime(2026, 2, 12, 10, 0, 0))
+
+        jan_payment = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("200.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="JAN-CREATED-AT",
+            payment_month=date(2026, 2, 1),
+        )
+        PaymentRecord.objects.filter(pk=jan_payment.pk).update(created_at=jan_created_at)
+
+        feb_payment = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("100.00"),
+            mode="upi",
+            status=PaymentStatus.SUCCESS,
+            transaction_reference="FEB-CREATED-AT",
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.filter(pk=feb_payment.pk).update(created_at=feb_created_at)
+
+        jan_pending_payment = PaymentRecord.objects.create(
+            donor=self.donor,
+            amount=Decimal("75.00"),
+            mode="upi",
+            status=PaymentStatus.PENDING,
+            transaction_reference="JAN-PENDING-WITH-REF",
+            payment_month=date(2026, 1, 1),
+        )
+        PaymentRecord.objects.filter(pk=jan_pending_payment.pk).update(created_at=jan_created_at)
+
+        AdditionIncomeRecord.objects.create(
+            transaction_date=date(2026, 1, 7),
+            category="General Donation",
+            amount=Decimal("25.00"),
+            transaction_no="INC-001",
+            created_by=self.admin,
+        )
+        ExpenseRecord.objects.create(
+            transaction_date=date(2026, 1, 8),
+            category="Maintenance",
+            amount=Decimal("50.00"),
+            transaction_no="EXP-001",
+            created_by=self.admin,
+        )
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.url, {"month": "2026-01"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workbook = self._load_workbook(response)
+        self.assertIn("Summary", workbook.sheetnames)
+        self.assertIn("Transactions", workbook.sheetnames)
+
+        summary_rows = list(workbook["Summary"].iter_rows(values_only=True))
+        summary_dict = {
+            row[0]: row[1]
+            for row in summary_rows[1:]
+            if row and row[0]
+        }
+        self.assertEqual(summary_dict.get("Month"), "January 2026")
+        self.assertEqual(summary_dict.get("Opening Balance"), 0)
+        self.assertEqual(summary_dict.get("Inflow"), 200)
+        self.assertEqual(summary_dict.get("Outflow"), 50)
+        self.assertEqual(summary_dict.get("Net Balance"), 150)
+
+        transaction_rows = list(workbook["Transactions"].iter_rows(min_row=2, values_only=True))
+        references = {row[3] for row in transaction_rows if row and row[3]}
+        self.assertNotIn("JAN-CREATED-AT", references)
+        self.assertIn("JAN-PENDING-WITH-REF", references)
+        self.assertIn("FEB-CREATED-AT", references)
+        self.assertIn("INC-001", references)
+        self.assertIn("EXP-001", references)
+
+
 class PassbookRefreshDetectionTests(TestCase):
     def setUp(self):
         self.donor = User.objects.create_user(
@@ -1828,3 +1937,31 @@ class PaymentRecordMonthFilterTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self._result_ids(response), set())
+
+    def test_month_filter_by_created_at_for_january_uses_transaction_month(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(
+            self.url,
+            {"month": "2026-01", "month_basis": "created_at"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = self._result_ids(response)
+        self.assertNotIn(self.jan_by_payment_month.id, ids)
+        self.assertIn(self.jan_by_created_at.id, ids)
+        self.assertIn(self.feb_by_payment_month.id, ids)
+        self.assertNotIn(self.feb_by_created_at.id, ids)
+
+    def test_month_filter_by_created_at_for_february_uses_transaction_month(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(
+            self.url,
+            {"month": "2026-02", "month_basis": "created_at"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = self._result_ids(response)
+        self.assertIn(self.jan_by_payment_month.id, ids)
+        self.assertNotIn(self.jan_by_created_at.id, ids)
+        self.assertNotIn(self.feb_by_payment_month.id, ids)
+        self.assertIn(self.feb_by_created_at.id, ids)

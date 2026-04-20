@@ -4,6 +4,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    AccountStatementExportView,
     AdditionIncomeRecordViewSet,
     CombinePaymentAccessView,
     CombinePaymentMappingView,
@@ -32,4 +33,5 @@ urlpatterns += [
     path('combine-access/', CombinePaymentAccessView.as_view(), name='combine-payment-access'),
     path('payment-details-export/', PaymentDetailsExportView.as_view(), name='payment-details-export'),
     path('general-donation-export/', GeneralDonationExportView.as_view(), name='general-donation-export'),
+    path('account-statement-export/', AccountStatementExportView.as_view(), name='account-statement-export'),
 ]

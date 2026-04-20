@@ -351,13 +351,17 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
                 month_end = _shift_month(month_start, 1)
                 month_start_dt = timezone.make_aware(datetime.combine(month_start, time.min))
                 month_end_dt = timezone.make_aware(datetime.combine(month_end, time.min))
-                qs = qs.filter(
-                    Q(payment_month__gte=month_start, payment_month__lt=month_end)
-                    | (
-                        Q(payment_month__isnull=True)
-                        & Q(created_at__gte=month_start_dt, created_at__lt=month_end_dt)
+                month_basis = (self.request.query_params.get("month_basis") or "").strip().lower()
+                if month_basis in {"created_at", "transaction_date", "transaction"}:
+                    qs = qs.filter(created_at__gte=month_start_dt, created_at__lt=month_end_dt)
+                else:
+                    qs = qs.filter(
+                        Q(payment_month__gte=month_start, payment_month__lt=month_end)
+                        | (
+                            Q(payment_month__isnull=True)
+                            & Q(created_at__gte=month_start_dt, created_at__lt=month_end_dt)
+                        )
                     )
-                )
 
         if self.request.user.role == UserRole.ADMIN:
             return qs
@@ -1454,6 +1458,224 @@ class GeneralDonationExportView(APIView):
         buffer.seek(0)
 
         filename = f"general-donation-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+
+class AccountStatementExportView(APIView):
+    """Export month-wise account statement data to Excel."""
+
+    permission_classes = (IsAdminRole,)
+
+    _DECEMBER_2025_OPENING_ROWS = (
+        {
+            "details": "Kumbabishekam SB account balance",
+            "reference": "Manual Opening Balance",
+            "inflow": Decimal("9091.00"),
+        },
+        {
+            "details": "Normal account SB account balance",
+            "reference": "Manual Opening Balance",
+            "inflow": Decimal("216770.00"),
+        },
+    )
+
+    @staticmethod
+    def _format_date(value):
+        if not value:
+            return ""
+        try:
+            return value.strftime("%d %b %Y")
+        except Exception:
+            return str(value)
+
+    @staticmethod
+    def _normalize_text(value, fallback: str = ""):
+        if value is None:
+            return fallback
+        text = str(value).strip()
+        return text if text else fallback
+
+    def get(self, request):
+        if not can_view_payment_statement(request.user):
+            return Response(
+                {"detail": "You don't have access for Payment Statement, contact other admins."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not can_view_expense_tracker(request.user):
+            return Response(
+                {"detail": EXPENSE_TRACKER_ACCESS_DENIED_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        month_param = request.query_params.get("month")
+        if month_param:
+            month_start = _parse_month_key(month_param)
+            if month_start is None:
+                return Response(
+                    {"detail": "Invalid month format. Use YYYY-MM."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            month_start = timezone.localdate().replace(day=1)
+        month_end = _shift_month(month_start, 1)
+
+        month_start_dt = timezone.make_aware(datetime.combine(month_start, time.min))
+        month_end_dt = timezone.make_aware(datetime.combine(month_end, time.min))
+
+        rows: list[dict] = []
+        sequence = 0
+
+        if month_start == date(2025, 12, 1):
+            for opening_row in self._DECEMBER_2025_OPENING_ROWS:
+                rows.append(
+                    {
+                        "sequence": sequence,
+                        "date": month_start,
+                        "type_label": "Opening Balance",
+                        "details": opening_row["details"],
+                        "reference": opening_row["reference"],
+                        "inflow": Decimal(opening_row["inflow"]),
+                        "outflow": Decimal("0.00"),
+                    }
+                )
+                sequence += 1
+
+        payments = (
+            PaymentRecord.objects.select_related("donor", "registration", "registration__pooja_option")
+            .filter(
+                Q(payment_month__gte=month_start, payment_month__lt=month_end)
+                | (
+                    Q(payment_month__isnull=True)
+                    & Q(created_at__gte=month_start_dt, created_at__lt=month_end_dt)
+                )
+            )
+            .order_by("created_at", "id")
+        )
+        for payment in payments:
+            status_value = self._normalize_text(payment.status).lower()
+            paid_amount = Decimal(payment.amount or 0)
+            has_reference = bool(self._normalize_text(payment.transaction_reference))
+            is_failed_like = status_value in {PaymentStatus.FAILED, PaymentStatus.REFUNDED}
+            is_paid_like = status_value == PaymentStatus.SUCCESS or (has_reference and paid_amount > 0)
+            if is_failed_like or not is_paid_like:
+                continue
+            payment_created_at = payment.created_at
+            payment_date = payment.payment_month or (
+                timezone.localtime(payment_created_at).date() if payment_created_at else month_start
+            )
+            donor_name = self._normalize_text(getattr(payment.donor, "name", None), f"Donor #{payment.donor_id}")
+            registration = getattr(payment, "registration", None)
+            pooja_option = getattr(registration, "pooja_option", None) if registration else None
+            pooja_name = self._normalize_text(getattr(pooja_option, "name", None), "Pooja Payment")
+            mode = self._normalize_text(payment.mode).upper()
+            mode_label = f" · {mode}" if mode else ""
+            details = f"{pooja_name} ({donor_name}){mode_label}"
+            reference = self._normalize_text(payment.transaction_reference, f"Payment #{payment.id}")
+
+            rows.append(
+                {
+                    "sequence": sequence,
+                    "date": payment_date,
+                    "type_label": "Donor Payment",
+                    "details": details,
+                    "reference": reference,
+                    "inflow": paid_amount,
+                    "outflow": Decimal("0.00"),
+                }
+            )
+            sequence += 1
+
+        addition_incomes = (
+            AdditionIncomeRecord.objects.select_related("created_by")
+            .filter(transaction_date__year=month_start.year, transaction_date__month=month_start.month)
+            .order_by("transaction_date", "id")
+        )
+        for income in addition_incomes:
+            category = self._normalize_text(income.category, "Additional Income")
+            created_by_name = self._normalize_text(getattr(income.created_by, "name", None))
+            details = f"{category} ({created_by_name})" if created_by_name else f"{category} (Additional Income)"
+            reference = self._normalize_text(income.transaction_no, f"Income #{income.id}")
+            rows.append(
+                {
+                    "sequence": sequence,
+                    "date": income.transaction_date,
+                    "type_label": "Addition Income",
+                    "details": details,
+                    "reference": reference,
+                    "inflow": Decimal(income.amount or 0),
+                    "outflow": Decimal("0.00"),
+                }
+            )
+            sequence += 1
+
+        expenses = (
+            ExpenseRecord.objects.select_related("created_by")
+            .filter(transaction_date__year=month_start.year, transaction_date__month=month_start.month)
+            .order_by("transaction_date", "id")
+        )
+        for expense in expenses:
+            category = self._normalize_text(expense.category, "Expense")
+            created_by_name = self._normalize_text(getattr(expense.created_by, "name", None))
+            details = f"{category} ({created_by_name})" if created_by_name else category
+            reference = self._normalize_text(expense.transaction_no, f"Expense #{expense.id}")
+            rows.append(
+                {
+                    "sequence": sequence,
+                    "date": expense.transaction_date,
+                    "type_label": "Admin Expense",
+                    "details": details,
+                    "reference": reference,
+                    "inflow": Decimal("0.00"),
+                    "outflow": Decimal(expense.amount or 0),
+                }
+            )
+            sequence += 1
+
+        rows.sort(key=lambda row: (row["date"], row["sequence"]))
+
+        opening_balance = Decimal("0.00")
+        total_inflow = sum((row["inflow"] for row in rows), Decimal("0.00"))
+        total_outflow = sum((row["outflow"] for row in rows), Decimal("0.00"))
+        net_balance = total_inflow - total_outflow
+        month_label = month_start.strftime("%B %Y")
+
+        workbook = Workbook()
+        summary_sheet = workbook.active
+        summary_sheet.title = "Summary"
+        summary_sheet.append(["Metric", "Value"])
+        summary_sheet.append(["Month", month_label])
+        summary_sheet.append(["Opening Balance", float(opening_balance)])
+        summary_sheet.append(["Inflow", float(total_inflow)])
+        summary_sheet.append(["Outflow", float(total_outflow)])
+        summary_sheet.append(["Net Balance", float(net_balance)])
+
+        transactions_sheet = workbook.create_sheet(title="Transactions")
+        transactions_sheet.append(
+            ["Date", "Type", "Details", "Reference", "Inflow", "Outflow", "Balance"]
+        )
+        for row in rows:
+            transactions_sheet.append(
+                [
+                    self._format_date(row["date"]),
+                    row["type_label"],
+                    row["details"],
+                    row["reference"],
+                    float(row["inflow"]) if row["inflow"] > 0 else "",
+                    float(row["outflow"]) if row["outflow"] > 0 else "",
+                    "",
+                ]
+            )
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        filename = f"account-statement-{month_start.strftime('%Y-%m')}-{timezone.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return FileResponse(
             buffer,
             as_attachment=True,
