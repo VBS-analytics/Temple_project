@@ -1,5 +1,5 @@
 import type { AxiosError } from "axios";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import api from "../lib/api";
@@ -7,17 +7,80 @@ import { isAdmin, useAuthStore } from "../store/auth";
 
 const MAX_FEEDBACK_LENGTH = 250;
 
+interface DonorFeedbackEntry {
+  id: number;
+  donor_name: string;
+  donor_phone_number: string;
+  feedback: string;
+  created_at: string;
+}
+
+const formatSubmittedAt = (value: string) => {
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+  return parsedDate.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  });
+};
+
 const DonorCornerPage = () => {
   const user = useAuthStore((state) => state.user);
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [feedbackHistory, setFeedbackHistory] = useState<DonorFeedbackEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const remainingChars = useMemo(
     () => MAX_FEEDBACK_LENGTH - feedback.length,
     [feedback.length],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user || isAdmin(user.role)) {
+      setLoadingHistory(false);
+      setHistoryError(null);
+      setFeedbackHistory([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const fetchFeedbackHistory = async () => {
+      setLoadingHistory(true);
+      setHistoryError(null);
+
+      try {
+        const response = await api.get<DonorFeedbackEntry[]>("auth/donor-feedback/");
+        if (!cancelled) {
+          setFeedbackHistory(Array.isArray(response.data) ? response.data : []);
+        }
+      } catch (error) {
+        const detail = (error as AxiosError<{ detail?: string }>).response?.data?.detail;
+        if (!cancelled) {
+          setHistoryError(detail || "Unable to load donor feedback right now.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingHistory(false);
+        }
+      }
+    };
+
+    void fetchFeedbackHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -41,9 +104,16 @@ const DonorCornerPage = () => {
 
     setSubmitting(true);
     try {
-      await api.post("auth/donor-feedback/", { feedback: trimmedFeedback });
+      const response = await api.post<DonorFeedbackEntry>("auth/donor-feedback/", {
+        feedback: trimmedFeedback,
+      });
       setFeedback("");
       setSuccessMessage("Your feedback has been submitted successfully.");
+      setHistoryError(null);
+      setFeedbackHistory((previousHistory) => [
+        response.data,
+        ...previousHistory.filter((entry) => entry.id !== response.data.id),
+      ]);
     } catch (error) {
       const detail = (error as AxiosError<{ detail?: string }>).response?.data?.detail;
       setErrorMessage(detail || "Unable to submit feedback right now. Please try again.");
@@ -93,6 +163,40 @@ const DonorCornerPage = () => {
             {errorMessage}
           </p>
         )}
+
+        <div className="mt-8 border-t border-slate-200 pt-6">
+          <h4 className="text-lg font-semibold text-slate-900">All Donor Feedback</h4>
+
+          {loadingHistory && (
+            <p className="mt-3 text-sm text-slate-500">Loading feedback...</p>
+          )}
+
+          {!loadingHistory && historyError && (
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {historyError}
+            </p>
+          )}
+
+          {!loadingHistory && !historyError && feedbackHistory.length === 0 && (
+            <p className="mt-3 text-sm text-slate-500">No feedback has been submitted yet.</p>
+          )}
+
+          {!loadingHistory && !historyError && feedbackHistory.length > 0 && (
+            <ul className="mt-4 space-y-3">
+              {feedbackHistory.map((entry) => (
+                <li key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{entry.donor_name}</p>
+                    <p className="text-xs text-slate-500">{formatSubmittedAt(entry.created_at)}</p>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">
+                    {entry.feedback}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );

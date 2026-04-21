@@ -265,6 +265,14 @@ class FamilyMemberDetailView(APIView):
 class DonorFeedbackView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
+    def get(self, request):
+        if request.user.role != UserRole.DONOR:
+            return Response({"detail": "Only donors can view feedback."}, status=status.HTTP_403_FORBIDDEN)
+
+        feedback_rows = DonorFeedback.objects.all().order_by("-created_at", "-id")
+        serializer = DonorFeedbackSerializer(feedback_rows, many=True)
+        return Response(serializer.data)
+
     def post(self, request):
         if request.user.role != UserRole.DONOR:
             return Response({"detail": "Only donors can submit feedback."}, status=status.HTTP_403_FORBIDDEN)

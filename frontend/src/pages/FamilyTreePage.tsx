@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type FamilyTreeInfo = {
   id: string;
@@ -30,7 +30,11 @@ type ViewMode = "diagram" | "tree" | "timeline" | "table";
 type SortField = "name" | "generation" | "birthYear" | "birthPlace";
 type SortDirection = "asc" | "desc";
 const MOBILE_BREAKPOINT = 768;
-const getDefaultDiagramZoom = (isMobile: boolean) => (isMobile ? 100 : 150);
+const MIN_DIAGRAM_ZOOM = 50;
+const MAX_DIAGRAM_ZOOM_DESKTOP = 300;
+const MAX_DIAGRAM_ZOOM_MOBILE = 450;
+const getDefaultDiagramZoom = (isMobile: boolean, embedded: boolean) =>
+  embedded ? (isMobile ? 175 : 100) : isMobile ? 120 : 150;
 
 type SvgRectNode = {
   x: number;
@@ -1088,7 +1092,10 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
     typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false,
   );
   const [zoomLevel, setZoomLevel] = useState(() =>
-    getDefaultDiagramZoom(typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false),
+    getDefaultDiagramZoom(
+      typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false,
+      embedded,
+    ),
   );
   const [viewMode, setViewMode] = useState<ViewMode>("diagram");
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
@@ -1096,6 +1103,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
     Record<string, Person[] | null>
   >({});
   const tabsRef = useRef<HTMLDivElement>(null);
+  const diagramViewportRef = useRef<HTMLDivElement>(null);
 
   const activeTree = familyTrees.find((tree) => tree.id === activeTreeId) ?? familyTrees[0];
   const staticPeopleForTree = detailedPeopleByTree[activeTreeId] || [];
@@ -1149,20 +1157,41 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
     };
 
     const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
-    setViewMode(isMobile ? "timeline" : "diagram");
+    setViewMode(embedded ? "diagram" : isMobile ? "timeline" : "diagram");
     syncViewport();
     window.addEventListener("resize", syncViewport);
     return () => window.removeEventListener("resize", syncViewport);
-  }, []);
+  }, [embedded]);
 
   useEffect(() => {
     setSelectedPerson(null);
-    setZoomLevel(getDefaultDiagramZoom(isMobileViewport));
-  }, [activeTreeId, isMobileViewport]);
+    setZoomLevel(getDefaultDiagramZoom(isMobileViewport, embedded));
+  }, [activeTreeId, embedded, isMobileViewport]);
 
-  const zoomIn = () => setZoomLevel((prev) => Math.min(prev + 25, 300));
-  const zoomOut = () => setZoomLevel((prev) => Math.max(prev - 25, 50));
-  const resetZoom = () => setZoomLevel(getDefaultDiagramZoom(isMobileViewport));
+  const maxZoomLevel = isMobileViewport || embedded ? MAX_DIAGRAM_ZOOM_MOBILE : MAX_DIAGRAM_ZOOM_DESKTOP;
+
+  const centerDiagramViewport = useCallback(() => {
+    const viewport = diagramViewportRef.current;
+    if (!viewport) return;
+
+    const horizontalOverflow = viewport.scrollWidth - viewport.clientWidth;
+    viewport.scrollLeft = horizontalOverflow > 0 ? horizontalOverflow / 2 : 0;
+    viewport.scrollTop = 0;
+  }, []);
+
+  useEffect(() => {
+    if (!(isMobileViewport || embedded)) return;
+    if (viewMode !== "diagram") return;
+
+    const frame = window.requestAnimationFrame(() => {
+      centerDiagramViewport();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTreeId, centerDiagramViewport, embedded, isMobileViewport, viewMode]);
+
+  const zoomIn = () => setZoomLevel((prev) => Math.min(prev + 25, maxZoomLevel));
+  const zoomOut = () => setZoomLevel((prev) => Math.max(prev - 25, MIN_DIAGRAM_ZOOM));
+  const resetZoom = () => setZoomLevel(getDefaultDiagramZoom(isMobileViewport, embedded));
 
   const scrollTabs = (delta: number) => {
     tabsRef.current?.scrollBy({ left: delta, behavior: "smooth" });
@@ -1173,11 +1202,13 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
     if (person) setSelectedPerson(person);
   };
 
-  const views: { id: ViewMode; label: string }[] = [
-    { id: "diagram", label: "Diagram" },
-    { id: "tree", label: "Tree" },
-    { id: "timeline", label: "Timeline" },
-  ];
+  const views: { id: ViewMode; label: string }[] = embedded
+    ? [{ id: "diagram", label: "Diagram" }]
+    : [
+        { id: "diagram", label: "Diagram" },
+        { id: "tree", label: "Tree" },
+        { id: "timeline", label: "Timeline" },
+      ];
 
   return (
     <div
@@ -1290,7 +1321,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                     <button
                       type="button"
                       onClick={zoomOut}
-                      disabled={zoomLevel <= 50}
+                      disabled={zoomLevel <= MIN_DIAGRAM_ZOOM}
                       className="rounded-lg p-1.5 transition-colors hover:bg-[#f8eee2] disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Zoom out"
                     >
@@ -1302,8 +1333,8 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                     <div className="flex items-center gap-2 px-2">
                       <input
                         type="range"
-                        min="50"
-                        max="300"
+                        min={MIN_DIAGRAM_ZOOM}
+                        max={maxZoomLevel}
                         step="25"
                         value={zoomLevel}
                         onChange={(e) => setZoomLevel(Number(e.target.value))}
@@ -1317,7 +1348,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                     <button
                       type="button"
                       onClick={zoomIn}
-                      disabled={zoomLevel >= 300}
+                      disabled={zoomLevel >= maxZoomLevel}
                       className="rounded-lg p-1.5 transition-colors hover:bg-[#f8eee2] disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Zoom in"
                     >
@@ -1329,7 +1360,12 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                     <div className="mx-1 h-6 w-px bg-[#d8b9ac]" />
                     <button
                       type="button"
-                      onClick={resetZoom}
+                      onClick={() => {
+                        resetZoom();
+                        if (isMobileViewport || embedded) {
+                          window.requestAnimationFrame(centerDiagramViewport);
+                        }
+                      }}
                       className="rounded-lg p-1.5 transition-colors hover:bg-[#f8eee2]"
                       aria-label="Reset zoom"
                       title="Reset zoom"
@@ -1340,7 +1376,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                       />
                     </button>
                   </div>
-                  {hasDetailedData && (
+                  {!embedded && hasDetailedData && (
                     <div className="rounded-xl border border-[#d8b9ac] bg-[#f8eee2] px-3 py-2 text-xs text-[#7e2a20] font-medium">
                       Detailed data available: switch to Tree or Timeline.
                     </div>
@@ -1352,6 +1388,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                 {activeTree?.isAvailable && activeTree.image ? (
                   <div className="bg-gradient-to-br from-[#f8eee2] via-white to-[#f8eee2] p-4 sm:p-6">
                     <div
+                      ref={diagramViewportRef}
                       className="overflow-auto rounded-2xl border border-[#efd9cf] bg-white shadow-inner shadow-[#a33a2b]/10"
                       style={{ maxHeight: "82vh" }}
                     >
@@ -1359,7 +1396,7 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                         className="p-4 transition-transform duration-300 ease-out sm:p-6"
                         style={{
                           transform: `scale(${zoomLevel / 100})`,
-                          transformOrigin: isMobileViewport ? "top left" : "top center",
+                          transformOrigin: isMobileViewport || embedded ? "top left" : "top center",
                         }}
                       >
                         <img
@@ -1367,8 +1404,13 @@ const FamilyTreePage = ({ embedded = false }: FamilyTreePageProps) => {
                           alt={`Family tree diagram for ${activeTree.subtitle}`}
                           className="mx-auto block h-auto drop-shadow-[0_12px_22px_rgba(21,101,192,0.18)]"
                           loading="lazy"
+                          onLoad={() => {
+                            if (isMobileViewport || embedded) {
+                              window.requestAnimationFrame(centerDiagramViewport);
+                            }
+                          }}
                           style={
-                            isMobileViewport
+                            isMobileViewport || embedded
                               ? { width: "auto", maxWidth: "none" }
                               : { width: "100%", maxWidth: "100%" }
                           }
