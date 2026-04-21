@@ -352,6 +352,32 @@ class DonorFeedbackViewTests(TestCase):
         self.assertEqual(row.donor_phone_number, self.donor.phone_number)
         self.assertEqual(row.feedback, "Please add more monthly progress updates.")
 
+    def test_donor_can_view_all_feedback(self):
+        DonorFeedback.objects.create(
+            donor_name="Donor One",
+            donor_phone_number="9000000001",
+            feedback="First feedback",
+        )
+        second = DonorFeedback.objects.create(
+            donor_name="Donor Two",
+            donor_phone_number="9000000002",
+            feedback="Second feedback",
+        )
+
+        self.client.force_authenticate(self.donor)
+        response = self.client.get(reverse("donor-feedback"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]["id"], second.id)
+        self.assertEqual(response.data[0]["donor_name"], "Donor Two")
+        self.assertEqual(response.data[0]["feedback"], "Second feedback")
+
+    def test_admin_cannot_view_feedback(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("donor-feedback"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_admin_cannot_submit_feedback(self):
         self.client.force_authenticate(self.admin)
         response = self.client.post(
