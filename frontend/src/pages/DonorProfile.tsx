@@ -533,6 +533,7 @@ const DonorProfile = () => {
 
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
+  const [deletingMemberId, setDeletingMemberId] = useState<number | null>(null);
   const [formData, setFormData] = useState<FamilyMemberFormState>(() => createInitialFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1014,6 +1015,28 @@ const DonorProfile = () => {
     }
   };
 
+  const handleDeleteMember = useCallback(
+    async (member: FamilyMember) => {
+      if (!window.confirm('Delete this family member from your donor profile?')) {
+        return;
+      }
+      setDeletingMemberId(member.id);
+      setFormError(null);
+      try {
+        await api.delete(`auth/family-members/${member.id}/`);
+        setMembers((prev) => prev.filter((entry) => entry.id !== member.id));
+        if (editingMemberId === member.id) {
+          cancelEditing();
+        }
+      } catch (error) {
+        setFormError(extractErrorMessage(error));
+      } finally {
+        setDeletingMemberId(null);
+      }
+    },
+    [cancelEditing, editingMemberId],
+  );
+
   // --- RENDER ---
 
   return (
@@ -1430,7 +1453,24 @@ const DonorProfile = () => {
                             </div>
                           </div>
 
-                          <button onClick={() => startEditing(member)} className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Edit</button>
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(member)}
+                              disabled={deletingMemberId === member.id}
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMember(member)}
+                              disabled={deletingMemberId === member.id}
+                              className="w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                            >
+                              {deletingMemberId === member.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
                         </>
                       )}
                     </div>
