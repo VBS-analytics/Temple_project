@@ -22,7 +22,7 @@
  * ============================================================================
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import { isAxiosError } from 'axios';
 import api from '../../lib/api';
@@ -120,10 +120,24 @@ interface ApiPassbookEntry {
   closing_due: number | string | null;
 }
 
+const getEntryTimestamp = (entry: Pick<ApiPassbookEntry, 'entry_date'>) => {
+  const timestamp = new Date(entry.entry_date).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const getEntryIdRank = (entry: Pick<ApiPassbookEntry, 'id'>) => {
+  if (typeof entry.id === 'number') {
+    return entry.id;
+  }
+  const parsed = Number(entry.id);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 // --- Component ---
 const CombinePaymentPage: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const cartKey = user ? String(user.id) : 'guest';
+  const navigate = useNavigate();
   const cartItems = useCartStore((state) => state.itemsByUser[cartKey] ?? []);
   const clearCart = useCartStore((state) => state.clear);
   const addCombinePaymentHistory = usePaymentStore((state) => state.addCombinePaymentHistory);
@@ -152,6 +166,8 @@ const CombinePaymentPage: React.FC = () => {
   const [paymentScope, setPaymentScope] = useState<'main' | 'parents'>('main');
   const [paymentMethodTab, setPaymentMethodTab] = useState<'upi' | 'bank'>('upi');
   const [statementClosingDue, setStatementClosingDue] = useState<number | null>(null);
+  const [statementDueLoading, setStatementDueLoading] = useState(false);
+  const [statementDueError, setStatementDueError] = useState<string | null>(null);
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const combineHistory = usePaymentStore((state) => state.combinePaymentHistory);
@@ -179,19 +195,17 @@ const CombinePaymentPage: React.FC = () => {
     [parentDonors],
   );
 
-  const fallbackAmountDue =
-    paymentScope === 'main'
-      ? yourTotalAmount
-      : Math.max(parentItemsTotal, 0);
-
-  const selectedAmountDue = statementClosingDue ?? fallbackAmountDue;
+  const selectedAmountDue = statementClosingDue ?? 0;
   const totalDueAmount = selectedAmountDue;
+  const dueReady = statementClosingDue !== null && !statementDueLoading && !statementDueError;
 
   const canPayParents = yourTotalAmount <= 0;
   const parentScopeDisabled = !canPayParents || parentDonors.length === 0;
 
   const paymentBlocked =
-    processingPayment || (paymentScope === 'parents' && !canPayParents);
+    processingPayment ||
+    !dueReady ||
+    (paymentScope === 'parents' && !canPayParents);
 
   useEffect(() => {
     if (parentScopeDisabled && paymentScope === 'parents') {
@@ -206,6 +220,7 @@ const CombinePaymentPage: React.FC = () => {
   const loadStatementClosingDue = useCallback(async () => {
     if (!user?.id) {
       setStatementClosingDue(null);
+      setStatementDueError('Unable to load due because donor identity is missing.');
       return;
     }
     const mainDonorId = user.id;
@@ -214,9 +229,11 @@ const CombinePaymentPage: React.FC = () => {
       .filter((id): id is number => typeof id === 'number');
     const donorIds = new Set<number>([mainDonorId, ...parentDonorIds]);
 
+    setStatementDueLoading(true);
+    setStatementDueError(null);
     try {
       const allEntries: ApiPassbookEntry[] = [];
-      let nextUrl: string | null = 'payments/passbook-entries/?ordering=entry_date&page_size=500';
+      let nextUrl: string | null = 'payments/passbook-entries/?ordering=entry_date&page_size=500&refresh=true';
       while (nextUrl) {
         const response = await api.get(nextUrl);
         const rows: ApiPassbookEntry[] = Array.isArray(response.data?.results)
@@ -233,78 +250,40 @@ const CombinePaymentPage: React.FC = () => {
         setStatementClosingDue(0);
         return;
       }
+      const latestEntryByDonor = new Map<number, ApiPassbookEntry>();
 
-      const mainEntries = allEntries.filter(
-        (entry) =>
-          entry.donor === mainDonorId &&
-          (entry.entry_type === 'due' || entry.entry_type === 'paid'),
-      );
-
-      const parentEntries = allEntries.filter(
-        (entry) =>
-          parentDonorIds.includes(entry.donor) &&
-          (entry.entry_type === 'due' || entry.entry_type === 'paid'),
-      );
-
-      const parentMonthTotals = new Map<string, { monthDate: string; dueTotal: number; paidTotal: number }>();
-      parentEntries.forEach((entry) => {
-        const monthKey = entry.entry_date.slice(0, 7);
-        const existing = parentMonthTotals.get(monthKey) ?? {
-          monthDate: entry.entry_date,
-          dueTotal: 0,
-          paidTotal: 0,
-        };
-        if (entry.entry_type === 'due') {
-          existing.dueTotal += parseAmount(entry.due_amount);
-        } else if (entry.entry_type === 'paid') {
-          existing.paidTotal += parseAmount(entry.paid_amount);
-        }
-        if (new Date(entry.entry_date).getTime() < new Date(existing.monthDate).getTime()) {
-          existing.monthDate = entry.entry_date;
-        }
-        parentMonthTotals.set(monthKey, existing);
-      });
-
-      const timeline: Array<{ id: string; date: string; due: number; paid: number; isParentAggregate: boolean }> = [];
-      mainEntries.forEach((entry) => {
-        timeline.push({
-          id: `main-${entry.id}`,
-          date: entry.entry_date,
-          due: entry.entry_type === 'due' ? parseAmount(entry.due_amount) : 0,
-          paid: entry.entry_type === 'paid' ? parseAmount(entry.paid_amount) : 0,
-          isParentAggregate: false,
-        });
-      });
-      Array.from(parentMonthTotals.values()).forEach((group) => {
-        if (group.dueTotal === 0 && group.paidTotal === 0) {
+      allEntries.forEach((entry) => {
+        const current = latestEntryByDonor.get(entry.donor);
+        if (!current) {
+          latestEntryByDonor.set(entry.donor, entry);
           return;
         }
-        timeline.push({
-          id: `parent-${group.monthDate}`,
-          date: group.monthDate,
-          due: group.dueTotal,
-          paid: group.paidTotal,
-          isParentAggregate: true,
-        });
-      });
-
-      timeline.sort((a, b) => {
-        const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (diff !== 0) return diff;
-        if (a.isParentAggregate !== b.isParentAggregate) {
-          return a.isParentAggregate ? 1 : -1;
+        const entryTs = getEntryTimestamp(entry);
+        const currentTs = getEntryTimestamp(current);
+        if (entryTs > currentTs) {
+          latestEntryByDonor.set(entry.donor, entry);
+          return;
         }
-        return a.id.localeCompare(b.id);
+        if (entryTs === currentTs && getEntryIdRank(entry) > getEntryIdRank(current)) {
+          latestEntryByDonor.set(entry.donor, entry);
+        }
       });
 
-      let running = 0;
-      timeline.forEach((entry) => {
-        running = running + entry.due - entry.paid;
-      });
-      setStatementClosingDue(Math.max(running, 0));
+      const combinedClosingDue = Array.from(donorIds).reduce((sum, donorId) => {
+        const latest = latestEntryByDonor.get(donorId);
+        if (!latest) {
+          return sum;
+        }
+        return sum + parseAmount(latest.closing_due);
+      }, 0);
+
+      setStatementClosingDue(Math.max(combinedClosingDue, 0));
     } catch (error) {
       console.error('Unable to fetch latest closing due from passbook entries', error);
       setStatementClosingDue(null);
+      setStatementDueError('Unable to load latest due. Please refresh and try again.');
+    } finally {
+      setStatementDueLoading(false);
     }
   }, [user?.id, parentDonors]);
 
@@ -416,6 +395,14 @@ const CombinePaymentPage: React.FC = () => {
   };
 
   const handlePaymentCompleted = useCallback(async () => {
+    if (statementDueLoading) {
+      setSubmissionError('Fetching latest total due. Please wait a moment and try again.');
+      return;
+    }
+    if (statementClosingDue === null || statementDueError) {
+      setSubmissionError('Unable to verify latest total due. Please refresh and try again.');
+      return;
+    }
     const trimmedReference = transactionReference.trim();
     if (!trimmedReference) {
       setTransactionReferenceError('Transaction ID or UPI ID is required.');
@@ -441,11 +428,15 @@ const CombinePaymentPage: React.FC = () => {
       parsedAmount = selectedAmountDue;
     }
 
-    const payableAmount = selectedAmountDue;
+    const payableAmount = statementClosingDue;
     const amountToRecord = parsedAmount ?? payableAmount;
 
     if (!Number.isFinite(amountToRecord) || amountToRecord <= 0) {
       setSubmissionError('Amount must be greater than zero before continuing.');
+      return;
+    }
+    if (amountToRecord - payableAmount > 0.01) {
+      setSubmissionError(`Amount cannot exceed total due (₹ ${formatCurrency(payableAmount)}).`);
       return;
     }
 
@@ -586,6 +577,7 @@ const CombinePaymentPage: React.FC = () => {
       }
       celebrationTimeoutRef.current = setTimeout(() => {
         setShowCelebration(false);
+        navigate('/payments/statement', { replace: true });
       }, 5000);
     } catch (error) {
       console.error('Unable to record combined payment', error);
@@ -601,7 +593,6 @@ const CombinePaymentPage: React.FC = () => {
     clearCart,
     currentBalance,
     hasOwnItems,
-    parentItemsTotal,
     parentDonors,
     paymentScope,
     refreshBalance,
@@ -609,9 +600,13 @@ const CombinePaymentPage: React.FC = () => {
     loadStatementClosingDue,
     transactionReference,
     selectedAmountDue,
+    statementClosingDue,
+    statementDueError,
+    statementDueLoading,
     yourTotalAmount,
     paymentMethodTab,
     paymentDate,
+    navigate,
     user,
   ]);
 
@@ -667,7 +662,24 @@ const CombinePaymentPage: React.FC = () => {
           </div>
           <div className="text-right">
             <p className="text-xs text-slate-500 uppercase font-semibold">Total Due</p>
-            <p className="text-lg font-bold text-orange-600">₹ {formatCurrency(totalDueAmount)}</p>
+            {statementDueLoading ? (
+              <p className="text-lg font-bold text-slate-500">Calculating...</p>
+            ) : statementDueError ? (
+              <p className="text-sm font-semibold text-red-600">Unable to load</p>
+            ) : (
+              <p className="text-lg font-bold text-orange-600">₹ {formatCurrency(totalDueAmount)}</p>
+            )}
+            {statementDueError && (
+              <button
+                type="button"
+                onClick={() => {
+                  void loadStatementClosingDue();
+                }}
+                className="mt-1 text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800"
+              >
+                Retry
+              </button>
+            )}
           </div>
         </div>
         </div>
@@ -858,8 +870,9 @@ const CombinePaymentPage: React.FC = () => {
                     {isAndroid && (
                       <button
                         type="button"
-                        onClick={() => handleOpenUpiApp(selectedAmountDue)}
-                        className="mt-2 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold hover:bg-orange-200 transition"
+                        disabled={!dueReady}
+                        onClick={() => handleOpenUpiApp()}
+                        className="mt-2 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold hover:bg-orange-200 transition disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Open UPI Apps
                       </button>
@@ -867,8 +880,9 @@ const CombinePaymentPage: React.FC = () => {
                     {isIos && (
                       <button
                         type="button"
-                        onClick={() => handleSharePaymentQr(selectedAmountDue)}
-                        className="mt-2 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold hover:bg-orange-200 transition"
+                        disabled={!dueReady}
+                        onClick={() => handleSharePaymentQr()}
+                        className="mt-2 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold hover:bg-orange-200 transition disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Share QR
                       </button>

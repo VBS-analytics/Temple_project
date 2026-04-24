@@ -99,6 +99,19 @@ interface PassbookSummaryEntry {
   closing_due?: string | number | null;
 }
 
+const getPassbookEntryTimestamp = (entry: Pick<PassbookSummaryEntry, 'entry_date'>) => {
+  const timestamp = entry.entry_date ? new Date(entry.entry_date).getTime() : NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const getPassbookEntryIdRank = (entry: Pick<PassbookSummaryEntry, 'id'>) => {
+  if (typeof entry.id === 'number') {
+    return entry.id;
+  }
+  const parsed = Number(entry.id);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const allocatePaymentAmounts = (items: CartItem[], totalAmount: number) => {
   const toPaise = (value: number) => {
     if (!Number.isFinite(value)) {
@@ -332,8 +345,9 @@ const PaymentPage = () => {
   const [petalSeed, setPetalSeed] = useState(0);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [latestPassbookEntry, setLatestPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
+  const [latestPassbookLoading, setLatestPassbookLoading] = useState(true);
+  const [latestPassbookError, setLatestPassbookError] = useState<string | null>(null);
   const [, setLatestPaidPassbookEntry] = useState<PassbookSummaryEntry | null>(null);
-  const [, setPassbookSummaryLoading] = useState(false);
   const [activeMethod, setActiveMethod] = useState<'upi' | 'bank'>('upi');
   const [activeContributionTab, setActiveContributionTab] = useState<ContributionTab>('regular');
   const [activeDonationMethod, setActiveDonationMethod] = useState<DonationMethod>('upi');
@@ -414,37 +428,52 @@ const PaymentPage = () => {
   }, [loadDueRecords]);
   
   const loadLatestPassbookEntry = useCallback(async () => {
-    setPassbookSummaryLoading(true);
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setLatestPassbookLoading(true);
+    setLatestPassbookError(null);
     try {
       const response = await api.get('payments/passbook-entries/', {
         params: {
           page_size: 500,
-          month: currentMonthKey,
           ordering: 'entry_date',
+          refresh: true,
         },
       });
       if (!latestPassbookMountedRef.current) {
         return;
       }
       const payload = extractResults<PassbookSummaryEntry>(response.data);
-      const latestCurrentMonthEntry = payload.length > 0 ? payload[payload.length - 1] : null;
-      setLatestPassbookEntry(latestCurrentMonthEntry);
+      const latestEntry = payload.reduce<PassbookSummaryEntry | null>((latest, entry) => {
+        if (!entry?.entry_date) {
+          return latest;
+        }
+        if (!latest?.entry_date) {
+          return entry;
+        }
+        const entryTs = getPassbookEntryTimestamp(entry);
+        const latestTs = getPassbookEntryTimestamp(latest);
+        if (entryTs > latestTs) {
+          return entry;
+        }
+        if (entryTs === latestTs && getPassbookEntryIdRank(entry) > getPassbookEntryIdRank(latest)) {
+          return entry;
+        }
+        return latest;
+      }, null);
+      setLatestPassbookEntry(latestEntry);
     } catch (error) {
       console.error('Unable to load latest passbook entry', error);
       if (latestPassbookMountedRef.current) {
         setLatestPassbookEntry(null);
+        setLatestPassbookError('Unable to load latest total due.');
       }
     } finally {
       if (latestPassbookMountedRef.current) {
-        setPassbookSummaryLoading(false);
+        setLatestPassbookLoading(false);
       }
     }
   }, []);
   
   const loadLatestPaidPassbookEntry = useCallback(async () => {
-    setPassbookSummaryLoading(true);
     try {
       const response = await api.get('payments/passbook-entries/', {
         params: {
@@ -462,10 +491,6 @@ const PaymentPage = () => {
       console.error('Unable to load latest paid passbook entry', error);
       if (latestPaidPassbookMountedRef.current) {
         setLatestPaidPassbookEntry(null);
-      }
-    } finally {
-      if (latestPaidPassbookMountedRef.current) {
-        setPassbookSummaryLoading(false);
       }
     }
   }, []);
@@ -508,7 +533,9 @@ const PaymentPage = () => {
   const effectiveCartAmount = paymentSnapshot ? cartTotalAmount : dueTotalAmount;
   const needToPayForPooja = Math.max(0, runningBalance + effectiveCartAmount);
   const netPaymentAmount = needToPayForPooja;
-  const totalDueAmount = Math.max(0, parseAmount(latestPassbookEntry?.closing_due));
+  const totalDueAmount = latestPassbookEntry
+    ? Math.max(0, parseAmount(latestPassbookEntry.closing_due))
+    : 0;
   
   const parentName = combinedTo?.name ?? 'Parent donor';
   const effectiveFromLabel = formatCombineMonthLabel(combinedTo?.effectiveFrom);
@@ -859,6 +886,7 @@ const PaymentPage = () => {
       clearCartItems(cartKey);
       clearPaymentSnapshot(cartKey);
       setShowCelebration(false);
+      navigate('/payments/statement', { replace: true });
     }, 5000);
   };
   
@@ -970,7 +998,24 @@ const PaymentPage = () => {
             </div>
             <div className="text-right">
               <p className="text-xs font-semibold uppercase text-slate-500">Total Due</p>
-              <p className="text-lg font-bold text-orange-600">₹ {formatCurrency(totalDueAmount)}</p>
+              {latestPassbookLoading ? (
+                <p className="text-lg font-bold text-slate-500">Calculating...</p>
+              ) : latestPassbookError ? (
+                <div className="flex flex-col items-end gap-1">
+                  <p className="text-xs font-semibold text-red-600">Unable to load</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void loadLatestPassbookEntry();
+                    }}
+                    className="text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <p className="text-lg font-bold text-orange-600">₹ {formatCurrency(totalDueAmount)}</p>
+              )}
             </div>
           </div>
         </header>
@@ -1066,7 +1111,7 @@ const PaymentPage = () => {
                       {isAndroid && (
                         <button
                           type="button"
-                          onClick={() => handleOpenUpiApp(netPaymentAmount)}
+                          onClick={() => handleOpenUpiApp()}
                           className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Open UPI
@@ -1075,7 +1120,7 @@ const PaymentPage = () => {
                       {isIos && (
                         <button
                           type="button"
-                          onClick={() => handleSharePaymentQr(netPaymentAmount)}
+                          onClick={() => handleSharePaymentQr()}
                           className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Share QR
