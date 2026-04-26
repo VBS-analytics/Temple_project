@@ -188,7 +188,7 @@ const normalizeNextUrl = (nextValue: unknown): string | null => {
 const sanitizeFilename = (value: string) => value.replace(/[\\/:*?"<>|]+/g, '_').trim();
 
 const LEDGER_CARRY_FORWARD_START_MONTH = '2026-01';
-const LEDGER_CARRY_FORWARD_START_OPENING_BALANCE = 216770;
+const LEDGER_CARRY_FORWARD_START_OPENING_BALANCE = 225861;
 const EMPTY_MONTH_DATA: MonthData = {
   payments: [],
   expenses: [],
