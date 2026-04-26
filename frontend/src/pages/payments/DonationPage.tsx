@@ -7,6 +7,8 @@ type DonationMethod = 'upi' | 'bank';
 
 const DONATION_QR_IMAGE_URL = '/images/donation-qr-code.jpg';
 const DONATION_UPI_ID = 'lakshmivenkat26@oksbi';
+const DONATION_UPI_ACCOUNT_NAME = 'Lakshmi V';
+const DONATION_UPI_NOTE = 'Temple donation';
 
 const getTodayDate = () => {
   const now = new Date();
@@ -14,6 +16,19 @@ const getTodayDate = () => {
   const month = `${now.getMonth() + 1}`.padStart(2, '0');
   const day = `${now.getDate()}`.padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const buildDonationUpiLink = (amount?: number) => {
+  const params = new URLSearchParams({
+    pa: DONATION_UPI_ID,
+    pn: DONATION_UPI_ACCOUNT_NAME,
+    cu: 'INR',
+    tn: DONATION_UPI_NOTE,
+  });
+  if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) {
+    params.set('am', amount.toFixed(2));
+  }
+  return `upi://pay?${params.toString()}`;
 };
 
 /* ─── tiny inline styles (no Tailwind dependency for the new tokens) ───────── */
@@ -134,6 +149,28 @@ const css = `
   .dp-copy-btn.copied { background: var(--success); color: #fff; border-color: var(--success); }
   .dp-copy-btn:hover:not(.copied) { background: var(--blue); color: #fff; border-color: var(--blue); }
 
+  .dp-mobile-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+  }
+  .dp-open-upi-btn {
+    border: 1px solid var(--saffron-mid);
+    background: linear-gradient(135deg, var(--saffron) 0%, var(--saffron-mid) 100%);
+    color: #fff;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 3px 12px rgba(163, 58, 43, 0.24);
+  }
+  .dp-open-upi-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(163, 58, 43, 0.32);
+  }
+
   .dp-hint { text-align: center; font-size: 0.82rem; font-weight: 700; color: var(--ink-3); margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .dp-hint-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--saffron-mid); display: inline-block; }
 
@@ -213,6 +250,18 @@ const DonationPage = () => {
   const [transactionIdError, setTransactionIdError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
+  const isMobileUpi =
+    typeof navigator !== 'undefined' &&
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const handleOpenDonationUpi = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const parsedAmount = Number(amountPaid);
+    const amount = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : undefined;
+    window.location.href = buildDonationUpiLink(amount);
+  }, [amountPaid]);
 
   const handleCopyUpi = useCallback(async () => {
     try {
@@ -349,6 +398,14 @@ const DonationPage = () => {
                       {copiedUpi ? '✓ Copied!' : 'Copy'}
                     </button>
                   </div>
+
+                  {isMobileUpi && (
+                    <div className="dp-mobile-actions">
+                      <button type="button" className="dp-open-upi-btn" onClick={handleOpenDonationUpi}>
+                        Open UPI App
+                      </button>
+                    </div>
+                  )}
 
                   <p className="dp-hint">
                     <span className="dp-hint-dot" />
