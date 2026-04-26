@@ -462,69 +462,25 @@ const CombinePaymentPage: React.FC = () => {
     }
 
     try {
-      const payments: Array<{
-        donorId: number | null;
-        amount: number;
-        notes?: string;
-      }> = [];
+      const baseNotes =
+        paymentScope === 'parents'
+          ? `Parent donor consolidated payment: ₹ ${formatCurrency(amountToRecord)}`
+          : hasOwnItems
+            ? `Main donor payment: ₹ ${formatCurrency(amountToRecord)}`
+            : `Manual main donor payment entry: ₹ ${formatCurrency(amountToRecord)}`;
 
-      if (paymentScope === 'main') {
-        if (user?.id) {
-          payments.push({
-            donorId: user.id,
-            amount: amountToRecord,
-            notes: hasOwnItems
-              ? `Main donor payment: ₹ ${formatCurrency(amountToRecord)}`
-              : `Manual main donor payment entry: ₹ ${formatCurrency(amountToRecord)}`,
-          });
-        }
-      } else {
-        let remainingAmount = amountToRecord;
-        donorEntries.forEach((entry) => {
-          if (remainingAmount <= 0) return;
-          const allocatedAmount = Math.min(entry.totalAmount, remainingAmount);
-          if (allocatedAmount > 0) {
-            payments.push({
-              donorId: entry.id,
-              amount: allocatedAmount,
-              notes: `${entry.name || entry.phone || 'Parent donor'} payment allocation: ₹ ${formatCurrency(allocatedAmount)}`,
-            });
-            remainingAmount -= allocatedAmount;
-          }
-        });
-
-        if (remainingAmount > 0) {
-          const fallbackDonor = donorEntries[0];
-          if (!fallbackDonor) {
-            setSubmissionError('No parent donor found to record this payment.');
-            setProcessingPayment(false);
-            return;
-          }
-          payments.push({
-            donorId: fallbackDonor.id,
-            amount: remainingAmount,
-            notes: `${fallbackDonor.name || fallbackDonor.phone || 'Parent donor'} excess payment allocation: ₹ ${formatCurrency(remainingAmount)}`,
-          });
-        }
-      }
-
-      const splitTotal = payments.reduce((sum, p) => sum + p.amount, 0);
-      if (Math.abs(splitTotal - amountToRecord) > 0.01) {
-        throw new Error('Split total does not match payable amount. Please reload and try again.');
-      }
-
-      for (const payment of payments) {
-        await api.post('payments/records/', {
-          donor_id: payment.donorId ?? undefined,
-          amount: payment.amount,
-          currency: 'INR',
-          mode: paymentMethodTab === 'upi' ? 'upi' : 'neft',
-          status: 'success',
-          transaction_reference: trimmedReference,
-          payment_month: paymentDate || undefined,
-          notes: [payment.notes, notesParts.join(' | ')].filter(Boolean).join(' | ') || undefined,
-        });
-      }
+      // Always persist a single received payment record per submit.
+      // Parent breakdown stays in notes to keep the statement readable.
+      await api.post('payments/records/', {
+        donor_id: user?.id ?? undefined,
+        amount: amountToRecord,
+        currency: 'INR',
+        mode: paymentMethodTab === 'upi' ? 'upi' : 'neft',
+        status: 'success',
+        transaction_reference: trimmedReference,
+        payment_month: paymentDate || undefined,
+        notes: [baseNotes, notesParts.join(' | ')].filter(Boolean).join(' | ') || undefined,
+      });
 
       addCombinePaymentHistory({
         yourItems: paymentScope === 'main' ? allOwnItems : [],
@@ -541,24 +497,23 @@ const CombinePaymentPage: React.FC = () => {
 
       if (typeof currentBalance === 'number') {
         const updatedBalance = Math.max(0, currentBalance - amountToRecord);
-        try {
-          await api.put('auth/profile/', { custom_number: updatedBalance });
-          refreshBalance();
-        } catch (balanceError) {
-          console.error('Unable to refresh opening balance after combined payment', balanceError);
-          setSubmissionError(
-            'Payment recorded but unable to refresh opening balance. Please reload page.',
-          );
-        }
+        void api
+          .put('auth/profile/', { custom_number: updatedBalance })
+          .then(() => {
+            refreshBalance();
+          })
+          .catch((balanceError) => {
+            console.error('Unable to refresh opening balance after combined payment', balanceError);
+          });
       }
 
       clearCart(cartKey);
-      try {
-        await fetchCombineAccess();
-        await loadStatementClosingDue();
-      } catch (refreshError) {
-        console.error('Unable to refresh combined payment page after payment', refreshError);
-      }
+      void fetchCombineAccess().catch((refreshError) => {
+        console.error('Unable to refresh combine access after payment', refreshError);
+      });
+      void loadStatementClosingDue().catch((refreshError) => {
+        console.error('Unable to refresh combined payment due after payment', refreshError);
+      });
 
       const paidScopeLabel = paymentScope === 'parents' ? 'parent donor dues' : 'main donor due';
       setSuccessToastMessage(
@@ -573,7 +528,7 @@ const CombinePaymentPage: React.FC = () => {
       celebrationTimeoutRef.current = setTimeout(() => {
         setShowCelebration(false);
         navigate('/payments/statement', { replace: true });
-      }, 5000);
+      }, 1500);
     } catch (error) {
       console.error('Unable to record combined payment', error);
       setSubmissionError(buildSubmissionErrorMessage(error));
