@@ -2408,12 +2408,54 @@ const PaymentStatementPage = () => {
         return next;
       };
 
-      const mainEntries = applyFilters(
+      const mainEntriesRaw = applyFilters(
         apiPassbookEntries.filter(
           (entry) =>
             entry.donor === mainDonorId &&
             (entry.entry_type === 'due' || entry.entry_type === 'paid'),
         ),
+      );
+      const mergedMainPaidByReference = new Map<string, ApiPassbookEntry>();
+      const mainEntriesWithoutMerge: ApiPassbookEntry[] = [];
+
+      mainEntriesRaw.forEach((entry) => {
+        if (entry.entry_type !== 'paid') {
+          mainEntriesWithoutMerge.push(entry);
+          return;
+        }
+
+        const reference = (entry.transaction_details ?? '').trim();
+        if (!reference) {
+          mainEntriesWithoutMerge.push(entry);
+          return;
+        }
+
+        const mergeKey = `${entry.entry_date}|${reference}`;
+        const existing = mergedMainPaidByReference.get(mergeKey);
+        if (!existing) {
+          mergedMainPaidByReference.set(mergeKey, { ...entry });
+          return;
+        }
+
+        const existingPaid = parseNumeric(existing.paid_amount);
+        const candidatePaid = parseNumeric(entry.paid_amount);
+        existing.paid_amount = existingPaid + candidatePaid;
+
+        if (isApiPassbookEntryMoreRecent(entry, existing)) {
+          existing.id = entry.id;
+          existing.payment_record = entry.payment_record ?? existing.payment_record;
+        }
+      });
+
+      const mainEntries = [...mainEntriesWithoutMerge, ...mergedMainPaidByReference.values()].sort(
+        (left, right) => {
+          const leftTs = getApiPassbookEntryTimestamp(left);
+          const rightTs = getApiPassbookEntryTimestamp(right);
+          if (leftTs !== rightTs) {
+            return leftTs - rightTs;
+          }
+          return left.id - right.id;
+        },
       );
 
       const parentEntries = applyFilters(
