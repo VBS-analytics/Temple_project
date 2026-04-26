@@ -435,11 +435,6 @@ const CombinePaymentPage: React.FC = () => {
       setSubmissionError('Amount must be greater than zero before continuing.');
       return;
     }
-    if (amountToRecord - payableAmount > 0.01) {
-      setSubmissionError(`Amount cannot exceed total due (₹ ${formatCurrency(payableAmount)}).`);
-      return;
-    }
-
     setProcessingPayment(true);
 
     const donorEntries = parentDonors
