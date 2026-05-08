@@ -1,0 +1,1 @@
+docker compose -p temple_dev up --build

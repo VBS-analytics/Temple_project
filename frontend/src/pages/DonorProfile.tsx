@@ -45,6 +45,7 @@ interface FamilyMember {
   gothra?: string | null;
   rasi?: string | null;
   family_name?: string | null;
+  is_active?: boolean;
 }
 
 interface ProfileResponse {
@@ -534,6 +535,7 @@ const DonorProfile = () => {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
   const [deletingMemberId, setDeletingMemberId] = useState<number | null>(null);
+  const [togglingMemberId, setTogglingMemberId] = useState<number | null>(null);
   const [formData, setFormData] = useState<FamilyMemberFormState>(() => createInitialFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1037,6 +1039,34 @@ const DonorProfile = () => {
     [cancelEditing, editingMemberId],
   );
 
+  const handleToggleMemberActive = useCallback(async (member: FamilyMember) => {
+    if (togglingMemberId === member.id) {
+      return;
+    }
+
+    setTogglingMemberId(member.id);
+    setFormError(null);
+    try {
+      const payload = {
+        name: (member.name ?? '').trim(),
+        relationship: (member.relationship ?? '').trim(),
+        gender: (member.gender ?? '').trim(),
+        date_of_birth: member.date_of_birth || null,
+        tamil_star: (member.tamil_star ?? '').trim(),
+        gothra: (member.gothra ?? '').trim(),
+        rasi: (member.rasi ?? '').trim(),
+        family_name: (member.family_name ?? '').trim(),
+        is_active: !(member.is_active ?? true),
+      };
+      const response = await api.put<FamilyMember>(`auth/family-members/${member.id}/`, payload);
+      setMembers((prev) => sortMembers(prev.map((entry) => (entry.id === member.id ? response.data : entry))));
+    } catch (error) {
+      setFormError(extractErrorMessage(error));
+    } finally {
+      setTogglingMemberId(null);
+    }
+  }, [togglingMemberId]);
+
   // --- RENDER ---
 
   return (
@@ -1427,6 +1457,25 @@ const DonorProfile = () => {
                           </div>
 
                           <div className="space-y-2 text-xs mb-4">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Status</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleMemberActive(member)}
+                                disabled={deletingMemberId === member.id || togglingMemberId === member.id}
+                                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                                  member.is_active ?? true
+                                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                                } disabled:opacity-50`}
+                              >
+                                {togglingMemberId === member.id
+                                  ? 'Saving...'
+                                  : (member.is_active ?? true)
+                                    ? 'Active'
+                                    : 'Deactive'}
+                              </button>
+                            </div>
                             <div className="flex justify-between">
                               <span className="text-slate-500">Gender</span>
                               <span className="font-medium text-slate-900">{member.gender || '—'}</span>
