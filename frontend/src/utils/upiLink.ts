@@ -1,4 +1,4 @@
-import { PAYMENT_UPI_ID, PAYMENT_UPI_ACCOUNT_NAME, PAYMENT_UPI_NOTE } from '../constants/paymentQr';
+import { PAYMENT_UPI_ID, PAYMENT_UPI_ACCOUNT_NAME } from '../constants/paymentQr';
 
 type BuildUpiLinkOptions = {
   amount?: number;
@@ -9,7 +9,6 @@ export const buildUpiLink = ({ amount }: BuildUpiLinkOptions = {}) => {
     pa: PAYMENT_UPI_ID,
     pn: PAYMENT_UPI_ACCOUNT_NAME,
     cu: 'INR',
-    tn: PAYMENT_UPI_NOTE,
   });
 
   if (typeof amount === 'number' && amount > 0) {

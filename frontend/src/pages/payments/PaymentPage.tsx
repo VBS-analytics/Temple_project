@@ -48,7 +48,7 @@ import { useCurrentBalance } from '../../hooks/useCurrentBalance';
 import { useCombineAccessStore } from '../../store/combineAccess';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
-import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
+import { PAYMENT_QR_IMAGE_URL, PAYMENT_UPI_ID, PAYMENT_UPI_ACCOUNT_NAME } from '../../constants/paymentQr';
 import type { CartItem } from '../../store/cart';
 import { buildRegistrationPayload, emitPoojaDataUpdatedEvent } from '../../lib/registrationPayload';
 import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
@@ -675,7 +675,7 @@ const PaymentPage = () => {
   
   const handleCopyUpi = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText('alamelu7@icici');
+      await navigator.clipboard.writeText(PAYMENT_UPI_ID);
       setCopiedUpi(true);
       setTimeout(() => setCopiedUpi(false), 2000);
     } catch (err) {
@@ -1091,7 +1091,7 @@ const PaymentPage = () => {
                   <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">UPI ID</p>
                     <div className="mt-1 flex items-center justify-between gap-3">
-                      <p className="truncate text-base font-bold text-slate-900 sm:text-lg">alamelu7@icici</p>
+                      <p className="truncate text-base font-bold text-slate-900 sm:text-lg">{PAYMENT_UPI_ID}</p>
                       <button
                         type="button"
                         onClick={handleCopyUpi}
@@ -1135,7 +1135,7 @@ const PaymentPage = () => {
                 <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Account Holder</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">ALAMELU V</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{PAYMENT_UPI_ACCOUNT_NAME}</p>
                     <p className="text-sm font-semibold text-slate-900">SRIRAM RAJU</p>
                   </div>
                   <div>

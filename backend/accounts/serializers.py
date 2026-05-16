@@ -271,6 +271,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             "rasi",
             "gothra",
             "family_name",
+            "is_active",
         )
         read_only_fields = ("id",)
         extra_kwargs = {
@@ -281,6 +282,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             "rasi": {"required": False, "allow_blank": True},
             "gothra": {"required": False, "allow_blank": True},
             "family_name": {"required": False, "allow_blank": True},
+            "is_active": {"required": False},
         }
 
     def create(self, validated_data):

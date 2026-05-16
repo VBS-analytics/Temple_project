@@ -23,6 +23,7 @@ interface DonorPoojaMember {
   name?: string | null;
   rasi?: string | null;
   tamil_star?: string | null;
+  is_active?: boolean;
 }
 
 interface DonorPoojaRecord {
@@ -331,6 +332,13 @@ const normalizeFamilyMembers = (members?: DonorPoojaMember[]) => {
     .filter((value) => value.length > 0);
 
   return formattedMembers.length > 0 ? formattedMembers.join('; ') : EMPTY_VALUE;
+};
+
+const getActiveMembers = (members?: DonorPoojaMember[]) => {
+  if (!Array.isArray(members)) {
+    return [];
+  }
+  return members.filter((member) => member?.is_active !== false);
 };
 
 const normalizeFamilyMemberDisplay = (members?: DonorPoojaMember[]): FamilyMemberDisplay[] => {
@@ -702,8 +710,9 @@ const DonorPoojaDetails = () => {
         const gothram = normalizeText(profile?.gothra);
         const rasi = normalizeText(profile?.rasi);
         const tamilStar = normalizeText(profile?.tamil_star);
-        const familyMembers = normalizeFamilyMembers(record.members);
-        const familyMemberDisplay = normalizeFamilyMemberDisplay(record.members);
+        const activeMembers = getActiveMembers(record.members);
+        const familyMembers = normalizeFamilyMembers(activeMembers);
+        const familyMemberDisplay = normalizeFamilyMemberDisplay(activeMembers);
         const address = normalizeAddress(profile);
 
         return {
@@ -718,7 +727,7 @@ const DonorPoojaDetails = () => {
           tamilStar,
           familyMembers,
           familyMemberDisplay,
-          familyMemberDetails: Array.isArray(record.members) ? record.members : [],
+          familyMemberDetails: activeMembers,
           address,
         };
       })

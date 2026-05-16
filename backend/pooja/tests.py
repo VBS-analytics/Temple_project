@@ -1459,6 +1459,29 @@ class NakshatraAssignmentTests(SimpleTestCase):
         self.assertEqual(result, 18)
         mock_moon_sidereal_longitude.assert_called_once_with(date(2026, 4, 8), hour=6, minute=0)
 
+    @patch.object(TempleCalendarService, "_sunrise_time_on")
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_nakshatra_date_overrides_apply_for_may_2026_hotfix(self, mock_nakshatra_index_at, mock_sunrise_time):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_sunrise_time.return_value = (6, 0)
+        mock_nakshatra_index_at.return_value = 0
+
+        expected = {
+            date(2026, 5, 21): 6,
+            date(2026, 5, 22): 7,
+            date(2026, 5, 23): 8,
+            date(2026, 5, 24): 9,
+            date(2026, 5, 25): 10,
+            date(2026, 5, 26): 11,
+            date(2026, 5, 27): 12,
+        }
+        for day, index in expected.items():
+            self.assertEqual(TempleCalendarService._nakshatra_on(service, day), index)
+
+        # Override dates should not call runtime astronomical calculation.
+        mock_sunrise_time.assert_not_called()
+        mock_nakshatra_index_at.assert_not_called()
+
 
 class PradoshamOccurrenceTests(SimpleTestCase):
     @patch.object(TempleCalendarService, "_upcoming_tithi_series_at_reference_time")

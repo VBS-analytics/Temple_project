@@ -33,7 +33,7 @@ import { usePaymentStore } from '../../store/payments';
 import { useCombineAccessStore } from '../../store/combineAccess';
 import { launchUpiLink } from '../../utils/upiLink';
 import { shareImageFile } from '../../utils/shareImageFile';
-import { PAYMENT_QR_IMAGE_URL } from '../../constants/paymentQr';
+import { PAYMENT_QR_IMAGE_URL, PAYMENT_UPI_ID } from '../../constants/paymentQr';
 import RevealableAccountSection from '../../components/RevealableAccountSection';
 
 // --- Helpers ---
@@ -372,7 +372,7 @@ const CombinePaymentPage: React.FC = () => {
 
   const handleCopyUpi = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText('alamelu7@icici');
+      await navigator.clipboard.writeText(PAYMENT_UPI_ID);
       setCopiedUpi(true);
       setTimeout(() => setCopiedUpi(false), 1200);
     } catch (err) {
@@ -804,7 +804,7 @@ const CombinePaymentPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-slate-500 uppercase font-semibold mb-1">UPI ID</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-mono font-bold text-slate-800">alamelu7@icici</p>
+                      <p className="text-sm font-mono font-bold text-slate-800">{PAYMENT_UPI_ID}</p>
                       <button
                         onClick={handleCopyUpi}
                         className={`flex-shrink-0 px-2 py-1 text-xs font-bold rounded transition ${
