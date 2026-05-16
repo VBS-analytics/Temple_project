@@ -7,8 +7,7 @@ type DonationMethod = 'upi' | 'bank';
 
 const DONATION_QR_IMAGE_URL = '/images/donation-qr-code.jpg';
 const DONATION_UPI_ID = 'lakshmivenkat26@oksbi';
-const DONATION_UPI_ACCOUNT_NAME = 'Lakshmi V';
-const DONATION_UPI_NOTE = 'Temple donation';
+const DONATION_UPI_ACCOUNT_NAME = 'V Lakshmi';
 
 const getTodayDate = () => {
   const now = new Date();
@@ -23,7 +22,6 @@ const buildDonationUpiLink = (amount?: number) => {
     pa: DONATION_UPI_ID,
     pn: DONATION_UPI_ACCOUNT_NAME,
     cu: 'INR',
-    tn: DONATION_UPI_NOTE,
   });
   if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) {
     params.set('am', amount.toFixed(2));

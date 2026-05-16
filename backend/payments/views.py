@@ -1263,10 +1263,6 @@ class PaymentDetailsExportView(APIView):
             "Transaction Reference",
             "Payment Month",
             "Notes",
-            "Registration ID",
-            "Registration Pooja",
-            "Created At",
-            "Updated At",
         ]
         payment_sheet.append(payment_headers)
 
@@ -1291,10 +1287,6 @@ class PaymentDetailsExportView(APIView):
                     record.transaction_reference,
                     self._format_date(record.payment_month),
                     record.notes,
-                    record.registration_id,
-                    getattr(record.registration.pooja_option, "name", "") if record.registration else "",
-                    self._format_datetime(record.created_at),
-                    self._format_datetime(record.updated_at),
                 ]
             )
 
@@ -1309,13 +1301,10 @@ class PaymentDetailsExportView(APIView):
             "Entry Type",
             "Transaction Details",
             "Payment Record ID",
-            "Registration ID",
             "Opening Balance",
             "Due Amount",
             "Paid Amount",
             "Closing Due",
-            "Created At",
-            "Updated At",
         ]
         passbook_sheet.append(passbook_headers)
 
@@ -1336,13 +1325,10 @@ class PaymentDetailsExportView(APIView):
                     entry.entry_type,
                     entry.transaction_details,
                     entry.payment_record_id,
-                    entry.registration_id,
                     float(entry.opening_balance or 0),
                     float(entry.due_amount or 0),
                     float(entry.paid_amount or 0),
                     float(entry.closing_due or 0),
-                    self._format_datetime(entry.created_at),
-                    self._format_datetime(entry.updated_at),
                 ]
             )
 

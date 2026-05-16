@@ -5,8 +5,13 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
 from itertools import count
 import calendar
+import json
+import logging
 import re
 import sys
+import time
+from urllib import parse, request as urllib_request
+from urllib.error import HTTPError
 from typing import Any
 
 from django.conf import settings
@@ -71,6 +76,184 @@ from .serializers import (
     PublicTodayPoojaRegistrationSerializer,
     SpecialAnnouncementSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+
+_TAMIL_NAKSHATRA_NATIVE_NAMES = [
+    "அசுவினி",
+    "பரணி",
+    "கிருத்திகை",
+    "ரோகிணி",
+    "மிருகசீரிடம்",
+    "திருவாதிரை",
+    "புனர்பூசம்",
+    "பூசம்",
+    "ஆயில்யம்",
+    "மகம்",
+    "பூரம்",
+    "உத்தரம்",
+    "அஸ்தம்",
+    "சித்திரை",
+    "சுவாதி",
+    "விசாகம்",
+    "அனுஷம்",
+    "கேட்டை",
+    "மூலம்",
+    "பூராடம்",
+    "உத்திராடம்",
+    "திருவோணம்",
+    "அவிட்டம்",
+    "சதயம்",
+    "பூரட்டாதி",
+    "உத்திரட்டாதி",
+    "ரேவதி",
+]
+
+
+def _extract_nakshatra_label(payload: Any) -> str | None:
+    if isinstance(payload, dict):
+        for key in ("nakshatra", "star", "birth_star"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, dict):
+                name_value = value.get("name")
+                if isinstance(name_value, str) and name_value.strip():
+                    return name_value.strip()
+        for value in payload.values():
+            extracted = _extract_nakshatra_label(value)
+            if extracted:
+                return extracted
+    elif isinstance(payload, list):
+        for item in payload:
+            extracted = _extract_nakshatra_label(item)
+            if extracted:
+                return extracted
+    return None
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _load_json_with_retry(req: urllib_request.Request, *, max_retries: int = 3) -> dict[str, Any]:
+    for attempt in range(max_retries + 1):
+        try:
+            with urllib_request.urlopen(req, timeout=20) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            if exc.code != 429 or attempt >= max_retries:
+                raise
+            retry_after_raw = exc.headers.get("Retry-After") if exc.headers else None
+            try:
+                retry_after = float(retry_after_raw) if retry_after_raw else 0.0
+            except ValueError:
+                retry_after = 0.0
+            backoff = max(1.0, retry_after, 2 ** attempt)
+            time.sleep(min(backoff, 8.0))
+    raise RuntimeError("Unexpected retry failure while contacting Prokerala.")
+
+
+def _extract_nakshatra_label_from_prokerala(payload: dict[str, Any]) -> str | None:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return _extract_nakshatra_label(payload)
+
+    nakshatra_items = data.get("nakshatra")
+    sunrise = _parse_iso_datetime(data.get("sunrise"))
+    if isinstance(nakshatra_items, list) and sunrise is not None:
+        for item in nakshatra_items:
+            if not isinstance(item, dict):
+                continue
+            start = _parse_iso_datetime(item.get("start"))
+            end = _parse_iso_datetime(item.get("end"))
+            if start is not None and end is not None and start <= sunrise <= end:
+                name = item.get("name")
+                if isinstance(name, str) and name.strip():
+                    return name.strip()
+        if nakshatra_items:
+            first_item = nakshatra_items[0]
+            if isinstance(first_item, dict):
+                first_name = first_item.get("name")
+                if isinstance(first_name, str) and first_name.strip():
+                    return first_name.strip()
+
+    return _extract_nakshatra_label(data) or _extract_nakshatra_label(payload)
+
+
+def _prokerala_access_token() -> str:
+    cached_token = cache.get("prokerala:access_token")
+    if isinstance(cached_token, str) and cached_token.strip():
+        return cached_token.strip()
+
+    client_id = (getattr(settings, "PROKERALA_CLIENT_ID", "") or "").strip()
+    client_secret = (getattr(settings, "PROKERALA_CLIENT_SECRET", "") or "").strip()
+    token_url = getattr(settings, "PROKERALA_TOKEN_URL", "https://api.prokerala.com/token")
+    if not client_id or not client_secret:
+        raise RuntimeError("Prokerala credentials are missing. Set PROKERALA_CLIENT_ID/PROKERALA_CLIENT_SECRET.")
+    body = parse.urlencode(
+        {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+    ).encode("utf-8")
+    req = urllib_request.Request(token_url, data=body, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    token_payload = _load_json_with_retry(req)
+    access_token = token_payload.get("access_token")
+    if not isinstance(access_token, str) or not access_token.strip():
+        raise RuntimeError("Prokerala token response did not include access_token.")
+    expires_in = token_payload.get("expires_in")
+    timeout = 3000
+    if isinstance(expires_in, int) and expires_in > 120:
+        timeout = max(60, expires_in - 60)
+    cache.set("prokerala:access_token", access_token.strip(), timeout=timeout)
+    return access_token.strip()
+
+
+def _prokerala_nakshatra_on(day: date, *, latitude: float, longitude: float, timezone_name: str) -> dict[str, Any]:
+    cache_key = f"prokerala:nakshatra:{day.isoformat()}:{latitude:.4f}:{longitude:.4f}:{timezone_name}"
+    cached_payload = cache.get(cache_key)
+    if isinstance(cached_payload, dict):
+        return cached_payload
+
+    access_token = _prokerala_access_token()
+    api_url = getattr(settings, "PROKERALA_PANCHANG_URL", "https://api.prokerala.com/v2/astrology/panchang")
+    params = parse.urlencode(
+        {
+            "datetime": f"{day.isoformat()}T06:00:00+05:30",
+            "coordinates": f"{latitude},{longitude}",
+            "ayanamsa": "1",  # Lahiri
+        }
+    )
+    req = urllib_request.Request(f"{api_url}?{params}", method="GET")
+    req.add_header("Authorization", f"Bearer {access_token}")
+    req.add_header("Accept", "application/json")
+    payload = _load_json_with_retry(req)
+
+    label = _extract_nakshatra_label_from_prokerala(payload)
+    if not label:
+        raise RuntimeError("Unable to read nakshatra from Prokerala response.")
+    index = resolve_nakshatra_index(label)
+    tamil_native = _TAMIL_NAKSHATRA_NATIVE_NAMES[index] if index is not None else label
+    result = {
+        "date": day.isoformat(),
+        "index": index if index is not None else -1,
+        "tamil_star": label,
+        "tamil_star_native": tamil_native,
+        "provider": "prokerala",
+        "timezone": timezone_name,
+    }
+    cache.set(cache_key, result, timeout=60 * 60 * 24)
+    return result
+
 
 class LargePagePagination(PageNumberPagination):
     page_size = 200
@@ -1852,9 +2035,70 @@ class TamilNakshatraCalendarView(APIView):
             month = 1
         elif month > 12:
             month = 12
+
+        provider = (request.query_params.get("provider") or "skyfield").strip().lower()
+        try:
+            latitude = float(request.query_params.get("lat") or getattr(settings, "TEMPLE_LATITUDE", 10.7722))
+        except (TypeError, ValueError):
+            latitude = float(getattr(settings, "TEMPLE_LATITUDE", 10.7722))
+        try:
+            longitude = float(request.query_params.get("lon") or getattr(settings, "TEMPLE_LONGITUDE", 79.6369))
+        except (TypeError, ValueError):
+            longitude = float(getattr(settings, "TEMPLE_LONGITUDE", 79.6369))
+        timezone_name = (request.query_params.get("tz") or getattr(settings, "TEMPLE_TIME_ZONE", "Asia/Kolkata")).strip()
+
         cursor = date(year, month, 1)
         results = []
         service = get_calendar_service()
+
+        if provider == "prokerala":
+            try:
+                while cursor.month == month:
+                    results.append(
+                        _prokerala_nakshatra_on(
+                            cursor,
+                            latitude=latitude,
+                            longitude=longitude,
+                            timezone_name=timezone_name,
+                        )
+                    )
+                    cursor += timedelta(days=1)
+                return Response(results)
+            except HTTPError as exc:
+                logger.exception("Failed to load Tamil nakshatra data from Prokerala")
+                if exc.code == 429:
+                    return Response(
+                        {
+                            "detail": (
+                                "Prokerala API rate limit exceeded (HTTP 429). "
+                                "Please retry after some time or upgrade API quota."
+                            )
+                        },
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+                return Response(
+                    {
+                        "detail": (
+                            "Unable to load Prokerala Panchang data. "
+                            "Verify PROKERALA credentials/endpoints and network access."
+                        ),
+                        "error": str(exc),
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            except Exception as exc:
+                logger.exception("Failed to load Tamil nakshatra data from Prokerala")
+                return Response(
+                    {
+                        "detail": (
+                            "Unable to load Prokerala Panchang data. "
+                            "Verify PROKERALA credentials/endpoints and network access."
+                        ),
+                        "error": str(exc),
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
         while cursor.month == month:
             results.append(
                 {
