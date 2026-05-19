@@ -1884,6 +1884,17 @@ def _collect_tithi_dates_in_range(service: TempleCalendarService, start: date, e
     return service._compress_consecutive_dates(occurrences)
 
 
+def _compress_consecutive_dates_keep_first(dates: list[date]) -> list[date]:
+    if not dates:
+        return []
+    deduped: list[date] = []
+    for day in dates:
+        if deduped and (day - deduped[-1]).days <= 1:
+            continue
+        deduped.append(day)
+    return deduped
+
+
 def _collect_tithi_dates_at_hour(
     service: TempleCalendarService,
     start: date,
@@ -1930,8 +1941,10 @@ def _collect_dates_for_canonical(service: TempleCalendarService, canonical: str,
         # Sashti follows the panchang midday tithi shown on temple calendars.
         return _collect_tithi_dates_at_hour(service, start, end, targets=(6, 21), hour=12)
     if canonical == "second_ashtami":
-        # 2-Ashtami aligns with morning panchang assignment.
-        return _collect_tithi_dates_at_hour(service, start, end, targets=(8, 23), hour=9)
+        # 2-Ashtami should use the first labeled day when Ashtami spans two dates.
+        # Example: May 2026 should map to 9 and 23 (not 10 and 23).
+        ashtami_occurrences = service._collect_tithi_dates(start, end, targets=(8, 23))
+        return _compress_consecutive_dates_keep_first(ashtami_occurrences)
     if canonical == "pradosham":
         # Pradosham requires Trayodashi at Pradosha kala (sunset), not just any daytime match.
         return _collect_tithi_dates_at_hour(service, start, end, targets=(13, 28), hour=18)
@@ -1943,7 +1956,9 @@ def _collect_dates_for_canonical(service: TempleCalendarService, canonical: str,
         # Sankatahara Chaturthi is observed against moonrise/evening tithi.
         return _collect_tithi_dates_at_hour(service, start, end, targets=(19,), hour=21)
     if canonical == "chaturthi":
-        return _collect_tithi_dates_at_hour(service, start, end, targets=(4,), hour=12)
+        # Ubhayam report should follow the day-level panchang labeling for Chaturthi.
+        # Noon-based matching can drop valid days where Chaturthi ends before noon.
+        return _collect_tithi_dates_at_hour(service, start, end, targets=(4,), hour=9)
     return []
 
 
