@@ -28,7 +28,11 @@ from .models import (
 from .serializers import RecurringPoojaPlanSerializer
 from .services.calendar import OccurrenceResult, TempleCalendarService
 from .services.recurrence import create_registration_from_plan, process_recurring_plans
-from .views import PAUSE_REASON_NO_POJA_NO_PAYMENT, PAUSE_REASON_USE_FOR_TEMPLE
+from .views import (
+    PAUSE_REASON_NO_POJA_NO_PAYMENT,
+    PAUSE_REASON_USE_FOR_TEMPLE,
+    _collect_dates_for_canonical,
+)
 
 
 SQLITE_DB_CONFIG = {
@@ -1522,6 +1526,42 @@ class CanonicalReferenceTimeTests(SimpleTestCase):
 
         self.assertEqual(result.date, date(2026, 3, 6))
         mock_next.assert_called_once_with(date(2026, 3, 1), targets=(19,), hour=21)
+
+    def test_ubhayam_chaturthi_uses_morning_reference_time(self):
+        service = Mock()
+
+        def fake_tithi_on(target_date, *, hour, minute=0):
+            if target_date == date(2026, 5, 20) and hour == 9 and minute == 0:
+                return 4
+            return 5
+
+        service._tithi_on = Mock(side_effect=fake_tithi_on)
+
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "chaturthi",
+            date(2026, 5, 1),
+            date(2026, 5, 31),
+        )
+
+        self.assertEqual(occurrences, [date(2026, 5, 20)])
+
+    def test_ubhayam_second_ashtami_prefers_first_day_of_two_day_span(self):
+        service = Mock()
+        service._collect_tithi_dates.return_value = [
+            date(2026, 5, 9),
+            date(2026, 5, 10),
+            date(2026, 5, 23),
+        ]
+
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "second_ashtami",
+            date(2026, 5, 1),
+            date(2026, 5, 31),
+        )
+
+        self.assertEqual(occurrences, [date(2026, 5, 9), date(2026, 5, 23)])
 
 
 class PradoshamHelperTests(SimpleTestCase):
