@@ -7,6 +7,7 @@ from itertools import count
 import calendar
 import json
 import logging
+from pathlib import Path
 import re
 import sys
 import time
@@ -78,6 +79,63 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _month_key(year: int, month: int) -> str:
+    return f"{year:04d}-{month:02d}"
+
+
+def _load_ubhayam_month_overrides_from_file() -> dict[str, Any]:
+    file_path_setting = getattr(settings, "UBHAYAM_MONTH_OVERRIDES_FILE", "")
+    if isinstance(file_path_setting, str) and file_path_setting.strip():
+        file_path = Path(file_path_setting.strip())
+    else:
+        # Default bundled path so May-2026 override works without extra env setup.
+        file_path = Path(settings.BASE_DIR) / "data" / "ubhayam_overrides" / "overrides.json"
+    if not file_path.is_absolute():
+        file_path = Path(settings.BASE_DIR) / file_path
+    if not file_path.exists():
+        logger.warning("Ubhayam override file not found: %s", file_path)
+        return {}
+    try:
+        payload = json.loads(file_path.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("Failed to parse Ubhayam override file: %s", file_path)
+        return {}
+    if not isinstance(payload, dict):
+        logger.warning("Ubhayam override file must contain a JSON object: %s", file_path)
+        return {}
+    return payload
+
+
+def _get_ubhayam_month_override(year: int, month: int, section: str) -> Any | None:
+    """
+    Expected shape (from settings dict and/or file dict):
+      {
+        "2026-05": {
+          "day_options": {"dates": [...]},
+          "donor_registrations": {"dates": [...]},
+          "tamil_nakshatras": [...]
+        }
+      }
+    """
+    month = max(1, min(12, month))
+    key = _month_key(year, month)
+
+    root: dict[str, Any] = {}
+    settings_overrides = getattr(settings, "UBHAYAM_MONTH_OVERRIDES", {})
+    if isinstance(settings_overrides, dict):
+        root.update(settings_overrides)
+
+    file_overrides = _load_ubhayam_month_overrides_from_file()
+    if isinstance(file_overrides, dict):
+        # File values override settings values for easier ops updates.
+        root.update(file_overrides)
+
+    month_payload = root.get(key)
+    if not isinstance(month_payload, dict):
+        return None
+    return month_payload.get(section)
 
 
 _TAMIL_NAKSHATRA_NATIVE_NAMES = [
@@ -1983,6 +2041,16 @@ class PoojaDayOptionCalendarView(APIView):
         elif month > 12:
             month = 12
 
+        override_payload = _get_ubhayam_month_override(year, month, "day_options")
+        if isinstance(override_payload, dict):
+            dates_payload = override_payload.get("dates")
+            if isinstance(dates_payload, list):
+                return Response({"year": year, "month": month, "dates": dates_payload, "source": "manual_override"})
+            logger.warning(
+                "Ignoring invalid day_options override for %s: expected dict with 'dates' list",
+                _month_key(year, month),
+            )
+
         first_day = date(year, month, 1)
         service = get_calendar_service()
         last_day = service._month_end(first_day)
@@ -2050,6 +2118,15 @@ class TamilNakshatraCalendarView(APIView):
             month = 1
         elif month > 12:
             month = 12
+
+        override_payload = _get_ubhayam_month_override(year, month, "tamil_nakshatras")
+        if isinstance(override_payload, list):
+            return Response(override_payload)
+        if override_payload is not None:
+            logger.warning(
+                "Ignoring invalid tamil_nakshatras override for %s: expected list",
+                _month_key(year, month),
+            )
 
         provider = (request.query_params.get("provider") or "skyfield").strip().lower()
         try:
@@ -2150,6 +2227,22 @@ class PoojaDonorCalendarView(APIView):
         debug_mode = request.query_params.get("debug") == "1"
         is_admin_request = request.user.role == UserRole.ADMIN
         donor_scope_user_id = None if is_admin_request else request.user.id
+
+        # Safety: manual donor override is admin-only because this payload typically
+        # contains all donors and should not be used for donor-scoped profile views.
+        if is_admin_request:
+            override_payload = _get_ubhayam_month_override(year, month, "donor_registrations")
+            if isinstance(override_payload, dict):
+                dates_payload = override_payload.get("dates")
+                if isinstance(dates_payload, list):
+                    return Response(
+                        {"year": year, "month": month, "dates": dates_payload, "source": "manual_override"}
+                    )
+                logger.warning(
+                    "Ignoring invalid donor_registrations override for %s: expected dict with 'dates' list",
+                    _month_key(year, month),
+                )
+
         force_refresh = (request.query_params.get("refresh") or "").strip()
         cache_scope = "admin" if is_admin_request else f"donor:{donor_scope_user_id}"
         cache_key = f"pooja_donor_calendar:{cache_scope}:{year}:{month}"
