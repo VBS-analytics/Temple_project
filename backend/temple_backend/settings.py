@@ -142,16 +142,6 @@ TEMPLE_LATITUDE = float(os.environ.get("TEMPLE_LATITUDE", "10.7722"))  # Thiruva
 TEMPLE_LONGITUDE = float(os.environ.get("TEMPLE_LONGITUDE", "79.6369"))  # Thiruvarur
 TEMPLE_TIME_ZONE = os.environ.get("TEMPLE_TIME_ZONE", TIME_ZONE)
 
-# Prokerala Panchang API (pilot integration)
-PROKERALA_CLIENT_ID = os.environ.get("PROKERALA_CLIENT_ID", "")
-PROKERALA_CLIENT_SECRET = os.environ.get("PROKERALA_CLIENT_SECRET", "")
-PROKERALA_TOKEN_URL = os.environ.get("PROKERALA_TOKEN_URL", "https://api.prokerala.com/token")
-PROKERALA_PANCHANG_URL = os.environ.get(
-    "PROKERALA_PANCHANG_URL",
-    "https://api.prokerala.com/v2/astrology/panchang",
-)
-
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 

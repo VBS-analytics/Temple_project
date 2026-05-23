@@ -1,0 +1,381 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e7]:
+      - link "TD Temple Donor Portal ADMIN COMMAND CENTER" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9]: TD
+        - generic [ref=e10]:
+          - generic [ref=e11]: Temple Donor Portal
+          - generic [ref=e12]: ADMIN COMMAND CENTER
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: TA
+          - generic [ref=e18]:
+            - generic [ref=e19]: Temple Admin
+            - generic [ref=e20]: Temple Admin
+            - generic [ref=e21]: Session Expires in 14:30
+        - button "Logout" [ref=e22] [cursor=pointer]
+    - navigation [ref=e25]:
+      - link "Admin Master" [ref=e26] [cursor=pointer]:
+        - /url: /admin/master
+      - link "Pooja Seva" [ref=e27] [cursor=pointer]:
+        - /url: /profile/pooja-seva
+      - link "Cow Samrakshana Seva" [ref=e28] [cursor=pointer]:
+        - /url: /profile/cow-samrakshana-seva
+      - link "Donor Details" [ref=e29] [cursor=pointer]:
+        - /url: /admin/donors
+      - link "Combine Payment - Donor" [ref=e30] [cursor=pointer]:
+        - /url: /admin/combine-payment-donor
+      - link "Pooja - Pause/Cancel" [ref=e31] [cursor=pointer]:
+        - /url: /admin/pooja-pause-cancel
+      - link "Ubhayam Report" [ref=e32] [cursor=pointer]:
+        - /url: /admin/pooja-details
+      - link "Ubhayam Message" [ref=e33] [cursor=pointer]:
+        - /url: /admin/donor-pooja-details
+      - link "Reports" [ref=e34] [cursor=pointer]:
+        - /url: /reports
+      - link "Expense Tracker" [ref=e35] [cursor=pointer]:
+        - /url: /admin/expenses
+      - link "Account Statement" [ref=e36] [cursor=pointer]:
+        - /url: /admin/account-statement
+      - link "Payment Statement" [ref=e37] [cursor=pointer]:
+        - /url: /payments/statement
+  - main [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]: Ubhayam Report
+          - paragraph [ref=e45]: View the template columns for the Ubhayam report.
+        - generic [ref=e46]:
+          - generic [ref=e47]: Jun 2026 • 30 rows
+          - generic [ref=e48]:
+            - button "Download PDF" [ref=e49] [cursor=pointer]
+            - button "Download Excel" [ref=e50] [cursor=pointer]
+      - generic [ref=e51]:
+        - button "Apr 2026" [ref=e52] [cursor=pointer]
+        - button "May 2026" [ref=e53] [cursor=pointer]
+        - button "Jun 2026" [active] [ref=e54] [cursor=pointer]
+        - button "Jul 2026" [ref=e55] [cursor=pointer]
+        - button "Aug 2026" [ref=e56] [cursor=pointer]
+        - button "Sept 2026" [ref=e57] [cursor=pointer]
+        - button "Oct 2026" [ref=e58] [cursor=pointer]
+        - button "Nov 2026" [ref=e59] [cursor=pointer]
+        - button "Dec 2026" [ref=e60] [cursor=pointer]
+        - button "Jan 2027" [ref=e61] [cursor=pointer]
+        - button "Feb 2027" [ref=e62] [cursor=pointer]
+        - button "Mar 2027" [ref=e63] [cursor=pointer]
+        - button "Apr 2027" [ref=e64] [cursor=pointer]
+      - table [ref=e68]:
+        - rowgroup [ref=e69]:
+          - row "Date Day of Month Tamil Star Pooja Day Option Daily Message Header Donor ID Donor Name Donor Mobile Number" [ref=e70]:
+            - columnheader "Date" [ref=e71]
+            - columnheader "Day of Month" [ref=e72]
+            - columnheader "Tamil Star" [ref=e73]
+            - columnheader "Pooja Day Option" [ref=e74]
+            - columnheader "Daily Message Header" [ref=e75]
+            - columnheader "Donor ID" [ref=e76]
+            - columnheader "Donor Name" [ref=e77]
+            - columnheader "Donor Mobile Number" [ref=e78]
+        - rowgroup [ref=e79]:
+          - row "1 Jun 2026 Monday கேட்டை 1st day of English Month திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் D8, D12, D14 User-test, K Subramanian, new-user-1 8888888888, +919840343640, 1111111111" [ref=e358]:
+            - cell "1 Jun 2026" [ref=e81]
+            - cell "Monday" [ref=e82]
+            - cell "கேட்டை" [ref=e359]
+            - cell "1st day of English Month" [ref=e360]:
+              - generic [ref=e362]: 1st day of English Month
+            - cell "திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e85]
+            - cell "D8, D12, D14" [ref=e363]
+            - cell "User-test, K Subramanian, new-user-1" [ref=e364]
+            - cell "8888888888, +919840343640, 1111111111" [ref=e365]
+          - row "2 Jun 2026 Tuesday மூலம் 1st Tuesday of month செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் *ஆஞ்சனேயர் அர்ச்சனை, கற்கட்டு ப்ரசாதம் D3 Donor 7894561232" [ref=e366]:
+            - cell "2 Jun 2026" [ref=e90]
+            - cell "Tuesday" [ref=e91]
+            - cell "மூலம்" [ref=e367]
+            - cell "1st Tuesday of month" [ref=e368]:
+              - generic [ref=e370]: 1st Tuesday of month
+            - cell "செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் *ஆஞ்சனேயர் அர்ச்சனை, கற்கட்டு ப்ரசாதம்" [ref=e371]
+            - cell "D3" [ref=e372]
+            - cell "Donor" [ref=e373]
+            - cell "7894561232" [ref=e374]
+          - row "3 Jun 2026 Wednesday பூராடம் Any Day of Month கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் D11 T Mallikarjunan +919840175991" [ref=e375]:
+            - cell "3 Jun 2026" [ref=e99]
+            - cell "Wednesday" [ref=e100]
+            - cell "பூராடம்" [ref=e376]
+            - cell "Any Day of Month" [ref=e102]:
+              - generic [ref=e378]: Any Day of Month
+            - cell "கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e103]
+            - cell "D11" [ref=e379]
+            - cell "T Mallikarjunan" [ref=e380]
+            - cell "+919840175991" [ref=e381]
+          - row "4 Jun 2026 Thursday உத்திராடம் On sankatachaturti day of month வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் * சங்கடசதுர்த்தி - ஆத்தங்கரை பிள்ளையார் அபிஷேகம் D16 J Venkatramani 8300301698" [ref=e382]:
+            - cell "4 Jun 2026" [ref=e108]
+            - cell "Thursday" [ref=e109]
+            - cell "உத்திராடம்" [ref=e383]
+            - cell "On sankatachaturti day of month" [ref=e384]:
+              - generic [ref=e386]: On sankatachaturti day of month
+            - cell "வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் * சங்கடசதுர்த்தி - ஆத்தங்கரை பிள்ளையார் அபிஷேகம்" [ref=e387]
+            - cell "D16" [ref=e388]
+            - cell "J Venkatramani" [ref=e389]
+            - cell "8300301698" [ref=e390]
+          - row "5 Jun 2026 Friday திருவோணம் Any Day of Month வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில் D17 J Balakrishnan 9791032897" [ref=e391]:
+            - cell "5 Jun 2026" [ref=e117]
+            - cell "Friday" [ref=e118]
+            - cell "திருவோணம்" [ref=e392]
+            - cell "Any Day of Month" [ref=e120]:
+              - generic [ref=e394]: Any Day of Month
+            - cell "வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e121]
+            - cell "D17" [ref=e395]
+            - cell "J Balakrishnan" [ref=e396]
+            - cell "9791032897" [ref=e397]
+          - row "6 Jun 2026 Saturday அவிட்டம் On sashti day of month Saturday Navagraha Pooja சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை D18 J Balasubramanian 9444400950" [ref=e398]:
+            - cell "6 Jun 2026" [ref=e126]
+            - cell "Saturday" [ref=e127]
+            - cell "அவிட்டம்" [ref=e399]
+            - cell "On sashti day of month Saturday Navagraha Pooja" [ref=e400]:
+              - generic [ref=e130]:
+                - generic [ref=e401]: On sashti day of month
+                - generic [ref=e131]: Saturday Navagraha Pooja
+            - cell "சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை" [ref=e132]
+            - cell "D18" [ref=e402]
+            - cell "J Balasubramanian" [ref=e403]
+            - cell "9444400950" [ref=e404]
+          - row "7 Jun 2026 Sunday சதயம் Every Sunday ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் D19 S Rajagopalan 9789741675" [ref=e405]:
+            - cell "7 Jun 2026" [ref=e137]
+            - cell "Sunday" [ref=e138]
+            - cell "சதயம்" [ref=e406]
+            - cell "Every Sunday" [ref=e407]:
+              - generic [ref=e409]: Every Sunday
+            - cell "ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e141]
+            - cell "D19" [ref=e410]
+            - cell "S Rajagopalan" [ref=e411]
+            - cell "9789741675" [ref=e412]
+          - row "8 Jun 2026 Monday பூரட்டாதி On 2 ashtami day of month திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் *காலபைரவர் அர்சனை D20 N Jayaraman 9566901698" [ref=e413]:
+            - cell "8 Jun 2026" [ref=e146]
+            - cell "Monday" [ref=e147]
+            - cell "பூரட்டாதி" [ref=e414]
+            - cell "On 2 ashtami day of month" [ref=e415]:
+              - generic [ref=e417]: On 2 ashtami day of month
+            - cell "திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் *காலபைரவர் அர்சனை" [ref=e418]
+            - cell "D20" [ref=e419]
+            - cell "N Jayaraman" [ref=e420]
+            - cell "9566901698" [ref=e421]
+          - row "9 Jun 2026 Tuesday உத்திரட்டாதி Any Day of Month செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் D21 J Thirumalai 9445419118" [ref=e422]:
+            - cell "9 Jun 2026" [ref=e155]
+            - cell "Tuesday" [ref=e156]
+            - cell "உத்திரட்டாதி" [ref=e423]
+            - cell "Any Day of Month" [ref=e158]:
+              - generic [ref=e425]: Any Day of Month
+            - cell "செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e159]
+            - cell "D21" [ref=e426]
+            - cell "J Thirumalai" [ref=e427]
+            - cell "9445419118" [ref=e428]
+          - row "10 Jun 2026 Wednesday ரேவதி Any Day of Month கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e429]:
+            - cell "10 Jun 2026" [ref=e164]
+            - cell "Wednesday" [ref=e165]
+            - cell "ரேவதி" [ref=e430]
+            - cell "Any Day of Month" [ref=e167]
+            - cell "கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e168]
+            - cell "—" [ref=e169]
+            - cell "—" [ref=e170]
+            - cell "—" [ref=e171]
+          - row "11 Jun 2026 Thursday அசுவினி Any Day of Month வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e431]:
+            - cell "11 Jun 2026" [ref=e173]
+            - cell "Thursday" [ref=e174]
+            - cell "அசுவினி" [ref=e432]
+            - cell "Any Day of Month" [ref=e176]
+            - cell "வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e177]
+            - cell "—" [ref=e178]
+            - cell "—" [ref=e179]
+            - cell "—" [ref=e180]
+          - row "12 Jun 2026 Friday பரணி Pradosham (Trayodashi) வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில் *ப்ரதோஷ பூஜை — — —" [ref=e433]:
+            - cell "12 Jun 2026" [ref=e182]
+            - cell "Friday" [ref=e183]
+            - cell "பரணி" [ref=e434]
+            - cell "Pradosham (Trayodashi)" [ref=e435]:
+              - generic [ref=e437]: Pradosham (Trayodashi)
+            - cell "வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில் *ப்ரதோஷ பூஜை" [ref=e438]
+            - cell "—" [ref=e187]
+            - cell "—" [ref=e188]
+            - cell "—" [ref=e189]
+          - row "13 Jun 2026 Saturday கிருத்திகை Saturday Navagraha Pooja சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை — — —" [ref=e439]:
+            - cell "13 Jun 2026" [ref=e191]
+            - cell "Saturday" [ref=e192]
+            - cell "கிருத்திகை" [ref=e440]
+            - cell "Saturday Navagraha Pooja" [ref=e194]:
+              - generic [ref=e196]: Saturday Navagraha Pooja
+            - cell "சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை" [ref=e197]
+            - cell "—" [ref=e198]
+            - cell "—" [ref=e199]
+            - cell "—" [ref=e200]
+          - row "14 Jun 2026 Sunday ரோகிணி Every Sunday On amavasai day of month Choose your Tamil star ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் D14, D15 new-user-1, new-user-2 1111111111, 2222222222" [ref=e441]:
+            - cell "14 Jun 2026" [ref=e202]
+            - cell "Sunday" [ref=e203]
+            - cell "ரோகிணி" [ref=e442]
+            - cell "Every Sunday On amavasai day of month Choose your Tamil star" [ref=e443]:
+              - generic [ref=e444]:
+                - generic [ref=e445]: Every Sunday
+                - generic [ref=e446]: On amavasai day of month
+                - generic [ref=e447]: Choose your Tamil star
+            - cell "ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e206]
+            - cell "D14, D15" [ref=e448]
+            - cell "new-user-1, new-user-2" [ref=e449]
+            - cell "1111111111, 2222222222" [ref=e450]
+          - row "15 Jun 2026 Monday திருவாதிரை 1st day of Tamil Month திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் D4, D12, D14 Second-Donor, K Subramanian, new-user-1 7777777777, +919840343640, 1111111111" [ref=e451]:
+            - cell "15 Jun 2026" [ref=e211]
+            - cell "Monday" [ref=e212]
+            - cell "திருவாதிரை" [ref=e452]
+            - cell "1st day of Tamil Month" [ref=e453]:
+              - generic [ref=e455]: 1st day of Tamil Month
+            - cell "திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e215]
+            - cell "D4, D12, D14" [ref=e456]
+            - cell "Second-Donor, K Subramanian, new-user-1" [ref=e457]
+            - cell "7777777777, +919840343640, 1111111111" [ref=e458]
+          - row "16 Jun 2026 Tuesday புனர்பூசம் Any Day of Month செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e459]:
+            - cell "16 Jun 2026" [ref=e220]
+            - cell "Tuesday" [ref=e221]
+            - cell "புனர்பூசம்" [ref=e460]
+            - cell "Any Day of Month" [ref=e223]
+            - cell "செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e224]
+            - cell "—" [ref=e225]
+            - cell "—" [ref=e226]
+            - cell "—" [ref=e227]
+          - row "17 Jun 2026 Wednesday பூசம் Any Day of Month கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e461]:
+            - cell "17 Jun 2026" [ref=e229]
+            - cell "Wednesday" [ref=e230]
+            - cell "பூசம்" [ref=e462]
+            - cell "Any Day of Month" [ref=e232]
+            - cell "கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e233]
+            - cell "—" [ref=e234]
+            - cell "—" [ref=e235]
+            - cell "—" [ref=e236]
+          - row "18 Jun 2026 Thursday ஆயில்யம் On chaturti day of month Choose your Tamil star வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் D14 new-user-1 1111111111" [ref=e463]:
+            - cell "18 Jun 2026" [ref=e238]
+            - cell "Thursday" [ref=e239]
+            - cell "ஆயில்யம்" [ref=e464]
+            - cell "On chaturti day of month Choose your Tamil star" [ref=e465]:
+              - generic [ref=e466]:
+                - generic [ref=e467]: On chaturti day of month
+                - generic [ref=e468]: Choose your Tamil star
+            - cell "வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e242]
+            - cell "D14" [ref=e469]
+            - cell "new-user-1" [ref=e470]
+            - cell "1111111111" [ref=e471]
+          - row "19 Jun 2026 Friday மகம் Any Day of Month வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e472]:
+            - cell "19 Jun 2026" [ref=e247]
+            - cell "Friday" [ref=e248]
+            - cell "மகம்" [ref=e473]
+            - cell "Any Day of Month" [ref=e250]
+            - cell "வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e251]
+            - cell "—" [ref=e252]
+            - cell "—" [ref=e253]
+            - cell "—" [ref=e254]
+          - row "20 Jun 2026 Saturday பூரம் On sashti day of month Saturday Navagraha Pooja சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை — — —" [ref=e474]:
+            - cell "20 Jun 2026" [ref=e256]
+            - cell "Saturday" [ref=e257]
+            - cell "பூரம்" [ref=e475]
+            - cell "On sashti day of month Saturday Navagraha Pooja" [ref=e476]:
+              - generic [ref=e260]:
+                - generic [ref=e477]: On sashti day of month
+                - generic [ref=e261]: Saturday Navagraha Pooja
+            - cell "சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை" [ref=e262]
+            - cell "—" [ref=e263]
+            - cell "—" [ref=e264]
+            - cell "—" [ref=e265]
+          - row "21 Jun 2026 Sunday உத்தரம் Every Sunday ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e478]:
+            - cell "21 Jun 2026" [ref=e267]
+            - cell "Sunday" [ref=e268]
+            - cell "உத்தரம்" [ref=e479]
+            - cell "Every Sunday" [ref=e480]:
+              - generic [ref=e482]: Every Sunday
+            - cell "ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e271]
+            - cell "—" [ref=e272]
+            - cell "—" [ref=e273]
+            - cell "—" [ref=e274]
+          - row "22 Jun 2026 Monday அஸ்தம் On 2 ashtami day of month திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் *காலபைரவர் அர்சனை — — —" [ref=e483]:
+            - cell "22 Jun 2026" [ref=e276]
+            - cell "Monday" [ref=e277]
+            - cell "அஸ்தம்" [ref=e484]
+            - cell "On 2 ashtami day of month" [ref=e485]:
+              - generic [ref=e487]: On 2 ashtami day of month
+            - cell "திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் *காலபைரவர் அர்சனை" [ref=e488]
+            - cell "—" [ref=e281]
+            - cell "—" [ref=e282]
+            - cell "—" [ref=e283]
+          - row "23 Jun 2026 Tuesday சித்திரை Any Day of Month செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e489]:
+            - cell "23 Jun 2026" [ref=e285]
+            - cell "Tuesday" [ref=e286]
+            - cell "சித்திரை" [ref=e490]
+            - cell "Any Day of Month" [ref=e288]
+            - cell "செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e289]
+            - cell "—" [ref=e290]
+            - cell "—" [ref=e291]
+            - cell "—" [ref=e292]
+          - row "24 Jun 2026 Wednesday சுவாதி Any Day of Month கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e491]:
+            - cell "24 Jun 2026" [ref=e294]
+            - cell "Wednesday" [ref=e295]
+            - cell "சுவாதி" [ref=e492]
+            - cell "Any Day of Month" [ref=e297]
+            - cell "கிழம அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e298]
+            - cell "—" [ref=e299]
+            - cell "—" [ref=e300]
+            - cell "—" [ref=e301]
+          - row "25 Jun 2026 Thursday விசாகம் Any Day of Month வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e493]:
+            - cell "25 Jun 2026" [ref=e303]
+            - cell "Thursday" [ref=e304]
+            - cell "விசாகம்" [ref=e494]
+            - cell "Any Day of Month" [ref=e306]
+            - cell "வியாழன் கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e307]
+            - cell "—" [ref=e308]
+            - cell "—" [ref=e309]
+            - cell "—" [ref=e310]
+          - row "26 Jun 2026 Friday அனுஷம் Any Day of Month வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e495]:
+            - cell "26 Jun 2026" [ref=e312]
+            - cell "Friday" [ref=e313]
+            - cell "அனுஷம்" [ref=e496]
+            - cell "Any Day of Month" [ref=e315]
+            - cell "வெள்ளி கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e316]
+            - cell "—" [ref=e317]
+            - cell "—" [ref=e318]
+            - cell "—" [ref=e319]
+          - row "27 Jun 2026 Saturday கேட்டை Pradosham (Trayodashi) Last sat day of month Saturday Navagraha Pooja சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை *ப்ரதோஷ பூஜை * ஆஞ்சனேயர் அர்ச்சனை, பானகம் ப்ரசாதம் — — —" [ref=e497]:
+            - cell "27 Jun 2026" [ref=e321]
+            - cell "Saturday" [ref=e322]
+            - cell "கேட்டை" [ref=e498]
+            - cell "Pradosham (Trayodashi) Last sat day of month Saturday Navagraha Pooja" [ref=e499]:
+              - generic [ref=e325]:
+                - generic [ref=e500]: Pradosham (Trayodashi)
+                - generic [ref=e501]: Last sat day of month
+                - generic [ref=e326]: Saturday Navagraha Pooja
+            - cell "சனி கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் + நவக்ரக அபிஷேகம் / அர்சனை *ப்ரதோஷ பூஜை * ஆஞ்சனேயர் அர்ச்சனை, பானகம் ப்ரசாதம்" [ref=e502]
+            - cell "—" [ref=e328]
+            - cell "—" [ref=e329]
+            - cell "—" [ref=e330]
+          - row "28 Jun 2026 Sunday கேட்டை Every Sunday ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e503]:
+            - cell "28 Jun 2026" [ref=e332]
+            - cell "Sunday" [ref=e333]
+            - cell "கேட்டை" [ref=e504]
+            - cell "Every Sunday" [ref=e505]:
+              - generic [ref=e507]: Every Sunday
+            - cell "ஞாயிறு கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e336]
+            - cell "—" [ref=e337]
+            - cell "—" [ref=e338]
+            - cell "—" [ref=e339]
+          - row "29 Jun 2026 Monday மூலம் On paurnami day of month திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e508]:
+            - cell "29 Jun 2026" [ref=e341]
+            - cell "Monday" [ref=e342]
+            - cell "மூலம்" [ref=e509]
+            - cell "On paurnami day of month" [ref=e510]:
+              - generic [ref=e512]: On paurnami day of month
+            - cell "திங்கட் கிழமை கிழமை அர்சனை -* ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், * அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e345]
+            - cell "—" [ref=e346]
+            - cell "—" [ref=e347]
+            - cell "—" [ref=e348]
+          - row "30 Jun 2026 Tuesday பூராடம் Any Day of Month செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில் — — —" [ref=e513]:
+            - cell "30 Jun 2026" [ref=e350]
+            - cell "Tuesday" [ref=e351]
+            - cell "பூராடம்" [ref=e514]
+            - cell "Any Day of Month" [ref=e353]
+            - cell "செவ்வாய் கிழமை -அபிஷேகம், * ஆத்தங்கரை பிள்ளையார், * சிவன் கோவிலில், சிவன்+ அம்பாள், *அய்யனார் கோவில், * பெருமாள் கோவில்" [ref=e354]
+            - cell "—" [ref=e355]
+            - cell "—" [ref=e356]
+            - cell "—" [ref=e357]

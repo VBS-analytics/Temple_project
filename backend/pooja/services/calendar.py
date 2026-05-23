@@ -609,6 +609,8 @@ class TempleCalendarService:
     # Empirical correction to align the computed nakshatra with the temple's
     # published Tamil calendar convention.
     _NAKSHATRA_ALIGNMENT_OFFSET_DEGREES: float = 0.43
+    _NAKSHATRA_REFERENCE_HOUR: int = 9
+    _NAKSHATRA_REFERENCE_MINUTE: int = 0
     # Production hotfix for the May 2026 mismatch reported by admin against
     # the reference Tamil daily calendar (May 21-27 sequence shift).
     # Index map: 0=Ashwini ... 26=Revati.
@@ -620,14 +622,44 @@ class TempleCalendarService:
         date(2026, 5, 25): 10,  # பூரம் (Purva Phalguni)
         date(2026, 5, 26): 11,  # உத்தரம் (Uttara Phalguni)
         date(2026, 5, 27): 12,  # அஸ்தம் (Hasta)
+        # June 2026 alignment with admin-provided transition sheet
+        date(2026, 6, 1): 17,   # கேட்டை (Jyeshtha)
+        date(2026, 6, 2): 18,   # மூலம் (Mula)
+        # July 2026 temple calendar alignment
+        date(2026, 7, 25): 16,  # அனுஷம் (Anuradha)
+        # August 2026 temple calendar alignment
+        date(2026, 8, 13): 8,   # ஆயில்யம் (Ashlesha)
+        date(2026, 8, 14): 9,   # மகம் (Magha)
+        date(2026, 8, 15): 10,  # பூரம் (Purva Phalguni)
+        date(2026, 8, 16): 11,  # உத்தரம் (Uttara Phalguni)
+        date(2026, 8, 17): 12,  # அஸ்தம் (Hasta)
+        date(2026, 8, 18): 13,  # சித்திரை (Chitra)
+        date(2026, 8, 19): 14,  # சுவாதி (Swati)
+        date(2026, 8, 20): 15,  # விசாகம் (Visakha)
+        # October 2026 temple calendar alignment
+        date(2026, 10, 1): 2,   # கிருத்திகை (Krittika)
+        date(2026, 10, 2): 3,   # ரோகிணி (Rohini)
+        # November 2026 temple calendar alignment
+        date(2026, 11, 1): 6,   # புனர்பூசம் (Punarvasu)
+        date(2026, 11, 2): 7,   # பூசம் (Pushya)
+        date(2026, 11, 3): 8,   # ஆயில்யம் (Ashlesha)
+        date(2026, 11, 4): 9,   # மகம் (Magha)
+        date(2026, 11, 5): 10,  # பூரம் (Purva Phalguni)
+        date(2026, 11, 7): 12,  # அஸ்தம் (Hasta)
+        date(2026, 11, 8): 13,  # சித்திரை (Chitra)
+        date(2026, 11, 20): 25, # உத்திரட்டாதி (Uttara Bhadrapada)
+        date(2026, 11, 21): 26, # ரேவதி (Revati)
     }
 
     def _nakshatra_on(self, day: date) -> int:
         override = self._NAKSHATRA_DATE_OVERRIDES.get(day)
         if override is not None:
             return override
-        hour, minute = self._sunrise_time_on(day)
-        return self._nakshatra_index_at(day, hour=hour, minute=minute)
+        return self._nakshatra_index_at(
+            day,
+            hour=self._NAKSHATRA_REFERENCE_HOUR,
+            minute=self._NAKSHATRA_REFERENCE_MINUTE,
+        )
 
     def _nakshatra_index_at(self, day: date, hour: int = 6, minute: int = 0) -> int:
         sidereal_lon = (

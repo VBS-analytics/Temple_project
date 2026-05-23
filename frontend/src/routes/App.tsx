@@ -15,8 +15,6 @@ import AccountStatementPage from "../pages/admin/AccountStatementPage";
 import DonorDetailsPage from "../pages/admin/DonorDetailsPage";
 import ExpensesPage from "../pages/admin/ExpensesPage";
 import PoojaDetailsPage from "../pages/admin/PoojaDetailsPage";
-// Disabled per request: "Ubhayam Report - Prokerala Panchang" admin page.
-// import PoojaDetailsProkeralaPage from "../pages/admin/PoojaDetailsProkeralaPage";
 import PoojaPauseCancelPage from "../pages/admin/PoojaPauseCancelPage";
 import DonorPoojaDetails from "../pages/admin/DonorPoojaDetails";
 import LandingPage from "../pages/LandingPage";
@@ -134,13 +132,6 @@ const App = () => (
         <Route path="/admin/bulk-upload" element={<Navigate to="/admin/master" replace />} />
         <Route path="/admin/donors" element={<DonorDetailsPage />} />
         <Route path="/admin/pooja-details" element={<PoojaDetailsPage />} />
-        {/* Disabled per request: "Ubhayam Report - Prokerala Panchang" admin route. */}
-        {/*
-        <Route
-          path="/admin/pooja-details-prokerala"
-          element={<PoojaDetailsProkeralaPage />}
-        />
-        */}
         <Route
           path="/admin/combine-payment-donor"
           element={<CombinePaymentDonorPage />}

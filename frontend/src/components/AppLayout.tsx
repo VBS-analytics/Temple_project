@@ -111,12 +111,6 @@ const AppLayout = () => {
       label: "Ubhayam Report",
       show: Boolean(user && isAdmin(user.role)),
     },
-    // Disabled per request: hide "Ubhayam Report - Prokerala Panchang" from admin navigation.
-    // {
-    //   to: "/admin/pooja-details-prokerala",
-    //   label: "Ubhayam Report - Prokerala Panchang",
-    //   show: Boolean(user && isAdmin(user.role)),
-    // },
     {
       to: "/admin/donor-pooja-details",
       label: "Ubhayam Message",

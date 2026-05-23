@@ -1437,19 +1437,16 @@ class TithiSearchBehaviourTests(SimpleTestCase):
 
 
 class NakshatraAssignmentTests(SimpleTestCase):
-    @patch.object(TempleCalendarService, "_sunrise_time_on")
     @patch.object(TempleCalendarService, "_nakshatra_index_at")
-    def test_nakshatra_on_uses_sunrise_time(self, mock_nakshatra_index_at, mock_sunrise_time):
+    def test_nakshatra_on_uses_fixed_9am_reference(self, mock_nakshatra_index_at):
         service = TempleCalendarService.__new__(TempleCalendarService)
         target_day = date(2026, 3, 1)
-        mock_sunrise_time.return_value = (7, 33)
         mock_nakshatra_index_at.return_value = 7
 
         result = TempleCalendarService._nakshatra_on(service, target_day)
 
         self.assertEqual(result, 7)
-        mock_sunrise_time.assert_called_once_with(target_day)
-        mock_nakshatra_index_at.assert_called_once_with(target_day, hour=7, minute=33)
+        mock_nakshatra_index_at.assert_called_once_with(target_day, hour=9, minute=0)
 
     @patch.object(TempleCalendarService, "_moon_sidereal_longitude")
     def test_nakshatra_index_applies_alignment_offset(self, mock_moon_sidereal_longitude):
@@ -1483,6 +1480,87 @@ class NakshatraAssignmentTests(SimpleTestCase):
             self.assertEqual(TempleCalendarService._nakshatra_on(service, day), index)
 
         # Override dates should not call runtime astronomical calculation.
+        mock_sunrise_time.assert_not_called()
+        mock_nakshatra_index_at.assert_not_called()
+
+    @patch.object(TempleCalendarService, "_sunrise_time_on")
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_nakshatra_date_overrides_apply_for_oct_nov_2026_hotfix(self, mock_nakshatra_index_at, mock_sunrise_time):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_sunrise_time.return_value = (6, 0)
+        mock_nakshatra_index_at.return_value = 0
+
+        expected = {
+            date(2026, 10, 1): 2,
+            date(2026, 10, 2): 3,
+            date(2026, 11, 1): 6,
+            date(2026, 11, 2): 7,
+            date(2026, 11, 3): 8,
+            date(2026, 11, 4): 9,
+            date(2026, 11, 5): 10,
+            date(2026, 11, 7): 12,
+            date(2026, 11, 8): 13,
+            date(2026, 11, 20): 25,
+            date(2026, 11, 21): 26,
+        }
+        for day, index in expected.items():
+            self.assertEqual(TempleCalendarService._nakshatra_on(service, day), index)
+
+        # Override dates should not call runtime astronomical calculation.
+        mock_sunrise_time.assert_not_called()
+        mock_nakshatra_index_at.assert_not_called()
+
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_2026_dates_use_runtime_astronomical_calculation(self, mock_nakshatra_index_at):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 6, 6)
+
+        def fake_index(_day, *, hour, minute):
+            return 21 if (hour, minute) < (9, 0) else 22
+
+        mock_nakshatra_index_at.side_effect = fake_index
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 22)
+
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_2026_date_after_morning_transition_uses_new_star(self, mock_nakshatra_index_at):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 6, 7)
+
+        def fake_index(_day, *, hour, minute):
+            return 22 if (hour, minute) < (9, 0) else 23
+
+        mock_nakshatra_index_at.side_effect = fake_index
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 23)
+
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_15_2026_resolves_to_mrigashirsha_at_9am(self, mock_nakshatra_index_at):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 6, 15)
+
+        def fake_index(_day, *, hour, minute):
+            return 4 if (hour, minute) == (9, 0) else 5
+
+        mock_nakshatra_index_at.side_effect = fake_index
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 4)
+
+    @patch.object(TempleCalendarService, "_sunrise_time_on")
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_1_and_2_2026_use_explicit_alignment_overrides(self, mock_nakshatra_index_at, mock_sunrise_time):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_sunrise_time.return_value = (6, 0)
+        mock_nakshatra_index_at.return_value = 0
+
+        self.assertEqual(TempleCalendarService._nakshatra_on(service, date(2026, 6, 1)), 17)
+        self.assertEqual(TempleCalendarService._nakshatra_on(service, date(2026, 6, 2)), 18)
         mock_sunrise_time.assert_not_called()
         mock_nakshatra_index_at.assert_not_called()
 
@@ -1562,6 +1640,36 @@ class CanonicalReferenceTimeTests(SimpleTestCase):
         )
 
         self.assertEqual(occurrences, [date(2026, 5, 9), date(2026, 5, 23)])
+
+    def test_ubhayam_sankata_chaturthi_uses_dec_2026_override_date(self):
+        service = Mock()
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "sankata_chaturthi",
+            date(2026, 12, 1),
+            date(2026, 12, 31),
+        )
+        self.assertEqual(occurrences, [date(2026, 12, 27)])
+
+    def test_ubhayam_second_ashtami_uses_nov_2026_override_date(self):
+        service = Mock()
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "second_ashtami",
+            date(2026, 11, 1),
+            date(2026, 11, 30),
+        )
+        self.assertEqual(occurrences, [date(2026, 11, 2)])
+
+    def test_ubhayam_second_ashtami_uses_dec_2026_override_date(self):
+        service = Mock()
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "second_ashtami",
+            date(2026, 12, 1),
+            date(2026, 12, 31),
+        )
+        self.assertEqual(occurrences, [date(2026, 12, 31)])
 
 
 class PradoshamHelperTests(SimpleTestCase):
