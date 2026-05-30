@@ -165,6 +165,99 @@ class UbhayamReport(models.Model):
         return f"Ubhayam #{self.s_no} - {self.donor_name or self.donor_id}"
 
 
+class UbhayamDateOverride(models.Model):
+    date = models.DateField(unique=True, db_index=True)
+    tamil_stars = models.JSONField(default=list, blank=True)
+    pooja_day_option_ids = models.JSONField(default=list, blank=True)
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ubhayam_date_overrides",
+    )
+
+    class Meta:
+        ordering = ("date", "id")
+
+    def __str__(self):
+        return f"Ubhayam override {self.date.isoformat()}"
+
+
+class UbhayamAllocationStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+
+
+class UbhayamAllocationRun(models.Model):
+    month = models.CharField(max_length=7, db_index=True)
+    run_number = models.PositiveIntegerField(default=1)
+    is_latest = models.BooleanField(default=True, db_index=True)
+    status = models.CharField(
+        max_length=16,
+        choices=UbhayamAllocationStatus.choices,
+        default=UbhayamAllocationStatus.PENDING,
+    )
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ubhayam_allocation_runs",
+    )
+    row_count = models.PositiveIntegerField(default=0)
+    generated_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-generated_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("month", "run_number"),
+                name="ubhayam_allocation_run_unique_month_number",
+            ),
+            models.UniqueConstraint(
+                fields=("month",),
+                condition=models.Q(is_latest=True),
+                name="ubhayam_allocation_run_unique_latest_per_month",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Ubhayam allocation {self.month} run {self.run_number}"
+
+
+class UbhayamAllocationRow(models.Model):
+    run = models.ForeignKey(
+        UbhayamAllocationRun,
+        on_delete=models.CASCADE,
+        related_name="rows",
+    )
+    date = models.DateField(db_index=True)
+    day_of_month = models.CharField(max_length=16)
+    tamil_star = models.TextField(blank=True)
+    pooja_day_option = models.TextField(blank=True)
+    donor_id = models.TextField(blank=True)
+    donor_name = models.TextField(blank=True)
+    donor_mobile_number = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("date", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("run", "date"),
+                name="ubhayam_allocation_row_unique_run_date",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Ubhayam allocation row {self.date.isoformat()} (run {self.run_id})"
+
+
 class PoojaRegistrationMember(models.Model):
     registration = models.ForeignKey(PoojaRegistration, on_delete=models.CASCADE, related_name="members")
     name = models.CharField(max_length=255)

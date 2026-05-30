@@ -36,6 +36,11 @@ from .models import (
     DayOptionCategory,
     DonorMessageTemplate,
     FeaturedPooja,
+    UbhayamAllocationRow,
+    UbhayamAllocationRun,
+    UbhayamAllocationStatus,
+    UbhayamDateOverride,
+    UbhayamReport,
     PoojaCartSnapshot,
     PoojaCartSnapshotExportBatch,
     PoojaCartSnapshotExportEntry,
@@ -178,6 +183,7 @@ ANY_DAY_OPTION_DESCRIPTIONS = {
     "any day of the month",
 }
 RUNNING_TESTS = "test" in sys.argv
+UBHAYAM_DB_CUTOVER_MONTH = "2026-07"
 
 
 def _normalize_text(value: str | None) -> str:
@@ -221,6 +227,26 @@ def _parse_iso_date(value: str | None) -> date | None:
         return date.fromisoformat(parsed)
     except ValueError:
         return None
+
+
+def _parse_month_key(value: str | None) -> tuple[str, int, int] | None:
+    if not value:
+        return None
+    normalized = value.strip()
+    match = re.fullmatch(r"(\d{4})-(\d{2})", normalized)
+    if not match:
+        return None
+    year = int(match.group(1))
+    month = int(match.group(2))
+    if month < 1 or month > 12:
+        return None
+    return normalized, year, month
+
+
+def _month_range(year: int, month: int) -> tuple[date, date]:
+    first_day = date(year, month, 1)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+    return first_day, last_day
 
 
 def _is_any_day_option(code: str | None, description: str | None) -> bool:
@@ -2743,6 +2769,469 @@ class PoojaDonorCalendarView(APIView):
             cache.set(cache_key, response_payload, timeout=60 * 5)
 
         return Response(response_payload)
+
+
+class UbhayamInputMonthView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def get(self, request):
+        today = timezone.localdate()
+        parsed = _parse_month_key(request.query_params.get("month"))
+        if parsed is None:
+            month_key = f"{today.year}-{today.month:02d}"
+            year = today.year
+            month = today.month
+        else:
+            month_key, year, month = parsed
+
+        first_day, last_day = _month_range(year, month)
+        overrides = {
+            row.date: row
+            for row in UbhayamDateOverride.objects.filter(date__gte=first_day, date__lte=last_day)
+        }
+
+        rows = []
+        cursor = first_day
+        while cursor <= last_day:
+            override = overrides.get(cursor)
+            raw_star_values = override.tamil_stars if override else []
+            raw_option_values = override.pooja_day_option_ids if override else []
+            tamil_stars = [
+                str(value).strip()
+                for value in (raw_star_values if isinstance(raw_star_values, list) else [])
+                if str(value).strip()
+            ]
+            pooja_day_option_ids = []
+            for value in (raw_option_values if isinstance(raw_option_values, list) else []):
+                try:
+                    pooja_day_option_ids.append(int(value))
+                except (TypeError, ValueError):
+                    continue
+
+            rows.append(
+                {
+                    "date": cursor.isoformat(),
+                    "day_of_month": cursor.strftime("%A"),
+                    "tamil_stars": tamil_stars,
+                    "pooja_day_option_ids": pooja_day_option_ids,
+                }
+            )
+            cursor += timedelta(days=1)
+
+        latest_run = (
+            UbhayamAllocationRun.objects.filter(month=month_key, is_latest=True)
+            .order_by("-run_number")
+            .first()
+        )
+        return Response(
+            {
+                "month": month_key,
+                "rows": rows,
+                "latest_allocation": (
+                    {
+                        "run_number": latest_run.run_number,
+                        "status": latest_run.status,
+                        "row_count": latest_run.row_count,
+                        "generated_at": latest_run.generated_at.isoformat() if latest_run.generated_at else None,
+                    }
+                    if latest_run
+                    else None
+                ),
+            }
+        )
+
+
+class UbhayamInputSaveView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def post(self, request):
+        parsed = _parse_month_key(request.data.get("month"))
+        if parsed is None:
+            return Response({"detail": "month must be in YYYY-MM format."}, status=status.HTTP_400_BAD_REQUEST)
+        month_key, year, month = parsed
+        first_day, last_day = _month_range(year, month)
+
+        payload_rows = request.data.get("rows")
+        if not isinstance(payload_rows, list):
+            return Response({"detail": "rows must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_day_option_ids = set(PoojaDayOption.objects.values_list("id", flat=True))
+
+        saved_rows = 0
+        processed_dates: set[date] = set()
+
+        for entry in payload_rows:
+            if not isinstance(entry, dict):
+                continue
+            row_date = _parse_iso_date(entry.get("date"))
+            if row_date is None:
+                continue
+            if row_date < first_day or row_date > last_day:
+                continue
+            processed_dates.add(row_date)
+
+            raw_stars = entry.get("tamil_stars")
+            normalized_stars: list[str] = []
+            seen_stars: set[str] = set()
+            if isinstance(raw_stars, list):
+                for value in raw_stars:
+                    text = str(value).strip()
+                    key = text.casefold()
+                    if not text or key in seen_stars:
+                        continue
+                    seen_stars.add(key)
+                    normalized_stars.append(text)
+
+            raw_option_ids = entry.get("pooja_day_option_ids")
+            normalized_option_ids: list[int] = []
+            seen_option_ids: set[int] = set()
+            if isinstance(raw_option_ids, list):
+                for value in raw_option_ids:
+                    try:
+                        option_id = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if option_id in seen_option_ids or option_id not in valid_day_option_ids:
+                        continue
+                    seen_option_ids.add(option_id)
+                    normalized_option_ids.append(option_id)
+
+            if not normalized_stars and not normalized_option_ids:
+                UbhayamDateOverride.objects.filter(date=row_date).delete()
+                continue
+
+            UbhayamDateOverride.objects.update_or_create(
+                date=row_date,
+                defaults={
+                    "tamil_stars": normalized_stars,
+                    "pooja_day_option_ids": normalized_option_ids,
+                    "updated_by": request.user,
+                },
+            )
+            saved_rows += 1
+
+        return Response(
+            {
+                "month": month_key,
+                "saved_rows": saved_rows,
+                "processed_dates": len(processed_dates),
+            }
+        )
+
+
+class UbhayamInputAllocateView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def post(self, request):
+        parsed = _parse_month_key(request.data.get("month"))
+        if parsed is None:
+            return Response({"detail": "month must be in YYYY-MM format."}, status=status.HTTP_400_BAD_REQUEST)
+        month_key, year, month = parsed
+        first_day, last_day = _month_range(year, month)
+
+        overrides = list(
+            UbhayamDateOverride.objects.filter(date__gte=first_day, date__lte=last_day).order_by("date")
+        )
+        if len(overrides) == 0:
+            return Response(
+                {"detail": "No input rows found for this month. Save input first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        month_dates: list[date] = []
+        cursor = first_day
+        while cursor <= last_day:
+            month_dates.append(cursor)
+            cursor += timedelta(days=1)
+
+        override_by_date = {row.date: row for row in overrides}
+        missing_dates = [day.isoformat() for day in month_dates if day not in override_by_date]
+        if missing_dates:
+            preview = ", ".join(missing_dates[:5])
+            suffix = "..." if len(missing_dates) > 5 else ""
+            return Response(
+                {
+                    "detail": (
+                        "Cannot allocate until all dates in the month are filled. "
+                        f"Missing input for: {preview}{suffix}"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        option_ids: set[int] = set()
+        for override in overrides:
+            raw_values = override.pooja_day_option_ids if isinstance(override.pooja_day_option_ids, list) else []
+            for value in raw_values:
+                try:
+                    option_ids.add(int(value))
+                except (TypeError, ValueError):
+                    continue
+        day_option_by_id = {
+            option.id: option
+            for option in PoojaDayOption.objects.filter(id__in=option_ids).only("id", "description")
+        }
+
+        def _normalize_option_ids(raw_values: list[Any] | Any) -> list[int]:
+            normalized: list[int] = []
+            seen: set[int] = set()
+            values = raw_values if isinstance(raw_values, list) else []
+            for value in values:
+                try:
+                    option_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if option_id in seen:
+                    continue
+                seen.add(option_id)
+                normalized.append(option_id)
+            return normalized
+
+        def _normalize_tamil_stars(raw_values: list[Any] | Any) -> list[str]:
+            normalized: list[str] = []
+            seen: set[str] = set()
+            values = raw_values if isinstance(raw_values, list) else []
+            for value in values:
+                text = str(value).strip()
+                key = text.casefold()
+                if not text or key in seen:
+                    continue
+                seen.add(key)
+                normalized.append(text)
+            return normalized
+
+        normalized_by_date: dict[date, dict[str, Any]] = {}
+        invalid_dates: list[str] = []
+        for day in month_dates:
+            override = override_by_date.get(day)
+            if override is None:
+                continue
+            tamil_stars = _normalize_tamil_stars(override.tamil_stars)
+            option_ids_for_date = _normalize_option_ids(override.pooja_day_option_ids)
+            option_labels = [
+                (day_option_by_id[option_id].description or "").strip()
+                for option_id in option_ids_for_date
+                if option_id in day_option_by_id and (day_option_by_id[option_id].description or "").strip()
+            ]
+            # Keep option labels unique but stable.
+            option_labels = list(dict.fromkeys(option_labels))
+
+            if not tamil_stars or not option_labels:
+                invalid_dates.append(day.isoformat())
+
+            normalized_by_date[day] = {
+                "tamil_stars": tamil_stars,
+                "option_labels": option_labels,
+            }
+
+        if invalid_dates:
+            preview = ", ".join(invalid_dates[:5])
+            suffix = "..." if len(invalid_dates) > 5 else ""
+            return Response(
+                {
+                    "detail": (
+                        "Cannot allocate until all dates have both Tamil star and Pooja day option. "
+                        f"Incomplete dates: {preview}{suffix}"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _donor_sort_key(entry: dict[str, str]) -> tuple[int, int | str]:
+            donor_id = (entry.get("donor_id") or "").strip()
+            normalized = donor_id.upper()
+            if normalized.startswith("D") and normalized[1:].isdigit():
+                return (0, int(normalized[1:]))
+            if donor_id.isdigit():
+                return (1, int(donor_id))
+            return (2, donor_id.casefold())
+
+        option_labels_for_month = sorted(
+            {
+                label
+                for value in normalized_by_date.values()
+                for label in value.get("option_labels", [])
+                if isinstance(label, str) and label.strip()
+            },
+            key=lambda value: value.casefold(),
+        )
+        donors_by_option_label: dict[str, list[dict[str, str]]] = {}
+        if option_labels_for_month:
+            donor_rows = list(
+                UbhayamReport.objects.filter(pooja_day_option__in=option_labels_for_month)
+                .order_by("pooja_day_option", "donor_id", "s_no")
+                .values("pooja_day_option", "donor_id", "donor_name", "donor_phone_number")
+            )
+            grouped: dict[str, dict[str, dict[str, str]]] = defaultdict(dict)
+            for donor in donor_rows:
+                label = (donor.get("pooja_day_option") or "").strip()
+                donor_identifier = (donor.get("donor_id") or "").strip()
+                if not label or not donor_identifier or donor_identifier in grouped[label]:
+                    continue
+                grouped[label][donor_identifier] = {
+                    "donor_id": donor_identifier,
+                    "donor_name": (donor.get("donor_name") or "").strip(),
+                    "donor_phone_number": (donor.get("donor_phone_number") or "").strip(),
+                }
+            for label, donor_map in grouped.items():
+                donors_by_option_label[label] = sorted(donor_map.values(), key=_donor_sort_key)
+
+        allocated_donors_by_date: dict[date, list[dict[str, str]]] = {day: [] for day in month_dates}
+        seen_donor_ids_by_date: dict[date, set[str]] = {day: set() for day in month_dates}
+        option_labels_by_date: dict[date, list[str]] = {
+            day: list(normalized_by_date[day]["option_labels"])
+            for day in month_dates
+        }
+
+        # Distribute each option donor-pool across eligible dates in balanced stages
+        # (0-donor dates first, then 1-donor dates, and so on).
+        for option_label in option_labels_for_month:
+            eligible_dates = [day for day in month_dates if option_label in option_labels_by_date[day]]
+            donor_pool = list(donors_by_option_label.get(option_label) or [])
+            if not eligible_dates or not donor_pool:
+                continue
+
+            counts_by_date = {day: 0 for day in eligible_dates}
+            target_existing_count = 0
+
+            while donor_pool:
+                current_max = max(counts_by_date.values()) if counts_by_date else 0
+                if target_existing_count > current_max:
+                    break
+
+                dates_for_stage = [
+                    day for day in eligible_dates if counts_by_date.get(day, 0) == target_existing_count
+                ]
+                allocated_in_stage = 0
+
+                for target_date in dates_for_stage:
+                    if not donor_pool:
+                        break
+
+                    selected_index = None
+                    for index, donor_entry in enumerate(donor_pool):
+                        donor_identifier = donor_entry["donor_id"]
+                        if donor_identifier in seen_donor_ids_by_date[target_date]:
+                            continue
+                        selected_index = index
+                        break
+
+                    if selected_index is None:
+                        continue
+
+                    donor_entry = donor_pool.pop(selected_index)
+                    allocated_donors_by_date[target_date].append(donor_entry)
+                    seen_donor_ids_by_date[target_date].add(donor_entry["donor_id"])
+                    counts_by_date[target_date] = counts_by_date.get(target_date, 0) + 1
+                    allocated_in_stage += 1
+
+                if allocated_in_stage == 0:
+                    break
+                target_existing_count += 1
+
+        with transaction.atomic():
+            existing_runs = (
+                UbhayamAllocationRun.objects.select_for_update()
+                .filter(month=month_key)
+                .order_by("-run_number")
+            )
+            latest_for_month = existing_runs.filter(is_latest=True)
+            current_max_run = existing_runs.first().run_number if existing_runs.exists() else 0
+            next_run_number = current_max_run + 1
+
+            run = UbhayamAllocationRun.objects.create(
+                month=month_key,
+                run_number=next_run_number,
+                is_latest=False,
+                status=UbhayamAllocationStatus.PENDING,
+                generated_by=request.user,
+            )
+
+            rows_to_create: list[UbhayamAllocationRow] = []
+            for day in month_dates:
+                normalized = normalized_by_date[day]
+                tamil_stars = normalized["tamil_stars"]
+                option_labels = normalized["option_labels"]
+                sorted_donors = sorted(allocated_donors_by_date[day], key=_donor_sort_key)
+                rows_to_create.append(
+                    UbhayamAllocationRow(
+                        run=run,
+                        date=day,
+                        day_of_month=day.strftime("%A"),
+                        tamil_star=", ".join(
+                            [str(value).strip() for value in tamil_stars if str(value).strip()]
+                        ),
+                        pooja_day_option=", ".join(option_labels),
+                        donor_id=", ".join([entry["donor_id"] for entry in sorted_donors]),
+                        donor_name=", ".join([entry["donor_name"] for entry in sorted_donors if entry["donor_name"]]),
+                        donor_mobile_number=", ".join(
+                            [entry["donor_phone_number"] for entry in sorted_donors if entry["donor_phone_number"]]
+                        ),
+                    )
+                )
+
+            if rows_to_create:
+                UbhayamAllocationRow.objects.bulk_create(rows_to_create, batch_size=500)
+            latest_for_month.update(is_latest=False)
+            run.is_latest = True
+            run.status = UbhayamAllocationStatus.COMPLETED
+            run.row_count = len(rows_to_create)
+            run.save(update_fields=["is_latest", "status", "row_count", "updated_at"])
+
+        return Response(
+            {
+                "month": month_key,
+                "run_number": run.run_number,
+                "row_count": run.row_count,
+                "is_latest": run.is_latest,
+                "status": run.status,
+            }
+        )
+
+
+class UbhayamAllocationLatestView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        parsed = _parse_month_key(request.query_params.get("month"))
+        if parsed is None:
+            return Response({"detail": "month must be in YYYY-MM format."}, status=status.HTTP_400_BAD_REQUEST)
+        month_key, _, _ = parsed
+        if month_key < UBHAYAM_DB_CUTOVER_MONTH:
+            return Response({"month": month_key, "rows": [], "latest_run": None})
+
+        latest_run = (
+            UbhayamAllocationRun.objects.filter(month=month_key, is_latest=True)
+            .order_by("-run_number")
+            .first()
+        )
+        if latest_run is None:
+            return Response({"month": month_key, "rows": [], "latest_run": None})
+
+        rows = [
+            {
+                "date": row.date.isoformat(),
+                "day_of_month": row.day_of_month,
+                "tamil_star": row.tamil_star,
+                "pooja_day_option": row.pooja_day_option,
+                "donor_id": row.donor_id,
+                "donor_name": row.donor_name,
+                "donor_mobile_number": row.donor_mobile_number,
+            }
+            for row in latest_run.rows.all().order_by("date", "id")
+        ]
+        return Response(
+            {
+                "month": month_key,
+                "latest_run": {
+                    "run_number": latest_run.run_number,
+                    "status": latest_run.status,
+                    "row_count": latest_run.row_count,
+                    "generated_at": latest_run.generated_at.isoformat() if latest_run.generated_at else None,
+                },
+                "rows": rows,
+            }
+        )
 
 
 class RecentPoojaRegistrationsView(APIView):

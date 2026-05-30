@@ -107,6 +107,11 @@ const AppLayout = () => {
       show: Boolean(user && isAdmin(user.role)),
     },
     {
+      to: "/admin/input-ubhayam-report",
+      label: "Ubhayam Report - Input Form",
+      show: Boolean(user && isAdmin(user.role)),
+    },
+    {
       to: "/admin/pooja-details",
       label: "Ubhayam Report",
       show: Boolean(user && isAdmin(user.role)),
