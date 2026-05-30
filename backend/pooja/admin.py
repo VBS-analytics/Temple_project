@@ -12,6 +12,9 @@ from .models import (
     PoojaRegistrationMember,
     RecurringPoojaPlan,
     SpecialAnnouncement,
+    UbhayamAllocationRow,
+    UbhayamAllocationRun,
+    UbhayamDateOverride,
     UbhayamReport,
 )
 
@@ -126,3 +129,26 @@ class RecurringPoojaPlanAdmin(admin.ModelAdmin):
 class UbhayamReportAdmin(admin.ModelAdmin):
     list_display = ("s_no", "donor_id", "donor_name", "donor_phone_number", "pooja_day_option")
     search_fields = ("donor_id", "donor_name", "donor_phone_number", "pooja_day_option")
+
+
+@admin.register(UbhayamDateOverride)
+class UbhayamDateOverrideAdmin(admin.ModelAdmin):
+    list_display = ("date", "updated_by", "updated_at")
+    search_fields = ("date", "updated_by__name", "updated_by__phone_number")
+    ordering = ("date",)
+
+
+@admin.register(UbhayamAllocationRun)
+class UbhayamAllocationRunAdmin(admin.ModelAdmin):
+    list_display = ("month", "run_number", "is_latest", "status", "row_count", "generated_by", "generated_at")
+    list_filter = ("status", "is_latest", "month")
+    search_fields = ("month", "generated_by__name", "generated_by__phone_number")
+    ordering = ("-generated_at",)
+
+
+@admin.register(UbhayamAllocationRow)
+class UbhayamAllocationRowAdmin(admin.ModelAdmin):
+    list_display = ("run", "date", "day_of_month", "pooja_day_option", "donor_id")
+    list_filter = ("run__month", "day_of_month")
+    search_fields = ("run__month", "pooja_day_option", "donor_id", "donor_name", "donor_mobile_number")
+    ordering = ("run", "date")

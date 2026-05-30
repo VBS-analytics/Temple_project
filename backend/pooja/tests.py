@@ -23,6 +23,9 @@ from .models import (
     RecurrenceFrequency,
     RecurrenceKind,
     RecurringPoojaPlan,
+    UbhayamAllocationRow,
+    UbhayamAllocationRun,
+    UbhayamDateOverride,
     UbhayamReport,
 )
 from .serializers import RecurringPoojaPlanSerializer
@@ -409,6 +412,131 @@ class DayOptionOccurrenceViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["day_option_code"], "CS")
         mock_service.next_occurrence.assert_called_once_with("CS", date(2025, 10, 16), tamil_star_labels=["அசுவினி"])
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
+class UbhayamInputAllocationBehaviorTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            phone_number="9000099991",
+            name="Ubhayam Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        self.any_day_option, _ = PoojaDayOption.objects.get_or_create(
+            code="AD",
+            defaults={
+                "description": "Any day of the month",
+                "category": DayOptionCategory.CODE,
+                "display_order": 1,
+            },
+        )
+        self.english_first_option, _ = PoojaDayOption.objects.get_or_create(
+            code="FE",
+            defaults={
+                "description": "1st day of English Month",
+                "category": DayOptionCategory.CODE,
+                "display_order": 2,
+            },
+        )
+        self.allocate_url = reverse("pooja-ubhayam-input-allocate")
+
+    def _month_dates(self, year: int, month: int) -> list[date]:
+        first_day = date(year, month, 1)
+        if month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, month + 1, 1)
+        last_day = next_month - timedelta(days=1)
+        result = []
+        cursor = first_day
+        while cursor <= last_day:
+            result.append(cursor)
+            cursor += timedelta(days=1)
+        return result
+
+    def _seed_full_month_overrides(self, year: int, month: int, option_id: int):
+        for month_day in self._month_dates(year, month):
+            UbhayamDateOverride.objects.create(
+                date=month_day,
+                tamil_stars=["அசுவினி"],
+                pooja_day_option_ids=[option_id],
+                updated_by=self.admin,
+            )
+
+    def _collect_allocated_donor_counts(self, month: str) -> dict[str, int]:
+        latest_run = (
+            UbhayamAllocationRun.objects.filter(month=month, is_latest=True)
+            .order_by("-run_number")
+            .first()
+        )
+        self.assertIsNotNone(latest_run)
+        counts: dict[str, int] = {}
+        rows = UbhayamAllocationRow.objects.filter(run=latest_run).order_by("date")
+        for row in rows:
+            donor_ids = [entry.strip() for entry in (row.donor_id or "").split(",") if entry.strip()]
+            for donor_id in donor_ids:
+                counts[donor_id] = counts.get(donor_id, 0) + 1
+        return counts
+
+    def test_allocate_rejects_when_month_input_is_missing_dates(self):
+        UbhayamDateOverride.objects.create(
+            date=date(2026, 6, 1),
+            tamil_stars=["அசுவினி"],
+            pooja_day_option_ids=[self.any_day_option.id],
+            updated_by=self.admin,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-06"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Cannot allocate until all dates in the month are filled", response.data["detail"])
+
+    def test_allocate_rejects_when_any_day_is_missing_star_or_day_option(self):
+        self._seed_full_month_overrides(2026, 6, self.any_day_option.id)
+        incomplete = UbhayamDateOverride.objects.get(date=date(2026, 6, 15))
+        incomplete.tamil_stars = []
+        incomplete.save(update_fields=["tamil_stars", "updated_at"])
+
+        response = self.client.post(self.allocate_url, {"month": "2026-06"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("both Tamil star and Pooja day option", response.data["detail"])
+
+    def test_allocate_distributes_any_day_donors_without_repeating_same_donor_across_month(self):
+        self._seed_full_month_overrides(2026, 6, self.any_day_option.id)
+        for index in range(1, 5):
+            UbhayamReport.objects.create(
+                donor_id=f"D{index}",
+                donor_name=f"Donor {index}",
+                donor_phone_number=f"90000001{index:02d}",
+                pooja_day_option=self.any_day_option.description,
+            )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-06"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        counts = self._collect_allocated_donor_counts("2026-06")
+        self.assertEqual(counts, {"D1": 1, "D2": 1, "D3": 1, "D4": 1})
+
+    def test_allocate_distributes_non_any_day_option_donors_too(self):
+        self._seed_full_month_overrides(2026, 6, self.english_first_option.id)
+        for donor_id in ("D11", "D12", "D13"):
+            UbhayamReport.objects.create(
+                donor_id=donor_id,
+                donor_name=f"Donor {donor_id}",
+                donor_phone_number="9000009999",
+                pooja_day_option=self.english_first_option.description,
+            )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-06"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        counts = self._collect_allocated_donor_counts("2026-06")
+        self.assertEqual(counts, {"D11": 1, "D12": 1, "D13": 1})
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
@@ -1437,19 +1565,16 @@ class TithiSearchBehaviourTests(SimpleTestCase):
 
 
 class NakshatraAssignmentTests(SimpleTestCase):
-    @patch.object(TempleCalendarService, "_sunrise_time_on")
     @patch.object(TempleCalendarService, "_nakshatra_index_at")
-    def test_nakshatra_on_uses_sunrise_time(self, mock_nakshatra_index_at, mock_sunrise_time):
+    def test_nakshatra_on_uses_fixed_9am_reference(self, mock_nakshatra_index_at):
         service = TempleCalendarService.__new__(TempleCalendarService)
         target_day = date(2026, 3, 1)
-        mock_sunrise_time.return_value = (7, 33)
         mock_nakshatra_index_at.return_value = 7
 
         result = TempleCalendarService._nakshatra_on(service, target_day)
 
         self.assertEqual(result, 7)
-        mock_sunrise_time.assert_called_once_with(target_day)
-        mock_nakshatra_index_at.assert_called_once_with(target_day, hour=7, minute=33)
+        mock_nakshatra_index_at.assert_called_once_with(target_day, hour=9, minute=0)
 
     @patch.object(TempleCalendarService, "_moon_sidereal_longitude")
     def test_nakshatra_index_applies_alignment_offset(self, mock_moon_sidereal_longitude):
@@ -1483,6 +1608,87 @@ class NakshatraAssignmentTests(SimpleTestCase):
             self.assertEqual(TempleCalendarService._nakshatra_on(service, day), index)
 
         # Override dates should not call runtime astronomical calculation.
+        mock_sunrise_time.assert_not_called()
+        mock_nakshatra_index_at.assert_not_called()
+
+    @patch.object(TempleCalendarService, "_sunrise_time_on")
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_nakshatra_date_overrides_apply_for_oct_nov_2026_hotfix(self, mock_nakshatra_index_at, mock_sunrise_time):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_sunrise_time.return_value = (6, 0)
+        mock_nakshatra_index_at.return_value = 0
+
+        expected = {
+            date(2026, 10, 1): 2,
+            date(2026, 10, 2): 3,
+            date(2026, 11, 1): 6,
+            date(2026, 11, 2): 7,
+            date(2026, 11, 3): 8,
+            date(2026, 11, 4): 9,
+            date(2026, 11, 5): 10,
+            date(2026, 11, 7): 12,
+            date(2026, 11, 8): 13,
+            date(2026, 11, 20): 25,
+            date(2026, 11, 21): 26,
+        }
+        for day, index in expected.items():
+            self.assertEqual(TempleCalendarService._nakshatra_on(service, day), index)
+
+        # Override dates should not call runtime astronomical calculation.
+        mock_sunrise_time.assert_not_called()
+        mock_nakshatra_index_at.assert_not_called()
+
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_2026_dates_use_runtime_astronomical_calculation(self, mock_nakshatra_index_at):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 6, 6)
+
+        def fake_index(_day, *, hour, minute):
+            return 21 if (hour, minute) < (9, 0) else 22
+
+        mock_nakshatra_index_at.side_effect = fake_index
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 22)
+
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_2026_date_after_morning_transition_uses_new_star(self, mock_nakshatra_index_at):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 6, 7)
+
+        def fake_index(_day, *, hour, minute):
+            return 22 if (hour, minute) < (9, 0) else 23
+
+        mock_nakshatra_index_at.side_effect = fake_index
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 23)
+
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_15_2026_resolves_to_mrigashirsha_at_9am(self, mock_nakshatra_index_at):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        target_day = date(2026, 6, 15)
+
+        def fake_index(_day, *, hour, minute):
+            return 4 if (hour, minute) == (9, 0) else 5
+
+        mock_nakshatra_index_at.side_effect = fake_index
+
+        result = TempleCalendarService._nakshatra_on(service, target_day)
+
+        self.assertEqual(result, 4)
+
+    @patch.object(TempleCalendarService, "_sunrise_time_on")
+    @patch.object(TempleCalendarService, "_nakshatra_index_at")
+    def test_june_1_and_2_2026_use_explicit_alignment_overrides(self, mock_nakshatra_index_at, mock_sunrise_time):
+        service = TempleCalendarService.__new__(TempleCalendarService)
+        mock_sunrise_time.return_value = (6, 0)
+        mock_nakshatra_index_at.return_value = 0
+
+        self.assertEqual(TempleCalendarService._nakshatra_on(service, date(2026, 6, 1)), 17)
+        self.assertEqual(TempleCalendarService._nakshatra_on(service, date(2026, 6, 2)), 18)
         mock_sunrise_time.assert_not_called()
         mock_nakshatra_index_at.assert_not_called()
 
@@ -1562,6 +1768,36 @@ class CanonicalReferenceTimeTests(SimpleTestCase):
         )
 
         self.assertEqual(occurrences, [date(2026, 5, 9), date(2026, 5, 23)])
+
+    def test_ubhayam_sankata_chaturthi_uses_dec_2026_override_date(self):
+        service = Mock()
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "sankata_chaturthi",
+            date(2026, 12, 1),
+            date(2026, 12, 31),
+        )
+        self.assertEqual(occurrences, [date(2026, 12, 27)])
+
+    def test_ubhayam_second_ashtami_uses_nov_2026_override_date(self):
+        service = Mock()
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "second_ashtami",
+            date(2026, 11, 1),
+            date(2026, 11, 30),
+        )
+        self.assertEqual(occurrences, [date(2026, 11, 2)])
+
+    def test_ubhayam_second_ashtami_uses_dec_2026_override_date(self):
+        service = Mock()
+        occurrences = _collect_dates_for_canonical(
+            service,
+            "second_ashtami",
+            date(2026, 12, 1),
+            date(2026, 12, 31),
+        )
+        self.assertEqual(occurrences, [date(2026, 12, 31)])
 
 
 class PradoshamHelperTests(SimpleTestCase):
@@ -2758,3 +2994,134 @@ class PoojaOptionTotalsMonthFilterTests(TestCase):
         self.client.force_authenticate(self.donor)
         response = self.client.get(self.paid_totals_url, {"month": "2026-01"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+# ---------------------------------------------------------------------------
+# Nakshatra calendar regression tests
+# Verified against mahacalendar.com (temple's reference printed calendar).
+# These tests lock known boundary windows so any code change that breaks
+# the nakshatra output is caught immediately.
+# ---------------------------------------------------------------------------
+
+from pooja.services.calendar import TempleCalendarService  # noqa: E402
+
+
+class NakshatraRegressionTests(SimpleTestCase):
+    """Regression tests for nakshatra calculation — admin-verified dates."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.svc = TempleCalendarService()
+
+    def _check(self, day: date, expected_index: int, expected_tamil: str):
+        result_idx  = self.svc.nakshatra_index_on(day)
+        result_name = self.svc.nakshatra_native_name_on(day)
+        self.assertEqual(
+            result_idx,
+            expected_index,
+            f"{day}: expected {expected_tamil} (idx {expected_index}), "
+            f"got {result_name} (idx {result_idx})",
+        )
+
+    # ── May 2026 ─────────────────────────────────────────────────────────────
+    def test_may_2026_star_transition_window(self):
+        cases = [
+            (date(2026, 5, 21),  6, "புனர்பூசம்"),
+            (date(2026, 5, 22),  7, "பூசம்"),
+            (date(2026, 5, 23),  8, "ஆயில்யம்"),
+            (date(2026, 5, 24),  9, "மகம்"),
+            (date(2026, 5, 25), 10, "பூரம்"),
+            (date(2026, 5, 26), 11, "உத்தரம்"),
+            (date(2026, 5, 27), 12, "அஸ்தம்"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)
+
+    # ── June 2026 ────────────────────────────────────────────────────────────
+    def test_jun_2026_non_boundary_dates_correct(self):
+        """Dates with no override must also be correct."""
+        cases = [
+            (date(2026, 6, 1),  17, "கேட்டை"),
+            (date(2026, 6, 5),  21, "திருவோணம்"),
+            (date(2026, 6, 13),  2, "கிருத்திகை"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)
+
+    def test_jun_2026_pre_sunrise_transition_window(self):
+        """Jun 6-12: star changes before sunrise — overrides must give correct star."""
+        cases = [
+            (date(2026, 6, 6),  22, "அவிட்டம்"),
+            (date(2026, 6, 7),  23, "சதயம்"),
+            (date(2026, 6, 8),  24, "பூரட்டாதி"),
+            (date(2026, 6, 9),  25, "உத்திரட்டாதி"),
+            (date(2026, 6, 10), 26, "ரேவதி"),
+            (date(2026, 6, 11),  0, "அசுவினி"),
+            (date(2026, 6, 12),  1, "பரணி"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)
+
+    # ── July 2026 ────────────────────────────────────────────────────────────
+    def test_jul_2026_boundary(self):
+        self._check(date(2026, 7, 25), 16, "அனுஷம்")
+
+    # ── August 2026 ──────────────────────────────────────────────────────────
+    def test_aug_2026_transition_window(self):
+        cases = [
+            (date(2026, 8, 13),  8, "ஆயில்யம்"),
+            (date(2026, 8, 14),  9, "மகம்"),
+            (date(2026, 8, 15), 10, "பூரம்"),
+            (date(2026, 8, 16), 11, "உத்தரம்"),
+            (date(2026, 8, 17), 12, "அஸ்தம்"),
+            (date(2026, 8, 18), 13, "சித்திரை"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)
+
+    # ── October 2026 ─────────────────────────────────────────────────────────
+    def test_oct_2026_boundary(self):
+        cases = [
+            (date(2026, 10, 1),  2, "கிருத்திகை"),
+            (date(2026, 10, 2),  3, "ரோகிணி"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)
+
+    # ── November 2026 ────────────────────────────────────────────────────────
+    def test_nov_2026_transition_window(self):
+        cases = [
+            (date(2026, 11, 1),   6, "புனர்பூசம்"),
+            (date(2026, 11, 2),   7, "பூசம்"),
+            (date(2026, 11, 3),   8, "ஆயில்யம்"),
+            (date(2026, 11, 4),   9, "மகம்"),
+            (date(2026, 11, 5),  10, "பூரம்"),
+            (date(2026, 11, 7),  12, "அஸ்தம்"),
+            (date(2026, 11, 8),  13, "சித்திரை"),
+            (date(2026, 11, 18), 23, "சதயம்"),
+            (date(2026, 11, 19), 24, "பூரட்டாதி"),
+            (date(2026, 11, 20), 25, "உத்திரட்டாதி"),
+            (date(2026, 11, 21), 26, "ரேவதி"),
+            (date(2026, 11, 22),  0, "அசுவினி"),
+            (date(2026, 11, 23),  1, "பரணி"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)
+
+    # ── December 2026 ────────────────────────────────────────────────────────
+    def test_dec_2026_boundary(self):
+        cases = [
+            (date(2026, 12, 12), 20, "உத்திராடம்"),
+            (date(2026, 12, 13), 21, "திருவோணம்"),
+            (date(2026, 12, 14), 21, "திருவோணம்"),
+        ]
+        for day, idx, name in cases:
+            with self.subTest(date=day):
+                self._check(day, idx, name)

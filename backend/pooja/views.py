@@ -5,14 +5,9 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
 from itertools import count
 import calendar
-import json
 import logging
-from pathlib import Path
 import re
 import sys
-import time
-from urllib import parse, request as urllib_request
-from urllib.error import HTTPError
 from typing import Any
 
 from django.conf import settings
@@ -41,6 +36,11 @@ from .models import (
     DayOptionCategory,
     DonorMessageTemplate,
     FeaturedPooja,
+    UbhayamAllocationRow,
+    UbhayamAllocationRun,
+    UbhayamAllocationStatus,
+    UbhayamDateOverride,
+    UbhayamReport,
     PoojaCartSnapshot,
     PoojaCartSnapshotExportBatch,
     PoojaCartSnapshotExportEntry,
@@ -81,63 +81,6 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-def _month_key(year: int, month: int) -> str:
-    return f"{year:04d}-{month:02d}"
-
-
-def _load_ubhayam_month_overrides_from_file() -> dict[str, Any]:
-    file_path_setting = getattr(settings, "UBHAYAM_MONTH_OVERRIDES_FILE", "")
-    if isinstance(file_path_setting, str) and file_path_setting.strip():
-        file_path = Path(file_path_setting.strip())
-    else:
-        # Default bundled path so May-2026 override works without extra env setup.
-        file_path = Path(settings.BASE_DIR) / "data" / "ubhayam_overrides" / "overrides.json"
-    if not file_path.is_absolute():
-        file_path = Path(settings.BASE_DIR) / file_path
-    if not file_path.exists():
-        logger.warning("Ubhayam override file not found: %s", file_path)
-        return {}
-    try:
-        payload = json.loads(file_path.read_text(encoding="utf-8"))
-    except Exception:
-        logger.exception("Failed to parse Ubhayam override file: %s", file_path)
-        return {}
-    if not isinstance(payload, dict):
-        logger.warning("Ubhayam override file must contain a JSON object: %s", file_path)
-        return {}
-    return payload
-
-
-def _get_ubhayam_month_override(year: int, month: int, section: str) -> Any | None:
-    """
-    Expected shape (from settings dict and/or file dict):
-      {
-        "2026-05": {
-          "day_options": {"dates": [...]},
-          "donor_registrations": {"dates": [...]},
-          "tamil_nakshatras": [...]
-        }
-      }
-    """
-    month = max(1, min(12, month))
-    key = _month_key(year, month)
-
-    root: dict[str, Any] = {}
-    settings_overrides = getattr(settings, "UBHAYAM_MONTH_OVERRIDES", {})
-    if isinstance(settings_overrides, dict):
-        root.update(settings_overrides)
-
-    file_overrides = _load_ubhayam_month_overrides_from_file()
-    if isinstance(file_overrides, dict):
-        # File values override settings values for easier ops updates.
-        root.update(file_overrides)
-
-    month_payload = root.get(key)
-    if not isinstance(month_payload, dict):
-        return None
-    return month_payload.get(section)
-
-
 _TAMIL_NAKSHATRA_NATIVE_NAMES = [
     "அசுவினி",
     "பரணி",
@@ -167,150 +110,6 @@ _TAMIL_NAKSHATRA_NATIVE_NAMES = [
     "உத்திரட்டாதி",
     "ரேவதி",
 ]
-
-
-def _extract_nakshatra_label(payload: Any) -> str | None:
-    if isinstance(payload, dict):
-        for key in ("nakshatra", "star", "birth_star"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-            if isinstance(value, dict):
-                name_value = value.get("name")
-                if isinstance(name_value, str) and name_value.strip():
-                    return name_value.strip()
-        for value in payload.values():
-            extracted = _extract_nakshatra_label(value)
-            if extracted:
-                return extracted
-    elif isinstance(payload, list):
-        for item in payload:
-            extracted = _extract_nakshatra_label(item)
-            if extracted:
-                return extracted
-    return None
-
-
-def _parse_iso_datetime(value: Any) -> datetime | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
-
-
-def _load_json_with_retry(req: urllib_request.Request, *, max_retries: int = 3) -> dict[str, Any]:
-    for attempt in range(max_retries + 1):
-        try:
-            with urllib_request.urlopen(req, timeout=20) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            if exc.code != 429 or attempt >= max_retries:
-                raise
-            retry_after_raw = exc.headers.get("Retry-After") if exc.headers else None
-            try:
-                retry_after = float(retry_after_raw) if retry_after_raw else 0.0
-            except ValueError:
-                retry_after = 0.0
-            backoff = max(1.0, retry_after, 2 ** attempt)
-            time.sleep(min(backoff, 8.0))
-    raise RuntimeError("Unexpected retry failure while contacting Prokerala.")
-
-
-def _extract_nakshatra_label_from_prokerala(payload: dict[str, Any]) -> str | None:
-    data = payload.get("data")
-    if not isinstance(data, dict):
-        return _extract_nakshatra_label(payload)
-
-    nakshatra_items = data.get("nakshatra")
-    sunrise = _parse_iso_datetime(data.get("sunrise"))
-    if isinstance(nakshatra_items, list) and sunrise is not None:
-        for item in nakshatra_items:
-            if not isinstance(item, dict):
-                continue
-            start = _parse_iso_datetime(item.get("start"))
-            end = _parse_iso_datetime(item.get("end"))
-            if start is not None and end is not None and start <= sunrise <= end:
-                name = item.get("name")
-                if isinstance(name, str) and name.strip():
-                    return name.strip()
-        if nakshatra_items:
-            first_item = nakshatra_items[0]
-            if isinstance(first_item, dict):
-                first_name = first_item.get("name")
-                if isinstance(first_name, str) and first_name.strip():
-                    return first_name.strip()
-
-    return _extract_nakshatra_label(data) or _extract_nakshatra_label(payload)
-
-
-def _prokerala_access_token() -> str:
-    cached_token = cache.get("prokerala:access_token")
-    if isinstance(cached_token, str) and cached_token.strip():
-        return cached_token.strip()
-
-    client_id = (getattr(settings, "PROKERALA_CLIENT_ID", "") or "").strip()
-    client_secret = (getattr(settings, "PROKERALA_CLIENT_SECRET", "") or "").strip()
-    token_url = getattr(settings, "PROKERALA_TOKEN_URL", "https://api.prokerala.com/token")
-    if not client_id or not client_secret:
-        raise RuntimeError("Prokerala credentials are missing. Set PROKERALA_CLIENT_ID/PROKERALA_CLIENT_SECRET.")
-    body = parse.urlencode(
-        {
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }
-    ).encode("utf-8")
-    req = urllib_request.Request(token_url, data=body, method="POST")
-    req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    token_payload = _load_json_with_retry(req)
-    access_token = token_payload.get("access_token")
-    if not isinstance(access_token, str) or not access_token.strip():
-        raise RuntimeError("Prokerala token response did not include access_token.")
-    expires_in = token_payload.get("expires_in")
-    timeout = 3000
-    if isinstance(expires_in, int) and expires_in > 120:
-        timeout = max(60, expires_in - 60)
-    cache.set("prokerala:access_token", access_token.strip(), timeout=timeout)
-    return access_token.strip()
-
-
-def _prokerala_nakshatra_on(day: date, *, latitude: float, longitude: float, timezone_name: str) -> dict[str, Any]:
-    cache_key = f"prokerala:nakshatra:{day.isoformat()}:{latitude:.4f}:{longitude:.4f}:{timezone_name}"
-    cached_payload = cache.get(cache_key)
-    if isinstance(cached_payload, dict):
-        return cached_payload
-
-    access_token = _prokerala_access_token()
-    api_url = getattr(settings, "PROKERALA_PANCHANG_URL", "https://api.prokerala.com/v2/astrology/panchang")
-    params = parse.urlencode(
-        {
-            "datetime": f"{day.isoformat()}T06:00:00+05:30",
-            "coordinates": f"{latitude},{longitude}",
-            "ayanamsa": "1",  # Lahiri
-        }
-    )
-    req = urllib_request.Request(f"{api_url}?{params}", method="GET")
-    req.add_header("Authorization", f"Bearer {access_token}")
-    req.add_header("Accept", "application/json")
-    payload = _load_json_with_retry(req)
-
-    label = _extract_nakshatra_label_from_prokerala(payload)
-    if not label:
-        raise RuntimeError("Unable to read nakshatra from Prokerala response.")
-    index = resolve_nakshatra_index(label)
-    tamil_native = _TAMIL_NAKSHATRA_NATIVE_NAMES[index] if index is not None else label
-    result = {
-        "date": day.isoformat(),
-        "index": index if index is not None else -1,
-        "tamil_star": label,
-        "tamil_star_native": tamil_native,
-        "provider": "prokerala",
-        "timezone": timezone_name,
-    }
-    cache.set(cache_key, result, timeout=60 * 60 * 24)
-    return result
 
 
 class LargePagePagination(PageNumberPagination):
@@ -384,6 +183,7 @@ ANY_DAY_OPTION_DESCRIPTIONS = {
     "any day of the month",
 }
 RUNNING_TESTS = "test" in sys.argv
+UBHAYAM_DB_CUTOVER_MONTH = "2026-07"
 
 
 def _normalize_text(value: str | None) -> str:
@@ -427,6 +227,26 @@ def _parse_iso_date(value: str | None) -> date | None:
         return date.fromisoformat(parsed)
     except ValueError:
         return None
+
+
+def _parse_month_key(value: str | None) -> tuple[str, int, int] | None:
+    if not value:
+        return None
+    normalized = value.strip()
+    match = re.fullmatch(r"(\d{4})-(\d{2})", normalized)
+    if not match:
+        return None
+    year = int(match.group(1))
+    month = int(match.group(2))
+    if month < 1 or month > 12:
+        return None
+    return normalized, year, month
+
+
+def _month_range(year: int, month: int) -> tuple[date, date]:
+    first_day = date(year, month, 1)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+    return first_day, last_day
 
 
 def _is_any_day_option(code: str | None, description: str | None) -> bool:
@@ -1936,6 +1756,29 @@ CALENDAR_DAY_OPTION_CANONICAL_CODES = {
     "chaturthi",
 }
 
+_UBHAYAM_CANONICAL_DATE_OVERRIDES: dict[tuple[int, int, str], tuple[int, ...]] = {
+    # May 2026: Sashti must align with temple-published calendar dates.
+    (2026, 5, "sashti"): (7, 22),
+    # June 2026: day-option corrections from temple calendar validation.
+    (2026, 6, "pradosham"): (12, 27),
+    (2026, 6, "amavasya"): (14,),
+    (2026, 6, "second_ashtami"): (8, 22),
+    # September 2026: second Ashtami should appear on 4th and 19th.
+    (2026, 9, "second_ashtami"): (4, 19),
+    # November 2026: second Ashtami should appear on 2nd.
+    (2026, 11, "second_ashtami"): (2,),
+    # December 2026: temple calendar corrections.
+    (2026, 12, "sankata_chaturthi"): (27,),
+    (2026, 12, "second_ashtami"): (31,),
+}
+
+
+def _canonical_override_dates(canonical: str, start: date) -> list[date] | None:
+    day_numbers = _UBHAYAM_CANONICAL_DATE_OVERRIDES.get((start.year, start.month, canonical))
+    if not day_numbers:
+        return None
+    return [date(start.year, start.month, day_num) for day_num in day_numbers]
+
 
 def _collect_tithi_dates_in_range(service: TempleCalendarService, start: date, end: date, targets: tuple[int, ...]) -> list[date]:
     occurrences = service._collect_tithi_dates(start, end, targets)
@@ -1983,6 +1826,10 @@ def _collect_tamil_month_starts(service: TempleCalendarService, start: date, end
 
 
 def _collect_dates_for_canonical(service: TempleCalendarService, canonical: str, start: date, end: date) -> list[date]:
+    override_dates = _canonical_override_dates(canonical, start)
+    if override_dates is not None:
+        return override_dates
+
     if canonical == "gregorian_1st":
         return [start]
     if canonical == "tamil_1st":
@@ -2040,16 +1887,6 @@ class PoojaDayOptionCalendarView(APIView):
             month = 1
         elif month > 12:
             month = 12
-
-        override_payload = _get_ubhayam_month_override(year, month, "day_options")
-        if isinstance(override_payload, dict):
-            dates_payload = override_payload.get("dates")
-            if isinstance(dates_payload, list):
-                return Response({"year": year, "month": month, "dates": dates_payload, "source": "manual_override"})
-            logger.warning(
-                "Ignoring invalid day_options override for %s: expected dict with 'dates' list",
-                _month_key(year, month),
-            )
 
         first_day = date(year, month, 1)
         service = get_calendar_service()
@@ -2119,77 +1956,9 @@ class TamilNakshatraCalendarView(APIView):
         elif month > 12:
             month = 12
 
-        override_payload = _get_ubhayam_month_override(year, month, "tamil_nakshatras")
-        if isinstance(override_payload, list):
-            return Response(override_payload)
-        if override_payload is not None:
-            logger.warning(
-                "Ignoring invalid tamil_nakshatras override for %s: expected list",
-                _month_key(year, month),
-            )
-
-        provider = (request.query_params.get("provider") or "skyfield").strip().lower()
-        try:
-            latitude = float(request.query_params.get("lat") or getattr(settings, "TEMPLE_LATITUDE", 10.7722))
-        except (TypeError, ValueError):
-            latitude = float(getattr(settings, "TEMPLE_LATITUDE", 10.7722))
-        try:
-            longitude = float(request.query_params.get("lon") or getattr(settings, "TEMPLE_LONGITUDE", 79.6369))
-        except (TypeError, ValueError):
-            longitude = float(getattr(settings, "TEMPLE_LONGITUDE", 79.6369))
-        timezone_name = (request.query_params.get("tz") or getattr(settings, "TEMPLE_TIME_ZONE", "Asia/Kolkata")).strip()
-
         cursor = date(year, month, 1)
         results = []
         service = get_calendar_service()
-
-        if provider == "prokerala":
-            try:
-                while cursor.month == month:
-                    results.append(
-                        _prokerala_nakshatra_on(
-                            cursor,
-                            latitude=latitude,
-                            longitude=longitude,
-                            timezone_name=timezone_name,
-                        )
-                    )
-                    cursor += timedelta(days=1)
-                return Response(results)
-            except HTTPError as exc:
-                logger.exception("Failed to load Tamil nakshatra data from Prokerala")
-                if exc.code == 429:
-                    return Response(
-                        {
-                            "detail": (
-                                "Prokerala API rate limit exceeded (HTTP 429). "
-                                "Please retry after some time or upgrade API quota."
-                            )
-                        },
-                        status=status.HTTP_429_TOO_MANY_REQUESTS,
-                    )
-                return Response(
-                    {
-                        "detail": (
-                            "Unable to load Prokerala Panchang data. "
-                            "Verify PROKERALA credentials/endpoints and network access."
-                        ),
-                        "error": str(exc),
-                    },
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-            except Exception as exc:
-                logger.exception("Failed to load Tamil nakshatra data from Prokerala")
-                return Response(
-                    {
-                        "detail": (
-                            "Unable to load Prokerala Panchang data. "
-                            "Verify PROKERALA credentials/endpoints and network access."
-                        ),
-                        "error": str(exc),
-                    },
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
 
         while cursor.month == month:
             results.append(
@@ -2227,21 +1996,6 @@ class PoojaDonorCalendarView(APIView):
         debug_mode = request.query_params.get("debug") == "1"
         is_admin_request = request.user.role == UserRole.ADMIN
         donor_scope_user_id = None if is_admin_request else request.user.id
-
-        # Safety: manual donor override is admin-only because this payload typically
-        # contains all donors and should not be used for donor-scoped profile views.
-        if is_admin_request:
-            override_payload = _get_ubhayam_month_override(year, month, "donor_registrations")
-            if isinstance(override_payload, dict):
-                dates_payload = override_payload.get("dates")
-                if isinstance(dates_payload, list):
-                    return Response(
-                        {"year": year, "month": month, "dates": dates_payload, "source": "manual_override"}
-                    )
-                logger.warning(
-                    "Ignoring invalid donor_registrations override for %s: expected dict with 'dates' list",
-                    _month_key(year, month),
-                )
 
         force_refresh = (request.query_params.get("refresh") or "").strip()
         cache_scope = "admin" if is_admin_request else f"donor:{donor_scope_user_id}"
@@ -3015,6 +2769,469 @@ class PoojaDonorCalendarView(APIView):
             cache.set(cache_key, response_payload, timeout=60 * 5)
 
         return Response(response_payload)
+
+
+class UbhayamInputMonthView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def get(self, request):
+        today = timezone.localdate()
+        parsed = _parse_month_key(request.query_params.get("month"))
+        if parsed is None:
+            month_key = f"{today.year}-{today.month:02d}"
+            year = today.year
+            month = today.month
+        else:
+            month_key, year, month = parsed
+
+        first_day, last_day = _month_range(year, month)
+        overrides = {
+            row.date: row
+            for row in UbhayamDateOverride.objects.filter(date__gte=first_day, date__lte=last_day)
+        }
+
+        rows = []
+        cursor = first_day
+        while cursor <= last_day:
+            override = overrides.get(cursor)
+            raw_star_values = override.tamil_stars if override else []
+            raw_option_values = override.pooja_day_option_ids if override else []
+            tamil_stars = [
+                str(value).strip()
+                for value in (raw_star_values if isinstance(raw_star_values, list) else [])
+                if str(value).strip()
+            ]
+            pooja_day_option_ids = []
+            for value in (raw_option_values if isinstance(raw_option_values, list) else []):
+                try:
+                    pooja_day_option_ids.append(int(value))
+                except (TypeError, ValueError):
+                    continue
+
+            rows.append(
+                {
+                    "date": cursor.isoformat(),
+                    "day_of_month": cursor.strftime("%A"),
+                    "tamil_stars": tamil_stars,
+                    "pooja_day_option_ids": pooja_day_option_ids,
+                }
+            )
+            cursor += timedelta(days=1)
+
+        latest_run = (
+            UbhayamAllocationRun.objects.filter(month=month_key, is_latest=True)
+            .order_by("-run_number")
+            .first()
+        )
+        return Response(
+            {
+                "month": month_key,
+                "rows": rows,
+                "latest_allocation": (
+                    {
+                        "run_number": latest_run.run_number,
+                        "status": latest_run.status,
+                        "row_count": latest_run.row_count,
+                        "generated_at": latest_run.generated_at.isoformat() if latest_run.generated_at else None,
+                    }
+                    if latest_run
+                    else None
+                ),
+            }
+        )
+
+
+class UbhayamInputSaveView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def post(self, request):
+        parsed = _parse_month_key(request.data.get("month"))
+        if parsed is None:
+            return Response({"detail": "month must be in YYYY-MM format."}, status=status.HTTP_400_BAD_REQUEST)
+        month_key, year, month = parsed
+        first_day, last_day = _month_range(year, month)
+
+        payload_rows = request.data.get("rows")
+        if not isinstance(payload_rows, list):
+            return Response({"detail": "rows must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_day_option_ids = set(PoojaDayOption.objects.values_list("id", flat=True))
+
+        saved_rows = 0
+        processed_dates: set[date] = set()
+
+        for entry in payload_rows:
+            if not isinstance(entry, dict):
+                continue
+            row_date = _parse_iso_date(entry.get("date"))
+            if row_date is None:
+                continue
+            if row_date < first_day or row_date > last_day:
+                continue
+            processed_dates.add(row_date)
+
+            raw_stars = entry.get("tamil_stars")
+            normalized_stars: list[str] = []
+            seen_stars: set[str] = set()
+            if isinstance(raw_stars, list):
+                for value in raw_stars:
+                    text = str(value).strip()
+                    key = text.casefold()
+                    if not text or key in seen_stars:
+                        continue
+                    seen_stars.add(key)
+                    normalized_stars.append(text)
+
+            raw_option_ids = entry.get("pooja_day_option_ids")
+            normalized_option_ids: list[int] = []
+            seen_option_ids: set[int] = set()
+            if isinstance(raw_option_ids, list):
+                for value in raw_option_ids:
+                    try:
+                        option_id = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if option_id in seen_option_ids or option_id not in valid_day_option_ids:
+                        continue
+                    seen_option_ids.add(option_id)
+                    normalized_option_ids.append(option_id)
+
+            if not normalized_stars and not normalized_option_ids:
+                UbhayamDateOverride.objects.filter(date=row_date).delete()
+                continue
+
+            UbhayamDateOverride.objects.update_or_create(
+                date=row_date,
+                defaults={
+                    "tamil_stars": normalized_stars,
+                    "pooja_day_option_ids": normalized_option_ids,
+                    "updated_by": request.user,
+                },
+            )
+            saved_rows += 1
+
+        return Response(
+            {
+                "month": month_key,
+                "saved_rows": saved_rows,
+                "processed_dates": len(processed_dates),
+            }
+        )
+
+
+class UbhayamInputAllocateView(APIView):
+    permission_classes = (IsAdminRole,)
+
+    def post(self, request):
+        parsed = _parse_month_key(request.data.get("month"))
+        if parsed is None:
+            return Response({"detail": "month must be in YYYY-MM format."}, status=status.HTTP_400_BAD_REQUEST)
+        month_key, year, month = parsed
+        first_day, last_day = _month_range(year, month)
+
+        overrides = list(
+            UbhayamDateOverride.objects.filter(date__gte=first_day, date__lte=last_day).order_by("date")
+        )
+        if len(overrides) == 0:
+            return Response(
+                {"detail": "No input rows found for this month. Save input first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        month_dates: list[date] = []
+        cursor = first_day
+        while cursor <= last_day:
+            month_dates.append(cursor)
+            cursor += timedelta(days=1)
+
+        override_by_date = {row.date: row for row in overrides}
+        missing_dates = [day.isoformat() for day in month_dates if day not in override_by_date]
+        if missing_dates:
+            preview = ", ".join(missing_dates[:5])
+            suffix = "..." if len(missing_dates) > 5 else ""
+            return Response(
+                {
+                    "detail": (
+                        "Cannot allocate until all dates in the month are filled. "
+                        f"Missing input for: {preview}{suffix}"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        option_ids: set[int] = set()
+        for override in overrides:
+            raw_values = override.pooja_day_option_ids if isinstance(override.pooja_day_option_ids, list) else []
+            for value in raw_values:
+                try:
+                    option_ids.add(int(value))
+                except (TypeError, ValueError):
+                    continue
+        day_option_by_id = {
+            option.id: option
+            for option in PoojaDayOption.objects.filter(id__in=option_ids).only("id", "description")
+        }
+
+        def _normalize_option_ids(raw_values: list[Any] | Any) -> list[int]:
+            normalized: list[int] = []
+            seen: set[int] = set()
+            values = raw_values if isinstance(raw_values, list) else []
+            for value in values:
+                try:
+                    option_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if option_id in seen:
+                    continue
+                seen.add(option_id)
+                normalized.append(option_id)
+            return normalized
+
+        def _normalize_tamil_stars(raw_values: list[Any] | Any) -> list[str]:
+            normalized: list[str] = []
+            seen: set[str] = set()
+            values = raw_values if isinstance(raw_values, list) else []
+            for value in values:
+                text = str(value).strip()
+                key = text.casefold()
+                if not text or key in seen:
+                    continue
+                seen.add(key)
+                normalized.append(text)
+            return normalized
+
+        normalized_by_date: dict[date, dict[str, Any]] = {}
+        invalid_dates: list[str] = []
+        for day in month_dates:
+            override = override_by_date.get(day)
+            if override is None:
+                continue
+            tamil_stars = _normalize_tamil_stars(override.tamil_stars)
+            option_ids_for_date = _normalize_option_ids(override.pooja_day_option_ids)
+            option_labels = [
+                (day_option_by_id[option_id].description or "").strip()
+                for option_id in option_ids_for_date
+                if option_id in day_option_by_id and (day_option_by_id[option_id].description or "").strip()
+            ]
+            # Keep option labels unique but stable.
+            option_labels = list(dict.fromkeys(option_labels))
+
+            if not tamil_stars or not option_labels:
+                invalid_dates.append(day.isoformat())
+
+            normalized_by_date[day] = {
+                "tamil_stars": tamil_stars,
+                "option_labels": option_labels,
+            }
+
+        if invalid_dates:
+            preview = ", ".join(invalid_dates[:5])
+            suffix = "..." if len(invalid_dates) > 5 else ""
+            return Response(
+                {
+                    "detail": (
+                        "Cannot allocate until all dates have both Tamil star and Pooja day option. "
+                        f"Incomplete dates: {preview}{suffix}"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _donor_sort_key(entry: dict[str, str]) -> tuple[int, int | str]:
+            donor_id = (entry.get("donor_id") or "").strip()
+            normalized = donor_id.upper()
+            if normalized.startswith("D") and normalized[1:].isdigit():
+                return (0, int(normalized[1:]))
+            if donor_id.isdigit():
+                return (1, int(donor_id))
+            return (2, donor_id.casefold())
+
+        option_labels_for_month = sorted(
+            {
+                label
+                for value in normalized_by_date.values()
+                for label in value.get("option_labels", [])
+                if isinstance(label, str) and label.strip()
+            },
+            key=lambda value: value.casefold(),
+        )
+        donors_by_option_label: dict[str, list[dict[str, str]]] = {}
+        if option_labels_for_month:
+            donor_rows = list(
+                UbhayamReport.objects.filter(pooja_day_option__in=option_labels_for_month)
+                .order_by("pooja_day_option", "donor_id", "s_no")
+                .values("pooja_day_option", "donor_id", "donor_name", "donor_phone_number")
+            )
+            grouped: dict[str, dict[str, dict[str, str]]] = defaultdict(dict)
+            for donor in donor_rows:
+                label = (donor.get("pooja_day_option") or "").strip()
+                donor_identifier = (donor.get("donor_id") or "").strip()
+                if not label or not donor_identifier or donor_identifier in grouped[label]:
+                    continue
+                grouped[label][donor_identifier] = {
+                    "donor_id": donor_identifier,
+                    "donor_name": (donor.get("donor_name") or "").strip(),
+                    "donor_phone_number": (donor.get("donor_phone_number") or "").strip(),
+                }
+            for label, donor_map in grouped.items():
+                donors_by_option_label[label] = sorted(donor_map.values(), key=_donor_sort_key)
+
+        allocated_donors_by_date: dict[date, list[dict[str, str]]] = {day: [] for day in month_dates}
+        seen_donor_ids_by_date: dict[date, set[str]] = {day: set() for day in month_dates}
+        option_labels_by_date: dict[date, list[str]] = {
+            day: list(normalized_by_date[day]["option_labels"])
+            for day in month_dates
+        }
+
+        # Distribute each option donor-pool across eligible dates in balanced stages
+        # (0-donor dates first, then 1-donor dates, and so on).
+        for option_label in option_labels_for_month:
+            eligible_dates = [day for day in month_dates if option_label in option_labels_by_date[day]]
+            donor_pool = list(donors_by_option_label.get(option_label) or [])
+            if not eligible_dates or not donor_pool:
+                continue
+
+            counts_by_date = {day: 0 for day in eligible_dates}
+            target_existing_count = 0
+
+            while donor_pool:
+                current_max = max(counts_by_date.values()) if counts_by_date else 0
+                if target_existing_count > current_max:
+                    break
+
+                dates_for_stage = [
+                    day for day in eligible_dates if counts_by_date.get(day, 0) == target_existing_count
+                ]
+                allocated_in_stage = 0
+
+                for target_date in dates_for_stage:
+                    if not donor_pool:
+                        break
+
+                    selected_index = None
+                    for index, donor_entry in enumerate(donor_pool):
+                        donor_identifier = donor_entry["donor_id"]
+                        if donor_identifier in seen_donor_ids_by_date[target_date]:
+                            continue
+                        selected_index = index
+                        break
+
+                    if selected_index is None:
+                        continue
+
+                    donor_entry = donor_pool.pop(selected_index)
+                    allocated_donors_by_date[target_date].append(donor_entry)
+                    seen_donor_ids_by_date[target_date].add(donor_entry["donor_id"])
+                    counts_by_date[target_date] = counts_by_date.get(target_date, 0) + 1
+                    allocated_in_stage += 1
+
+                if allocated_in_stage == 0:
+                    break
+                target_existing_count += 1
+
+        with transaction.atomic():
+            existing_runs = (
+                UbhayamAllocationRun.objects.select_for_update()
+                .filter(month=month_key)
+                .order_by("-run_number")
+            )
+            latest_for_month = existing_runs.filter(is_latest=True)
+            current_max_run = existing_runs.first().run_number if existing_runs.exists() else 0
+            next_run_number = current_max_run + 1
+
+            run = UbhayamAllocationRun.objects.create(
+                month=month_key,
+                run_number=next_run_number,
+                is_latest=False,
+                status=UbhayamAllocationStatus.PENDING,
+                generated_by=request.user,
+            )
+
+            rows_to_create: list[UbhayamAllocationRow] = []
+            for day in month_dates:
+                normalized = normalized_by_date[day]
+                tamil_stars = normalized["tamil_stars"]
+                option_labels = normalized["option_labels"]
+                sorted_donors = sorted(allocated_donors_by_date[day], key=_donor_sort_key)
+                rows_to_create.append(
+                    UbhayamAllocationRow(
+                        run=run,
+                        date=day,
+                        day_of_month=day.strftime("%A"),
+                        tamil_star=", ".join(
+                            [str(value).strip() for value in tamil_stars if str(value).strip()]
+                        ),
+                        pooja_day_option=", ".join(option_labels),
+                        donor_id=", ".join([entry["donor_id"] for entry in sorted_donors]),
+                        donor_name=", ".join([entry["donor_name"] for entry in sorted_donors if entry["donor_name"]]),
+                        donor_mobile_number=", ".join(
+                            [entry["donor_phone_number"] for entry in sorted_donors if entry["donor_phone_number"]]
+                        ),
+                    )
+                )
+
+            if rows_to_create:
+                UbhayamAllocationRow.objects.bulk_create(rows_to_create, batch_size=500)
+            latest_for_month.update(is_latest=False)
+            run.is_latest = True
+            run.status = UbhayamAllocationStatus.COMPLETED
+            run.row_count = len(rows_to_create)
+            run.save(update_fields=["is_latest", "status", "row_count", "updated_at"])
+
+        return Response(
+            {
+                "month": month_key,
+                "run_number": run.run_number,
+                "row_count": run.row_count,
+                "is_latest": run.is_latest,
+                "status": run.status,
+            }
+        )
+
+
+class UbhayamAllocationLatestView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        parsed = _parse_month_key(request.query_params.get("month"))
+        if parsed is None:
+            return Response({"detail": "month must be in YYYY-MM format."}, status=status.HTTP_400_BAD_REQUEST)
+        month_key, _, _ = parsed
+        if month_key < UBHAYAM_DB_CUTOVER_MONTH:
+            return Response({"month": month_key, "rows": [], "latest_run": None})
+
+        latest_run = (
+            UbhayamAllocationRun.objects.filter(month=month_key, is_latest=True)
+            .order_by("-run_number")
+            .first()
+        )
+        if latest_run is None:
+            return Response({"month": month_key, "rows": [], "latest_run": None})
+
+        rows = [
+            {
+                "date": row.date.isoformat(),
+                "day_of_month": row.day_of_month,
+                "tamil_star": row.tamil_star,
+                "pooja_day_option": row.pooja_day_option,
+                "donor_id": row.donor_id,
+                "donor_name": row.donor_name,
+                "donor_mobile_number": row.donor_mobile_number,
+            }
+            for row in latest_run.rows.all().order_by("date", "id")
+        ]
+        return Response(
+            {
+                "month": month_key,
+                "latest_run": {
+                    "run_number": latest_run.run_number,
+                    "status": latest_run.status,
+                    "row_count": latest_run.row_count,
+                    "generated_at": latest_run.generated_at.isoformat() if latest_run.generated_at else None,
+                },
+                "rows": rows,
+            }
+        )
 
 
 class RecentPoojaRegistrationsView(APIView):

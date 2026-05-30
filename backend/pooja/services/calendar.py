@@ -12,16 +12,26 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
+from pooja.services.nakshatra_overrides import NAKSHATRA_DATE_OVERRIDES
+
 try:
     from skyfield.api import Loader, wgs84
     from skyfield import almanac
-except ModuleNotFoundError as exc:  # pragma: no cover - protective fallback for optional dependency
+except ModuleNotFoundError as exc:  # pragma: no cover
     Loader = None  # type: ignore[assignment]
     wgs84 = None  # type: ignore[assignment]
     almanac = None  # type: ignore[assignment]
     _SKYFIELD_IMPORT_ERROR = exc
 else:
     _SKYFIELD_IMPORT_ERROR = None
+
+try:
+    import swisseph as swe
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    _SWISSEPH_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover
+    swe = None  # type: ignore[assignment]
+    _SWISSEPH_AVAILABLE = False
 
 # --------------------------------------------------------------------------- #
 # Configuration helpers
@@ -606,34 +616,23 @@ class TempleCalendarService:
             probe += timedelta(days=1)
         raise RuntimeError("Nakshatra not found within search horizon.")
 
-    # Empirical correction to align the computed nakshatra with the temple's
-    # published Tamil calendar convention.
-    _NAKSHATRA_ALIGNMENT_OFFSET_DEGREES: float = 0.43
-    # Production hotfix for the May 2026 mismatch reported by admin against
-    # the reference Tamil daily calendar (May 21-27 sequence shift).
-    # Index map: 0=Ashwini ... 26=Revati.
-    _NAKSHATRA_DATE_OVERRIDES: dict[date, int] = {
-        date(2026, 5, 21): 6,   # புனர்பூசம் (Punarvasu)
-        date(2026, 5, 22): 7,   # பூசம் (Pushya)
-        date(2026, 5, 23): 8,   # ஆயில்யம் (Ashlesha)
-        date(2026, 5, 24): 9,   # மகம் (Magha)
-        date(2026, 5, 25): 10,  # பூரம் (Purva Phalguni)
-        date(2026, 5, 26): 11,  # உத்தரம் (Uttara Phalguni)
-        date(2026, 5, 27): 12,  # அஸ்தம் (Hasta)
-    }
+    _NAKSHATRA_REFERENCE_HOUR: int = 9   # kept for fallback; _nakshatra_on uses actual sunrise
+    _NAKSHATRA_REFERENCE_MINUTE: int = 0
+    _NAKSHATRA_DATE_OVERRIDES = NAKSHATRA_DATE_OVERRIDES
 
     def _nakshatra_on(self, day: date) -> int:
         override = self._NAKSHATRA_DATE_OVERRIDES.get(day)
         if override is not None:
             return override
-        hour, minute = self._sunrise_time_on(day)
-        return self._nakshatra_index_at(day, hour=hour, minute=minute)
+        sunrise_hour, sunrise_minute = self._sunrise_time_on(day)
+        return self._nakshatra_index_at(
+            day,
+            hour=sunrise_hour,
+            minute=sunrise_minute,
+        )
 
     def _nakshatra_index_at(self, day: date, hour: int = 6, minute: int = 0) -> int:
-        sidereal_lon = (
-            self._moon_sidereal_longitude(day, hour=hour, minute=minute)
-            + self._NAKSHATRA_ALIGNMENT_OFFSET_DEGREES
-        ) % 360.0
+        sidereal_lon = self._moon_sidereal_longitude(day, hour=hour, minute=minute) % 360.0
         return int(math.floor(sidereal_lon / (360.0 / 27.0))) % 27
 
     def _nakshatra_name(self, index: int) -> str:
@@ -781,7 +780,11 @@ class TempleCalendarService:
 
     @lru_cache(maxsize=4096)
     def _ayanamsa(self, day: date) -> float:
-        """Approximate Lahiri ayanamsa in degrees."""
+        """Lahiri ayanamsa in degrees using Swiss Ephemeris (exact) with linear fallback."""
+        if _SWISSEPH_AVAILABLE:
+            jd = swe.julday(day.year, day.month, day.day, 6.0)
+            return swe.get_ayanamsa_ut(jd)
+        # Fallback: linear approximation if pyswisseph is not installed
         instant = datetime.combine(day, time(6, 0), tzinfo=self.location.tz).astimezone(_utc_zone())
         base = datetime(2000, 1, 1, 12, 0, tzinfo=_utc_zone())
         delta_days = (instant - base).total_seconds() / 86400.0

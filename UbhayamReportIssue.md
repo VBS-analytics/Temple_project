@@ -50,11 +50,56 @@
 2. Add a date-wise override mechanism (`date`, `star`, `source`, `approved_by`).
 3. Add monthly pre-validation process before month starts.
 4. Add regression test dataset for known mismatch windows (including May 2026).
-5. Keep pilot provider comparison (`Prokerala`) separate from production report until validated.
+5. Keep any pilot provider comparison separate from production report until validated.
 
 ## Current Status
 - Hotfix applied in calendar service for May 21 to May 27, 2026.
 - Unit test added to lock this behavior and prevent regression.
-- Pilot page `Ubhayam Report - Prokerala Panchang` created for evaluation.
 - Production `Ubhayam Report` remains active.
 - This issue document is created for tracking closure.
+
+---
+
+## Additional Issues Logged - October, November, December 2026
+
+## October 2026 - Tamil Star Corrections
+
+| Date | Wrong in Ubhayam Report | Correct Value |
+|---|---|---|
+| 2026-10-01 | பூரட்டாதி | கிருத்திகை |
+| 2026-10-02 | ரேவதி | ரோகிணி |
+
+## November 2026 - Tamil Star Corrections
+
+| Date | Wrong in Ubhayam Report | Correct Value | Note |
+|---|---|---|---|
+| 2026-11-01 | பூசம் | புனர்பூசம் | 2nd Ashtami window context |
+| 2026-11-02 | ஆயில்யம் | பூசம் | 2nd Ashtami day |
+| 2026-11-03 | மகம் | ஆயில்யம் | |
+| 2026-11-04 | பூரம் | மகம் | |
+| 2026-11-05 | உத்தரம் | பூரம் | |
+| 2026-11-07 | சித்திரை | அஸ்தம் | |
+| 2026-11-08 | சுவாதி | சித்திரை | அமாவாசை day |
+| 2026-11-09 | சுவாதி | சுவாதி | No star change (label confirmation) |
+| 2026-11-20 | பூரட்டாதி | உத்திரட்டாதி | |
+| 2026-11-21 | உத்திரட்டாதி | ரேவதி | |
+
+## December 2026 - Canonical Day-Option Date Corrections
+
+| Canonical Option | Wrong Date in Ubhayam | Correct Date |
+|---|---|---|
+| Sankata Chaturthi | 2026-12-26 | 2026-12-27 |
+| Second Ashtami | 2026-12-30 | 2026-12-31 |
+
+## Technical Cause (Oct-Dec pattern)
+- Same class of issue as prior windows: day-assignment mismatch between computed astronomical boundaries and temple-admin reference calendar convention.
+- For December items, mismatch affected canonical day-option mapping dates (not Tamil star labels).
+
+## Code-Level Fix Applied
+1. Updated nakshatra date overrides for October/November 2026 in `backend/pooja/services/calendar.py`.
+2. Updated canonical day-option date overrides for December 2026 in `backend/pooja/views.py`.
+3. Added regression tests in `backend/pooja/tests.py` to lock Oct-Nov star overrides and Dec canonical override dates.
+
+## Validation Status
+- Django targeted tests executed successfully for override behavior.
+- Expected Ubhayam report alignment for October-November-December 2026 is now locked by tests.

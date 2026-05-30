@@ -9,3 +9,4 @@ numpy==1.26.4
 skyfield==1.49
 jplephem==2.21
 openpyxl==3.1.2
+pyswisseph==2.10.3.2

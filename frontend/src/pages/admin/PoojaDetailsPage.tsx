@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../../lib/pdfMakeLoader';
 import api, { extractResults } from '../../lib/api';
 import { FALLBACK_DAILY_HEADERS } from '../../data/dailyHeaderText';
+import ubhayamReportMay2026 from '../../data/ubhayamReportMay2026.json';
 import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 import { isAdmin, useAuthStore } from '../../store/auth';
 
@@ -30,6 +31,8 @@ const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
 const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
 const DAY_OPTION_BADGE_CLASS =
   'rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-orange-600';
+const UBHAYAM_DB_CUTOVER_MONTH = '2026-07';
+const UBHAYAM_FIXED_MONTH_KEY = '2026-05';
 
 const normalizeAnyDayDescription = (value?: string | null) =>
   (value ?? '')
@@ -92,6 +95,9 @@ const buildMonthDates = (year: number, monthIndex: number) => {
 const formatFilenameDate = (value: Date) =>
   value.toISOString().replace(/[:.]/g, '').replace(/-/g, '').slice(0, 15);
 
+const buildMonthKey = (year: number, monthIndex: number) =>
+  `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+
 type TamilNakshatraDay = {
   date: string;
   tamil_star: string;
@@ -136,6 +142,23 @@ type DonorCalendarResponse = {
   month: number;
   dates: DonorCalendarDate[];
 };
+
+type UbhayamAllocationRowResponse = {
+  date: string;
+  day_of_month: string;
+  tamil_star: string;
+  pooja_day_option: string;
+  donor_id: string;
+  donor_name: string;
+  donor_mobile_number: string;
+};
+
+type UbhayamAllocationLatestResponse = {
+  month: string;
+  rows: UbhayamAllocationRowResponse[];
+};
+
+const UBHAYAM_FIXED_MONTH_ROWS = ubhayamReportMay2026 as UbhayamAllocationRowResponse[];
 
 type DonorCalendarSummary = {
   ids: string | null;
@@ -228,17 +251,17 @@ const MobileDayCard = ({ data }: MobileDayCardProps) => {
 
         <div className="flex justify-between">
           <span className="text-sm font-medium text-slate-500">Donor ID:</span>
-          <span className="text-sm text-slate-700">{donorInfo?.ids ?? '—'}</span>
+          <span className="text-sm text-slate-700">{donorInfo?.ids ?? ''}</span>
         </div>
 
         <div className="flex justify-between">
           <span className="text-sm font-medium text-slate-500">Donor Name:</span>
-          <span className="text-sm text-slate-700">{donorInfo?.names ?? '—'}</span>
+          <span className="text-sm text-slate-700">{donorInfo?.names ?? ''}</span>
         </div>
 
         <div className="flex justify-between">
           <span className="text-sm font-medium text-slate-500">Donor Mobile:</span>
-          <span className="text-sm text-slate-700">{donorInfo?.phones ?? '—'}</span>
+          <span className="text-sm text-slate-700">{donorInfo?.phones ?? ''}</span>
         </div>
       </div>
     </div>
@@ -306,6 +329,106 @@ const PoojaDetailsPage = () => {
       month: selectedMonth.monthIndex + 1,
       refresh: calendarRefreshToken,
     };
+    const selectedMonthKey = buildMonthKey(selectedMonth.year, selectedMonth.monthIndex);
+
+    if (selectedMonthKey === UBHAYAM_FIXED_MONTH_KEY) {
+      const starsMap: Record<string, string> = {};
+      const optionsMap: Record<string, DayOptionCalendarEntry[]> = {};
+      const donorMap: Record<string, DonorCalendarSummary> = {};
+
+      UBHAYAM_FIXED_MONTH_ROWS.forEach((entry) => {
+        const dateKey = (entry.date ?? '').trim();
+        if (!dateKey) return;
+        const tamilStar = (entry.tamil_star ?? '').trim();
+        if (tamilStar) {
+          starsMap[dateKey] = tamilStar;
+        }
+
+        const optionLabels = (entry.pooja_day_option ?? '')
+          .split(',')
+          .map((label) => label.trim())
+          .filter((label) => label.length > 0);
+        const dayOptions: DayOptionCalendarEntry[] = optionLabels.map((label, index) => ({
+          id: index + 1,
+          code: `FIXED-${index + 1}`,
+          description: label,
+          display_order: index + 1,
+          category: 'code',
+        }));
+        optionsMap[dateKey] = dayOptions;
+        donorMap[dateKey] = {
+          ids: (entry.donor_id ?? '').trim() || null,
+          names: (entry.donor_name ?? '').trim() || null,
+          phones: (entry.donor_mobile_number ?? '').trim() || null,
+          dayOptions,
+        };
+      });
+
+      setTamilStars(starsMap);
+      setDayOptionsByDate(optionsMap);
+      setDonorCalendarByDate(donorMap);
+      return () => {
+        active = false;
+      };
+    }
+    const useDbAllocationMode = isAdminUser && selectedMonthKey >= UBHAYAM_DB_CUTOVER_MONTH;
+
+    if (useDbAllocationMode) {
+      api
+        .get<UbhayamAllocationLatestResponse>('pooja/ubhayam-allocation/latest/', {
+          params: { month: selectedMonthKey },
+        })
+        .then((allocationRes) => {
+          if (!active) return;
+          const starsMap: Record<string, string> = {};
+          const optionsMap: Record<string, DayOptionCalendarEntry[]> = {};
+          const donorMap: Record<string, DonorCalendarSummary> = {};
+
+          const payloadRows = Array.isArray(allocationRes.data?.rows) ? allocationRes.data.rows : [];
+          payloadRows.forEach((entry) => {
+            const dateKey = (entry.date ?? '').trim();
+            if (!dateKey) return;
+            const tamilStar = (entry.tamil_star ?? '').trim();
+            if (tamilStar) {
+              starsMap[dateKey] = tamilStar;
+            }
+
+            const optionLabels = (entry.pooja_day_option ?? '')
+              .split(',')
+              .map((label) => label.trim())
+              .filter((label) => label.length > 0);
+            const dayOptions: DayOptionCalendarEntry[] = optionLabels.map((label, index) => ({
+              id: index + 1,
+              code: `DB-${index + 1}`,
+              description: label,
+              display_order: index + 1,
+              category: 'code',
+            }));
+            optionsMap[dateKey] = dayOptions;
+            donorMap[dateKey] = {
+              ids: (entry.donor_id ?? '').trim() || null,
+              names: (entry.donor_name ?? '').trim() || null,
+              phones: (entry.donor_mobile_number ?? '').trim() || null,
+              dayOptions,
+            };
+          });
+
+          setTamilStars(starsMap);
+          setDayOptionsByDate(optionsMap);
+          setDonorCalendarByDate(donorMap);
+        })
+        .catch((error) => {
+          if (!active) return;
+          console.error('Failed to load DB allocation data for Ubhayam report', error);
+          setTamilStars({});
+          setDayOptionsByDate({});
+          setDonorCalendarByDate({});
+        });
+
+      return () => {
+        active = false;
+      };
+    }
 
     Promise.all([
       api.get<TamilNakshatraDay[]>('pooja/calendar/tamil-nakshatras/', { params }),
@@ -366,7 +489,7 @@ const PoojaDetailsPage = () => {
     return () => {
       active = false;
     };
-  }, [selectedMonth, calendarRefreshToken]);
+  }, [selectedMonth, calendarRefreshToken, isAdminUser]);
 
   // Daily messages and special announcements are month-independent — fetch once on mount.
   useEffect(() => {
@@ -503,12 +626,12 @@ const PoojaDetailsPage = () => {
       const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
         date.getDate(),
       ).padStart(2, '0')}`;
-      const tamilStar = tamilStars[dateKey] ?? '—';
+      const tamilStar = tamilStars[dateKey] ?? '';
       const donorInfo = donorCalendarByDate[dateKey];
       const dayOptionInfo = resolveDayOptionInfo(date, dateKey);
       const dayOptionValue = buildDayOptionText(dayOptionInfo);
       const dayName = DAY_NAMES[date.getDay()];
-      const dailyHeader = formatDailyHeader(dayName, dayOptionValue) ?? '—';
+      const dailyHeader = formatDailyHeader(dayName, dayOptionValue) ?? '';
       return { date, dateKey, tamilStar, donorInfo, dayOptionInfo, dayOptionValue, dayName, dailyHeader };
     });
 
@@ -534,9 +657,9 @@ const PoojaDetailsPage = () => {
       'Tamil Star': tamilStar,
       'Pooja Day Option': dayOptionValue,
       'Daily Message Header': dailyHeader,
-      'Donor ID': donorInfo?.ids ?? '—',
-      'Donor Name': donorInfo?.names ?? '—',
-      'Donor Mobile Number': donorInfo?.phones ?? '—',
+      'Donor ID': donorInfo?.ids ?? '',
+      'Donor Name': donorInfo?.names ?? '',
+      'Donor Mobile Number': donorInfo?.phones ?? '',
     }));
   }, [perDateData]);
 
@@ -574,7 +697,7 @@ const PoojaDetailsPage = () => {
       }));
       const tableBodyRows: TableCell[][] = reportRows.map((row) =>
         TABLE_COLUMNS.map((column) => ({
-          text: row[column] ?? '—',
+          text: row[column] ?? '',
           fillColor: '#fff',
           font: PDF_TAMIL_FONT_NAME,
         })),
@@ -817,9 +940,9 @@ const PoojaDetailsPage = () => {
                         <td className="px-4 py-3 text-slate-700 whitespace-pre-line">
                           {row.dailyHeader}
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.ids ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.names ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.phones ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.ids ?? ''}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.names ?? ''}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.donorInfo?.phones ?? ''}</td>
                       </tr>
                     );
                   })}
