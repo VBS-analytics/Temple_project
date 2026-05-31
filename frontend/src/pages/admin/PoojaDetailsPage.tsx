@@ -5,6 +5,7 @@ import { loadPdfMake, PDF_TAMIL_FONT_NAME, verifyTamilFont } from '../../lib/pdf
 import api, { extractResults } from '../../lib/api';
 import { FALLBACK_DAILY_HEADERS } from '../../data/dailyHeaderText';
 import ubhayamReportMay2026 from '../../data/ubhayamReportMay2026.json';
+import ubhayamReportJune2026 from '../../data/ubhayamReportJune2026.json';
 import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 import { isAdmin, useAuthStore } from '../../store/auth';
 
@@ -32,7 +33,10 @@ const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the
 const DAY_OPTION_BADGE_CLASS =
   'rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-orange-600';
 const UBHAYAM_DB_CUTOVER_MONTH = '2026-07';
-const UBHAYAM_FIXED_MONTH_KEY = '2026-05';
+const UBHAYAM_FIXED_MONTH_ROWS_BY_MONTH: Record<string, UbhayamAllocationRowResponse[]> = {
+  '2026-05': ubhayamReportMay2026 as UbhayamAllocationRowResponse[],
+  '2026-06': ubhayamReportJune2026 as UbhayamAllocationRowResponse[],
+};
 
 const normalizeAnyDayDescription = (value?: string | null) =>
   (value ?? '')
@@ -157,8 +161,6 @@ type UbhayamAllocationLatestResponse = {
   month: string;
   rows: UbhayamAllocationRowResponse[];
 };
-
-const UBHAYAM_FIXED_MONTH_ROWS = ubhayamReportMay2026 as UbhayamAllocationRowResponse[];
 
 type DonorCalendarSummary = {
   ids: string | null;
@@ -331,12 +333,13 @@ const PoojaDetailsPage = () => {
     };
     const selectedMonthKey = buildMonthKey(selectedMonth.year, selectedMonth.monthIndex);
 
-    if (selectedMonthKey === UBHAYAM_FIXED_MONTH_KEY) {
+    const fixedMonthRows = UBHAYAM_FIXED_MONTH_ROWS_BY_MONTH[selectedMonthKey];
+    if (fixedMonthRows) {
       const starsMap: Record<string, string> = {};
       const optionsMap: Record<string, DayOptionCalendarEntry[]> = {};
       const donorMap: Record<string, DonorCalendarSummary> = {};
 
-      UBHAYAM_FIXED_MONTH_ROWS.forEach((entry) => {
+      fixedMonthRows.forEach((entry) => {
         const dateKey = (entry.date ?? '').trim();
         if (!dateKey) return;
         const tamilStar = (entry.tamil_star ?? '').trim();
