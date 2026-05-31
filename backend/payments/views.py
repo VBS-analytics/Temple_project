@@ -1,7 +1,8 @@
 """Payment API views."""
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from calendar import monthrange
+from collections import defaultdict
 from decimal import Decimal, ROUND_CEILING
 from io import BytesIO
 from typing import Iterable
@@ -1198,10 +1199,15 @@ class CombinePaymentAccessView(APIView):
 
 class PaymentDetailsExportView(APIView):
     """
-    Export payment data to a single Excel workbook with three sheets:
+    Export payment data to a single Excel workbook with base sheets:
     1) Payment Records
     2) Passbook Entries
     3) Donor Statements (donor-wise ordered passbook entries)
+
+    Query params:
+    - include_subordinates=true|1|yes:
+      Includes active subordinate donors only in the Passbook Entries sheet and
+      adds a 4th sheet ("Combined Statement View") in statement-style format.
     """
 
     permission_classes = (IsAdminRole,)
@@ -1233,6 +1239,198 @@ class PaymentDetailsExportView(APIView):
             .values_list("parent_donor_id", flat=True)
         )
 
+    @staticmethod
+    def _combined_statement_opening_date(entries: list[PassbookEntry], reference_date: date) -> date:
+        balance_dates = [entry.entry_date for entry in entries if entry.entry_type == "balance" and entry.entry_date]
+        if balance_dates:
+            return min(balance_dates)
+        return reference_date.replace(month=1, day=1) - timedelta(days=1)
+
+    @staticmethod
+    def _build_combined_statement_rows(
+        *,
+        reference_date: date,
+        main_donor: User,
+        parent_donor_ids: list[int],
+        passbook_by_donor: dict[int, list[PassbookEntry]],
+    ) -> list[list]:
+        main_entries = [
+            entry
+            for entry in passbook_by_donor.get(main_donor.id, [])
+            if entry.entry_type in {"due", "paid"}
+        ]
+        parent_entries = [
+            entry
+            for parent_id in parent_donor_ids
+            for entry in passbook_by_donor.get(parent_id, [])
+            if entry.entry_type in {"due", "paid"}
+        ]
+        opening_entries = [
+            entry
+            for donor_id in [main_donor.id, *parent_donor_ids]
+            for entry in passbook_by_donor.get(donor_id, [])
+            if entry.entry_type == "balance"
+        ]
+        opening_date = PaymentDetailsExportView._combined_statement_opening_date(opening_entries, reference_date)
+        opening_amount = sum(float(entry.closing_due or 0) for entry in opening_entries)
+
+        merged_main_paid: dict[str, dict] = {}
+        main_events: list[dict] = []
+        for entry in sorted(main_entries, key=lambda item: (item.entry_date, item.id)):
+            if entry.entry_type != "paid":
+                main_events.append(
+                    {
+                        "event_date": entry.entry_date,
+                        "donor_name": getattr(entry.donor, "name", "") or "",
+                        "transaction_details": entry.transaction_details or "",
+                        "due_amount": float(entry.due_amount or 0),
+                        "paid_amount": 0.0,
+                        "sort_kind": 0,
+                        "sort_id": f"main-due-{entry.id}",
+                        "source_entry_type": entry.entry_type,
+                        "source_donor_id": entry.donor_id,
+                        "source_payment_record_id": entry.payment_record_id,
+                    }
+                )
+                continue
+
+            reference = (entry.transaction_details or "").strip()
+            if not reference:
+                main_events.append(
+                    {
+                        "event_date": entry.entry_date,
+                        "donor_name": getattr(entry.donor, "name", "") or "",
+                        "transaction_details": entry.transaction_details or "",
+                        "due_amount": 0.0,
+                        "paid_amount": float(entry.paid_amount or 0),
+                        "sort_kind": 0,
+                        "sort_id": f"main-paid-{entry.id}",
+                        "source_entry_type": entry.entry_type,
+                        "source_donor_id": entry.donor_id,
+                        "source_payment_record_id": entry.payment_record_id,
+                    }
+                )
+                continue
+
+            merge_key = f"{entry.entry_date.isoformat()}|{reference}"
+            existing = merged_main_paid.get(merge_key)
+            if not existing:
+                merged_main_paid[merge_key] = {
+                    "event_date": entry.entry_date,
+                    "donor_name": getattr(entry.donor, "name", "") or "",
+                    "transaction_details": entry.transaction_details or "",
+                    "due_amount": 0.0,
+                    "paid_amount": float(entry.paid_amount or 0),
+                    "sort_kind": 0,
+                    "sort_id": f"main-paid-{entry.id}",
+                    "source_entry_type": entry.entry_type,
+                    "source_donor_id": entry.donor_id,
+                    "source_payment_record_id": entry.payment_record_id,
+                    "source_id": entry.id,
+                }
+                continue
+
+            existing["paid_amount"] += float(entry.paid_amount or 0)
+            if entry.id > existing.get("source_id", 0):
+                existing["source_id"] = entry.id
+                existing["sort_id"] = f"main-paid-{entry.id}"
+                existing["source_payment_record_id"] = entry.payment_record_id
+
+        main_events.extend(merged_main_paid.values())
+
+        parent_month_totals: dict[str, dict] = {}
+        for entry in parent_entries:
+            month_key = entry.entry_date.strftime("%Y-%m")
+            existing = parent_month_totals.get(month_key)
+            if existing is None:
+                existing = {
+                    "event_date": entry.entry_date,
+                    "due_total": 0.0,
+                    "paid_total": 0.0,
+                }
+                parent_month_totals[month_key] = existing
+            if entry.entry_date < existing["event_date"]:
+                existing["event_date"] = entry.entry_date
+            if entry.entry_type == "due":
+                existing["due_total"] += float(entry.due_amount or 0)
+            elif entry.entry_type == "paid":
+                existing["paid_total"] += float(entry.paid_amount or 0)
+
+        parent_events: list[dict] = []
+        for month_total in sorted(parent_month_totals.values(), key=lambda item: item["event_date"]):
+            if month_total["due_total"] == 0 and month_total["paid_total"] == 0:
+                continue
+            parent_events.append(
+                {
+                    "event_date": month_total["event_date"],
+                    "donor_name": "Sub-ordinate Donors",
+                    "transaction_details": "--- Pooja DUE ---",
+                    "due_amount": month_total["due_total"],
+                    "paid_amount": month_total["paid_total"],
+                    "sort_kind": 1,
+                    "sort_id": f"parent-{month_total['event_date'].isoformat()}",
+                    "source_entry_type": "aggregate",
+                    "source_donor_id": "",
+                    "source_payment_record_id": "",
+                }
+            )
+
+        combined_events = [
+            {
+                "event_date": opening_date,
+                "donor_name": getattr(main_donor, "name", "") or "",
+                "transaction_details": "-",
+                "due_amount": 0.0,
+                "paid_amount": 0.0,
+                "opening_delta": opening_amount,
+                "is_opening": True,
+                "sort_kind": -1,
+                "sort_id": "opening",
+                "source_entry_type": "balance",
+                "source_donor_id": main_donor.id,
+                "source_payment_record_id": "",
+            },
+            *main_events,
+            *parent_events,
+        ]
+
+        combined_events.sort(
+            key=lambda item: (
+                item["event_date"],
+                item["sort_kind"],
+                str(item["sort_id"]),
+            )
+        )
+
+        running_balance = 0.0
+        rows: list[list] = []
+        for event in combined_events:
+            if event.get("is_opening"):
+                opening_balance = running_balance
+                closing_due = opening_balance + float(event.get("opening_delta", 0))
+            else:
+                opening_balance = running_balance
+                closing_due = opening_balance + float(event["due_amount"]) - float(event["paid_amount"])
+            running_balance = closing_due
+            rows.append(
+                [
+                    main_donor.id,
+                    getattr(main_donor, "name", "") or "",
+                    getattr(main_donor, "phone_number", "") or "",
+                    PaymentDetailsExportView._format_date(event["event_date"]),
+                    event["donor_name"],
+                    event["transaction_details"],
+                    float(event["due_amount"]),
+                    float(event["paid_amount"]),
+                    float(closing_due),
+                    float(opening_balance),
+                    event["source_entry_type"],
+                    event["source_donor_id"],
+                    event["source_payment_record_id"],
+                ]
+            )
+        return rows
+
     def get(self, request):
         if not can_download_reports(request.user):
             return Response(
@@ -1243,6 +1441,10 @@ class PaymentDetailsExportView(APIView):
         # Refresh passbooks so donor-wise statements are up to date
         regenerate_all_passbooks()
         subordinate_donor_ids = self._active_subordinate_donor_ids(timezone.localdate())
+        include_subordinates_in_passbook = (
+            (request.query_params.get("include_subordinates") or "").strip().lower()
+            in {"1", "true", "yes"}
+        )
 
         workbook = Workbook()
         # Remove the default auto-created sheet for a clean slate
@@ -1311,9 +1513,10 @@ class PaymentDetailsExportView(APIView):
         passbook_qs = (
             PassbookEntry.objects.select_related("donor", "payment_record", "registration")
             .exclude(donor__role=UserRole.ADMIN)
-            .exclude(donor_id__in=subordinate_donor_ids)
             .order_by("donor_id", "entry_date")
         )
+        if not include_subordinates_in_passbook:
+            passbook_qs = passbook_qs.exclude(donor_id__in=subordinate_donor_ids)
         for entry in passbook_qs:
             passbook_sheet.append(
                 [
@@ -1376,6 +1579,66 @@ class PaymentDetailsExportView(APIView):
                     entry.payment_record_id,
                 ]
             )
+
+        # Sheet 4: Combined Statement View (matches donor payment statement style)
+        if include_subordinates_in_passbook:
+            month_start = timezone.localdate().replace(day=1)
+            active_mappings = list(
+                CombinePaymentMapping.objects.select_related("main_donor", "parent_donor")
+                .filter(effective_from__lte=month_start)
+                .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=month_start))
+                .order_by("main_donor_id", "parent_donor_id")
+            )
+            if active_mappings:
+                combined_sheet = workbook.create_sheet(title="Combined Statement View")
+                combined_headers = [
+                    "Main Donor ID",
+                    "Main Donor Name",
+                    "Main Donor Phone",
+                    "Date",
+                    "Donor Name",
+                    "Transaction Details",
+                    "Due For Current Month",
+                    "Amount Received",
+                    "Closing Due For Current Month",
+                    "Opening Balance",
+                    "Source Entry Type",
+                    "Source Donor ID",
+                    "Source Payment Record ID",
+                ]
+                combined_sheet.append(combined_headers)
+
+                main_to_parents: dict[int, list[int]] = defaultdict(list)
+                main_donor_lookup: dict[int, User] = {}
+                relevant_donor_ids: set[int] = set()
+                for mapping in active_mappings:
+                    main_to_parents[mapping.main_donor_id].append(mapping.parent_donor_id)
+                    main_donor_lookup[mapping.main_donor_id] = mapping.main_donor
+                    relevant_donor_ids.add(mapping.main_donor_id)
+                    relevant_donor_ids.add(mapping.parent_donor_id)
+
+                passbook_for_combined = (
+                    PassbookEntry.objects.select_related("donor")
+                    .exclude(donor__role=UserRole.ADMIN)
+                    .filter(donor_id__in=relevant_donor_ids)
+                    .order_by("donor_id", "entry_date", "id")
+                )
+                passbook_by_donor: dict[int, list[PassbookEntry]] = defaultdict(list)
+                for entry in passbook_for_combined:
+                    passbook_by_donor[entry.donor_id].append(entry)
+
+                for main_donor_id in sorted(main_to_parents.keys()):
+                    main_donor = main_donor_lookup.get(main_donor_id)
+                    if not main_donor:
+                        continue
+                    rows = self._build_combined_statement_rows(
+                        reference_date=timezone.localdate(),
+                        main_donor=main_donor,
+                        parent_donor_ids=main_to_parents[main_donor_id],
+                        passbook_by_donor=passbook_by_donor,
+                    )
+                    for row in rows:
+                        combined_sheet.append(row)
 
         buffer = BytesIO()
         workbook.save(buffer)

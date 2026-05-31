@@ -1213,6 +1213,7 @@ const ReportPage = () => {
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
   const [exportingExcessDonation, setExportingExcessDonation] = useState(false);
   const [exportingPaymentDetails, setExportingPaymentDetails] = useState(false);
+  const [includeSubordinatesInPassbookExport, setIncludeSubordinatesInPassbookExport] = useState(false);
   const [exportingGeneralDonation, setExportingGeneralDonation] = useState(false);
   const [exportingDonorFeedback, setExportingDonorFeedback] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
@@ -1620,6 +1621,7 @@ const ReportPage = () => {
     try {
       const response = await api.get<Blob>('payments/payment-details-export/', {
         responseType: 'blob',
+        params: includeSubordinatesInPassbookExport ? { include_subordinates: 'true' } : undefined,
       });
       const blobData = response.data;
       if (!(blobData instanceof Blob)) {
@@ -1646,7 +1648,7 @@ const ReportPage = () => {
     } finally {
       setExportingPaymentDetails(false);
     }
-  }, [ensureReportDownloadAccess, exportingPaymentDetails]);
+  }, [ensureReportDownloadAccess, exportingPaymentDetails, includeSubordinatesInPassbookExport]);
 
   const handleGeneralDonationDownload = useCallback(async () => {
     if (exportingGeneralDonation) return;
@@ -2040,18 +2042,35 @@ const ReportPage = () => {
                     </p>
                   </button>
 
-                  <button
-                    onClick={handlePaymentDetailsDownload}
-                    disabled={exportingPaymentDetails}
-                    className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      {exportingPaymentDetails ? <LoadingSpinner /> : <DownloadIcon />}
-                    </div>
-                    <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
-                      {exportingPaymentDetails ? 'Preparing…' : 'Payment Details'}
-                    </p>
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={handlePaymentDetailsDownload}
+                      disabled={exportingPaymentDetails}
+                      className="group relative bg-white hover:bg-orange-50 border-2 border-orange-200 hover:border-orange-400 rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        {exportingPaymentDetails ? <LoadingSpinner /> : <DownloadIcon />}
+                      </div>
+                      <p className="font-semibold text-slate-800 text-sm md:text-base text-left">
+                        {exportingPaymentDetails ? 'Preparing…' : 'Payment Details'}
+                      </p>
+                    </button>
+                    <label
+                      htmlFor="include-subordinates-passbook-export"
+                      className="inline-flex items-center gap-2 text-xs text-slate-600"
+                    >
+                      <input
+                        id="include-subordinates-passbook-export"
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
+                        checked={includeSubordinatesInPassbookExport}
+                        onChange={(event) =>
+                          setIncludeSubordinatesInPassbookExport(event.target.checked)
+                        }
+                      />
+                      Include subordinate donors in Passbook Entries sheet
+                    </label>
+                  </div>
 
                   <button
                     onClick={handleOpeningBalanceDownload}

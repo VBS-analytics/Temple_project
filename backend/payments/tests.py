@@ -209,6 +209,40 @@ class PaymentDetailsExportContentTests(TestCase):
         self.assertNotIn(self.subordinate_donor.id, passbook_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
 
+    def test_payment_details_export_can_include_subordinates_in_passbook_sheet_only(self):
+        self.client.force_authenticate(self.admin)
+
+        with patch("payments.views.regenerate_all_passbooks"):
+            response = self.client.get(
+                reverse("payment-details-export"),
+                {"include_subordinates": "true"},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = b"".join(response.streaming_content)
+        workbook = load_workbook(filename=BytesIO(payload))
+
+        payment_rows = list(workbook["Payment Records"].iter_rows(min_row=2, values_only=True))
+        passbook_rows = list(workbook["Passbook Entries"].iter_rows(min_row=2, values_only=True))
+        statement_rows = list(workbook["Donor Statements"].iter_rows(min_row=2, values_only=True))
+
+        payment_donor_ids = {row[1] for row in payment_rows if row and row[1] is not None}
+        passbook_donor_ids = {row[1] for row in passbook_rows if row and row[1] is not None}
+        statement_donor_ids = {row[0] for row in statement_rows if row and row[0] is not None}
+
+        self.assertNotIn(self.subordinate_donor.id, payment_donor_ids)
+        self.assertIn(self.subordinate_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
+        self.assertIn("Combined Statement View", workbook.sheetnames)
+
+        combined_rows = list(
+            workbook["Combined Statement View"].iter_rows(min_row=2, values_only=True)
+        )
+        combined_main_ids = {row[0] for row in combined_rows if row and row[0] is not None}
+        combined_donor_labels = {row[4] for row in combined_rows if row and row[4] is not None}
+        self.assertIn(self.main_donor.id, combined_main_ids)
+        self.assertIn("Sub-ordinate Donors", combined_donor_labels)
+
 
 class AccountStatementExportTests(TestCase):
     def setUp(self):
