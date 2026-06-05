@@ -8,6 +8,12 @@ import ubhayamReportMay2026 from '../../data/ubhayamReportMay2026.json';
 import ubhayamReportJune2026 from '../../data/ubhayamReportJune2026.json';
 import { POOJA_DATA_UPDATED_EVENT } from '../../constants/events';
 import { isAdmin, useAuthStore } from '../../store/auth';
+import {
+  SATURDAY_NAVAGRAHA_LABEL,
+  filterFixedUbhayamRowsForDonor,
+  shouldAppendSaturdayNavagrahaLabel,
+  shouldUseFixedUbhayamRows,
+} from './ubhayamReportFilters';
 
 const TABLE_COLUMNS = [
   'Date',
@@ -26,7 +32,6 @@ const formatDateLabel = (date: Date) =>
   date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-const SATURDAY_NAVAGRAHA_LABEL = 'Saturday Navagraha Pooja';
 const DAY_OPTION_FALLBACK_LABEL = 'Any Day of Month';
 const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
 const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
@@ -162,6 +167,12 @@ type UbhayamAllocationLatestResponse = {
   rows: UbhayamAllocationRowResponse[];
 };
 
+type ProfileResponse = {
+  profile?: {
+    donor_id?: string | null;
+  };
+};
+
 type DonorCalendarSummary = {
   ids: string | null;
   names: string | null;
@@ -273,8 +284,33 @@ const MobileDayCard = ({ data }: MobileDayCardProps) => {
 const PoojaDetailsPage = () => {
   const user = useAuthStore((state) => state.user);
   const isAdminUser = Boolean(user && isAdmin(user.role));
+  const [currentDonorId, setCurrentDonorId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMonthSelector, setShowMobileMonthSelector] = useState(false);
+
+  useEffect(() => {
+    if (isAdminUser) {
+      setCurrentDonorId(null);
+      return;
+    }
+
+    let active = true;
+    api
+      .get<ProfileResponse>('auth/profile/')
+      .then((response) => {
+        if (!active) return;
+        setCurrentDonorId(response.data?.profile?.donor_id ?? null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('Failed to load donor profile for Ubhayam report filtering', error);
+        setCurrentDonorId(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAdminUser]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -334,12 +370,15 @@ const PoojaDetailsPage = () => {
     const selectedMonthKey = buildMonthKey(selectedMonth.year, selectedMonth.monthIndex);
 
     const fixedMonthRows = UBHAYAM_FIXED_MONTH_ROWS_BY_MONTH[selectedMonthKey];
-    if (fixedMonthRows) {
+    if (shouldUseFixedUbhayamRows(isAdminUser, Boolean(fixedMonthRows))) {
       const starsMap: Record<string, string> = {};
       const optionsMap: Record<string, DayOptionCalendarEntry[]> = {};
       const donorMap: Record<string, DonorCalendarSummary> = {};
+      const visibleFixedMonthRows = isAdminUser
+        ? fixedMonthRows
+        : filterFixedUbhayamRowsForDonor(fixedMonthRows, currentDonorId);
 
-      fixedMonthRows.forEach((entry) => {
+      visibleFixedMonthRows.forEach((entry) => {
         const dateKey = (entry.date ?? '').trim();
         if (!dateKey) return;
         const tamilStar = (entry.tamil_star ?? '').trim();
@@ -492,7 +531,7 @@ const PoojaDetailsPage = () => {
     return () => {
       active = false;
     };
-  }, [selectedMonth, calendarRefreshToken, isAdminUser]);
+  }, [selectedMonth, calendarRefreshToken, isAdminUser, currentDonorId]);
 
   // Daily messages and special announcements are month-independent — fetch once on mount.
   useEffect(() => {
@@ -564,7 +603,10 @@ const PoojaDetailsPage = () => {
       });
       return {
         combined: dedupedOptions,
-        showSaturdayLabel: date.getDay() === 6,
+        showSaturdayLabel: shouldAppendSaturdayNavagrahaLabel(
+          dedupedOptions.map((option) => normalizeDayOptionLabel(option)),
+          date.getDay() === 6,
+        ),
       };
     },
     [dayOptionsByDate, donorCalendarByDate],
