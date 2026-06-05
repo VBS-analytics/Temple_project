@@ -130,6 +130,8 @@ export const canViewExpenseTracker = (user?: UserProfile): boolean => {
   return !isInPhoneSet(user.phone_number, EXPENSE_TRACKER_HIDDEN_ADMIN_PHONES);
 };
 
+export const canViewDonorUbhayamReport = (_user?: UserProfile): boolean => false;
+
 export const canDownloadReports = (user?: UserProfile): boolean => {
   if (!user) {
     return false;

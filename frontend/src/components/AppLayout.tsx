@@ -8,6 +8,7 @@ import useSessionTimeout from "../hooks/useSessionTimeout";
 import SessionExpiryPrompt from "./SessionExpiryPrompt";
 import {
   canViewExpenseTracker,
+  canViewDonorUbhayamReport,
   canViewPaymentStatement,
   isAdmin,
   isReadOnlyAdmin,
@@ -179,7 +180,7 @@ const AppLayout = () => {
     {
       to: "/profile/ubhayam-report",
       label: "Ubhayam Report",
-      show: Boolean(user && !isAdmin(user.role)),
+      show: canViewDonorUbhayamReport(user),
     },
     {
       to: "/profile/donor-corner",
