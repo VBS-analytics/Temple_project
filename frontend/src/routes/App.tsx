@@ -32,7 +32,13 @@ import DonationPage from "../pages/payments/DonationPage";
 import ReportPage from "../pages/ReportPage";
 import WhyVisitNativeVillage from "../pages/WhyVisitNativeVillage";
 import History from "../pages/History";
-import { canViewExpenseTracker, canViewPaymentStatement, isAdmin, useAuthStore } from "../store/auth";
+import {
+  canViewDonorUbhayamReport,
+  canViewExpenseTracker,
+  canViewPaymentStatement,
+  isAdmin,
+  useAuthStore,
+} from "../store/auth";
 const HomeRoute = () => {
   const user = useAuthStore((state) => state.user);
   if (user) {
@@ -82,6 +88,17 @@ const AccountStatementRoute = () => {
   return <AccountStatementPage />;
 };
 
+const DonorUbhayamReportRoute = () => {
+  const user = useAuthStore((state) => state.user);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!canViewDonorUbhayamReport(user)) {
+    return <Navigate to={isAdmin(user.role) ? "/admin/master" : "/profile"} replace />;
+  }
+  return <PoojaDetailsPage />;
+};
+
 const App = () => (
   <Routes>
     <Route path="/" element={<HomeRoute />} />
@@ -122,7 +139,7 @@ const App = () => (
         <Route path="/profile/family-tree" element={<FamilyTreePage />} />
         <Route path="/profile/cow-samrakshana-seva" element={<CowSamrakshanaSeva />} />
         <Route path="/profile/pooja-seva" element={<PoojaSeva />} />
-        <Route path="/profile/ubhayam-report" element={<PoojaDetailsPage />} />
+        <Route path="/profile/ubhayam-report" element={<DonorUbhayamReportRoute />} />
         <Route path="/calendar" element={<CalendarPage />} />
       </Route>
     </Route>
