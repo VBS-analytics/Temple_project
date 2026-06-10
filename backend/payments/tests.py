@@ -183,15 +183,18 @@ class PaymentDetailsExportContentTests(TestCase):
             closing_due=Decimal("0.00"),
         )
 
-    def test_payment_details_export_excludes_active_subordinate_donors_from_all_sheets(self):
+    def _load_workbook(self, response):
+        payload = b"".join(response.streaming_content)
+        return load_workbook(filename=BytesIO(payload))
+
+    def test_payment_details_export_keeps_main_donor_in_payment_records_only(self):
         self.client.force_authenticate(self.admin)
 
         with patch("payments.views.regenerate_all_passbooks"):
             response = self.client.get(reverse("payment-details-export"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        payload = b"".join(response.streaming_content)
-        workbook = load_workbook(filename=BytesIO(payload))
+        workbook = self._load_workbook(response)
 
         payment_rows = list(workbook["Payment Records"].iter_rows(min_row=2, values_only=True))
         passbook_rows = list(workbook["Passbook Entries"].iter_rows(min_row=2, values_only=True))
@@ -201,15 +204,45 @@ class PaymentDetailsExportContentTests(TestCase):
         passbook_donor_ids = {row[1] for row in passbook_rows if row and row[1] is not None}
         statement_donor_ids = {row[0] for row in statement_rows if row and row[0] is not None}
 
-        expected_ids = {self.main_donor.id, self.regular_donor.id}
-        self.assertSetEqual(payment_donor_ids, expected_ids)
-        self.assertSetEqual(passbook_donor_ids, expected_ids)
-        self.assertSetEqual(statement_donor_ids, expected_ids)
+        self.assertSetEqual(payment_donor_ids, {self.main_donor.id, self.regular_donor.id})
+        self.assertSetEqual(passbook_donor_ids, {self.regular_donor.id})
+        self.assertSetEqual(statement_donor_ids, {self.regular_donor.id})
+        self.assertIn(self.main_donor.id, payment_donor_ids)
+        self.assertNotIn(self.main_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.main_donor.id, statement_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, payment_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, passbook_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
 
-    def test_payment_details_export_can_include_subordinates_in_passbook_sheet_only(self):
+    def test_payment_details_export_always_includes_populated_combined_sheet(self):
+        self.client.force_authenticate(self.admin)
+
+        with patch("payments.views.regenerate_all_passbooks"):
+            response = self.client.get(reverse("payment-details-export"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workbook = self._load_workbook(response)
+
+        self.assertEqual(
+            workbook.sheetnames,
+            [
+                "Payment Records",
+                "Passbook Entries",
+                "Donor Statements",
+                "Combined Statement View",
+            ],
+        )
+
+        combined_rows = list(
+            workbook["Combined Statement View"].iter_rows(min_row=2, values_only=True)
+        )
+        combined_main_ids = {row[0] for row in combined_rows if row and row[0] is not None}
+        combined_donor_labels = {row[4] for row in combined_rows if row and row[4] is not None}
+
+        self.assertIn(self.main_donor.id, combined_main_ids)
+        self.assertIn("Sub-ordinate Donors", combined_donor_labels)
+
+    def test_payment_details_export_ignores_include_subordinates_for_combine_payment_donors(self):
         self.client.force_authenticate(self.admin)
 
         with patch("payments.views.regenerate_all_passbooks"):
@@ -219,8 +252,7 @@ class PaymentDetailsExportContentTests(TestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        payload = b"".join(response.streaming_content)
-        workbook = load_workbook(filename=BytesIO(payload))
+        workbook = self._load_workbook(response)
 
         payment_rows = list(workbook["Payment Records"].iter_rows(min_row=2, values_only=True))
         passbook_rows = list(workbook["Passbook Entries"].iter_rows(min_row=2, values_only=True))
@@ -230,8 +262,11 @@ class PaymentDetailsExportContentTests(TestCase):
         passbook_donor_ids = {row[1] for row in passbook_rows if row and row[1] is not None}
         statement_donor_ids = {row[0] for row in statement_rows if row and row[0] is not None}
 
+        self.assertIn(self.main_donor.id, payment_donor_ids)
+        self.assertNotIn(self.main_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.main_donor.id, statement_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, payment_donor_ids)
-        self.assertIn(self.subordinate_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.subordinate_donor.id, passbook_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
         self.assertIn("Combined Statement View", workbook.sheetnames)
 
@@ -242,6 +277,38 @@ class PaymentDetailsExportContentTests(TestCase):
         combined_donor_labels = {row[4] for row in combined_rows if row and row[4] is not None}
         self.assertIn(self.main_donor.id, combined_main_ids)
         self.assertIn("Sub-ordinate Donors", combined_donor_labels)
+
+    def test_payment_details_export_keeps_combined_sheet_header_only_without_active_mappings(self):
+        self.client.force_authenticate(self.admin)
+        CombinePaymentMapping.objects.all().delete()
+
+        with patch("payments.views.regenerate_all_passbooks"):
+            response = self.client.get(reverse("payment-details-export"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workbook = self._load_workbook(response)
+
+        self.assertIn("Combined Statement View", workbook.sheetnames)
+        combined_rows = list(workbook["Combined Statement View"].iter_rows(values_only=True))
+        self.assertEqual(len(combined_rows), 1)
+        self.assertEqual(
+            combined_rows[0],
+            (
+                "Main Donor ID",
+                "Main Donor Name",
+                "Main Donor Phone",
+                "Date",
+                "Donor Name",
+                "Transaction Details",
+                "Due For Current Month",
+                "Amount Received",
+                "Closing Due For Current Month",
+                "Opening Balance",
+                "Source Entry Type",
+                "Source Donor ID",
+                "Source Payment Record ID",
+            ),
+        )
 
 
 class AccountStatementExportTests(TestCase):
