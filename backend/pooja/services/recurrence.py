@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -580,35 +580,68 @@ def _create_due_payment_record(
     if total_amount <= 0:
         return None
     
+    default_notes = "Monthly recurring pooja contribution due"
+
+    def _collapse_duplicate_pending_dues(
+        *,
+        normalized_amount: Optional[Decimal] = None,
+        normalized_notes: Optional[str] = None,
+    ) -> Optional[PaymentRecord]:
+        pending_rows = list(
+            PaymentRecord.objects.filter(
+                donor_id=donor_id,
+                registration=None,
+                payment_month=payment_month,
+                status=PaymentStatus.PENDING,
+            ).order_by("created_at", "id")
+        )
+        if not pending_rows:
+            return None
+
+        keeper = pending_rows[0]
+        update_fields: list[str] = []
+        if normalized_amount is not None and keeper.amount != normalized_amount:
+            keeper.amount = normalized_amount
+            update_fields.append("amount")
+        if normalized_notes and not keeper.notes:
+            keeper.notes = normalized_notes
+            update_fields.append("notes")
+        if update_fields:
+            update_fields.append("updated_at")
+            keeper.save(update_fields=update_fields)
+
+        duplicate_ids = [row.id for row in pending_rows[1:]]
+        if duplicate_ids:
+            PaymentRecord.objects.filter(id__in=duplicate_ids).delete()
+        return keeper
+
     # Use get_or_create to atomically create or return existing due
     try:
-        payment_record, created = PaymentRecord.objects.get_or_create(
-            donor_id=donor_id,
-            registration=None,
-            payment_month=payment_month,
-            defaults={
-                'amount': total_amount,
-                'currency': 'INR',
-                'mode': 'pending',
-                'status': PaymentStatus.PENDING,
-                'notes': 'Monthly recurring pooja contribution due',
-            }
-        )
-    except PaymentRecord.MultipleObjectsReturned:
+        with transaction.atomic():
+            payment_record, created = PaymentRecord.objects.get_or_create(
+                donor_id=donor_id,
+                registration=None,
+                payment_month=payment_month,
+                status=PaymentStatus.PENDING,
+                defaults={
+                    'amount': total_amount,
+                    'currency': 'INR',
+                    'mode': 'pending',
+                    'notes': default_notes,
+                }
+            )
+    except (IntegrityError, PaymentRecord.MultipleObjectsReturned):
         # Consolidate any duplicate pending dues for the same month into the earliest record
-        existing = (
-            PaymentRecord.objects
-            .filter(donor_id=donor_id, registration=None, payment_month=payment_month, status=PaymentStatus.PENDING)
-            .order_by("created_at")
-            .first()
+        _collapse_duplicate_pending_dues(
+            normalized_amount=total_amount,
+            normalized_notes=default_notes,
         )
-        if existing:
-            existing.amount = total_amount
-            if not existing.notes:
-                existing.notes = 'Monthly recurring pooja contribution due'
-            existing.save(update_fields=["amount", "notes", "updated_at"])
         return None
-    
+
+    if not created and not payment_record.notes:
+        payment_record.notes = default_notes
+        payment_record.save(update_fields=["notes", "updated_at"])
+
     return payment_record if created else None
 
 
@@ -728,13 +761,17 @@ def _generate_due_payments_for_recurring_plans(today: Optional[date] = None, don
                 continue
 
             # If a pending due already exists, update the amount to the latest total
-            existing_pending = PaymentRecord.objects.filter(
+            existing_pending_qs = PaymentRecord.objects.filter(
                 donor_id=donor_id,
                 registration__isnull=True,
                 payment_month=month_start,
                 status=PaymentStatus.PENDING,
-            ).first()
+            ).order_by("created_at", "id")
+            existing_pending = existing_pending_qs.first()
             if existing_pending:
+                duplicate_ids = list(existing_pending_qs.values_list("id", flat=True))[1:]
+                if duplicate_ids:
+                    PaymentRecord.objects.filter(id__in=duplicate_ids).delete()
                 # IMPORTANT: never rewrite past-month dues when new plans are added later.
                 # Only adjust the pending due for the current run month.
                 if month_start == current_month and existing_pending.amount != month_total:
@@ -1107,40 +1144,50 @@ def _generate_due_payments_for_chrt_poojas(today: Optional[date] = None) -> int:
         if total_amount <= 0:
             continue
 
+        def _apply_chrt_amount_to_existing_due(existing_due: PaymentRecord) -> bool:
+            non_chrt_total = (
+                RecurringPoojaPlan.objects.filter(
+                    donor_id=donor_id,
+                    is_active=True,
+                    recurrence_kind=RecurrenceKind.RECURRING,
+                )
+                .exclude(_chrt_plan_filter())
+                .aggregate(total=Sum("amount"))
+                .get("total")
+                or Decimal("0.00")
+            )
+            new_amount = non_chrt_total + total_amount
+            notes = existing_due.notes or "Monthly recurring pooja contribution due"
+            if "CHRT" not in notes:
+                notes = f"{notes} + CHRT (Preferred Date) poojas"
+
+            changed = existing_due.amount != new_amount or existing_due.notes != notes
+            if changed:
+                existing_due.amount = new_amount
+                existing_due.notes = notes
+                existing_due.save(update_fields=["amount", "notes", "updated_at"])
+            return changed
+
         try:
             # For CHRT poojas, ADD the amount to any existing due for this month
             # If the month matches an existing recurring due, combine them
             # Otherwise, create a separate CHRT due
             
             # Try to find an existing due for this month
-            existing_due = PaymentRecord.objects.filter(
+            existing_due_qs = PaymentRecord.objects.filter(
                 donor_id=donor_id,
                 registration=None,
                 payment_month=payment_month,
                 status=PaymentStatus.PENDING,
-            ).first()
+            ).order_by("created_at", "id")
+            existing_due = existing_due_qs.first()
             
             if existing_due:
-                # Idempotent combine: set amount = non-CHRT recurring for the month + CHRT total
-                non_chrt_total = (
-                    RecurringPoojaPlan.objects.filter(
-                        donor_id=donor_id,
-                        is_active=True,
-                        recurrence_kind=RecurrenceKind.RECURRING,
-                    )
-                    .exclude(_chrt_plan_filter())
-                    .aggregate(total=Sum("amount"))
-                    .get("total")
-                    or Decimal("0.00")
-                )
-                new_amount = non_chrt_total + total_amount
-                if existing_due.amount != new_amount or "CHRT" not in (existing_due.notes or ""):
-                    existing_due.amount = new_amount
-                    notes = existing_due.notes or "Monthly recurring pooja contribution due"
-                    if "CHRT" not in notes:
-                        notes = f"{notes} + CHRT (Preferred Date) poojas"
-                    existing_due.notes = notes
-                    existing_due.save(update_fields=["amount", "notes", "updated_at"])
+                duplicate_ids = list(existing_due_qs.values_list("id", flat=True))[1:]
+                changed = _apply_chrt_amount_to_existing_due(existing_due)
+                if duplicate_ids:
+                    PaymentRecord.objects.filter(id__in=duplicate_ids).delete()
+                if changed or duplicate_ids:
                     LOGGER.info(
                         "Combined CHRT pooja amount (₹%.2f) with existing due for donor %s for month %s (new total: ₹%.2f)",
                         float(total_amount),
@@ -1151,18 +1198,50 @@ def _generate_due_payments_for_chrt_poojas(today: Optional[date] = None) -> int:
                     created_count += 1
             else:
                 # Create a new separate CHRT due
-                due_record, created = PaymentRecord.objects.get_or_create(
-                    donor_id=donor_id,
-                    registration=None,
-                    payment_month=payment_month,
-                    defaults={
-                        'amount': total_amount,
-                        'currency': 'INR',
-                        'mode': 'pending',
-                        'status': PaymentStatus.PENDING,
-                        'notes': 'CHRT (Preferred Date) pooja contribution due',
-                    }
-                )
+                try:
+                    with transaction.atomic():
+                        due_record, created = PaymentRecord.objects.get_or_create(
+                            donor_id=donor_id,
+                            registration=None,
+                            payment_month=payment_month,
+                            status=PaymentStatus.PENDING,
+                            defaults={
+                                'amount': total_amount,
+                                'currency': 'INR',
+                                'mode': 'pending',
+                                'notes': 'CHRT (Preferred Date) pooja contribution due',
+                            }
+                        )
+                except IntegrityError:
+                    due_record = (
+                        PaymentRecord.objects.filter(
+                            donor_id=donor_id,
+                            registration=None,
+                            payment_month=payment_month,
+                            status=PaymentStatus.PENDING,
+                        )
+                        .order_by("created_at", "id")
+                        .first()
+                    )
+                    created = False
+                    if due_record:
+                        changed = _apply_chrt_amount_to_existing_due(due_record)
+                        duplicate_ids = list(
+                            PaymentRecord.objects.filter(
+                                donor_id=donor_id,
+                                registration=None,
+                                payment_month=payment_month,
+                                status=PaymentStatus.PENDING,
+                            )
+                            .order_by("created_at", "id")
+                            .values_list("id", flat=True)
+                        )[1:]
+                        if duplicate_ids:
+                            PaymentRecord.objects.filter(id__in=duplicate_ids).delete()
+                        if changed or duplicate_ids:
+                            created_count += 1
+                    else:
+                        raise
                 
                 if created:
                     LOGGER.info(

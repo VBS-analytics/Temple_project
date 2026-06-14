@@ -1,0 +1,499 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e7]:
+      - link "TD Temple Donor Portal ADMIN COMMAND CENTER" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9]: TD
+        - generic [ref=e10]:
+          - generic [ref=e11]: Temple Donor Portal
+          - generic [ref=e12]: ADMIN COMMAND CENTER
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: TA
+          - generic [ref=e18]:
+            - generic [ref=e19]: Temple Admin
+            - generic [ref=e20]: Temple Admin
+            - generic [ref=e581]: Session Expires in 8:07
+        - button "Logout" [ref=e21] [cursor=pointer]
+    - navigation [ref=e24]:
+      - link "Admin Master" [ref=e25] [cursor=pointer]:
+        - /url: /admin/master
+      - link "Pooja Seva" [ref=e26] [cursor=pointer]:
+        - /url: /profile/pooja-seva
+      - link "Cow Samrakshana Seva" [ref=e27] [cursor=pointer]:
+        - /url: /profile/cow-samrakshana-seva
+      - link "Donor Details" [ref=e28] [cursor=pointer]:
+        - /url: /admin/donors
+      - link "Combine Payment - Donor" [ref=e29] [cursor=pointer]:
+        - /url: /admin/combine-payment-donor
+      - link "Pooja - Pause/Cancel" [ref=e30] [cursor=pointer]:
+        - /url: /admin/pooja-pause-cancel
+      - link "Ubhayam Report - Input Form" [ref=e31] [cursor=pointer]:
+        - /url: /admin/input-ubhayam-report
+      - link "Ubhayam Report" [ref=e32] [cursor=pointer]:
+        - /url: /admin/pooja-details
+      - link "Ubhayam Message" [ref=e33] [cursor=pointer]:
+        - /url: /admin/donor-pooja-details
+      - link "Reports" [ref=e34] [cursor=pointer]:
+        - /url: /reports
+      - link "Expense Tracker" [ref=e35] [cursor=pointer]:
+        - /url: /admin/expenses
+      - link "Account Statement" [ref=e36] [cursor=pointer]:
+        - /url: /admin/account-statement
+      - link "Payment Statement" [ref=e37] [cursor=pointer]:
+        - /url: /payments/statement
+  - main [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e41]:
+        - heading "Ubhayam Report - Input Form" [level=3] [ref=e42]
+        - generic [ref=e43]:
+          - button "Save" [ref=e44] [cursor=pointer]
+          - button "Donor Allocation for Ubhayam Report" [ref=e45] [cursor=pointer]
+      - generic [ref=e46]:
+        - button "Jul 2026" [ref=e47] [cursor=pointer]
+        - button "Aug 2026" [ref=e48] [cursor=pointer]
+        - button "Sept 2026" [ref=e49] [cursor=pointer]
+        - button "Oct 2026" [ref=e50] [cursor=pointer]
+        - button "Nov 2026" [ref=e51] [cursor=pointer]
+        - button "Dec 2026" [ref=e52] [cursor=pointer]
+        - button "Jan 2027" [ref=e53] [cursor=pointer]
+        - button "Feb 2027" [ref=e54] [cursor=pointer]
+        - button "Mar 2027" [ref=e55] [cursor=pointer]
+        - button "Apr 2027" [ref=e56] [cursor=pointer]
+        - button "May 2027" [ref=e57] [cursor=pointer]
+        - button "Jun 2027" [ref=e58] [cursor=pointer]
+        - button "Jul 2027" [ref=e59] [cursor=pointer]
+      - table [ref=e65]:
+        - rowgroup [ref=e66]:
+          - row "Date Day Of Month Tamil Star Pooja Day Option" [ref=e67]:
+            - columnheader "Date" [ref=e68]
+            - columnheader "Day Of Month" [ref=e69]
+            - columnheader "Tamil Star" [ref=e70]
+            - columnheader "Pooja Day Option" [ref=e71]
+        - rowgroup [ref=e72]:
+          - row "1 Jul 2026 Wednesday பூராடம் ▾ Any day of the month ▾" [ref=e476]:
+            - cell "1 Jul 2026" [ref=e74]
+            - cell "Wednesday" [ref=e75]
+            - cell "பூராடம் ▾" [ref=e477]:
+              - button "பூராடம் ▾" [ref=e478] [cursor=pointer]:
+                - generic "பூராடம்" [ref=e479]
+                - generic [ref=e80]: ▾
+            - cell "Any day of the month ▾" [ref=e480]:
+              - button "Any day of the month ▾" [ref=e481] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e482]
+                - generic [ref=e85]: ▾
+          - row "2 Jul 2026 Thursday உத்திரட்டாதி ▾ Any day of the month ▾" [ref=e483]:
+            - cell "2 Jul 2026" [ref=e87]
+            - cell "Thursday" [ref=e88]
+            - cell "உத்திரட்டாதி ▾" [ref=e484]:
+              - button "உத்திரட்டாதி ▾" [ref=e485] [cursor=pointer]:
+                - generic "உத்திரட்டாதி" [ref=e486]
+                - generic [ref=e93]: ▾
+            - cell "Any day of the month ▾" [ref=e487]:
+              - button "Any day of the month ▾" [ref=e488] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e489]
+                - generic [ref=e98]: ▾
+          - row "3 Jul 2026 Friday திருவோணம் ▾ On sankatachaturti day of month ▾" [ref=e490]:
+            - cell "3 Jul 2026" [ref=e100]
+            - cell "Friday" [ref=e101]
+            - cell "திருவோணம் ▾" [ref=e491]:
+              - button "திருவோணம் ▾" [ref=e492] [cursor=pointer]:
+                - generic "திருவோணம்" [ref=e493]
+                - generic [ref=e106]: ▾
+            - cell "On sankatachaturti day of month ▾" [ref=e494]:
+              - button "On sankatachaturti day of month ▾" [ref=e495] [cursor=pointer]:
+                - generic "On sankatachaturti day of month" [ref=e496]
+                - generic [ref=e111]: ▾
+          - row "4 Jul 2026 Saturday அவிட்டம் ▾ Any day of the month ▾" [ref=e497]:
+            - cell "4 Jul 2026" [ref=e113]
+            - cell "Saturday" [ref=e114]
+            - cell "அவிட்டம் ▾" [ref=e498]:
+              - button "அவிட்டம் ▾" [ref=e499] [cursor=pointer]:
+                - generic "அவிட்டம்" [ref=e500]
+                - generic [ref=e119]: ▾
+            - cell "Any day of the month ▾" [ref=e501]:
+              - button "Any day of the month ▾" [ref=e502] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e503]
+                - generic [ref=e124]: ▾
+          - row "5 Jul 2026 Sunday சதயம் ▾ On sashti day of month ▾" [ref=e504]:
+            - cell "5 Jul 2026" [ref=e126]
+            - cell "Sunday" [ref=e127]
+            - cell "சதயம் ▾" [ref=e505]:
+              - button "சதயம் ▾" [ref=e506] [cursor=pointer]:
+                - generic "சதயம்" [ref=e507]
+                - generic [ref=e132]: ▾
+            - cell "On sashti day of month ▾" [ref=e508]:
+              - button "On sashti day of month ▾" [ref=e509] [cursor=pointer]:
+                - generic "On sashti day of month" [ref=e510]
+                - generic [ref=e137]: ▾
+          - row "6 Jul 2026 Monday பூரட்டாதி ▾ Any day of the month ▾" [ref=e511]:
+            - cell "6 Jul 2026" [ref=e139]
+            - cell "Monday" [ref=e140]
+            - cell "பூரட்டாதி ▾" [ref=e512]:
+              - button "பூரட்டாதி ▾" [ref=e513] [cursor=pointer]:
+                - generic "பூரட்டாதி" [ref=e514]
+                - generic [ref=e145]: ▾
+            - cell "Any day of the month ▾" [ref=e515]:
+              - button "Any day of the month ▾" [ref=e516] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e517]
+                - generic [ref=e150]: ▾
+          - row "7 Jul 2026 Tuesday ரேவதி ▾ On 2 ashtami day of month ▾" [ref=e518]:
+            - cell "7 Jul 2026" [ref=e152]
+            - cell "Tuesday" [ref=e153]
+            - cell "ரேவதி ▾" [ref=e519]:
+              - button "ரேவதி ▾" [ref=e520] [cursor=pointer]:
+                - generic "ரேவதி" [ref=e521]
+                - generic [ref=e158]: ▾
+            - cell "On 2 ashtami day of month ▾" [ref=e522]:
+              - button "On 2 ashtami day of month ▾" [ref=e523] [cursor=pointer]:
+                - generic "On 2 ashtami day of month" [ref=e524]
+                - generic [ref=e163]: ▾
+          - row "8 Jul 2026 Wednesday அசுவினி ▾ Any day of the month ▾" [ref=e525]:
+            - cell "8 Jul 2026" [ref=e165]
+            - cell "Wednesday" [ref=e166]
+            - cell "அசுவினி ▾" [ref=e526]:
+              - button "அசுவினி ▾" [ref=e527] [cursor=pointer]:
+                - generic "அசுவினி" [ref=e528]
+                - generic [ref=e171]: ▾
+            - cell "Any day of the month ▾" [ref=e529]:
+              - button "Any day of the month ▾" [ref=e530] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e531]
+                - generic [ref=e176]: ▾
+          - row "9 Jul 2026 Thursday பரணி ▾ Any day of the month ▾" [ref=e532]:
+            - cell "9 Jul 2026" [ref=e178]
+            - cell "Thursday" [ref=e179]
+            - cell "பரணி ▾" [ref=e533]:
+              - button "பரணி ▾" [ref=e534] [cursor=pointer]:
+                - generic "பரணி" [ref=e535]
+                - generic [ref=e184]: ▾
+            - cell "Any day of the month ▾" [ref=e536]:
+              - button "Any day of the month ▾" [ref=e537] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e538]
+                - generic [ref=e189]: ▾
+          - row "10 Jul 2026 Friday பரணி ▾ Any day of the month ▾" [ref=e539]:
+            - cell "10 Jul 2026" [ref=e191]
+            - cell "Friday" [ref=e192]
+            - cell "பரணி ▾" [ref=e540]:
+              - button "பரணி ▾" [ref=e541] [cursor=pointer]:
+                - generic "பரணி" [ref=e542]
+                - generic [ref=e197]: ▾
+            - cell "Any day of the month ▾" [ref=e543]:
+              - button "Any day of the month ▾" [ref=e544] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e545]
+                - generic [ref=e202]: ▾
+          - row "11 Jul 2026 Saturday கிருத்திகை ▾ Any day of the month ▾" [ref=e546]:
+            - cell "11 Jul 2026" [ref=e204]
+            - cell "Saturday" [ref=e205]
+            - cell "கிருத்திகை ▾" [ref=e547]:
+              - button "கிருத்திகை ▾" [ref=e548] [cursor=pointer]:
+                - generic "கிருத்திகை" [ref=e549]
+                - generic [ref=e210]: ▾
+            - cell "Any day of the month ▾" [ref=e550]:
+              - button "Any day of the month ▾" [ref=e551] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e552]
+                - generic [ref=e215]: ▾
+          - row "12 Jul 2026 Sunday ரோகிணி ▾ Pradosham (Trayodashi) ▾" [ref=e553]:
+            - cell "12 Jul 2026" [ref=e217]
+            - cell "Sunday" [ref=e218]
+            - cell "ரோகிணி ▾" [ref=e554]:
+              - button "ரோகிணி ▾" [ref=e555] [cursor=pointer]:
+                - generic "ரோகிணி" [ref=e556]
+                - generic [ref=e223]: ▾
+            - cell "Pradosham (Trayodashi) ▾" [ref=e557]:
+              - button "Pradosham (Trayodashi) ▾" [ref=e558] [cursor=pointer]:
+                - generic "Pradosham (Trayodashi)" [ref=e559]
+                - generic [ref=e228]: ▾
+          - row "13 Jul 2026 Monday திருவாதிரை ▾ Any day of the month ▾" [ref=e560]:
+            - cell "13 Jul 2026" [ref=e230]
+            - cell "Monday" [ref=e231]
+            - cell "திருவாதிரை ▾" [ref=e561]:
+              - button "திருவாதிரை ▾" [ref=e562] [cursor=pointer]:
+                - generic "திருவாதிரை" [ref=e563]
+                - generic [ref=e236]: ▾
+            - cell "Any day of the month ▾" [ref=e564]:
+              - button "Any day of the month ▾" [ref=e565] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e566]
+                - generic [ref=e241]: ▾
+          - row "14 Jul 2026 Tuesday புனர்பூசம் ▾ On amavasai day of month ▾" [ref=e567]:
+            - cell "14 Jul 2026" [ref=e243]
+            - cell "Tuesday" [ref=e244]
+            - cell "புனர்பூசம் ▾" [ref=e568]:
+              - button "புனர்பூசம் ▾" [ref=e569] [cursor=pointer]:
+                - generic "புனர்பூசம்" [ref=e570]
+                - generic [ref=e249]: ▾
+            - cell "On amavasai day of month ▾" [ref=e571]:
+              - button "On amavasai day of month ▾" [ref=e572] [cursor=pointer]:
+                - generic "On amavasai day of month" [ref=e573]
+                - generic [ref=e254]: ▾
+          - row "15 Jul 2026 Wednesday பூசம் ▾ Any day of the month ▾" [ref=e574]:
+            - cell "15 Jul 2026" [ref=e256]
+            - cell "Wednesday" [ref=e257]
+            - cell "பூசம் ▾" [ref=e575]:
+              - button "பூசம் ▾" [ref=e576] [cursor=pointer]:
+                - generic "பூசம்" [ref=e577]
+                - generic [ref=e262]: ▾
+            - cell "Any day of the month ▾" [ref=e578]:
+              - button "Any day of the month ▾" [ref=e579] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e580]
+                - generic [ref=e267]: ▾
+          - row "16 Jul 2026 Thursday ஆயில்யம் ▾ Any day of the month ▾" [ref=e730]:
+            - cell "16 Jul 2026" [ref=e269]
+            - cell "Thursday" [ref=e270]
+            - cell "ஆயில்யம் ▾" [ref=e674]:
+              - button "ஆயில்யம் ▾" [ref=e671] [cursor=pointer]:
+                - generic "ஆயில்யம்" [ref=e672]
+                - generic [ref=e275]: ▾
+            - cell "Any day of the month ▾" [ref=e731]:
+              - button "Any day of the month ▾" [ref=e728] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e729]
+                - generic [ref=e280]: ▾
+          - row "17 Jul 2026 Friday மகம் ▾ On chaturti day of month ▾" [ref=e880]:
+            - cell "17 Jul 2026" [ref=e282]
+            - cell "Friday" [ref=e283]
+            - cell "மகம் ▾" [ref=e824]:
+              - button "மகம் ▾" [ref=e821] [cursor=pointer]:
+                - generic "மகம்" [ref=e822]
+                - generic [ref=e288]: ▾
+            - cell "On chaturti day of month ▾" [ref=e881]:
+              - button "On chaturti day of month ▾" [ref=e878] [cursor=pointer]:
+                - generic "On chaturti day of month" [ref=e879]
+                - generic [ref=e293]: ▾
+          - row "18 Jul 2026 Saturday பூரம் ▾ Any day of the month ▾" [ref=e1030]:
+            - cell "18 Jul 2026" [ref=e295]
+            - cell "Saturday" [ref=e296]
+            - cell "பூரம் ▾" [ref=e974]:
+              - button "பூரம் ▾" [ref=e971] [cursor=pointer]:
+                - generic "பூரம்" [ref=e972]
+                - generic [ref=e301]: ▾
+            - cell "Any day of the month ▾" [ref=e1031]:
+              - button "Any day of the month ▾" [ref=e1028] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e1029]
+                - generic [ref=e306]: ▾
+          - row "19 Jul 2026 Sunday உத்தரம் ▾ On sashti day of month ▾" [ref=e1180]:
+            - cell "19 Jul 2026" [ref=e308]
+            - cell "Sunday" [ref=e309]
+            - cell "உத்தரம் ▾" [ref=e1124]:
+              - button "உத்தரம் ▾" [ref=e1121] [cursor=pointer]:
+                - generic "உத்தரம்" [ref=e1122]
+                - generic [ref=e314]: ▾
+            - cell "On sashti day of month ▾" [ref=e1181]:
+              - button "On sashti day of month ▾" [ref=e1178] [cursor=pointer]:
+                - generic "On sashti day of month" [ref=e1179]
+                - generic [ref=e319]: ▾
+          - row "20 Jul 2026 Monday சித்திரை ▾ Any day of the month ▾" [ref=e1330]:
+            - cell "20 Jul 2026" [ref=e321]
+            - cell "Monday" [ref=e322]
+            - cell "சித்திரை ▾" [ref=e1274]:
+              - button "சித்திரை ▾" [ref=e1271] [cursor=pointer]:
+                - generic "சித்திரை" [ref=e1272]
+                - generic [ref=e327]: ▾
+            - cell "Any day of the month ▾" [ref=e1331]:
+              - button "Any day of the month ▾" [ref=e1328] [cursor=pointer]:
+                - generic "Any day of the month" [ref=e1329]
+                - generic [ref=e332]: ▾
+          - row "21 Jul 2026 Tuesday சுவாதி ▾ Search Tamil star அசுவினி பரணி கிருத்திகை ரோகிணி மிருகசீரிடம் திருவாதிரை புனர்பூசம் பூசம் ஆயில்யம் மகம் பூரம் உத்தரம் அஸ்தம் சித்திரை சுவாதி விசாகம் அனுஷம் கேட்டை மூலம் பூராடம் உத்திராடம் திருவோணம் அவிட்டம் சதயம் பூரட்டாதி உத்திரட்டாதி ரேவதி Select pooja day option ▾" [ref=e1419]:
+            - cell "21 Jul 2026" [ref=e334]
+            - cell "Tuesday" [ref=e335]
+            - cell "சுவாதி ▾ Search Tamil star அசுவினி பரணி கிருத்திகை ரோகிணி மிருகசீரிடம் திருவாதிரை புனர்பூசம் பூசம் ஆயில்யம் மகம் பூரம் உத்தரம் அஸ்தம் சித்திரை சுவாதி விசாகம் அனுஷம் கேட்டை மூலம் பூராடம் உத்திராடம் திருவோணம் அவிட்டம் சதயம் பூரட்டாதி உத்திரட்டாதி ரேவதி" [ref=e1420]:
+              - generic [ref=e337]:
+                - button "சுவாதி ▾" [ref=e1421] [cursor=pointer]:
+                  - generic "சுவாதி" [ref=e1422]
+                  - generic [ref=e340]: ▾
+                - generic [ref=e1334]:
+                  - searchbox "Search Tamil star" [ref=e1336]
+                  - generic [ref=e1337]:
+                    - generic [ref=e1338] [cursor=pointer]:
+                      - generic [ref=e1339]: அசுவினி
+                      - checkbox "அசுவினி" [ref=e1340]
+                    - generic [ref=e1341] [cursor=pointer]:
+                      - generic [ref=e1342]: பரணி
+                      - checkbox "பரணி" [ref=e1343]
+                    - generic [ref=e1344] [cursor=pointer]:
+                      - generic [ref=e1345]: கிருத்திகை
+                      - checkbox "கிருத்திகை" [ref=e1346]
+                    - generic [ref=e1347] [cursor=pointer]:
+                      - generic [ref=e1348]: ரோகிணி
+                      - checkbox "ரோகிணி" [ref=e1349]
+                    - generic [ref=e1350] [cursor=pointer]:
+                      - generic [ref=e1351]: மிருகசீரிடம்
+                      - checkbox "மிருகசீரிடம்" [ref=e1352]
+                    - generic [ref=e1353] [cursor=pointer]:
+                      - generic [ref=e1354]: திருவாதிரை
+                      - checkbox "திருவாதிரை" [ref=e1355]
+                    - generic [ref=e1356] [cursor=pointer]:
+                      - generic [ref=e1357]: புனர்பூசம்
+                      - checkbox "புனர்பூசம்" [ref=e1358]
+                    - generic [ref=e1359] [cursor=pointer]:
+                      - generic [ref=e1360]: பூசம்
+                      - checkbox "பூசம்" [ref=e1361]
+                    - generic [ref=e1362] [cursor=pointer]:
+                      - generic [ref=e1363]: ஆயில்யம்
+                      - checkbox "ஆயில்யம்" [ref=e1364]
+                    - generic [ref=e1365] [cursor=pointer]:
+                      - generic [ref=e1366]: மகம்
+                      - checkbox "மகம்" [ref=e1367]
+                    - generic [ref=e1368] [cursor=pointer]:
+                      - generic [ref=e1369]: பூரம்
+                      - checkbox "பூரம்" [ref=e1370]
+                    - generic [ref=e1371] [cursor=pointer]:
+                      - generic [ref=e1372]: உத்தரம்
+                      - checkbox "உத்தரம்" [ref=e1373]
+                    - generic [ref=e1374] [cursor=pointer]:
+                      - generic [ref=e1375]: அஸ்தம்
+                      - checkbox "அஸ்தம்" [ref=e1376]
+                    - generic [ref=e1377] [cursor=pointer]:
+                      - generic [ref=e1378]: சித்திரை
+                      - checkbox "சித்திரை" [ref=e1379]
+                    - generic [ref=e1380] [cursor=pointer]:
+                      - generic [ref=e1381]: சுவாதி
+                      - checkbox "சுவாதி" [checked] [active] [ref=e1382]
+                    - generic [ref=e1383] [cursor=pointer]:
+                      - generic [ref=e1384]: விசாகம்
+                      - checkbox "விசாகம்" [ref=e1385]
+                    - generic [ref=e1386] [cursor=pointer]:
+                      - generic [ref=e1387]: அனுஷம்
+                      - checkbox "அனுஷம்" [ref=e1388]
+                    - generic [ref=e1389] [cursor=pointer]:
+                      - generic [ref=e1390]: கேட்டை
+                      - checkbox "கேட்டை" [ref=e1391]
+                    - generic [ref=e1392] [cursor=pointer]:
+                      - generic [ref=e1393]: மூலம்
+                      - checkbox "மூலம்" [ref=e1394]
+                    - generic [ref=e1395] [cursor=pointer]:
+                      - generic [ref=e1396]: பூராடம்
+                      - checkbox "பூராடம்" [ref=e1397]
+                    - generic [ref=e1398] [cursor=pointer]:
+                      - generic [ref=e1399]: உத்திராடம்
+                      - checkbox "உத்திராடம்" [ref=e1400]
+                    - generic [ref=e1401] [cursor=pointer]:
+                      - generic [ref=e1402]: திருவோணம்
+                      - checkbox "திருவோணம்" [ref=e1403]
+                    - generic [ref=e1404] [cursor=pointer]:
+                      - generic [ref=e1405]: அவிட்டம்
+                      - checkbox "அவிட்டம்" [ref=e1406]
+                    - generic [ref=e1407] [cursor=pointer]:
+                      - generic [ref=e1408]: சதயம்
+                      - checkbox "சதயம்" [ref=e1409]
+                    - generic [ref=e1410] [cursor=pointer]:
+                      - generic [ref=e1411]: பூரட்டாதி
+                      - checkbox "பூரட்டாதி" [ref=e1412]
+                    - generic [ref=e1413] [cursor=pointer]:
+                      - generic [ref=e1414]: உத்திரட்டாதி
+                      - checkbox "உத்திரட்டாதி" [ref=e1415]
+                    - generic [ref=e1416] [cursor=pointer]:
+                      - generic [ref=e1417]: ரேவதி
+                      - checkbox "ரேவதி" [ref=e1418]
+            - cell "Select pooja day option ▾" [ref=e341]:
+              - button "Select pooja day option ▾" [ref=e343] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e344]
+                - generic [ref=e345]: ▾
+          - row "22 Jul 2026 Wednesday Select Tamil star ▾ Select pooja day option ▾" [ref=e346]:
+            - cell "22 Jul 2026" [ref=e347]
+            - cell "Wednesday" [ref=e348]
+            - cell "Select Tamil star ▾" [ref=e349]:
+              - button "Select Tamil star ▾" [ref=e351] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e352]
+                - generic [ref=e353]: ▾
+            - cell "Select pooja day option ▾" [ref=e354]:
+              - button "Select pooja day option ▾" [ref=e356] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e357]
+                - generic [ref=e358]: ▾
+          - row "23 Jul 2026 Thursday Select Tamil star ▾ Select pooja day option ▾" [ref=e359]:
+            - cell "23 Jul 2026" [ref=e360]
+            - cell "Thursday" [ref=e361]
+            - cell "Select Tamil star ▾" [ref=e362]:
+              - button "Select Tamil star ▾" [ref=e364] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e365]
+                - generic [ref=e366]: ▾
+            - cell "Select pooja day option ▾" [ref=e367]:
+              - button "Select pooja day option ▾" [ref=e369] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e370]
+                - generic [ref=e371]: ▾
+          - row "24 Jul 2026 Friday Select Tamil star ▾ Select pooja day option ▾" [ref=e372]:
+            - cell "24 Jul 2026" [ref=e373]
+            - cell "Friday" [ref=e374]
+            - cell "Select Tamil star ▾" [ref=e375]:
+              - button "Select Tamil star ▾" [ref=e377] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e378]
+                - generic [ref=e379]: ▾
+            - cell "Select pooja day option ▾" [ref=e380]:
+              - button "Select pooja day option ▾" [ref=e382] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e383]
+                - generic [ref=e384]: ▾
+          - row "25 Jul 2026 Saturday Select Tamil star ▾ Select pooja day option ▾" [ref=e385]:
+            - cell "25 Jul 2026" [ref=e386]
+            - cell "Saturday" [ref=e387]
+            - cell "Select Tamil star ▾" [ref=e388]:
+              - button "Select Tamil star ▾" [ref=e390] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e391]
+                - generic [ref=e392]: ▾
+            - cell "Select pooja day option ▾" [ref=e393]:
+              - button "Select pooja day option ▾" [ref=e395] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e396]
+                - generic [ref=e397]: ▾
+          - row "26 Jul 2026 Sunday Select Tamil star ▾ Select pooja day option ▾" [ref=e398]:
+            - cell "26 Jul 2026" [ref=e399]
+            - cell "Sunday" [ref=e400]
+            - cell "Select Tamil star ▾" [ref=e401]:
+              - button "Select Tamil star ▾" [ref=e403] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e404]
+                - generic [ref=e405]: ▾
+            - cell "Select pooja day option ▾" [ref=e406]:
+              - button "Select pooja day option ▾" [ref=e408] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e409]
+                - generic [ref=e410]: ▾
+          - row "27 Jul 2026 Monday Select Tamil star ▾ Select pooja day option ▾" [ref=e411]:
+            - cell "27 Jul 2026" [ref=e412]
+            - cell "Monday" [ref=e413]
+            - cell "Select Tamil star ▾" [ref=e414]:
+              - button "Select Tamil star ▾" [ref=e416] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e417]
+                - generic [ref=e418]: ▾
+            - cell "Select pooja day option ▾" [ref=e419]:
+              - button "Select pooja day option ▾" [ref=e421] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e422]
+                - generic [ref=e423]: ▾
+          - row "28 Jul 2026 Tuesday Select Tamil star ▾ Select pooja day option ▾" [ref=e424]:
+            - cell "28 Jul 2026" [ref=e425]
+            - cell "Tuesday" [ref=e426]
+            - cell "Select Tamil star ▾" [ref=e427]:
+              - button "Select Tamil star ▾" [ref=e429] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e430]
+                - generic [ref=e431]: ▾
+            - cell "Select pooja day option ▾" [ref=e432]:
+              - button "Select pooja day option ▾" [ref=e434] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e435]
+                - generic [ref=e436]: ▾
+          - row "29 Jul 2026 Wednesday Select Tamil star ▾ Select pooja day option ▾" [ref=e437]:
+            - cell "29 Jul 2026" [ref=e438]
+            - cell "Wednesday" [ref=e439]
+            - cell "Select Tamil star ▾" [ref=e440]:
+              - button "Select Tamil star ▾" [ref=e442] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e443]
+                - generic [ref=e444]: ▾
+            - cell "Select pooja day option ▾" [ref=e445]:
+              - button "Select pooja day option ▾" [ref=e447] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e448]
+                - generic [ref=e449]: ▾
+          - row "30 Jul 2026 Thursday Select Tamil star ▾ Select pooja day option ▾" [ref=e450]:
+            - cell "30 Jul 2026" [ref=e451]
+            - cell "Thursday" [ref=e452]
+            - cell "Select Tamil star ▾" [ref=e453]:
+              - button "Select Tamil star ▾" [ref=e455] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e456]
+                - generic [ref=e457]: ▾
+            - cell "Select pooja day option ▾" [ref=e458]:
+              - button "Select pooja day option ▾" [ref=e460] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e461]
+                - generic [ref=e462]: ▾
+          - row "31 Jul 2026 Friday Select Tamil star ▾ Select pooja day option ▾" [ref=e463]:
+            - cell "31 Jul 2026" [ref=e464]
+            - cell "Friday" [ref=e465]
+            - cell "Select Tamil star ▾" [ref=e466]:
+              - button "Select Tamil star ▾" [ref=e468] [cursor=pointer]:
+                - generic "Select Tamil star" [ref=e469]
+                - generic [ref=e470]: ▾
+            - cell "Select pooja day option ▾" [ref=e471]:
+              - button "Select pooja day option ▾" [ref=e473] [cursor=pointer]:
+                - generic "Select pooja day option" [ref=e474]
+                - generic [ref=e475]: ▾

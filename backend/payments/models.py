@@ -4,6 +4,7 @@ from datetime import date
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from pooja.models import PoojaRegistration
@@ -55,6 +56,17 @@ class PaymentRecord(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("donor", "payment_month"),
+                condition=Q(
+                    registration__isnull=True,
+                    status=PaymentStatus.PENDING,
+                    payment_month__isnull=False,
+                ),
+                name="uniq_pending_monthly_due_per_donor_month",
+            ),
+        ]
 
     def __str__(self):
         return f"Payment {self.pk} - {self.donor}"
