@@ -10,8 +10,8 @@ const makeUser = (role: UserProfile['role']): UserProfile => ({
 });
 
 describe('canViewDonorUbhayamReport', () => {
-  it('hides the donor Ubhayam report page for donor logins', () => {
-    expect(canViewDonorUbhayamReport(makeUser('donor'))).toBe(false);
+  it('shows the donor Ubhayam report page for donor logins', () => {
+    expect(canViewDonorUbhayamReport(makeUser('donor'))).toBe(true);
   });
 
   it('does not grant the donor route to admin users', () => {

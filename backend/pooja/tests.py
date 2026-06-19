@@ -540,6 +540,153 @@ class UbhayamInputAllocationBehaviorTests(TestCase):
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
+class UbhayamAllocationLatestViewTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            phone_number="9000099991",
+            name="Ubhayam Admin",
+            password="secret",
+            role=UserRole.ADMIN,
+            is_staff=True,
+        )
+        self.donor = User.objects.create_user(
+            phone_number="9000099992",
+            name="Ubhayam Donor",
+            password="secret",
+            role=UserRole.DONOR,
+        )
+        self.other_donor = User.objects.create_user(
+            phone_number="9000099993",
+            name="Other Ubhayam Donor",
+            password="secret",
+            role=UserRole.DONOR,
+        )
+        self.latest_url = reverse("pooja-ubhayam-allocation-latest")
+        self.donor_identifier = DonorProfile.objects.get(user=self.donor).donor_id
+        self.other_donor_identifier = DonorProfile.objects.get(user=self.other_donor).donor_id
+
+    def _create_run_with_rows(
+        self,
+        *,
+        month: str,
+        run_number: int,
+        is_latest: bool,
+        rows: list[dict[str, str]],
+    ) -> UbhayamAllocationRun:
+        run = UbhayamAllocationRun.objects.create(
+            month=month,
+            run_number=run_number,
+            is_latest=is_latest,
+            status=UbhayamAllocationStatus.COMPLETED,
+            generated_by=self.admin,
+            row_count=len(rows),
+        )
+        for row in rows:
+            UbhayamAllocationRow.objects.create(
+                run=run,
+                date=row["date"],
+                day_of_month=row["day_of_month"],
+                tamil_star=row.get("tamil_star", ""),
+                pooja_day_option=row.get("pooja_day_option", ""),
+                donor_id=row.get("donor_id", ""),
+                donor_name=row.get("donor_name", ""),
+                donor_mobile_number=row.get("donor_mobile_number", ""),
+            )
+        return run
+
+    def test_admin_receives_full_latest_allocation_rows(self):
+        self._create_run_with_rows(
+            month="2026-07",
+            run_number=1,
+            is_latest=True,
+            rows=[
+                {
+                    "date": date(2026, 7, 1),
+                    "day_of_month": "Wednesday",
+                    "tamil_star": "பூராடம்",
+                    "pooja_day_option": "Any day of the month",
+                    "donor_id": f"{self.donor_identifier}, {self.other_donor_identifier}",
+                    "donor_name": "First Donor, Second Donor",
+                    "donor_mobile_number": "1111111111, 2222222222",
+                },
+            ],
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get(self.latest_url, {"month": "2026-07"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["rows"]), 1)
+        self.assertEqual(
+            response.data["rows"][0]["donor_id"],
+            f"{self.donor_identifier}, {self.other_donor_identifier}",
+        )
+        self.assertEqual(response.data["latest_run"]["run_number"], 1)
+
+    def test_donor_receives_only_matching_rows_from_latest_run_with_trimmed_columns(self):
+        self._create_run_with_rows(
+            month="2026-07",
+            run_number=1,
+            is_latest=False,
+            rows=[
+                {
+                    "date": date(2026, 7, 1),
+                    "day_of_month": "Wednesday",
+                    "tamil_star": "OLD",
+                    "pooja_day_option": "Any day of the month",
+                    "donor_id": self.other_donor_identifier,
+                    "donor_name": "Old Donor",
+                    "donor_mobile_number": "9999999999",
+                },
+            ],
+        )
+        self._create_run_with_rows(
+            month="2026-07",
+            run_number=2,
+            is_latest=True,
+            rows=[
+                {
+                    "date": date(2026, 7, 1),
+                    "day_of_month": "Wednesday",
+                    "tamil_star": "பூராடம்",
+                    "pooja_day_option": "Any day of the month",
+                    "donor_id": f"{self.donor_identifier}, {self.other_donor_identifier}",
+                    "donor_name": "First Donor, Second Donor",
+                    "donor_mobile_number": "1111111111, 2222222222",
+                },
+                {
+                    "date": date(2026, 7, 2),
+                    "day_of_month": "Thursday",
+                    "tamil_star": "உத்திராடாதி",
+                    "pooja_day_option": "On sashti day of month",
+                    "donor_id": self.other_donor_identifier,
+                    "donor_name": "Other Donor",
+                    "donor_mobile_number": "3333333333",
+                },
+            ],
+        )
+
+        self.client.force_authenticate(user=self.donor)
+        response = self.client.get(self.latest_url, {"month": "2026-07"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["latest_run"]["run_number"], 2)
+        self.assertEqual(response.data["month"], "2026-07")
+        self.assertEqual(response.data["rows"], [
+            {
+                "date": "2026-07-01",
+                "day_of_month": "Wednesday",
+                "tamil_star": "பூராடம்",
+                "pooja_day_option": "Any day of the month",
+                "donor_id": self.donor_identifier,
+                "donor_name": "First Donor",
+                "donor_mobile_number": "1111111111",
+            }
+        ])
+
+
+@override_settings(DATABASES=SQLITE_DB_CONFIG)
 class PoojaDayOptionCalendarViewTests(TestCase):
     class DummyCalendarService:
         def _month_end(self, start):

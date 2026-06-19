@@ -112,6 +112,61 @@ _TAMIL_NAKSHATRA_NATIVE_NAMES = [
 ]
 
 
+def _split_comma_separated_values(value: str | None) -> list[str]:
+    return [entry.strip() for entry in (value or "").split(",") if entry.strip()]
+
+
+def _normalize_ubhayam_donor_identifier(value: str | None) -> str:
+    return (value or "").strip().upper()
+
+
+def _serialize_ubhayam_allocation_row(row: UbhayamAllocationRow) -> dict[str, str]:
+    return {
+        "date": row.date.isoformat(),
+        "day_of_month": row.day_of_month,
+        "tamil_star": row.tamil_star,
+        "pooja_day_option": row.pooja_day_option,
+        "donor_id": row.donor_id,
+        "donor_name": row.donor_name,
+        "donor_mobile_number": row.donor_mobile_number,
+    }
+
+
+def _serialize_ubhayam_allocation_row_for_donor(
+    row: UbhayamAllocationRow,
+    donor_identifier: str | None,
+) -> dict[str, str] | None:
+    normalized_target = _normalize_ubhayam_donor_identifier(donor_identifier)
+    if not normalized_target:
+        return None
+
+    donor_ids = _split_comma_separated_values(row.donor_id)
+    donor_index = next(
+        (
+            index
+            for index, value in enumerate(donor_ids)
+            if _normalize_ubhayam_donor_identifier(value) == normalized_target
+        ),
+        -1,
+    )
+    if donor_index < 0:
+        return None
+
+    donor_names = _split_comma_separated_values(row.donor_name)
+    donor_mobile_numbers = _split_comma_separated_values(row.donor_mobile_number)
+    return {
+        "date": row.date.isoformat(),
+        "day_of_month": row.day_of_month,
+        "tamil_star": row.tamil_star,
+        "pooja_day_option": row.pooja_day_option,
+        "donor_id": donor_ids[donor_index] if donor_index < len(donor_ids) else "",
+        "donor_name": donor_names[donor_index] if donor_index < len(donor_names) else "",
+        "donor_mobile_number": (
+            donor_mobile_numbers[donor_index] if donor_index < len(donor_mobile_numbers) else ""
+        ),
+    }
+
+
 class LargePagePagination(PageNumberPagination):
     page_size = 200
     page_size_query_param = "page_size"
@@ -3208,18 +3263,22 @@ class UbhayamAllocationLatestView(APIView):
         if latest_run is None:
             return Response({"month": month_key, "rows": [], "latest_run": None})
 
-        rows = [
-            {
-                "date": row.date.isoformat(),
-                "day_of_month": row.day_of_month,
-                "tamil_star": row.tamil_star,
-                "pooja_day_option": row.pooja_day_option,
-                "donor_id": row.donor_id,
-                "donor_name": row.donor_name,
-                "donor_mobile_number": row.donor_mobile_number,
-            }
-            for row in latest_run.rows.all().order_by("date", "id")
-        ]
+        latest_rows = latest_run.rows.all().order_by("date", "id")
+        if request.user.role == UserRole.DONOR:
+            donor_identifier = None
+            donor_profile = DonorProfile.objects.filter(user_id=request.user.id).only("donor_number").first()
+            if donor_profile is not None:
+                donor_identifier = donor_profile.donor_id
+            rows = [
+                serialized
+                for serialized in (
+                    _serialize_ubhayam_allocation_row_for_donor(row, donor_identifier)
+                    for row in latest_rows
+                )
+                if serialized is not None
+            ]
+        else:
+            rows = [_serialize_ubhayam_allocation_row(row) for row in latest_rows]
         return Response(
             {
                 "month": month_key,

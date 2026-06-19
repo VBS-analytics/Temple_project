@@ -14,6 +14,11 @@ import {
   shouldAppendSaturdayNavagrahaLabel,
   shouldUseFixedUbhayamRows,
 } from './ubhayamReportFilters';
+import {
+  buildContinuousUbhayamMonthTabs,
+  buildRollingUbhayamMonthTabs,
+  buildUbhayamYearOptions,
+} from './ubhayamMonthTabs';
 
 const TABLE_COLUMNS = [
   'Date',
@@ -37,6 +42,7 @@ const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
 const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
 const DAY_OPTION_BADGE_CLASS =
   'rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-orange-600';
+const UBHAYAM_DONOR_START_MONTH = '2026-01';
 const UBHAYAM_DB_CUTOVER_MONTH = '2026-07';
 const UBHAYAM_FIXED_MONTH_ROWS_BY_MONTH: Record<string, UbhayamAllocationRowResponse[]> = {
   '2026-05': ubhayamReportMay2026 as UbhayamAllocationRowResponse[],
@@ -78,22 +84,6 @@ const normalizeDayOptionLabel = (option: DayOptionCalendarEntry) => {
   }
   const description = option.description?.trim();
   return description || DAY_OPTION_FALLBACK_LABEL;
-};
-
-const buildMonthTabs = (options?: { startOffset?: number; totalMonths?: number }) => {
-  const { startOffset = -1, totalMonths = 13 } = options ?? {};
-  const reference = new Date();
-  const tabs = Array.from({ length: totalMonths }, (_, index) => {
-    const targetDate = new Date(reference.getFullYear(), reference.getMonth() + startOffset + index, 1);
-    return {
-      key: `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`,
-      label: targetDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-      shortLabel: targetDate.toLocaleDateString('en-GB', { month: 'short' }),
-      year: targetDate.getFullYear(),
-      monthIndex: targetDate.getMonth(),
-    };
-  });
-  return tabs;
 };
 
 const buildMonthDates = (year: number, monthIndex: number) => {
@@ -319,26 +309,40 @@ const PoojaDetailsPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  const today = useMemo(() => new Date(), []);
+  const donorYearOptions = useMemo(
+    () => buildUbhayamYearOptions(UBHAYAM_DONOR_START_MONTH, { referenceDate: today }),
+    [today],
+  );
+  const [selectedYear, setSelectedYear] = useState(() => today.getFullYear());
   const monthTabs = useMemo(() => {
-    const tabs = buildMonthTabs();
     if (isAdminUser) {
-      return tabs;
+      return buildRollingUbhayamMonthTabs({ referenceDate: today });
     }
-    const today = new Date();
-    return tabs.filter(
-      (tab) =>
-        tab.year < today.getFullYear()
-        || (tab.year === today.getFullYear() && tab.monthIndex <= today.getMonth()),
+
+    return buildContinuousUbhayamMonthTabs(UBHAYAM_DONOR_START_MONTH, { referenceDate: today }).filter(
+      (tab) => tab.year === selectedYear,
     );
-  }, [isAdminUser]);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState(() => {
-    const today = new Date();
-    const currentMonthIndex = monthTabs.findIndex(
-      (tab) => tab.year === today.getFullYear() && tab.monthIndex === today.getMonth(),
-    );
-    return currentMonthIndex >= 0 ? currentMonthIndex : 0;
+  }, [isAdminUser, selectedYear, today]);
+  const [selectedMonthKey, setSelectedMonthKey] = useState(() => {
+    const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    return currentMonthKey;
   });
-  const selectedMonth = monthTabs[selectedMonthIndex] ?? monthTabs[0];
+  useEffect(() => {
+    if (monthTabs.length === 0) {
+      return;
+    }
+    if (monthTabs.some((tab) => tab.key === selectedMonthKey)) {
+      return;
+    }
+    const nextTab = !isAdminUser && selectedYear < today.getFullYear()
+      ? monthTabs[0]
+      : monthTabs[monthTabs.length - 1];
+    if (nextTab) {
+      setSelectedMonthKey(nextTab.key);
+    }
+  }, [monthTabs, selectedMonthKey, isAdminUser, selectedYear, today]);
+  const selectedMonth = monthTabs.find((tab) => tab.key === selectedMonthKey) ?? monthTabs[0];
   const selectedMonthDates = useMemo(() => {
     if (!selectedMonth) return [];
     return buildMonthDates(selectedMonth.year, selectedMonth.monthIndex);
@@ -413,7 +417,7 @@ const PoojaDetailsPage = () => {
         active = false;
       };
     }
-    const useDbAllocationMode = isAdminUser && selectedMonthKey >= UBHAYAM_DB_CUTOVER_MONTH;
+    const useDbAllocationMode = selectedMonthKey >= UBHAYAM_DB_CUTOVER_MONTH;
 
     if (useDbAllocationMode) {
       api
@@ -861,16 +865,39 @@ const PoojaDetailsPage = () => {
         </div>
       </header>
 
+      {!isAdminUser && (
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="ubhayam-view-year" className="text-sm font-semibold text-slate-700">
+            View Year
+          </label>
+          <select
+            id="ubhayam-view-year"
+            value={selectedYear}
+            onChange={(event) => {
+              setSelectedYear(Number(event.target.value));
+              setShowMobileMonthSelector(false);
+            }}
+            className="min-w-[130px] rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 outline-none transition focus:border-orange-400"
+          >
+            {donorYearOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Month Navigation - Desktop View */}
       {!isMobile && (
         <div className="flex flex-wrap gap-2">
-          {monthTabs.map((tab, index) => {
-            const isActive = index === selectedMonthIndex;
+          {monthTabs.map((tab) => {
+            const isActive = tab.key === selectedMonthKey;
             return (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setSelectedMonthIndex(index)}
+                onClick={() => setSelectedMonthKey(tab.key)}
                 className={`rounded-full border px-4 py-1 text-sm font-semibold transition ${
                   isActive
                     ? 'border-orange-600 bg-orange-600 text-white'
@@ -906,14 +933,14 @@ const PoojaDetailsPage = () => {
 
           {showMobileMonthSelector && (
             <div className="absolute z-10 mt-1 w-full rounded-lg bg-white shadow-lg border border-orange-100 max-h-60 overflow-y-auto">
-              {monthTabs.map((tab, index) => {
-                const isActive = index === selectedMonthIndex;
+              {monthTabs.map((tab) => {
+                const isActive = tab.key === selectedMonthKey;
                 return (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={() => {
-                      setSelectedMonthIndex(index);
+                      setSelectedMonthKey(tab.key);
                       setShowMobileMonthSelector(false);
                     }}
                     className={`w-full text-left px-4 py-2 text-sm font-medium transition ${
