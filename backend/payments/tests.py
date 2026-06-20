@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
 
+from django.db import IntegrityError
 from django.db.models import F, Window
 from django.db.models.functions import RowNumber
 from django.test import TestCase
@@ -27,7 +28,7 @@ from pooja.models import (
     RecurrenceKind,
     RecurringPoojaPlan,
 )
-from pooja.services.recurrence import _clean_stale_chrt_dues
+from pooja.services.recurrence import _clean_stale_chrt_dues, _create_due_payment_record
 from payments.models import PassbookEntry
 from payments.models import (
     AdditionIncomeRecord,
@@ -183,15 +184,18 @@ class PaymentDetailsExportContentTests(TestCase):
             closing_due=Decimal("0.00"),
         )
 
-    def test_payment_details_export_excludes_active_subordinate_donors_from_all_sheets(self):
+    def _load_workbook(self, response):
+        payload = b"".join(response.streaming_content)
+        return load_workbook(filename=BytesIO(payload))
+
+    def test_payment_details_export_keeps_main_donor_in_payment_records_only(self):
         self.client.force_authenticate(self.admin)
 
         with patch("payments.views.regenerate_all_passbooks"):
             response = self.client.get(reverse("payment-details-export"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        payload = b"".join(response.streaming_content)
-        workbook = load_workbook(filename=BytesIO(payload))
+        workbook = self._load_workbook(response)
 
         payment_rows = list(workbook["Payment Records"].iter_rows(min_row=2, values_only=True))
         passbook_rows = list(workbook["Passbook Entries"].iter_rows(min_row=2, values_only=True))
@@ -201,15 +205,45 @@ class PaymentDetailsExportContentTests(TestCase):
         passbook_donor_ids = {row[1] for row in passbook_rows if row and row[1] is not None}
         statement_donor_ids = {row[0] for row in statement_rows if row and row[0] is not None}
 
-        expected_ids = {self.main_donor.id, self.regular_donor.id}
-        self.assertSetEqual(payment_donor_ids, expected_ids)
-        self.assertSetEqual(passbook_donor_ids, expected_ids)
-        self.assertSetEqual(statement_donor_ids, expected_ids)
+        self.assertSetEqual(payment_donor_ids, {self.main_donor.id, self.regular_donor.id})
+        self.assertSetEqual(passbook_donor_ids, {self.regular_donor.id})
+        self.assertSetEqual(statement_donor_ids, {self.regular_donor.id})
+        self.assertIn(self.main_donor.id, payment_donor_ids)
+        self.assertNotIn(self.main_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.main_donor.id, statement_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, payment_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, passbook_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
 
-    def test_payment_details_export_can_include_subordinates_in_passbook_sheet_only(self):
+    def test_payment_details_export_always_includes_populated_combined_sheet(self):
+        self.client.force_authenticate(self.admin)
+
+        with patch("payments.views.regenerate_all_passbooks"):
+            response = self.client.get(reverse("payment-details-export"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workbook = self._load_workbook(response)
+
+        self.assertEqual(
+            workbook.sheetnames,
+            [
+                "Payment Records",
+                "Passbook Entries",
+                "Donor Statements",
+                "Combined Statement View",
+            ],
+        )
+
+        combined_rows = list(
+            workbook["Combined Statement View"].iter_rows(min_row=2, values_only=True)
+        )
+        combined_main_ids = {row[0] for row in combined_rows if row and row[0] is not None}
+        combined_donor_labels = {row[4] for row in combined_rows if row and row[4] is not None}
+
+        self.assertIn(self.main_donor.id, combined_main_ids)
+        self.assertIn("Sub-ordinate Donors", combined_donor_labels)
+
+    def test_payment_details_export_ignores_include_subordinates_for_combine_payment_donors(self):
         self.client.force_authenticate(self.admin)
 
         with patch("payments.views.regenerate_all_passbooks"):
@@ -219,8 +253,7 @@ class PaymentDetailsExportContentTests(TestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        payload = b"".join(response.streaming_content)
-        workbook = load_workbook(filename=BytesIO(payload))
+        workbook = self._load_workbook(response)
 
         payment_rows = list(workbook["Payment Records"].iter_rows(min_row=2, values_only=True))
         passbook_rows = list(workbook["Passbook Entries"].iter_rows(min_row=2, values_only=True))
@@ -230,8 +263,11 @@ class PaymentDetailsExportContentTests(TestCase):
         passbook_donor_ids = {row[1] for row in passbook_rows if row and row[1] is not None}
         statement_donor_ids = {row[0] for row in statement_rows if row and row[0] is not None}
 
+        self.assertIn(self.main_donor.id, payment_donor_ids)
+        self.assertNotIn(self.main_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.main_donor.id, statement_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, payment_donor_ids)
-        self.assertIn(self.subordinate_donor.id, passbook_donor_ids)
+        self.assertNotIn(self.subordinate_donor.id, passbook_donor_ids)
         self.assertNotIn(self.subordinate_donor.id, statement_donor_ids)
         self.assertIn("Combined Statement View", workbook.sheetnames)
 
@@ -242,6 +278,38 @@ class PaymentDetailsExportContentTests(TestCase):
         combined_donor_labels = {row[4] for row in combined_rows if row and row[4] is not None}
         self.assertIn(self.main_donor.id, combined_main_ids)
         self.assertIn("Sub-ordinate Donors", combined_donor_labels)
+
+    def test_payment_details_export_keeps_combined_sheet_header_only_without_active_mappings(self):
+        self.client.force_authenticate(self.admin)
+        CombinePaymentMapping.objects.all().delete()
+
+        with patch("payments.views.regenerate_all_passbooks"):
+            response = self.client.get(reverse("payment-details-export"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workbook = self._load_workbook(response)
+
+        self.assertIn("Combined Statement View", workbook.sheetnames)
+        combined_rows = list(workbook["Combined Statement View"].iter_rows(values_only=True))
+        self.assertEqual(len(combined_rows), 1)
+        self.assertEqual(
+            combined_rows[0],
+            (
+                "Main Donor ID",
+                "Main Donor Name",
+                "Main Donor Phone",
+                "Date",
+                "Donor Name",
+                "Transaction Details",
+                "Due For Current Month",
+                "Amount Received",
+                "Closing Due For Current Month",
+                "Opening Balance",
+                "Source Entry Type",
+                "Source Donor ID",
+                "Source Payment Record ID",
+            ),
+        )
 
 
 class AccountStatementExportTests(TestCase):
@@ -1046,6 +1114,72 @@ class RecurringDueGenerationEdgeCaseTests(TestCase):
 
         self.assertIsNotNone(april_due)
         self.assertEqual(april_due.amount, Decimal("1000.00"))
+
+    def test_due_helper_collapses_duplicate_pending_rows_for_same_month(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000011",
+            name="Duplicate Due Donor",
+            password="secret",
+        )
+        payment_month = date(2026, 6, 1)
+        first_due = PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("600.00"),
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=payment_month,
+            notes="Monthly recurring pooja contribution due",
+        )
+        duplicate_due = PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("600.00"),
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=payment_month,
+            notes="Monthly recurring pooja contribution due",
+        )
+
+        created = _create_due_payment_record(donor.id, Decimal("600.00"), payment_month)
+
+        self.assertIsNone(created)
+        remaining_dues = list(
+            PaymentRecord.objects.filter(
+                donor=donor,
+                registration__isnull=True,
+                status=PaymentStatus.PENDING,
+                payment_month=payment_month,
+            ).order_by("created_at", "id")
+        )
+        self.assertEqual(len(remaining_dues), 1)
+        self.assertEqual(remaining_dues[0].id, first_due.id)
+        self.assertEqual(remaining_dues[0].amount, Decimal("600.00"))
+        self.assertFalse(PaymentRecord.objects.filter(id=duplicate_due.id).exists())
+
+    def test_pending_monthly_due_rows_are_unique_per_donor_and_month(self):
+        donor = User.objects.create_user(
+            phone_number="+919000000012",
+            name="Unique Due Donor",
+            password="secret",
+        )
+        payment_month = date(2026, 6, 1)
+        PaymentRecord.objects.create(
+            donor=donor,
+            amount=Decimal("600.00"),
+            mode="pending",
+            status=PaymentStatus.PENDING,
+            payment_month=payment_month,
+            notes="Monthly recurring pooja contribution due",
+        )
+
+        with self.assertRaises(IntegrityError):
+            PaymentRecord.objects.create(
+                donor=donor,
+                amount=Decimal("600.00"),
+                mode="pending",
+                status=PaymentStatus.PENDING,
+                payment_month=payment_month,
+                notes="Monthly recurring pooja contribution due",
+            )
 
 
 class ChrtCleanupSafetyTests(TestCase):

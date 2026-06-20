@@ -1203,11 +1203,13 @@ class PaymentDetailsExportView(APIView):
     1) Payment Records
     2) Passbook Entries
     3) Donor Statements (donor-wise ordered passbook entries)
+    4) Combined Statement View
 
-    Query params:
-    - include_subordinates=true|1|yes:
-      Includes active subordinate donors only in the Passbook Entries sheet and
-      adds a 4th sheet ("Combined Statement View") in statement-style format.
+    The Combined Statement View sheet is always present. It is populated only
+    when active combined donor mappings exist for the current month. Donors
+    participating in an active combined mapping are excluded from Passbook
+    Entries and Donor Statements, while Payment Records continues to show the
+    main donor payment rows.
     """
 
     permission_classes = (IsAdminRole,)
@@ -1238,6 +1240,16 @@ class PaymentDetailsExportView(APIView):
             .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=month_start))
             .values_list("parent_donor_id", flat=True)
         )
+
+    @staticmethod
+    def _active_combined_donor_ids(reference_date: date) -> set[int]:
+        month_start = reference_date.replace(day=1)
+        mappings = CombinePaymentMapping.objects.filter(effective_from__lte=month_start).filter(
+            Q(effective_to__isnull=True) | Q(effective_to__gt=month_start)
+        )
+        donor_ids = set(mappings.values_list("main_donor_id", flat=True))
+        donor_ids.update(mappings.values_list("parent_donor_id", flat=True))
+        return donor_ids
 
     @staticmethod
     def _combined_statement_opening_date(entries: list[PassbookEntry], reference_date: date) -> date:
@@ -1440,11 +1452,9 @@ class PaymentDetailsExportView(APIView):
 
         # Refresh passbooks so donor-wise statements are up to date
         regenerate_all_passbooks()
-        subordinate_donor_ids = self._active_subordinate_donor_ids(timezone.localdate())
-        include_subordinates_in_passbook = (
-            (request.query_params.get("include_subordinates") or "").strip().lower()
-            in {"1", "true", "yes"}
-        )
+        current_date = timezone.localdate()
+        subordinate_donor_ids = self._active_subordinate_donor_ids(current_date)
+        combined_donor_ids = self._active_combined_donor_ids(current_date)
 
         workbook = Workbook()
         # Remove the default auto-created sheet for a clean slate
@@ -1513,10 +1523,9 @@ class PaymentDetailsExportView(APIView):
         passbook_qs = (
             PassbookEntry.objects.select_related("donor", "payment_record", "registration")
             .exclude(donor__role=UserRole.ADMIN)
+            .exclude(donor_id__in=combined_donor_ids)
             .order_by("donor_id", "entry_date")
         )
-        if not include_subordinates_in_passbook:
-            passbook_qs = passbook_qs.exclude(donor_id__in=subordinate_donor_ids)
         for entry in passbook_qs:
             passbook_sheet.append(
                 [
@@ -1553,7 +1562,7 @@ class PaymentDetailsExportView(APIView):
         latest_statement_qs = (
             PassbookEntry.objects.select_related("donor", "payment_record", "registration")
             .exclude(donor__role=UserRole.ADMIN)
-            .exclude(donor_id__in=subordinate_donor_ids)
+            .exclude(donor_id__in=combined_donor_ids)
             .annotate(
                 donor_latest_rank=Window(
                     expression=RowNumber(),
@@ -1581,64 +1590,63 @@ class PaymentDetailsExportView(APIView):
             )
 
         # Sheet 4: Combined Statement View (matches donor payment statement style)
-        if include_subordinates_in_passbook:
-            month_start = timezone.localdate().replace(day=1)
-            active_mappings = list(
-                CombinePaymentMapping.objects.select_related("main_donor", "parent_donor")
-                .filter(effective_from__lte=month_start)
-                .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=month_start))
-                .order_by("main_donor_id", "parent_donor_id")
+        combined_sheet = workbook.create_sheet(title="Combined Statement View")
+        combined_headers = [
+            "Main Donor ID",
+            "Main Donor Name",
+            "Main Donor Phone",
+            "Date",
+            "Donor Name",
+            "Transaction Details",
+            "Due For Current Month",
+            "Amount Received",
+            "Closing Due For Current Month",
+            "Opening Balance",
+            "Source Entry Type",
+            "Source Donor ID",
+            "Source Payment Record ID",
+        ]
+        combined_sheet.append(combined_headers)
+
+        month_start = current_date.replace(day=1)
+        active_mappings = list(
+            CombinePaymentMapping.objects.select_related("main_donor", "parent_donor")
+            .filter(effective_from__lte=month_start)
+            .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=month_start))
+            .order_by("main_donor_id", "parent_donor_id")
+        )
+        if active_mappings:
+            main_to_parents: dict[int, list[int]] = defaultdict(list)
+            main_donor_lookup: dict[int, User] = {}
+            relevant_donor_ids: set[int] = set()
+            for mapping in active_mappings:
+                main_to_parents[mapping.main_donor_id].append(mapping.parent_donor_id)
+                main_donor_lookup[mapping.main_donor_id] = mapping.main_donor
+                relevant_donor_ids.add(mapping.main_donor_id)
+                relevant_donor_ids.add(mapping.parent_donor_id)
+
+            passbook_for_combined = (
+                PassbookEntry.objects.select_related("donor")
+                .exclude(donor__role=UserRole.ADMIN)
+                .filter(donor_id__in=relevant_donor_ids)
+                .order_by("donor_id", "entry_date", "id")
             )
-            if active_mappings:
-                combined_sheet = workbook.create_sheet(title="Combined Statement View")
-                combined_headers = [
-                    "Main Donor ID",
-                    "Main Donor Name",
-                    "Main Donor Phone",
-                    "Date",
-                    "Donor Name",
-                    "Transaction Details",
-                    "Due For Current Month",
-                    "Amount Received",
-                    "Closing Due For Current Month",
-                    "Opening Balance",
-                    "Source Entry Type",
-                    "Source Donor ID",
-                    "Source Payment Record ID",
-                ]
-                combined_sheet.append(combined_headers)
+            passbook_by_donor: dict[int, list[PassbookEntry]] = defaultdict(list)
+            for entry in passbook_for_combined:
+                passbook_by_donor[entry.donor_id].append(entry)
 
-                main_to_parents: dict[int, list[int]] = defaultdict(list)
-                main_donor_lookup: dict[int, User] = {}
-                relevant_donor_ids: set[int] = set()
-                for mapping in active_mappings:
-                    main_to_parents[mapping.main_donor_id].append(mapping.parent_donor_id)
-                    main_donor_lookup[mapping.main_donor_id] = mapping.main_donor
-                    relevant_donor_ids.add(mapping.main_donor_id)
-                    relevant_donor_ids.add(mapping.parent_donor_id)
-
-                passbook_for_combined = (
-                    PassbookEntry.objects.select_related("donor")
-                    .exclude(donor__role=UserRole.ADMIN)
-                    .filter(donor_id__in=relevant_donor_ids)
-                    .order_by("donor_id", "entry_date", "id")
+            for main_donor_id in sorted(main_to_parents.keys()):
+                main_donor = main_donor_lookup.get(main_donor_id)
+                if not main_donor:
+                    continue
+                rows = self._build_combined_statement_rows(
+                    reference_date=current_date,
+                    main_donor=main_donor,
+                    parent_donor_ids=main_to_parents[main_donor_id],
+                    passbook_by_donor=passbook_by_donor,
                 )
-                passbook_by_donor: dict[int, list[PassbookEntry]] = defaultdict(list)
-                for entry in passbook_for_combined:
-                    passbook_by_donor[entry.donor_id].append(entry)
-
-                for main_donor_id in sorted(main_to_parents.keys()):
-                    main_donor = main_donor_lookup.get(main_donor_id)
-                    if not main_donor:
-                        continue
-                    rows = self._build_combined_statement_rows(
-                        reference_date=timezone.localdate(),
-                        main_donor=main_donor,
-                        parent_donor_ids=main_to_parents[main_donor_id],
-                        passbook_by_donor=passbook_by_donor,
-                    )
-                    for row in rows:
-                        combined_sheet.append(row)
+                for row in rows:
+                    combined_sheet.append(row)
 
         buffer = BytesIO()
         workbook.save(buffer)

@@ -1213,7 +1213,6 @@ const ReportPage = () => {
   const [exportingReports, setExportingReports] = useState(initialPoojaExportState);
   const [exportingExcessDonation, setExportingExcessDonation] = useState(false);
   const [exportingPaymentDetails, setExportingPaymentDetails] = useState(false);
-  const [includeSubordinatesInPassbookExport, setIncludeSubordinatesInPassbookExport] = useState(false);
   const [exportingGeneralDonation, setExportingGeneralDonation] = useState(false);
   const [exportingDonorFeedback, setExportingDonorFeedback] = useState(false);
   const [pendingReportKey, setPendingReportKey] = useState<PoojaReportKey | null>(null);
@@ -1621,7 +1620,6 @@ const ReportPage = () => {
     try {
       const response = await api.get<Blob>('payments/payment-details-export/', {
         responseType: 'blob',
-        params: includeSubordinatesInPassbookExport ? { include_subordinates: 'true' } : undefined,
       });
       const blobData = response.data;
       if (!(blobData instanceof Blob)) {
@@ -1648,7 +1646,7 @@ const ReportPage = () => {
     } finally {
       setExportingPaymentDetails(false);
     }
-  }, [ensureReportDownloadAccess, exportingPaymentDetails, includeSubordinatesInPassbookExport]);
+  }, [ensureReportDownloadAccess, exportingPaymentDetails]);
 
   const handleGeneralDonationDownload = useCallback(async () => {
     if (exportingGeneralDonation) return;
@@ -2055,21 +2053,6 @@ const ReportPage = () => {
                         {exportingPaymentDetails ? 'Preparing…' : 'Payment Details'}
                       </p>
                     </button>
-                    <label
-                      htmlFor="include-subordinates-passbook-export"
-                      className="inline-flex items-center gap-2 text-xs text-slate-600"
-                    >
-                      <input
-                        id="include-subordinates-passbook-export"
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
-                        checked={includeSubordinatesInPassbookExport}
-                        onChange={(event) =>
-                          setIncludeSubordinatesInPassbookExport(event.target.checked)
-                        }
-                      />
-                      Include subordinate donors in Passbook Entries sheet
-                    </label>
                   </div>
 
                   <button
