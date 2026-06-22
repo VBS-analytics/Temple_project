@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import api, { extractResults } from '../../lib/api';
 
 type MonthTab = {
@@ -137,13 +138,80 @@ const MultiSelectDropdown = ({
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
+  const portalContainer = typeof document !== 'undefined' ? document.body : null;
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredOptions = normalizedSearch
+    ? options.filter((option) => option.label.toLowerCase().includes(normalizedSearch))
+    : options;
+
+  const updateDropdownPosition = useCallback(() => {
+    if (!containerRef.current || typeof window === 'undefined') {
+      setDropdownStyle(null);
+      return;
+    }
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const spacing = 12;
+    const viewportWidth = Math.max(window.innerWidth, document.documentElement.clientWidth || 0);
+    const viewportHeight = Math.max(window.innerHeight, document.documentElement.clientHeight || 0);
+    const availableWidth = Math.max(viewportWidth - spacing * 2, 80);
+    const width = Math.min(Math.max(containerRect.width || 240, 160), availableWidth);
+    const maxLeft = Math.max(spacing, viewportWidth - width - spacing);
+    const left = Math.min(Math.max(containerRect.left, spacing), maxLeft);
+
+    const dropdownHeight = dropdownRef.current?.offsetHeight ?? 240;
+    const spaceBelow = viewportHeight - containerRect.bottom - spacing;
+    const spaceAbove = containerRect.top - spacing;
+    const shouldOpenUpward = spaceBelow < Math.min(dropdownHeight, 240) && spaceAbove > spaceBelow;
+    const top = shouldOpenUpward
+      ? Math.max(spacing, containerRect.top - dropdownHeight - 6)
+      : Math.min(
+          Math.max(containerRect.bottom + 6, spacing),
+          Math.max(spacing, viewportHeight - dropdownHeight - spacing),
+        );
+
+    setDropdownStyle({
+      position: 'fixed',
+      top,
+      left,
+      width,
+      minWidth: Math.min(containerRect.width || width, width),
+      zIndex: 1000,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setDropdownStyle(null);
+      return;
+    }
+    updateDropdownPosition();
+  }, [open, updateDropdownPosition, filteredOptions.length, searchTerm]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleScrollOrResize = () => updateDropdownPosition();
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [open, updateDropdownPosition]);
 
   useEffect(() => {
     if (!open) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
+      if (
+        containerRef.current &&
+        (containerRef.current.contains(event.target as Node) ||
+          dropdownRef.current?.contains(event.target as Node))
+      ) {
+        return;
       }
+      setOpen(false);
     };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -173,11 +241,6 @@ const MultiSelectDropdown = ({
       ? placeholder
       : selectedLabels.join(', ');
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredOptions = normalizedSearch
-    ? options.filter((option) => option.label.toLowerCase().includes(normalizedSearch))
-    : options;
-
   const handleToggleValue = (value: string) => {
     if (selectedValues.includes(value)) {
       onChange(selectedValues.filter((item) => item !== value));
@@ -197,41 +260,48 @@ const MultiSelectDropdown = ({
         <span className="ml-2 text-slate-400">▾</span>
       </button>
 
-      {open && (
-        <div className="absolute z-40 mt-1 w-full rounded-lg border border-orange-200 bg-white shadow-lg">
-          <div className="p-2">
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full rounded-md border border-orange-200 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-orange-400"
-            />
-          </div>
-          <div className="max-h-44 overflow-auto border-t border-orange-100">
-            {filteredOptions.map((option) => {
-              const checked = selectedValues.includes(option.id);
-              return (
-                <label
-                  key={option.id}
-                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-orange-50"
-                >
-                  <span className="truncate pr-2">{option.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => handleToggleValue(option.id)}
-                    className="h-4 w-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
-                  />
-                </label>
-              );
-            })}
-            {filteredOptions.length === 0 && (
-              <p className="px-3 py-2 text-sm text-slate-500">No options found</p>
-            )}
-          </div>
-        </div>
-      )}
+      {open &&
+        portalContainer &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="rounded-lg border border-orange-200 bg-white shadow-lg"
+            style={dropdownStyle ?? undefined}
+          >
+            <div className="p-2">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full rounded-md border border-orange-200 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-orange-400"
+              />
+            </div>
+            <div className="max-h-44 overflow-auto border-t border-orange-100">
+              {filteredOptions.map((option) => {
+                const checked = selectedValues.includes(option.id);
+                return (
+                  <label
+                    key={option.id}
+                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-orange-50"
+                  >
+                    <span className="truncate pr-2">{option.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleValue(option.id)}
+                      className="h-4 w-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
+                    />
+                  </label>
+                );
+              })}
+              {filteredOptions.length === 0 && (
+                <p className="px-3 py-2 text-sm text-slate-500">No options found</p>
+              )}
+            </div>
+          </div>,
+          portalContainer,
+        )}
     </div>
   );
 };
