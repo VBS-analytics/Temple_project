@@ -442,6 +442,14 @@ class UbhayamInputAllocationBehaviorTests(TestCase):
                 "display_order": 2,
             },
         )
+        self.second_ashtami_option, _ = PoojaDayOption.objects.get_or_create(
+            code="AST",
+            defaults={
+                "description": "On 2 ashtami day of month",
+                "category": DayOptionCategory.CODE,
+                "display_order": 3,
+            },
+        )
         self.allocate_url = reverse("pooja-ubhayam-input-allocate")
 
     def _month_dates(self, year: int, month: int) -> list[date]:
@@ -537,6 +545,83 @@ class UbhayamInputAllocationBehaviorTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         counts = self._collect_allocated_donor_counts("2026-06")
         self.assertEqual(counts, {"D11": 1, "D12": 1, "D13": 1})
+
+    def test_allocate_repeats_second_ashtami_donor_across_both_month_occurrences_only(self):
+        self._seed_full_month_overrides(2026, 6, self.english_first_option.id)
+        for ashtami_date in (date(2026, 6, 8), date(2026, 6, 22)):
+            override = UbhayamDateOverride.objects.get(date=ashtami_date)
+            override.pooja_day_option_ids = [self.second_ashtami_option.id]
+            override.save(update_fields=["pooja_day_option_ids", "updated_at"])
+
+        UbhayamReport.objects.create(
+            donor_id="D21",
+            donor_name="Ashtami Donor",
+            donor_phone_number="9000000021",
+            pooja_day_option=self.second_ashtami_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-06"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        counts = self._collect_allocated_donor_counts("2026-06")
+        self.assertEqual(counts, {"D21": 2})
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-06", is_latest=True)
+        allocated_rows = list(
+            UbhayamAllocationRow.objects.filter(
+                run=latest_run,
+                pooja_day_option=self.second_ashtami_option.description,
+            )
+            .order_by("date")
+            .values_list("date", "donor_id")
+        )
+        self.assertEqual(
+            allocated_rows,
+            [
+                (date(2026, 6, 8), "D21"),
+                (date(2026, 6, 22), "D21"),
+            ],
+        )
+
+    def test_allocate_excludes_no_payment_paused_recurring_donor_for_month(self):
+        self._seed_full_month_overrides(2026, 6, self.english_first_option.id)
+        paused_donor = User.objects.create_user(
+            phone_number="9000000044",
+            name="Paused Ubhayam Donor",
+            password="secret",
+        )
+        donor_identifier = DonorProfile.objects.get(user=paused_donor).donor_id
+        pooja_option = PoojaOption.objects.create(
+            code="UBH-T1",
+            name="Paused Test Pooja",
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=paused_donor,
+            pooja_option=pooja_option,
+            day_option=self.english_first_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 6, 1),
+            amount=Decimal("100.00"),
+            is_active=False,
+            pause_from=date(2026, 2, 1),
+            pause_until=date(2027, 2, 28),
+            metadata={"pause_reason": PAUSE_REASON_NO_POJA_NO_PAYMENT},
+        )
+        UbhayamReport.objects.create(
+            donor_id=donor_identifier,
+            donor_name=paused_donor.name,
+            donor_phone_number=paused_donor.phone_number,
+            pooja_day_option=self.english_first_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-06"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-06", is_latest=True)
+        first_day_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 6, 1))
+        self.assertEqual(first_day_row.donor_id, "")
 
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
