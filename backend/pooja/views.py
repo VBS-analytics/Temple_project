@@ -55,6 +55,7 @@ from .models import (
 from .services.recurrence import create_plan_from_registration
 from .services.calendar import TempleCalendarService, get_calendar_service, resolve_nakshatra_index
 from .services.recurrence import (
+    _plan_contributes_amount_for_month,
     calculate_next_recurring_occurrence,
     find_due_registration,
     prepare_recurring_registration,
@@ -320,6 +321,71 @@ def _resolve_donor_identifier(donor: User | None) -> str:
         return f"D{donor_number}"
     donor_pk = getattr(donor, "id", None)
     return str(donor_pk) if donor_pk is not None else ""
+
+
+def _is_ubhayam_excluded_pooja_option(option: PoojaOption | None) -> bool:
+    if option is None:
+        return False
+    parent_code = (getattr(getattr(option, "parent", None), "code", None) or "").strip().upper()
+    if parent_code in UBHAYAM_EXCLUDED_PARENT_CODES:
+        return True
+    option_code = (getattr(option, "code", None) or "").strip().upper()
+    if option_code in UBHAYAM_EXCLUDED_POOJA_CODES:
+        return True
+    option_name = _normalize_text(getattr(option, "name", None))
+    return bool(option_name and option_name in UBHAYAM_EXCLUDED_POOJA_NORMALIZED_NAMES)
+
+
+def _normalize_ubhayam_option_label(code: str | None, description: str | None) -> str:
+    if _is_any_day_option(code, description):
+        return "any day of month"
+    return _normalize_text(description or code)
+
+
+def _resolve_user_id_from_ubhayam_donor_identifier(donor_identifier: str | None) -> int | None:
+    raw_value = (donor_identifier or "").strip()
+    if not raw_value:
+        return None
+    normalized = raw_value.upper()
+    if normalized.startswith("D") and normalized[1:].isdigit():
+        donor_number = int(normalized[1:])
+        return (
+            DonorProfile.objects.filter(donor_number=donor_number)
+            .values_list("user_id", flat=True)
+            .first()
+        )
+    if raw_value.isdigit():
+        return int(raw_value)
+    return None
+
+
+def _ubhayam_donor_option_contributes_for_month(
+    donor_identifier: str | None,
+    option_label: str | None,
+    month_start: date,
+) -> bool:
+    user_id = _resolve_user_id_from_ubhayam_donor_identifier(donor_identifier)
+    normalized_option = _normalize_ubhayam_option_label(None, option_label)
+    if user_id is None or not normalized_option:
+        return True
+
+    matching_plans = [
+        plan
+        for plan in RecurringPoojaPlan.objects.filter(
+            donor_id=user_id,
+            recurrence_kind=RecurrenceKind.RECURRING,
+        ).select_related("day_option", "origin_registration", "pooja_option", "pooja_option__parent")
+        if not _is_ubhayam_excluded_pooja_option(getattr(plan, "pooja_option", None))
+        and _normalize_ubhayam_option_label(
+            getattr(getattr(plan, "day_option", None), "code", None),
+            getattr(getattr(plan, "day_option", None), "description", None),
+        )
+        == normalized_option
+    ]
+    if not matching_plans:
+        return True
+
+    return any(_plan_contributes_amount_for_month(plan, month_start) for plan in matching_plans)
 
 
 def _credit_custom_balance(user, amount: Decimal):
@@ -3123,6 +3189,12 @@ class UbhayamInputAllocateView(APIView):
                 donor_identifier = (donor.get("donor_id") or "").strip()
                 if not label or not donor_identifier or donor_identifier in grouped[label]:
                     continue
+                if not _ubhayam_donor_option_contributes_for_month(
+                    donor_identifier,
+                    label,
+                    first_day,
+                ):
+                    continue
                 grouped[label][donor_identifier] = {
                     "donor_id": donor_identifier,
                     "donor_name": (donor.get("donor_name") or "").strip(),
@@ -3138,12 +3210,31 @@ class UbhayamInputAllocateView(APIView):
             for day in month_dates
         }
 
-        # Distribute each option donor-pool across eligible dates in balanced stages
-        # (0-donor dates first, then 1-donor dates, and so on).
+        # Distribute each option donor-pool across eligible dates.
+        # "Any Day of Month" uses a balanced staged fill — each donor appears once.
+        # "On 2 ashtami day of month" repeats the same donor pool on each eligible
+        # occurrence in the month. All other labels retain the one-time pool behavior.
         for option_label in option_labels_for_month:
             eligible_dates = [day for day in month_dates if option_label in option_labels_by_date[day]]
             donor_pool = list(donors_by_option_label.get(option_label) or [])
             if not eligible_dates or not donor_pool:
+                continue
+
+            is_any_day_label = _normalize_text(option_label) in ANY_DAY_OPTION_DESCRIPTIONS
+            is_second_ashtami_label = _normalize_text(option_label) == _normalize_text(
+                "On 2 ashtami day of month"
+            )
+
+            if is_second_ashtami_label:
+                # Second Ashtami should show the same donor pool on both eligible
+                # dates in the month.
+                for target_date in eligible_dates:
+                    for donor_entry in donor_pool:
+                        donor_identifier = donor_entry["donor_id"]
+                        if donor_identifier in seen_donor_ids_by_date[target_date]:
+                            continue
+                        allocated_donors_by_date[target_date].append(donor_entry)
+                        seen_donor_ids_by_date[target_date].add(donor_identifier)
                 continue
 
             counts_by_date = {day: 0 for day in eligible_dates}
