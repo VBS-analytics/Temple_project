@@ -639,38 +639,86 @@ const DonorPoojaDetails = () => {
       setMessageCalendarLoading(true);
       setMessageCalendarError('');
       try {
-        const params = { year: messageYear, month: messageMonth };
-        const [dayOptionsRes, donorRes] = await Promise.all([
-          api.get<DayOptionCalendarResponse>('pooja/calendar/day-options/', { params }),
-          api.get<DonorCalendarResponse>('pooja/calendar/donor-registrations/', { params }),
-        ]);
-        if (!mounted) {
-          return;
+        const monthKey = `${messageYear}-${String(messageMonth).padStart(2, '0')}`;
+        const useAllocationMode = monthKey >= '2026-07';
+
+        if (useAllocationMode) {
+          const allocationRes = await api.get<{ month: string; rows: Array<{
+            date: string;
+            tamil_star: string;
+            pooja_day_option: string;
+            donor_id: string;
+            donor_name: string;
+            donor_mobile_number: string;
+          }> }>('pooja/ubhayam-allocation/latest/', { params: { month: monthKey } });
+          if (!mounted) return;
+
+          const dayOptionsMap: Record<string, DayOptionCalendarEntry[]> = {};
+          const donorMap: Record<string, { donors: DonorCalendarDonor[]; dayOptions: DayOptionCalendarEntry[] }> = {};
+
+          const rows = Array.isArray(allocationRes.data?.rows) ? allocationRes.data.rows : [];
+          rows.forEach((entry, _idx) => {
+            const dateKey = (entry.date ?? '').trim();
+            if (!dateKey) return;
+
+            const optionLabels = (entry.pooja_day_option ?? '')
+              .split(',')
+              .map((label) => label.trim())
+              .filter((label) => label.length > 0);
+            const dayOptions: DayOptionCalendarEntry[] = optionLabels.map((label, index) => ({
+              id: index + 1,
+              code: `alloc-${index + 1}`,
+              description: label,
+              display_order: index + 1,
+              category: 'code',
+            }));
+            dayOptionsMap[dateKey] = dayOptions;
+
+            const donors: DonorCalendarDonor[] = (entry.donor_id ?? '')
+              .split(',')
+              .map((id, i) => {
+                const names = (entry.donor_name ?? '').split(',');
+                const phones = (entry.donor_mobile_number ?? '').split(',');
+                return {
+                  donor_id: id.trim() || null,
+                  name: (names[i] ?? '').trim() || null,
+                  phone_number: (phones[i] ?? '').trim() || null,
+                };
+              })
+              .filter((d) => d.donor_id);
+            donorMap[dateKey] = { donors, dayOptions };
+          });
+
+          setCalendarDayOptionsByDate(dayOptionsMap);
+          setDonorCalendarByDate(donorMap);
+        } else {
+          const params = { year: messageYear, month: messageMonth };
+          const [dayOptionsRes, donorRes] = await Promise.all([
+            api.get<DayOptionCalendarResponse>('pooja/calendar/day-options/', { params }),
+            api.get<DonorCalendarResponse>('pooja/calendar/donor-registrations/', { params }),
+          ]);
+          if (!mounted) return;
+
+          const dayOptionsMap: Record<string, DayOptionCalendarEntry[]> = {};
+          const dayOptionDates = Array.isArray(dayOptionsRes.data?.dates) ? dayOptionsRes.data.dates : [];
+          dayOptionDates.forEach((entry) => {
+            if (!entry?.date) return;
+            dayOptionsMap[entry.date] = Array.isArray(entry.day_options) ? entry.day_options : [];
+          });
+
+          const donorMap: Record<string, { donors: DonorCalendarDonor[]; dayOptions: DayOptionCalendarEntry[] }> = {};
+          const donorDates = Array.isArray(donorRes.data?.dates) ? donorRes.data.dates : [];
+          donorDates.forEach((entry) => {
+            if (!entry?.date) return;
+            donorMap[entry.date] = {
+              donors: Array.isArray(entry.donors) ? entry.donors : [],
+              dayOptions: Array.isArray(entry.day_options) ? entry.day_options : [],
+            };
+          });
+
+          setCalendarDayOptionsByDate(dayOptionsMap);
+          setDonorCalendarByDate(donorMap);
         }
-
-        const dayOptionsMap: Record<string, DayOptionCalendarEntry[]> = {};
-        const dayOptionDates = Array.isArray(dayOptionsRes.data?.dates) ? dayOptionsRes.data.dates : [];
-        dayOptionDates.forEach((entry) => {
-          if (!entry?.date) {
-            return;
-          }
-          dayOptionsMap[entry.date] = Array.isArray(entry.day_options) ? entry.day_options : [];
-        });
-
-        const donorMap: Record<string, { donors: DonorCalendarDonor[]; dayOptions: DayOptionCalendarEntry[] }> = {};
-        const donorDates = Array.isArray(donorRes.data?.dates) ? donorRes.data.dates : [];
-        donorDates.forEach((entry) => {
-          if (!entry?.date) {
-            return;
-          }
-          donorMap[entry.date] = {
-            donors: Array.isArray(entry.donors) ? entry.donors : [],
-            dayOptions: Array.isArray(entry.day_options) ? entry.day_options : [],
-          };
-        });
-
-        setCalendarDayOptionsByDate(dayOptionsMap);
-        setDonorCalendarByDate(donorMap);
       } catch (calendarError: any) {
         if (!mounted) {
           return;
