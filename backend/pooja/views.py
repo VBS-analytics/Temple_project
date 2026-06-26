@@ -56,6 +56,7 @@ from .services.recurrence import create_plan_from_registration
 from .services.calendar import TempleCalendarService, get_calendar_service, resolve_nakshatra_index
 from .services.recurrence import (
     _plan_contributes_amount_for_month,
+    _resolve_plan_occurrence_date_in_month,
     calculate_next_recurring_occurrence,
     find_due_registration,
     prepare_recurring_registration,
@@ -386,6 +387,105 @@ def _ubhayam_donor_option_contributes_for_month(
         return True
 
     return any(_plan_contributes_amount_for_month(plan, month_start) for plan in matching_plans)
+
+
+def _resolve_tamil_star_option_label(raw_value: Any) -> str | None:
+    if raw_value is None:
+        return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+
+    star_option = None
+    if text.isdigit():
+        star_option = PoojaDayOption.objects.filter(
+            id=int(text),
+            category=DayOptionCategory.TAMIL_STAR,
+        ).only("description", "code").first()
+    else:
+        star_option = PoojaDayOption.objects.filter(
+            code__iexact=text,
+            category=DayOptionCategory.TAMIL_STAR,
+        ).only("description", "code").first()
+
+    if star_option is None:
+        return None
+    return (star_option.description or star_option.code or "").strip() or None
+
+
+def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
+    labels: list[str] = []
+    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+    members = metadata.get("members")
+    if isinstance(members, list):
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            star = (member.get("tamil_star") or "").strip()
+            if star:
+                labels.append(star)
+
+    cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
+    for key in ("selectedTamilStarLabel", "selected_tamil_star_label"):
+        selected_label = (cart_payload.get(key) or "").strip()
+        if selected_label:
+            labels.append(selected_label)
+
+    for key in ("selectedTamilStarId", "selected_tamil_star_id"):
+        option_label = _resolve_tamil_star_option_label(cart_payload.get(key))
+        if option_label:
+            labels.append(option_label)
+
+    indexes: set[int] = set()
+    for label in labels:
+        index = resolve_nakshatra_index(label)
+        if index is not None:
+            indexes.add(index)
+    return indexes
+
+
+def _resolve_plan_day_option_label(plan: RecurringPoojaPlan) -> str:
+    day_option = getattr(plan, "day_option", None)
+    cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
+    code = getattr(day_option, "code", None) or cart_payload.get("dayOptionCode")
+    description = getattr(day_option, "description", None) or cart_payload.get("dayOptionDescription")
+    if _is_any_day_option(code, description):
+        return "any day of month"
+    return (str(description or code or "").strip()) or "Any day of the month"
+
+
+def _resolve_plan_specific_target_date(plan: RecurringPoojaPlan, month_start: date) -> date | None:
+    day_option = getattr(plan, "day_option", None)
+    code = (getattr(day_option, "code", None) or "").strip().upper()
+    cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
+
+    if code == "CHRT" or (not code and (cart_payload.get("dayOptionCode") or "").strip().upper() == "CHRT"):
+        preferred = (
+            plan.one_time_date
+            or _parse_iso_date(cart_payload.get("recurrenceOneTimeDate"))
+            or plan.start_date
+        )
+        if preferred and preferred.year == month_start.year and preferred.month == month_start.month:
+            return preferred
+        return None
+
+    normalized_label = _normalize_ubhayam_option_label(
+        getattr(day_option, "code", None) or cart_payload.get("dayOptionCode"),
+        getattr(day_option, "description", None) or cart_payload.get("dayOptionDescription"),
+    )
+    if normalized_label in ANY_DAY_OPTION_DESCRIPTIONS:
+        anchor_date = plan.next_occurrence or plan.start_date or month_start
+        if anchor_date.year == month_start.year and anchor_date.month == month_start.month:
+            return anchor_date
+        return month_start
+
+    try:
+        target_date = _resolve_plan_occurrence_date_in_month(plan, month_start)
+    except Exception:
+        target_date = None
+    if target_date and target_date.year == month_start.year and target_date.month == month_start.month:
+        return target_date
+    return None
 
 
 def _credit_custom_balance(user, amount: Decimal):
@@ -3122,6 +3222,7 @@ class UbhayamInputAllocateView(APIView):
             return normalized
 
         normalized_by_date: dict[date, dict[str, Any]] = {}
+        tamil_star_indexes_by_date: dict[date, set[int]] = {}
         invalid_dates: list[str] = []
         for day in month_dates:
             override = override_by_date.get(day)
@@ -3139,6 +3240,12 @@ class UbhayamInputAllocateView(APIView):
 
             if not tamil_stars or not option_labels:
                 invalid_dates.append(day.isoformat())
+
+            tamil_star_indexes_by_date[day] = {
+                index
+                for index in (resolve_nakshatra_index(value) for value in tamil_stars)
+                if index is not None
+            }
 
             normalized_by_date[day] = {
                 "tamil_stars": tamil_stars,
@@ -3167,6 +3274,10 @@ class UbhayamInputAllocateView(APIView):
                 return (1, int(donor_id))
             return (2, donor_id.casefold())
 
+        option_labels_by_date = {}
+        for day in month_dates:
+            option_labels_by_date[day] = list(normalized_by_date[day]["option_labels"])
+
         option_labels_for_month = sorted(
             {
                 label
@@ -3176,7 +3287,64 @@ class UbhayamInputAllocateView(APIView):
             },
             key=lambda value: value.casefold(),
         )
+        eligible_plan_labels_by_date: dict[date, dict[str, list[dict[str, str]]]] = {
+            day: defaultdict(list) for day in month_dates
+        }
         donors_by_option_label: dict[str, list[dict[str, str]]] = {}
+        seen_plan_entries: set[tuple[str, str]] = set()
+
+        active_plans = (
+            RecurringPoojaPlan.objects.filter(
+                recurrence_kind=RecurrenceKind.RECURRING,
+            )
+            .select_related("donor", "day_option", "origin_registration", "pooja_option", "pooja_option__parent")
+            .order_by("donor__id", "id")
+        )
+
+        for plan in active_plans:
+            if not _plan_contributes_amount_for_month(plan, first_day):
+                continue
+            if _is_ubhayam_excluded_pooja_option(getattr(plan, "pooja_option", None)):
+                continue
+
+            donor = getattr(plan, "donor", None)
+            donor_identifier = _resolve_donor_identifier(donor)
+            option_label = _resolve_plan_day_option_label(plan)
+            if not donor_identifier or not option_label:
+                continue
+            if option_label not in option_labels_for_month:
+                continue
+
+            target_date = _resolve_plan_specific_target_date(plan, first_day)
+            if target_date is None:
+                continue
+            if target_date < first_day or target_date > last_day:
+                continue
+            if option_label not in option_labels_by_date.get(target_date, []):
+                continue
+
+            plan_entry = {
+                "donor_id": donor_identifier,
+                "donor_name": ((getattr(donor, "name", None) or "").strip()),
+                "donor_phone_number": ((getattr(donor, "phone_number", None) or "").strip()),
+                "tamil_star_indexes": sorted(_extract_plan_tamil_star_indexes(plan)),
+            }
+            eligible_plan_labels_by_date[target_date][option_label].append(plan_entry)
+            seen_plan_entries.add((donor_identifier, option_label))
+
+        for day in month_dates:
+            label_map = eligible_plan_labels_by_date[day]
+            for label, entries in label_map.items():
+                deduped_entries: dict[str, dict[str, str]] = {}
+                for entry in entries:
+                    deduped_entries.setdefault(entry["donor_id"], entry)
+                label_map[label] = sorted(deduped_entries.values(), key=_donor_sort_key)
+                if label not in donors_by_option_label:
+                    donors_by_option_label[label] = []
+                for entry in label_map[label]:
+                    if all(existing["donor_id"] != entry["donor_id"] for existing in donors_by_option_label[label]):
+                        donors_by_option_label[label].append(entry)
+
         if option_labels_for_month:
             donor_rows = list(
                 UbhayamReport.objects.filter(pooja_day_option__in=option_labels_for_month)
@@ -3189,6 +3357,8 @@ class UbhayamInputAllocateView(APIView):
                 donor_identifier = (donor.get("donor_id") or "").strip()
                 if not label or not donor_identifier or donor_identifier in grouped[label]:
                     continue
+                if (donor_identifier, label) in seen_plan_entries:
+                    continue
                 if not _ubhayam_donor_option_contributes_for_month(
                     donor_identifier,
                     label,
@@ -3199,16 +3369,20 @@ class UbhayamInputAllocateView(APIView):
                     "donor_id": donor_identifier,
                     "donor_name": (donor.get("donor_name") or "").strip(),
                     "donor_phone_number": (donor.get("donor_phone_number") or "").strip(),
+                    "tamil_star_indexes": [],
                 }
             for label, donor_map in grouped.items():
-                donors_by_option_label[label] = sorted(donor_map.values(), key=_donor_sort_key)
+                fallback_entries = sorted(donor_map.values(), key=_donor_sort_key)
+                if label not in donors_by_option_label:
+                    donors_by_option_label[label] = []
+                existing_ids = {entry["donor_id"] for entry in donors_by_option_label[label]}
+                for entry in fallback_entries:
+                    if entry["donor_id"] not in existing_ids:
+                        donors_by_option_label[label].append(entry)
+                        existing_ids.add(entry["donor_id"])
 
         allocated_donors_by_date: dict[date, list[dict[str, str]]] = {day: [] for day in month_dates}
         seen_donor_ids_by_date: dict[date, set[str]] = {day: set() for day in month_dates}
-        option_labels_by_date: dict[date, list[str]] = {
-            day: list(normalized_by_date[day]["option_labels"])
-            for day in month_dates
-        }
 
         # Distribute each option donor-pool across eligible dates.
         # "Any Day of Month" uses a balanced staged fill — each donor appears once.
@@ -3224,6 +3398,26 @@ class UbhayamInputAllocateView(APIView):
             is_second_ashtami_label = _normalize_text(option_label) == _normalize_text(
                 "On 2 ashtami day of month"
             )
+
+            targeted_entries_by_date = {
+                day: list(eligible_plan_labels_by_date.get(day, {}).get(option_label, []))
+                for day in eligible_dates
+            }
+
+            if not is_any_day_label and not is_second_ashtami_label:
+                targeted_ids = {
+                    entry["donor_id"]
+                    for entries in targeted_entries_by_date.values()
+                    for entry in entries
+                }
+                donor_pool = [entry for entry in donor_pool if entry["donor_id"] not in targeted_ids]
+                for target_date in eligible_dates:
+                    for donor_entry in targeted_entries_by_date.get(target_date, []):
+                        donor_identifier = donor_entry["donor_id"]
+                        if donor_identifier in seen_donor_ids_by_date[target_date]:
+                            continue
+                        allocated_donors_by_date[target_date].append(donor_entry)
+                        seen_donor_ids_by_date[target_date].add(donor_identifier)
 
             if is_second_ashtami_label:
                 # Second Ashtami should show the same donor pool on both eligible
@@ -3258,6 +3452,15 @@ class UbhayamInputAllocateView(APIView):
                     for index, donor_entry in enumerate(donor_pool):
                         donor_identifier = donor_entry["donor_id"]
                         if donor_identifier in seen_donor_ids_by_date[target_date]:
+                            continue
+                        donor_star_indexes = {
+                            int(value)
+                            for value in donor_entry.get("tamil_star_indexes", [])
+                            if isinstance(value, int)
+                        }
+                        if donor_star_indexes and not (
+                            donor_star_indexes & tamil_star_indexes_by_date.get(target_date, set())
+                        ):
                             continue
                         selected_index = index
                         break
