@@ -1588,6 +1588,12 @@ class PoojaDonorCalendarViewTests(TestCase):
                     {"date": "2026-03-02", "label": "Monday, 02 Mar 2026"},
                 ],
             },
+            metadata={
+                "members": [
+                    {"name": "Self", "tamil_star": "ஆயில்யம்"},
+                    {"name": "Selected Member", "tamil_star": "மிருகசீரிடம்"},
+                ]
+            },
         )
 
         response = self.client.get(reverse("pooja-calendar-donor-registrations"), {"year": "2026", "month": "3"})

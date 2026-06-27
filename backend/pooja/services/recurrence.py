@@ -91,6 +91,11 @@ def _plan_due_anchor_date(plan: RecurringPoojaPlan) -> Optional[date]:
 
 def _extract_tamil_star_labels(plan: RecurringPoojaPlan) -> list[str]:
     labels: list[str] = []
+    cart_payload = plan.cart_payload or {}
+    if isinstance(cart_payload, dict):
+        selected_label = (cart_payload.get("selectedTamilStarLabel") or cart_payload.get("selected_tamil_star_label") or "").strip()
+        if selected_label:
+            labels.append(selected_label)
     metadata = plan.metadata or {}
     members = metadata.get("members")
     if isinstance(members, list):
@@ -100,11 +105,6 @@ def _extract_tamil_star_labels(plan: RecurringPoojaPlan) -> list[str]:
             star = (member.get("tamil_star") or "").strip()
             if star:
                 labels.append(star)
-    cart_payload = plan.cart_payload or {}
-    if isinstance(cart_payload, dict):
-        selected_label = (cart_payload.get("selectedTamilStarLabel") or cart_payload.get("selected_tamil_star_label") or "").strip()
-        if selected_label:
-            labels.append(selected_label)
     # keep order, remove duplicates
     deduped: list[str] = []
     seen = set()
