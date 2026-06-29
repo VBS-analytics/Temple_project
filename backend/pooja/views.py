@@ -3479,8 +3479,15 @@ class UbhayamInputAllocateView(APIView):
                 continue
             if target_date < first_day or target_date > last_day:
                 continue
+            is_chrt_option = (getattr(getattr(plan, "day_option", None), "code", None) or "").strip().upper() == "CHRT"
             if option_label not in option_labels_by_date.get(target_date, []):
-                continue
+                if is_chrt_option:
+                    option_labels_by_date.setdefault(target_date, []).append(option_label)
+                    normalized_by_date[target_date]["option_labels"] = list(dict.fromkeys(option_labels_by_date[target_date]))
+                    if option_label not in option_labels_for_month:
+                        option_labels_for_month.append(option_label)
+                else:
+                    continue
 
             plan_entry = {
                 "donor_id": donor_identifier,
