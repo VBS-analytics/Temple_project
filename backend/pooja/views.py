@@ -468,10 +468,17 @@ def _resolve_plan_day_option_label(plan: RecurringPoojaPlan) -> str:
     return (str(description or code or "").strip()) or "Any day of the month"
 
 
-def _resolve_plan_specific_target_date(plan: RecurringPoojaPlan, month_start: date) -> date | None:
+def _resolve_plan_specific_target_date(
+    plan: RecurringPoojaPlan,
+    month_start: date,
+    *,
+    tamil_star_indexes_by_date: dict[date, set[int]] | None = None,
+    option_labels_by_date: dict[date, list[str]] | None = None,
+) -> date | None:
     day_option = getattr(plan, "day_option", None)
     code = (getattr(day_option, "code", None) or "").strip().upper()
     cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
+    option_label = _resolve_plan_day_option_label(plan)
 
     if code == "CHRT" or (not code and (cart_payload.get("dayOptionCode") or "").strip().upper() == "CHRT"):
         preferred = (
@@ -482,6 +489,18 @@ def _resolve_plan_specific_target_date(plan: RecurringPoojaPlan, month_start: da
         if preferred and preferred.year == month_start.year and preferred.month == month_start.month:
             return preferred
         return None
+
+    if code == "CS" and tamil_star_indexes_by_date and option_labels_by_date:
+        donor_star_indexes = _extract_plan_tamil_star_indexes(plan)
+        if donor_star_indexes:
+            matching_dates = []
+            for target_date, star_indexes in tamil_star_indexes_by_date.items():
+                if option_label not in option_labels_by_date.get(target_date, []):
+                    continue
+                if donor_star_indexes & star_indexes:
+                    matching_dates.append(target_date)
+            if matching_dates:
+                return min(matching_dates)
 
     normalized_label = _normalize_ubhayam_option_label(
         getattr(day_option, "code", None) or cart_payload.get("dayOptionCode"),
@@ -3326,16 +3345,33 @@ class UbhayamInputAllocateView(APIView):
             option_label = _resolve_plan_day_option_label(plan)
             if not donor_identifier or not option_label:
                 continue
-            if option_label not in option_labels_for_month:
+            is_plan_specific_option = _is_plan_specific_ubhayam_option(
+                getattr(getattr(plan, "day_option", None), "code", None),
+                option_label,
+            )
+            if not is_plan_specific_option and option_label not in option_labels_for_month:
                 continue
 
-            target_date = _resolve_plan_specific_target_date(plan, first_day)
+            target_date = _resolve_plan_specific_target_date(
+                plan,
+                first_day,
+                tamil_star_indexes_by_date=tamil_star_indexes_by_date,
+                option_labels_by_date=option_labels_by_date,
+            )
             if target_date is None:
                 continue
             if target_date < first_day or target_date > last_day:
                 continue
             if option_label not in option_labels_by_date.get(target_date, []):
-                continue
+                option_labels_by_date.setdefault(target_date, []).append(option_label)
+                normalized_day = normalized_by_date.setdefault(
+                    target_date,
+                    {"tamil_stars": [], "option_labels": []},
+                )
+                if option_label not in normalized_day["option_labels"]:
+                    normalized_day["option_labels"].append(option_label)
+                if option_label not in option_labels_for_month:
+                    option_labels_for_month.append(option_label)
 
             plan_entry = {
                 "donor_id": donor_identifier,
