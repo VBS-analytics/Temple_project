@@ -430,7 +430,12 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
     labels: list[str] = []
 
     cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
-    for key in ("selectedTamilStarLabel", "selected_tamil_star_label"):
+    for key in (
+        "selectedTamilStarLabel",
+        "selected_tamil_star_label",
+        "selectedTamilStar",
+        "selected_tamil_star",
+    ):
         selected_label = (cart_payload.get(key) or "").strip()
         if selected_label:
             labels.append(selected_label)
@@ -440,15 +445,21 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
         if option_label:
             labels.append(option_label)
 
-    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
-    members = metadata.get("members")
-    if isinstance(members, list):
+    def append_member_stars(members: Any) -> None:
+        if not isinstance(members, list):
+            return
         for member in members:
             if not isinstance(member, dict):
                 continue
-            star = (member.get("tamil_star") or "").strip()
-            if star:
-                labels.append(star)
+            for key in ("tamil_star", "tamilStar"):
+                star = (member.get(key) or "").strip()
+                if star:
+                    labels.append(star)
+
+    append_member_stars(cart_payload.get("members"))
+
+    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+    append_member_stars(metadata.get("members"))
 
     indexes: set[int] = set()
     for label in labels:
