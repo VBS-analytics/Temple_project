@@ -695,4 +695,3 @@ const InputUbhayamReport = () => {
 };
 
 export default InputUbhayamReport;
-
