@@ -507,12 +507,22 @@ def _resolve_plan_specific_target_date(
 
     if (
         code == "CS"
-        and target_date
         and tamil_star_indexes_by_date is not None
         and option_labels_by_date is not None
     ):
         donor_star_indexes = _extract_plan_tamil_star_indexes(plan)
         if donor_star_indexes:
+            matching_dates = [
+                candidate
+                for candidate, star_indexes in tamil_star_indexes_by_date.items()
+                if (
+                    candidate.year == month_start.year
+                    and candidate.month == month_start.month
+                    and option_label in option_labels_by_date.get(candidate, [])
+                    and bool(donor_star_indexes & star_indexes)
+                )
+            ]
+
             def _date_matches(candidate: date) -> bool:
                 return (
                     candidate.year == month_start.year
@@ -521,16 +531,20 @@ def _resolve_plan_specific_target_date(
                     and bool(donor_star_indexes & tamil_star_indexes_by_date.get(candidate, set()))
                 )
 
-            if _date_matches(target_date):
+            if target_date and _date_matches(target_date):
                 return target_date
 
-            previous_day = target_date - timedelta(days=1)
-            if _date_matches(previous_day):
-                return previous_day
+            if target_date:
+                previous_day = target_date - timedelta(days=1)
+                if _date_matches(previous_day):
+                    return previous_day
 
-            next_day = target_date + timedelta(days=1)
-            if _date_matches(next_day):
-                return next_day
+                next_day = target_date + timedelta(days=1)
+                if _date_matches(next_day):
+                    return next_day
+
+            if len(matching_dates) == 1:
+                return matching_dates[0]
 
     if target_date and target_date.year == month_start.year and target_date.month == month_start.month:
         return target_date
