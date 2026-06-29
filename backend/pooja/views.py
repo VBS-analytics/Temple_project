@@ -623,6 +623,35 @@ def _resolve_plan_specific_target_date(
     return None
 
 
+def _plan_is_assignable_for_ubhayam_target_date(
+    plan: RecurringPoojaPlan,
+    target_date: date,
+) -> bool:
+    if plan.recurrence_kind != RecurrenceKind.RECURRING:
+        return False
+
+    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+    cancel_effective_from = metadata.get("cancel_effective_from")
+    if isinstance(cancel_effective_from, str):
+        cancel_date = _parse_iso_date(cancel_effective_from)
+        if cancel_date is not None and target_date >= cancel_date:
+            return False
+
+    if plan.is_active:
+        return True
+
+    if plan.pause_from is None:
+        return False
+
+    if target_date < plan.pause_from:
+        return True
+
+    if plan.pause_until is not None and target_date > plan.pause_until:
+        return True
+
+    return False
+
+
 def _credit_custom_balance(user, amount: Decimal):
     if amount <= Decimal("0.00"):
         return
@@ -3456,17 +3485,10 @@ class UbhayamInputAllocateView(APIView):
         )
 
         for plan in active_plans:
-            if not _plan_contributes_amount_for_month(plan, first_day):
-                continue
-            if _is_ubhayam_excluded_pooja_option(getattr(plan, "pooja_option", None)):
-                continue
-
             donor = getattr(plan, "donor", None)
             donor_identifier = _resolve_donor_identifier(donor)
             option_label = _resolve_plan_day_option_label(plan)
             if not donor_identifier or not option_label:
-                continue
-            if option_label not in option_labels_for_month:
                 continue
 
             target_date = _resolve_plan_specific_target_date(
@@ -3475,11 +3497,25 @@ class UbhayamInputAllocateView(APIView):
                 tamil_star_indexes_by_date=tamil_star_indexes_by_date,
                 option_labels_by_date=option_labels_by_date,
             )
+
+            if _is_ubhayam_excluded_pooja_option(getattr(plan, "pooja_option", None)):
+                continue
+
+            day_option_code = (getattr(getattr(plan, "day_option", None), "code", None) or "").strip().upper()
+            is_chrt_option = day_option_code == "CHRT"
+            if is_chrt_option:
+                if target_date is None or not _plan_is_assignable_for_ubhayam_target_date(plan, target_date):
+                    continue
+            else:
+                if not _plan_contributes_amount_for_month(plan, first_day):
+                    continue
+
+            if option_label not in option_labels_for_month:
+                continue
             if target_date is None:
                 continue
             if target_date < first_day or target_date > last_day:
                 continue
-            is_chrt_option = (getattr(getattr(plan, "day_option", None), "code", None) or "").strip().upper() == "CHRT"
             if option_label not in option_labels_by_date.get(target_date, []):
                 if is_chrt_option:
                     option_labels_by_date.setdefault(target_date, []).append(option_label)

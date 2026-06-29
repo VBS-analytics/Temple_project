@@ -1223,6 +1223,94 @@ class UbhayamInputAllocationBehaviorTests(TestCase):
         self.assertIn(donor_identifier, july_15_row.donor_id)
         self.assertIn("Choose Your Date For Pooja", july_15_row.pooja_day_option)
 
+    def test_allocate_maps_chrt_plan_when_next_occurrence_is_outside_target_month(self):
+        self._seed_full_month_overrides(2026, 7, self.any_day_option.id)
+        chrt_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CHRT",
+            defaults={
+                "description": "Choose Your Date For Pooja",
+                "category": DayOptionCategory.CODE,
+                "display_order": 5,
+            },
+        )
+
+        for target_date in (date(2026, 7, 9), date(2026, 7, 26)):
+            override = UbhayamDateOverride.objects.get(date=target_date)
+            override.pooja_day_option_ids = [chrt_option.id]
+            override.save(update_fields=["pooja_day_option_ids", "updated_at"])
+
+        annual_donor = User.objects.create_user(
+            phone_number="9000000057",
+            name="Annual CHRT Donor",
+            password="secret",
+        )
+        annual_identifier = DonorProfile.objects.get(user=annual_donor).donor_id
+        monthly_donor = User.objects.create_user(
+            phone_number="9000000058",
+            name="Monthly CHRT Donor",
+            password="secret",
+        )
+        monthly_identifier = DonorProfile.objects.get(user=monthly_donor).donor_id
+        pooja_option = PoojaOption.objects.create(
+            code="UBH-CHRT-5",
+            name="CHRT Future Next Occurrence Test Pooja",
+            is_active=True,
+        )
+
+        RecurringPoojaPlan.objects.create(
+            donor=annual_donor,
+            pooja_option=pooja_option,
+            day_option=chrt_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.ANNUALLY,
+            start_date=date(2026, 7, 9),
+            one_time_date=date(2026, 7, 9),
+            next_occurrence=date(2027, 7, 9),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "dayOptionCode": "CHRT",
+                "dayOptionDescription": "Choose Your Date For Pooja",
+                "recurrenceOneTimeDate": "2026-07-09",
+            },
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=monthly_donor,
+            pooja_option=pooja_option,
+            day_option=chrt_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 7, 26),
+            one_time_date=date(2026, 7, 26),
+            next_occurrence=date(2026, 8, 26),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "dayOptionCode": "CHRT",
+                "dayOptionDescription": "Choose Your Date For Pooja",
+                "recurrenceOneTimeDate": "2026-07-26",
+            },
+        )
+        for donor, donor_identifier in (
+            (annual_donor, annual_identifier),
+            (monthly_donor, monthly_identifier),
+        ):
+            UbhayamReport.objects.create(
+                donor_id=donor_identifier,
+                donor_name=donor.name,
+                donor_phone_number=donor.phone_number,
+                pooja_day_option=chrt_option.description,
+            )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-07"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-07", is_latest=True)
+        july_9_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 9))
+        july_26_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 26))
+        self.assertIn(annual_identifier, july_9_row.donor_id)
+        self.assertIn(monthly_identifier, july_26_row.donor_id)
+
     def test_allocate_does_not_use_legacy_choose_star_rows_without_plan_specific_metadata(self):
         self._seed_full_month_overrides(2026, 7, self.english_first_option.id)
         choose_star_option, _ = PoojaDayOption.objects.get_or_create(
