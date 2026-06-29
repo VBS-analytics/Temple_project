@@ -461,6 +461,20 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
     metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
     append_member_stars(metadata.get("members"))
 
+    origin_registration = getattr(plan, "origin_registration", None)
+    origin_members = getattr(origin_registration, "members", None)
+    if origin_members is not None:
+        try:
+            append_member_stars(origin_members.all())
+        except Exception:
+            pass
+
+    donor = getattr(plan, "donor", None)
+    donor_profile = getattr(donor, "profile", None) if donor is not None else None
+    donor_star = (getattr(donor_profile, "tamil_star", None) or "").strip()
+    if donor_star:
+        labels.append(donor_star)
+
     indexes: set[int] = set()
     for label in labels:
         index = resolve_nakshatra_index(label)
@@ -2764,6 +2778,7 @@ class PoojaDonorCalendarView(APIView):
                 "next_occurrence",
                 "one_time_date",
                 "cart_payload",
+                "metadata",
                 "day_option__id",
                 "day_option__code",
                 "day_option__description",
@@ -2841,6 +2856,16 @@ class PoojaDonorCalendarView(APIView):
                 continue
             if canonical_code == "tamil_star":
                 star_labels = _extract_tamil_star_labels_from_payload(payload)
+                if not star_labels:
+                    plan_metadata = getattr(plan, "metadata", None)
+                    if isinstance(plan_metadata, dict):
+                        for _member in (plan_metadata.get("members") or []):
+                            if not isinstance(_member, dict):
+                                continue
+                            for _key in ("tamil_star", "tamilStar"):
+                                _val = (_member.get(_key) or "").strip()
+                                if _val:
+                                    star_labels.append(_val)
                 star_index = resolve_nakshatra_index(*star_labels) if star_labels else None
                 if star_index is not None:
                     occurrences = _collect_dates_for_tamil_star_index(star_index)
@@ -3371,7 +3396,15 @@ class UbhayamInputAllocateView(APIView):
             RecurringPoojaPlan.objects.filter(
                 recurrence_kind=RecurrenceKind.RECURRING,
             )
-            .select_related("donor", "day_option", "origin_registration", "pooja_option", "pooja_option__parent")
+            .select_related(
+                "donor",
+                "donor__profile",
+                "day_option",
+                "origin_registration",
+                "pooja_option",
+                "pooja_option__parent",
+            )
+            .prefetch_related("origin_registration__members")
             .order_by("donor__id", "id")
         )
 
