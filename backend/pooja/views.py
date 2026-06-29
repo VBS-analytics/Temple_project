@@ -430,6 +430,8 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
     labels: list[str] = []
 
     cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
+
+    selected_labels: list[str] = []
     for key in (
         "selectedTamilStarLabel",
         "selected_tamil_star_label",
@@ -438,12 +440,59 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
     ):
         selected_label = (cart_payload.get(key) or "").strip()
         if selected_label:
-            labels.append(selected_label)
+            selected_labels.append(selected_label)
 
     for key in ("selectedTamilStarId", "selected_tamil_star_id"):
         option_label = _resolve_tamil_star_option_label(cart_payload.get(key))
         if option_label:
-            labels.append(option_label)
+            selected_labels.append(option_label)
+
+    # For Choose Your Star plans, the explicitly selected star is authoritative.
+    # Do not mix in family-member stars when a selected star exists, or the plan
+    # can incorrectly match multiple month rows.
+    if selected_labels:
+        labels.extend(selected_labels)
+    else:
+        def append_member_stars(members: Any) -> None:
+            if not isinstance(members, list):
+                return
+            for member in members:
+                if not isinstance(member, dict):
+                    continue
+                for key in ("tamil_star", "tamilStar"):
+                    star = (member.get(key) or "").strip()
+                    if star:
+                        labels.append(star)
+
+        append_member_stars(cart_payload.get("members"))
+
+        metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+        append_member_stars(metadata.get("members"))
+
+        origin_registration = getattr(plan, "origin_registration", None)
+        origin_members = getattr(origin_registration, "members", None)
+        if origin_members is not None:
+            try:
+                append_member_stars(origin_members.all())
+            except Exception:
+                pass
+
+        donor = getattr(plan, "donor", None)
+        donor_profile = getattr(donor, "profile", None) if donor is not None else None
+        donor_star = (getattr(donor_profile, "tamil_star", None) or "").strip()
+        if donor_star:
+            labels.append(donor_star)
+
+    indexes: set[int] = set()
+    for label in labels:
+        index = resolve_nakshatra_index(label)
+        if index is not None:
+            indexes.add(index)
+    return indexes
+
+
+def _extract_plan_fallback_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
+    labels: list[str] = []
 
     def append_member_stars(members: Any) -> None:
         if not isinstance(members, list):
@@ -452,11 +501,9 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
             if not isinstance(member, dict):
                 continue
             for key in ("tamil_star", "tamilStar"):
-                star = (member.get(key) or "").strip()
-                if star:
-                    labels.append(star)
-
-    append_member_stars(cart_payload.get("members"))
+                    star = (member.get(key) or "").strip()
+                    if star:
+                        labels.append(star)
 
     metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
     append_member_stars(metadata.get("members"))
