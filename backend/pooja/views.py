@@ -239,6 +239,12 @@ ANY_DAY_OPTION_DESCRIPTIONS = {
     "any day of month",
     "any day of the month",
 }
+PLAN_SPECIFIC_OPTION_CODES = {"CS", "CHRT"}
+PLAN_SPECIFIC_OPTION_DESCRIPTIONS = {
+    "choose your star",
+    "choose your date for pooja",
+    "choose your preferred date",
+}
 RUNNING_TESTS = "test" in sys.argv
 UBHAYAM_DB_CUTOVER_MONTH = "2026-07"
 
@@ -311,6 +317,13 @@ def _is_any_day_option(code: str | None, description: str | None) -> bool:
     if normalized_code in ANY_DAY_OPTION_CODES:
         return True
     return _normalize_text(description) in ANY_DAY_OPTION_DESCRIPTIONS
+
+
+def _is_plan_specific_ubhayam_option(code: str | None, description: str | None) -> bool:
+    normalized_code = (code or "").strip().upper()
+    if normalized_code in PLAN_SPECIFIC_OPTION_CODES:
+        return True
+    return _normalize_text(description) in PLAN_SPECIFIC_OPTION_DESCRIPTIONS
 
 
 def _resolve_donor_identifier(donor: User | None) -> str:
@@ -415,15 +428,6 @@ def _resolve_tamil_star_option_label(raw_value: Any) -> str | None:
 
 def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
     labels: list[str] = []
-    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
-    members = metadata.get("members")
-    if isinstance(members, list):
-        for member in members:
-            if not isinstance(member, dict):
-                continue
-            star = (member.get("tamil_star") or "").strip()
-            if star:
-                labels.append(star)
 
     cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
     for key in ("selectedTamilStarLabel", "selected_tamil_star_label"):
@@ -435,6 +439,16 @@ def _extract_plan_tamil_star_indexes(plan: RecurringPoojaPlan) -> set[int]:
         option_label = _resolve_tamil_star_option_label(cart_payload.get(key))
         if option_label:
             labels.append(option_label)
+
+    metadata = plan.metadata if isinstance(plan.metadata, dict) else {}
+    members = metadata.get("members")
+    if isinstance(members, list):
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            star = (member.get("tamil_star") or "").strip()
+            if star:
+                labels.append(star)
 
     indexes: set[int] = set()
     for label in labels:
@@ -3357,6 +3371,8 @@ class UbhayamInputAllocateView(APIView):
                 donor_identifier = (donor.get("donor_id") or "").strip()
                 if not label or not donor_identifier or donor_identifier in grouped[label]:
                     continue
+                if _is_plan_specific_ubhayam_option(None, label):
+                    continue
                 if (donor_identifier, label) in seen_plan_entries:
                     continue
                 if not _ubhayam_donor_option_contributes_for_month(
@@ -3431,8 +3447,11 @@ class UbhayamInputAllocateView(APIView):
                         seen_donor_ids_by_date[target_date].add(donor_identifier)
                 continue
 
-            counts_by_date = {day: 0 for day in eligible_dates}
-            target_existing_count = 0
+            counts_by_date = {
+                day: len(allocated_donors_by_date.get(day, []))
+                for day in eligible_dates
+            }
+            target_existing_count = min(counts_by_date.values()) if counts_by_date else 0
 
             while donor_pool:
                 current_max = max(counts_by_date.values()) if counts_by_date else 0

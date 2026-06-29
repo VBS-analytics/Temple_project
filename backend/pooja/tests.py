@@ -784,6 +784,209 @@ class UbhayamInputAllocationBehaviorTests(TestCase):
         preferred_row = UbhayamAllocationRow.objects.get(run=latest_run, date=preferred_date)
         self.assertEqual(preferred_row.donor_id, donor_identifier)
 
+    def test_allocate_does_not_use_legacy_choose_star_rows_without_plan_specific_metadata(self):
+        self._seed_full_month_overrides(2026, 7, self.english_first_option.id)
+        choose_star_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CS",
+            defaults={
+                "description": "Choose Your Star",
+                "category": DayOptionCategory.CODE,
+                "display_order": 4,
+            },
+        )
+
+        for target_date, star_name in (
+            (date(2026, 7, 5), "சதயம்"),
+            (date(2026, 7, 7), "உத்திரட்டாதி"),
+        ):
+            override = UbhayamDateOverride.objects.get(date=target_date)
+            override.tamil_stars = [star_name]
+            override.pooja_day_option_ids = [choose_star_option.id]
+            override.save(update_fields=["tamil_stars", "pooja_day_option_ids", "updated_at"])
+
+        donor = User.objects.create_user(
+            phone_number="9000000048",
+            name="Plan Based Choose Star Donor",
+            password="secret",
+        )
+        donor_identifier = DonorProfile.objects.get(user=donor).donor_id
+        pooja_option = PoojaOption.objects.create(
+            code="UBH-CS-2",
+            name="Choose Star Test Pooja 2",
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=choose_star_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 7, 7),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "selectedTamilStarLabel": "உத்திரட்டாதி — STR26",
+                "selectedTamilStarId": "STR26",
+            },
+        )
+        UbhayamReport.objects.create(
+            donor_id=donor_identifier,
+            donor_name=donor.name,
+            donor_phone_number=donor.phone_number,
+            pooja_day_option=choose_star_option.description,
+        )
+        UbhayamReport.objects.create(
+            donor_id="D999",
+            donor_name="Legacy Star Row Donor",
+            donor_phone_number="9000099999",
+            pooja_day_option=choose_star_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-07"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-07", is_latest=True)
+        july_5_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 5))
+        july_7_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 7))
+        self.assertEqual(july_5_row.donor_id, "")
+        self.assertEqual(july_7_row.donor_id, donor_identifier)
+        self.assertFalse(
+            UbhayamAllocationRow.objects.filter(run=latest_run, donor_id__icontains="D999").exists()
+        )
+
+    def test_allocate_does_not_use_legacy_choose_date_rows_without_plan_specific_date(self):
+        self._seed_full_month_overrides(2026, 7, self.any_day_option.id)
+        chrt_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CHRT",
+            defaults={
+                "description": "Choose your preferred date",
+                "category": DayOptionCategory.CODE,
+                "display_order": 5,
+            },
+        )
+        preferred_date = date(2026, 7, 26)
+        preferred_override = UbhayamDateOverride.objects.get(date=preferred_date)
+        preferred_override.pooja_day_option_ids = [chrt_option.id]
+        preferred_override.save(update_fields=["pooja_day_option_ids", "updated_at"])
+
+        donor = User.objects.create_user(
+            phone_number="9000000049",
+            name="Plan Based CHRT Donor",
+            password="secret",
+        )
+        donor_identifier = DonorProfile.objects.get(user=donor).donor_id
+        pooja_option = PoojaOption.objects.create(
+            code="UBH-CHRT-2",
+            name="CHRT Test Pooja 2",
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=chrt_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            one_time_date=preferred_date,
+            next_occurrence=date(2026, 7, 28),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "dayOptionCode": "CHRT",
+                "dayOptionDescription": "Choose your preferred date",
+                "recurrenceOneTimeDate": preferred_date.isoformat(),
+            },
+        )
+        UbhayamReport.objects.create(
+            donor_id=donor_identifier,
+            donor_name=donor.name,
+            donor_phone_number=donor.phone_number,
+            pooja_day_option=chrt_option.description,
+        )
+        UbhayamReport.objects.create(
+            donor_id="D998",
+            donor_name="Legacy CHRT Row Donor",
+            donor_phone_number="9000099998",
+            pooja_day_option=chrt_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-07"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-07", is_latest=True)
+        preferred_row = UbhayamAllocationRow.objects.get(run=latest_run, date=preferred_date)
+        self.assertEqual(preferred_row.donor_id, donor_identifier)
+        self.assertFalse(
+            UbhayamAllocationRow.objects.filter(run=latest_run, donor_id__icontains="D998").exists()
+        )
+
+    def test_allocate_any_day_balances_against_existing_day_load(self):
+        self._seed_full_month_overrides(2026, 7, self.any_day_option.id)
+        chrt_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CHRT",
+            defaults={
+                "description": "Choose your preferred date",
+                "category": DayOptionCategory.CODE,
+                "display_order": 5,
+            },
+        )
+        july_first_override = UbhayamDateOverride.objects.get(date=date(2026, 7, 1))
+        july_first_override.pooja_day_option_ids = [self.any_day_option.id, chrt_option.id]
+        july_first_override.save(update_fields=["pooja_day_option_ids", "updated_at"])
+
+        for index in range(2):
+            donor = User.objects.create_user(
+                phone_number=f"900000005{index}",
+                name=f"Heavy Day Donor {index + 1}",
+                password="secret",
+            )
+            pooja_option = PoojaOption.objects.create(
+                code=f"UBH-LOAD-{index}",
+                name=f"Load Test Pooja {index + 1}",
+                is_active=True,
+            )
+            RecurringPoojaPlan.objects.create(
+                donor=donor,
+                pooja_option=pooja_option,
+                day_option=chrt_option,
+                recurrence_kind=RecurrenceKind.RECURRING,
+                recurrence_frequency=RecurrenceFrequency.MONTHLY,
+                start_date=date(2026, 1, 1),
+                one_time_date=date(2026, 7, 1),
+                next_occurrence=date(2026, 7, 1),
+                amount=Decimal("100.00"),
+                is_active=True,
+                cart_payload={
+                    "dayOptionCode": "CHRT",
+                    "dayOptionDescription": "Choose your preferred date",
+                    "recurrenceOneTimeDate": "2026-07-01",
+                },
+            )
+            UbhayamReport.objects.create(
+                donor_id=DonorProfile.objects.get(user=donor).donor_id,
+                donor_name=donor.name,
+                donor_phone_number=donor.phone_number,
+                pooja_day_option=chrt_option.description,
+            )
+
+        UbhayamReport.objects.create(
+            donor_id="D700",
+            donor_name="Any Day Balanced Donor",
+            donor_phone_number="9000000700",
+            pooja_day_option=self.any_day_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-07"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-07", is_latest=True)
+        july_1_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 1))
+        self.assertNotIn("D700", july_1_row.donor_id)
+        self.assertTrue(
+            UbhayamAllocationRow.objects.filter(run=latest_run, donor_id__icontains="D700").exclude(date=date(2026, 7, 1)).exists()
+        )
+
 
 @override_settings(DATABASES=SQLITE_DB_CONFIG)
 class UbhayamAllocationLatestViewTests(TestCase):
