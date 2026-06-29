@@ -784,6 +784,132 @@ class UbhayamInputAllocationBehaviorTests(TestCase):
         preferred_row = UbhayamAllocationRow.objects.get(run=latest_run, date=preferred_date)
         self.assertEqual(preferred_row.donor_id, donor_identifier)
 
+    def test_allocate_maps_choose_star_plan_to_previous_day_when_override_row_contains_second_star(self):
+        self._seed_full_month_overrides(2026, 7, self.english_first_option.id)
+        choose_star_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CS",
+            defaults={
+                "description": "Choose Your Star",
+                "category": DayOptionCategory.CODE,
+                "display_order": 4,
+            },
+        )
+
+        july_12 = UbhayamDateOverride.objects.get(date=date(2026, 7, 12))
+        july_12.tamil_stars = ["ரோகிணி", "மிருகசீரிடம்"]
+        july_12.pooja_day_option_ids = [choose_star_option.id]
+        july_12.save(update_fields=["tamil_stars", "pooja_day_option_ids", "updated_at"])
+
+        july_13 = UbhayamDateOverride.objects.get(date=date(2026, 7, 13))
+        july_13.tamil_stars = ["திருவாதிரை"]
+        july_13.pooja_day_option_ids = [choose_star_option.id]
+        july_13.save(update_fields=["tamil_stars", "pooja_day_option_ids", "updated_at"])
+
+        donor = User.objects.create_user(
+            phone_number="9000000050",
+            name="Mirugaseeridam Boundary Donor",
+            password="secret",
+        )
+        donor_identifier = DonorProfile.objects.get(user=donor).donor_id
+        pooja_option = PoojaOption.objects.create(
+            code="UBH-CS-3",
+            name="Choose Star Boundary Test Pooja",
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=choose_star_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 7, 13),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "selectedTamilStarLabel": "மிருகசீரிடம் — STR5",
+                "selectedTamilStarId": "STR5",
+            },
+        )
+        UbhayamReport.objects.create(
+            donor_id=donor_identifier,
+            donor_name=donor.name,
+            donor_phone_number=donor.phone_number,
+            pooja_day_option=choose_star_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-07"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-07", is_latest=True)
+        july_12_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 12))
+        july_13_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 13))
+        self.assertIn(donor_identifier, july_12_row.donor_id)
+        self.assertNotIn(donor_identifier, july_13_row.donor_id)
+
+    def test_allocate_maps_choose_star_plan_to_previous_day_for_kettai_boundary_row(self):
+        self._seed_full_month_overrides(2026, 7, self.english_first_option.id)
+        choose_star_option, _ = PoojaDayOption.objects.get_or_create(
+            code="CS",
+            defaults={
+                "description": "Choose Your Star",
+                "category": DayOptionCategory.CODE,
+                "display_order": 4,
+            },
+        )
+
+        july_25 = UbhayamDateOverride.objects.get(date=date(2026, 7, 25))
+        july_25.tamil_stars = ["கேட்டை", "அனுஷம்"]
+        july_25.pooja_day_option_ids = [choose_star_option.id]
+        july_25.save(update_fields=["tamil_stars", "pooja_day_option_ids", "updated_at"])
+
+        july_26 = UbhayamDateOverride.objects.get(date=date(2026, 7, 26))
+        july_26.tamil_stars = ["கேட்டை"]
+        july_26.pooja_day_option_ids = [self.any_day_option.id]
+        july_26.save(update_fields=["tamil_stars", "pooja_day_option_ids", "updated_at"])
+
+        donor = User.objects.create_user(
+            phone_number="9000000051",
+            name="Kettai Boundary Donor",
+            password="secret",
+        )
+        donor_identifier = DonorProfile.objects.get(user=donor).donor_id
+        pooja_option = PoojaOption.objects.create(
+            code="UBH-CS-4",
+            name="Choose Star Kettai Boundary Test Pooja",
+            is_active=True,
+        )
+        RecurringPoojaPlan.objects.create(
+            donor=donor,
+            pooja_option=pooja_option,
+            day_option=choose_star_option,
+            recurrence_kind=RecurrenceKind.RECURRING,
+            recurrence_frequency=RecurrenceFrequency.MONTHLY,
+            start_date=date(2026, 1, 1),
+            next_occurrence=date(2026, 7, 26),
+            amount=Decimal("100.00"),
+            is_active=True,
+            cart_payload={
+                "selectedTamilStarLabel": "கேட்டை — STR18",
+                "selectedTamilStarId": "STR18",
+            },
+        )
+        UbhayamReport.objects.create(
+            donor_id=donor_identifier,
+            donor_name=donor.name,
+            donor_phone_number=donor.phone_number,
+            pooja_day_option=choose_star_option.description,
+        )
+
+        response = self.client.post(self.allocate_url, {"month": "2026-07"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_run = UbhayamAllocationRun.objects.get(month="2026-07", is_latest=True)
+        july_25_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 25))
+        july_26_row = UbhayamAllocationRow.objects.get(run=latest_run, date=date(2026, 7, 26))
+        self.assertIn(donor_identifier, july_25_row.donor_id)
+        self.assertNotIn(donor_identifier, july_26_row.donor_id)
+
     def test_allocate_does_not_use_legacy_choose_star_rows_without_plan_specific_metadata(self):
         self._seed_full_month_overrides(2026, 7, self.english_first_option.id)
         choose_star_option, _ = PoojaDayOption.objects.get_or_create(
