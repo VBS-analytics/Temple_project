@@ -468,10 +468,17 @@ def _resolve_plan_day_option_label(plan: RecurringPoojaPlan) -> str:
     return (str(description or code or "").strip()) or "Any day of the month"
 
 
-def _resolve_plan_specific_target_date(plan: RecurringPoojaPlan, month_start: date) -> date | None:
+def _resolve_plan_specific_target_date(
+    plan: RecurringPoojaPlan,
+    month_start: date,
+    *,
+    tamil_star_indexes_by_date: dict[date, set[int]] | None = None,
+    option_labels_by_date: dict[date, list[str]] | None = None,
+) -> date | None:
     day_option = getattr(plan, "day_option", None)
     code = (getattr(day_option, "code", None) or "").strip().upper()
     cart_payload = plan.cart_payload if isinstance(plan.cart_payload, dict) else {}
+    option_label = _resolve_plan_day_option_label(plan)
 
     if code == "CHRT" or (not code and (cart_payload.get("dayOptionCode") or "").strip().upper() == "CHRT"):
         preferred = (
@@ -497,6 +504,34 @@ def _resolve_plan_specific_target_date(plan: RecurringPoojaPlan, month_start: da
         target_date = _resolve_plan_occurrence_date_in_month(plan, month_start)
     except Exception:
         target_date = None
+
+    if (
+        code == "CS"
+        and target_date
+        and tamil_star_indexes_by_date is not None
+        and option_labels_by_date is not None
+    ):
+        donor_star_indexes = _extract_plan_tamil_star_indexes(plan)
+        if donor_star_indexes:
+            def _date_matches(candidate: date) -> bool:
+                return (
+                    candidate.year == month_start.year
+                    and candidate.month == month_start.month
+                    and option_label in option_labels_by_date.get(candidate, [])
+                    and bool(donor_star_indexes & tamil_star_indexes_by_date.get(candidate, set()))
+                )
+
+            if _date_matches(target_date):
+                return target_date
+
+            previous_day = target_date - timedelta(days=1)
+            if _date_matches(previous_day):
+                return previous_day
+
+            next_day = target_date + timedelta(days=1)
+            if _date_matches(next_day):
+                return next_day
+
     if target_date and target_date.year == month_start.year and target_date.month == month_start.month:
         return target_date
     return None
@@ -3329,7 +3364,12 @@ class UbhayamInputAllocateView(APIView):
             if option_label not in option_labels_for_month:
                 continue
 
-            target_date = _resolve_plan_specific_target_date(plan, first_day)
+            target_date = _resolve_plan_specific_target_date(
+                plan,
+                first_day,
+                tamil_star_indexes_by_date=tamil_star_indexes_by_date,
+                option_labels_by_date=option_labels_by_date,
+            )
             if target_date is None:
                 continue
             if target_date < first_day or target_date > last_day:
