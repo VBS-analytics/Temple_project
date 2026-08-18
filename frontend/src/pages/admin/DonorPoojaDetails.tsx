@@ -77,6 +77,10 @@ interface DonorCalendarDonor {
   donor_id?: string | null;
   name?: string | null;
   phone_number?: string | null;
+  chrt_poojas?: Array<{
+    pooja_name?: string | null;
+    instructions?: string | null;
+  }>;
 }
 
 interface DonorCalendarDate {
@@ -643,18 +647,25 @@ const DonorPoojaDetails = () => {
         const useAllocationMode = monthKey >= '2026-07';
 
         if (useAllocationMode) {
-          const allocationRes = await api.get<{ month: string; rows: Array<{
+          const [allocationRes, detailCalendarRes] = await Promise.all([
+            api.get<{ month: string; rows: Array<{
             date: string;
             tamil_star: string;
             pooja_day_option: string;
             donor_id: string;
             donor_name: string;
             donor_mobile_number: string;
-          }> }>('pooja/ubhayam-allocation/latest/', { params: { month: monthKey } });
+            }> }>('pooja/ubhayam-allocation/latest/', { params: { month: monthKey } }),
+            api.get<DonorCalendarResponse>('pooja/calendar/donor-registrations/', { params: { year: messageYear, month: messageMonth } }),
+          ]);
           if (!mounted) return;
 
           const dayOptionsMap: Record<string, DayOptionCalendarEntry[]> = {};
           const donorMap: Record<string, { donors: DonorCalendarDonor[]; dayOptions: DayOptionCalendarEntry[] }> = {};
+          const detailDates = detailCalendarRes.data?.dates ?? [];
+          const detailDonorsByDate = new Map(
+            detailDates.map((entry) => [entry.date, entry.donors ?? []]),
+          );
 
           const rows = Array.isArray(allocationRes.data?.rows) ? allocationRes.data.rows : [];
           rows.forEach((entry, _idx) => {
@@ -674,15 +685,20 @@ const DonorPoojaDetails = () => {
             }));
             dayOptionsMap[dateKey] = dayOptions;
 
+            const detailDonors = detailDonorsByDate.get(dateKey) ?? [];
             const donors: DonorCalendarDonor[] = (entry.donor_id ?? '')
               .split(',')
               .map((id, i) => {
                 const names = (entry.donor_name ?? '').split(',');
                 const phones = (entry.donor_mobile_number ?? '').split(',');
+                const detail = detailDonors.find((candidate) =>
+                  normalizeDonorIdLookup(candidate.donor_id) === normalizeDonorIdLookup(id),
+                );
                 return {
                   donor_id: id.trim() || null,
                   name: (names[i] ?? '').trim() || null,
                   phone_number: (phones[i] ?? '').trim() || null,
+                  chrt_poojas: detail?.chrt_poojas,
                 };
               })
               .filter((d) => d.donor_id);
@@ -997,12 +1013,21 @@ const DonorPoojaDetails = () => {
         if (row.donorHeaderText !== EMPTY_VALUE) {
           lines.push(row.donorHeaderText);
         }
+        const donor = donorsOnSelectedDate.find(
+          (entry) => normalizeDonorIdLookup(entry.donor_id) === normalizeDonorIdLookup(row.donorId),
+        );
+        (donor?.chrt_poojas ?? []).forEach((pooja) => {
+          const instructions = pooja.instructions?.trim();
+          if (!instructions) return;
+          lines.push(`Donor Instructions${pooja.pooja_name ? ` (${pooja.pooja_name})` : ''}:`);
+          lines.push(instructions);
+        });
         return lines.join('\n');
       })
       .join('\n\n');
 
     return `${scheduleBaseLines.join('\n')}\n${donorLines}`;
-  }, [messageTargetRows, messageDateHeadline, dailyHeaderForMessage]);
+  }, [messageTargetRows, messageDateHeadline, dailyHeaderForMessage, donorsOnSelectedDate]);
 
   const addressCopyPreview = useMemo(() => {
     if (messageTargetRows.length === 0) {

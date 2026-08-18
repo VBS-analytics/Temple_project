@@ -2482,12 +2482,13 @@ class PoojaDonorCalendarView(APIView):
                 )
             )
             .exclude(is_paused_registration=True)
-            .select_related("donor", "donor__profile", "day_option")
+            .select_related("donor", "donor__profile", "day_option", "pooja_option")
             .only(
                 "id",
                 "start_date",
                 "created_at",
                 "pooja_option_id",
+                "additional_notes",
                 "day_option_id",
                 "donor__id",
                 "donor__name",
@@ -2502,7 +2503,7 @@ class PoojaDonorCalendarView(APIView):
             .order_by("start_date", "created_at", "donor__id")
         )
 
-        donors_by_date: dict[date, list[dict[str, str]]] = defaultdict(list)
+        donors_by_date: dict[date, list[dict[str, Any]]] = defaultdict(list)
         seen_donor_ids: dict[date, set[int]] = defaultdict(set)
         day_options_by_date: dict[date, dict[int, dict[str, Any]]] = defaultdict(dict)
         unassigned_any_day_donors: list[dict[str, Any]] = []
@@ -2673,16 +2674,27 @@ class PoojaDonorCalendarView(APIView):
 
         def add_donor_for_date(
             donor_id: int,
-            donor_payload: dict[str, str],
+            donor_payload: dict[str, Any],
             target_date: date | None,
             day_option_for_date: dict[str, Any] | None = None,
+            chrt_detail: dict[str, str] | None = None,
         ) -> bool:
             if target_date is None or target_date < first_day or target_date > last_day:
                 return False
             if donor_id in seen_donor_ids[target_date]:
+                if chrt_detail:
+                    for existing in donors_by_date[target_date]:
+                        if existing.get("donor_id") == donor_payload.get("donor_id"):
+                            details = existing.setdefault("chrt_poojas", [])
+                            if chrt_detail not in details:
+                                details.append(chrt_detail)
+                            break
                 return False
             seen_donor_ids[target_date].add(donor_id)
-            donors_by_date[target_date].append(donor_payload)
+            payload = dict(donor_payload)
+            if chrt_detail:
+                payload["chrt_poojas"] = [chrt_detail]
+            donors_by_date[target_date].append(payload)
             record_day_option_entry(target_date, day_option_for_date)
             return True
 
@@ -2733,6 +2745,16 @@ class PoojaDonorCalendarView(APIView):
 
             day_option = getattr(registration, "day_option", None)
             day_option_payload = build_day_option_payload(day_option)
+            registration_canonical_code = (
+                TempleCalendarService._canonicalize_code(day_option.code or "") if day_option else None
+            )
+            chrt_detail = None
+            instructions = (registration.additional_notes or "").strip()
+            if registration_canonical_code == "custom_date" and instructions:
+                chrt_detail = {
+                    "pooja_name": registration.pooja_option.name or "CHRT Pooja",
+                    "instructions": instructions,
+                }
             if _is_any_day_option(getattr(day_option, "code", None), getattr(day_option, "description", None)):
                 queue_unassigned_any_day_donor(
                     donor.id,
@@ -2754,6 +2776,7 @@ class PoojaDonorCalendarView(APIView):
             add_donor_for_date(
                 donor.id, donor_payload, registration_date,
                 None if is_canonical else day_option_payload,
+                chrt_detail,
             )
             if is_canonical:
                 occurrences = canonical_occurrences_cache.get(canonical_code)
@@ -2767,7 +2790,7 @@ class PoojaDonorCalendarView(APIView):
                 for occurrence_date in occurrences:
                     if occurrence_date < anchor_date:
                         continue
-                    add_donor_for_date(donor.id, donor_payload, occurrence_date, day_option_payload)
+                    add_donor_for_date(donor.id, donor_payload, occurrence_date, day_option_payload, chrt_detail)
                 if debug_mode:
                     debug_info.append(
                         {
@@ -2847,7 +2870,7 @@ class PoojaDonorCalendarView(APIView):
         if donor_scope_user_id is not None:
             recurring_plan_filters = recurring_plan_filters.filter(donor_id=donor_scope_user_id)
         recurring_plans = (
-            recurring_plan_filters.select_related("donor", "donor__profile", "day_option")
+            recurring_plan_filters.select_related("donor", "donor__profile", "day_option", "pooja_option")
             .only(
                 "id",
                 "start_date",
@@ -2855,6 +2878,7 @@ class PoojaDonorCalendarView(APIView):
                 "one_time_date",
                 "cart_payload",
                 "metadata",
+                "pooja_option__name",
                 "day_option__id",
                 "day_option__code",
                 "day_option__description",
@@ -2877,6 +2901,7 @@ class PoojaDonorCalendarView(APIView):
                 "phone_number": donor.phone_number or "",
             }
             payload = getattr(plan, "cart_payload", {}) or {}
+            plan_metadata = getattr(plan, "metadata", {}) or {}
             plan_day_option_payload = build_day_option_payload(plan.day_option)
             if is_any_day_payload(plan_day_option_payload):
                 queue_unassigned_any_day_donor(
@@ -2918,6 +2943,22 @@ class PoojaDonorCalendarView(APIView):
                     donor_payload,
                     preferred_date,
                     plan_day_option_payload,
+                    (
+                        {
+                            "pooja_name": plan.pooja_option.name or "CHRT Pooja",
+                            "instructions": instructions,
+                        }
+                        if (
+                            instructions := str(
+                                plan_metadata.get("additional_notes")
+                                or plan_metadata.get("donor_instructions")
+                                or payload.get("customDayNote")
+                                or payload.get("additional_notes")
+                                or ""
+                            ).strip()
+                        )
+                        else None
+                    ),
                 )
                 if debug_mode:
                     debug_info.append(
