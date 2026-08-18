@@ -1016,12 +1016,12 @@ const DonorPoojaDetails = () => {
         const donor = donorsOnSelectedDate.find(
           (entry) => normalizeDonorIdLookup(entry.donor_id) === normalizeDonorIdLookup(row.donorId),
         );
-        (donor?.chrt_poojas ?? []).forEach((pooja) => {
-          const instructions = pooja.instructions?.trim();
-          if (!instructions) return;
-          lines.push(`Donor Instructions${pooja.pooja_name ? ` (${pooja.pooja_name})` : ''}:`);
-          lines.push(instructions);
-        });
+        const chrtInstructions = donor?.chrt_poojas
+          ?.map((pooja) => pooja.instructions?.trim())
+          .find((instructions): instructions is string => Boolean(instructions));
+        if (chrtInstructions) {
+          lines.push(chrtInstructions);
+        }
         return lines.join('\n');
       })
       .join('\n\n');
