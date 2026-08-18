@@ -94,6 +94,8 @@ interface RegistrationCartItem {
   day_option_description?: string | null;
   selectedTamilStarId?: string | null;
   selectedTamilStarLabel?: string | null;
+  additional_notes?: string | null;
+  customDayNote?: string | null;
 }
 
 interface PoojaRegistration {
@@ -107,6 +109,7 @@ interface PoojaRegistration {
   day_option_code?: string | null;
   day_option_description?: string | null;
   post_prasadam?: boolean | null;
+  additional_notes?: string | null;
   total_amount?: number | string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -374,6 +377,26 @@ const getPayloadDayOptionDescription = (payload?: unknown) => {
     }
   }
   return '';
+};
+
+const getDonorInstructions = (
+  directValue?: string | null,
+  metadata?: Record<string, unknown> | null,
+  cartPayload?: unknown,
+) => {
+  const values: unknown[] = [
+    directValue,
+    metadata?.additional_notes,
+    metadata?.donor_instructions,
+    cartPayload && typeof cartPayload === 'object'
+      ? (cartPayload as Record<string, unknown>).additional_notes
+      : undefined,
+    cartPayload && typeof cartPayload === 'object'
+      ? (cartPayload as Record<string, unknown>).customDayNote
+      : undefined,
+  ];
+  const instruction = values.find((value) => typeof value === 'string' && value.trim());
+  return typeof instruction === 'string' ? instruction.trim() : null;
 };
 
 const includesCHRTKeyword = (value?: string | null) => {
@@ -2024,6 +2047,11 @@ const DonorProfile = () => {
                             plan.cart_payload ?? undefined,
                             plan.day_option_description,
                           );
+                          const donorInstructions = getDonorInstructions(
+                            undefined,
+                            plan.metadata,
+                            plan.cart_payload,
+                          );
 
                           return (
                             <div key={plan.id} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
@@ -2177,6 +2205,12 @@ const DonorProfile = () => {
                                   <span className="text-slate-500">Members</span>
                                   <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{memberNames.length > 0 ? memberNames.join(', ') : '—'}</span>
                                 </div>
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-slate-500">Donor Instructions</span>
+                                  <span className="font-medium text-slate-900 text-right whitespace-pre-wrap break-words max-w-[60%]">
+                                    {donorInstructions || '—'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2193,6 +2227,11 @@ const DonorProfile = () => {
                             registration.day_option_code,
                             registration.cart_item ?? undefined,
                             registration.day_option_description,
+                          );
+                          const donorInstructions = getDonorInstructions(
+                            registration.additional_notes,
+                            undefined,
+                            registration.cart_item,
                           );
                           return (
                             <div key={`chrt-registration-${registration.id}`} className="rounded-xl bg-white p-5 ring-1 ring-purple-200 hover:shadow-lg hover:ring-purple-300 transition-all">
@@ -2313,6 +2352,12 @@ const DonorProfile = () => {
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Members</span>
                                   <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{formatMemberNames(registration.members)}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-slate-500">Donor Instructions</span>
+                                  <span className="font-medium text-slate-900 text-right whitespace-pre-wrap break-words max-w-[60%]">
+                                    {donorInstructions || '—'}
+                                  </span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Prasadam</span>
