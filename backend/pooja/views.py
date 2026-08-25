@@ -3503,6 +3503,14 @@ class UbhayamInputAllocateView(APIView):
             },
             key=lambda value: value.casefold(),
         )
+
+        def _existing_option_label(labels: list[str], candidate: str) -> str:
+            normalized_candidate = _normalize_text(candidate)
+            for label in labels:
+                if _normalize_text(label) == normalized_candidate:
+                    return label
+            return candidate
+
         eligible_plan_labels_by_date: dict[date, dict[str, list[dict[str, str]]]] = {
             day: defaultdict(list) for day in month_dates
         }
@@ -3551,26 +3559,96 @@ class UbhayamInputAllocateView(APIView):
                 if not _plan_contributes_amount_for_month(plan, first_day):
                     continue
 
-            if option_label not in option_labels_for_month:
+            if not any(
+                _normalize_text(existing_label) == _normalize_text(option_label)
+                for existing_label in option_labels_for_month
+            ):
                 continue
             if target_date is None:
                 continue
             if target_date < first_day or target_date > last_day:
                 continue
-            if option_label not in option_labels_by_date.get(target_date, []):
+            existing_target_labels = option_labels_by_date.get(target_date, [])
+            has_matching_target_label = any(
+                _normalize_text(existing_label) == _normalize_text(option_label)
+                for existing_label in existing_target_labels
+            )
+            if not has_matching_target_label:
                 if is_chrt_option:
                     option_labels_by_date.setdefault(target_date, []).append(option_label)
                     normalized_by_date[target_date]["option_labels"] = list(dict.fromkeys(option_labels_by_date[target_date]))
-                    if option_label not in option_labels_for_month:
+                    if not any(
+                        _normalize_text(existing_label) == _normalize_text(option_label)
+                        for existing_label in option_labels_for_month
+                    ):
                         option_labels_for_month.append(option_label)
                 else:
                     continue
+
+            option_label = _existing_option_label(option_labels_for_month, option_label)
 
             plan_entry = {
                 "donor_id": donor_identifier,
                 "donor_name": ((getattr(donor, "name", None) or "").strip()),
                 "donor_phone_number": ((getattr(donor, "phone_number", None) or "").strip()),
                 "tamil_star_indexes": sorted(_extract_plan_tamil_star_indexes(plan)),
+            }
+            eligible_plan_labels_by_date[target_date][option_label].append(plan_entry)
+            seen_plan_entries.add((donor_identifier, option_label))
+
+        # One-time CHRT registrations do not have a recurring plan. Include them
+        # directly in the allocation pool using their selected preferred date.
+        one_time_chrt_registrations = (
+            PoojaRegistration.objects.filter(
+                day_option__code="CHRT",
+                start_date__range=(first_day, last_day),
+                status__in=(PoojaStatus.PENDING, PoojaStatus.CONFIRMED, PoojaStatus.COMPLETED),
+            )
+            .select_related("donor", "donor__profile", "day_option", "pooja_option", "pooja_option__parent")
+            .order_by("donor__id", "id")
+        )
+
+        for registration in one_time_chrt_registrations:
+            donor = getattr(registration, "donor", None)
+            donor_identifier = _resolve_donor_identifier(donor)
+            target_date = registration.start_date
+            option_label = _normalize_ubhayam_option_label(
+                getattr(registration.day_option, "code", None),
+                getattr(registration.day_option, "description", None),
+            )
+            if (
+                not donor_identifier
+                or target_date is None
+                or not option_label
+                or target_date < first_day
+                or target_date > last_day
+                or _is_ubhayam_excluded_pooja_option(getattr(registration, "pooja_option", None))
+            ):
+                continue
+
+            existing_target_labels = option_labels_by_date.get(target_date, [])
+            has_matching_target_label = any(
+                _normalize_text(existing_label) == _normalize_text(option_label)
+                for existing_label in existing_target_labels
+            )
+            if not has_matching_target_label:
+                option_labels_by_date.setdefault(target_date, []).append(option_label)
+                normalized_by_date[target_date]["option_labels"] = list(
+                    dict.fromkeys(option_labels_by_date[target_date])
+                )
+                if not any(
+                    _normalize_text(existing_label) == _normalize_text(option_label)
+                    for existing_label in option_labels_for_month
+                ):
+                    option_labels_for_month.append(option_label)
+
+            option_label = _existing_option_label(option_labels_for_month, option_label)
+
+            plan_entry = {
+                "donor_id": donor_identifier,
+                "donor_name": ((getattr(donor, "name", None) or "").strip()),
+                "donor_phone_number": ((getattr(donor, "phone_number", None) or "").strip()),
+                "tamil_star_indexes": [],
             }
             eligible_plan_labels_by_date[target_date][option_label].append(plan_entry)
             seen_plan_entries.add((donor_identifier, option_label))
