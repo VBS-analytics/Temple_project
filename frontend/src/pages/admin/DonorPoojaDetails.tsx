@@ -103,6 +103,27 @@ interface SpecialAnnouncementEntry {
   description?: string | null;
 }
 
+interface PoojaReportEntry {
+  donor_id: number | string;
+  name?: string | null;
+  phone_number?: string | null;
+  pooja_date?: string | null;
+}
+
+interface PoojaReportDefinition {
+  key: string;
+  label: string;
+  endpoint: string;
+}
+
+const UBHAYAM_POOJA_REPORTS: PoojaReportDefinition[] = [
+  { key: 'tillOil', label: 'Till Oil for Lamps', endpoint: 'pooja/registrations/till-oil-for-lamps-report/' },
+  { key: 'nityaNeivedhyam', label: 'Nitya Neivedhyam', endpoint: 'pooja/registrations/nitya-neivedhyam-report/' },
+  { key: 'gauSamrakshana', label: 'Gau Samrakshana Seva', endpoint: 'pooja/registrations/gau-samrakshana-seva-report/' },
+  { key: 'saturdayNavagraha', label: 'Saturday Navagraha Pooja', endpoint: 'pooja/registrations/saturday-navagraha-report/' },
+  { key: 'pradosha', label: 'Pradosha Pooja', endpoint: 'pooja/registrations/pradosha-pooja-report/' },
+];
+
 const EMPTY_VALUE = '—';
 const ANY_DAY_OPTION_CODES = new Set(['AD', 'ANYDAY']);
 const ANY_DAY_OPTION_DESCRIPTIONS = new Set(['any day of month', 'any day of the month']);
@@ -517,6 +538,10 @@ const DonorPoojaDetails = () => {
   const [messageTemplateError, setMessageTemplateError] = useState('');
   const [messageCalendarLoading, setMessageCalendarLoading] = useState(false);
   const [messageCalendarError, setMessageCalendarError] = useState('');
+  const [selectedPoojaReportKey, setSelectedPoojaReportKey] = useState<string | null>(null);
+  const [poojaReportRows, setPoojaReportRows] = useState<PoojaReportEntry[]>([]);
+  const [poojaReportLoading, setPoojaReportLoading] = useState(false);
+  const [poojaReportError, setPoojaReportError] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -912,6 +937,21 @@ const DonorPoojaDetails = () => {
     [mergedDayOptionsForMessage],
   );
 
+  const availablePoojaReports = useMemo(() => {
+    const isFirstDayOfMonth = parsedMessageDate.getDate() === 1;
+    const isSaturday = parsedMessageDate.getDay() === 6;
+    const isPradoshaDay = mergedDayOptionsForMessage.some((option) => {
+      const text = `${option.code ?? ''} ${option.description ?? ''}`.toLowerCase();
+      return text.includes('pradosh');
+    });
+
+    return UBHAYAM_POOJA_REPORTS.filter((report) => {
+      if (['tillOil', 'nityaNeivedhyam', 'gauSamrakshana'].includes(report.key)) return isFirstDayOfMonth;
+      if (report.key === 'saturdayNavagraha') return isSaturday;
+      return isPradoshaDay;
+    });
+  }, [mergedDayOptionsForMessage, parsedMessageDate]);
+
   const dailyHeaderForMessage = useMemo(
     () =>
       formatDailyHeaderForCopy(
@@ -1097,6 +1137,44 @@ const DonorPoojaDetails = () => {
     } catch (copyError: any) {
       setCopyStatus(copyError?.message || 'Failed to copy donor details');
     }
+  };
+
+  const handlePoojaReportSelect = async (report: PoojaReportDefinition) => {
+    setSelectedPoojaReportKey(report.key);
+    setPoojaReportRows([]);
+    setPoojaReportError('');
+    setPoojaReportLoading(true);
+    try {
+      const response = await api.get(report.endpoint);
+      const uniqueRows = new Map<string, PoojaReportEntry>();
+      extractResults<PoojaReportEntry>(response.data).forEach((entry) => {
+        const donorKey = String(entry.donor_id);
+        if (!uniqueRows.has(donorKey)) uniqueRows.set(donorKey, entry);
+      });
+      setPoojaReportRows(Array.from(uniqueRows.values()));
+    } catch (reportError: any) {
+      const detail = reportError?.response?.data?.detail ?? reportError?.message ?? 'Unable to load this pooja report.';
+      setPoojaReportError(typeof detail === 'string' ? detail : 'Unable to load this pooja report.');
+    } finally {
+      setPoojaReportLoading(false);
+    }
+  };
+
+  const handleCopyPoojaReport = async () => {
+    const report = UBHAYAM_POOJA_REPORTS.find((item) => item.key === selectedPoojaReportKey);
+    if (!report || !poojaReportRows.length) return;
+    const tamilHeading = report.key === 'pradosha'
+      ? 'ப்ரதோஷ பூஜைக்கு காணிக்கை கொடுத்த அன்பர்கள்'
+      : `Donor For ${report.label}`;
+    const content = [
+      tamilHeading,
+      'S.no\tDonor\tName',
+      ...poojaReportRows.map((entry, index) =>
+        `${index + 1}\t${entry.donor_id}\t${entry.name || EMPTY_VALUE}`,
+      ),
+    ].join('\n');
+    await copyToClipboard(content);
+    setCopyStatus(`Copied ${poojaReportRows.length} ${report.label} record${poojaReportRows.length === 1 ? '' : 's'}`);
   };
 
   const renderFamilyMemberList = (row: DonorPoojaDetailRow, expanded = false) => {
@@ -1430,7 +1508,7 @@ const DonorPoojaDetails = () => {
         )}
 
         {activeTab === 'messageCopy' && (
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 flex flex-col gap-4">
             <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                 <div className="space-y-2">
@@ -1474,6 +1552,61 @@ const DonorPoojaDetails = () => {
                   </button>
                 </div>
               </div>
+            </div>
+
+            <div className="order-last rounded-xl border border-orange-200 bg-orange-50/30 p-4">
+              <h3 className="text-sm font-semibold text-orange-900">Pooja Reports</h3>
+              <p className="mt-1 text-xs text-slate-600">Select a pooja to view its donor details.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {availablePoojaReports.map((report) => (
+                  <button
+                    key={report.key}
+                    type="button"
+                    onClick={() => handlePoojaReportSelect(report)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      selectedPoojaReportKey === report.key
+                        ? 'border-orange-500 bg-orange-500 text-white'
+                        : 'border-orange-300 bg-white text-orange-800 hover:bg-orange-100'
+                    }`}
+                  >
+                    {report.label}
+                  </button>
+                ))}
+              </div>
+
+              {selectedPoojaReportKey && (
+                <div className="mt-4 overflow-x-auto rounded-lg border border-orange-100 bg-white">
+                  {poojaReportLoading ? (
+                    <p className="p-4 text-sm text-slate-600">Loading report details...</p>
+                  ) : poojaReportError ? (
+                    <p className="p-4 text-sm text-rose-700">{poojaReportError}</p>
+                  ) : poojaReportRows.length === 0 ? (
+                    <p className="p-4 text-sm text-slate-600">No registrations found for this pooja.</p>
+                  ) : (
+                    <>
+                      <div className="flex justify-end border-b border-orange-100 p-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyPoojaReport}
+                          className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 transition hover:bg-blue-100"
+                        >
+                          Copy Content
+                        </button>
+                      </div>
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="border-b border-orange-100 bg-orange-50 text-xs uppercase tracking-wide text-slate-600">
+                          <tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">Donor</th><th className="px-3 py-2">Name</th><th className="px-3 py-2">Phone</th></tr>
+                        </thead>
+                        <tbody>{poojaReportRows.map((entry, index) => (
+                          <tr key={`${entry.donor_id}-${entry.pooja_date ?? index}`} className="border-b border-slate-100 last:border-b-0">
+                            <td className="px-3 py-2 text-slate-600">{index + 1}</td><td className="px-3 py-2 font-medium text-slate-800">{entry.donor_id}</td><td className="px-3 py-2 text-slate-700">{entry.name || EMPTY_VALUE}</td><td className="px-3 py-2 text-slate-700">{entry.phone_number || EMPTY_VALUE}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {(messageTemplateLoading || messageCalendarLoading) && (
