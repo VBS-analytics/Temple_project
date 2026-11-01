@@ -3592,6 +3592,7 @@ class UbhayamInputAllocateView(APIView):
                 "donor_name": ((getattr(donor, "name", None) or "").strip()),
                 "donor_phone_number": ((getattr(donor, "phone_number", None) or "").strip()),
                 "tamil_star_indexes": sorted(_extract_plan_tamil_star_indexes(plan)),
+                "is_chrt": is_chrt_option,
             }
             eligible_plan_labels_by_date[target_date][option_label].append(plan_entry)
             seen_plan_entries.add((donor_identifier, option_label))
@@ -3649,6 +3650,7 @@ class UbhayamInputAllocateView(APIView):
                 "donor_name": ((getattr(donor, "name", None) or "").strip()),
                 "donor_phone_number": ((getattr(donor, "phone_number", None) or "").strip()),
                 "tamil_star_indexes": [],
+                "is_chrt": True,
             }
             eligible_plan_labels_by_date[target_date][option_label].append(plan_entry)
             seen_plan_entries.add((donor_identifier, option_label))
@@ -3804,6 +3806,21 @@ class UbhayamInputAllocateView(APIView):
                     break
                 target_existing_count += 1
 
+        previous_latest_run = (
+            UbhayamAllocationRun.objects.filter(month=month_key, is_latest=True)
+            .prefetch_related("rows")
+            .first()
+        )
+        previous_rows_by_date = {
+            row.date: row for row in (previous_latest_run.rows.all() if previous_latest_run else [])
+        }
+        previous_donor_ids = {
+            donor_id.strip()
+            for row in previous_rows_by_date.values()
+            for donor_id in (row.donor_id or "").split(",")
+            if donor_id.strip()
+        }
+
         with transaction.atomic():
             existing_runs = (
                 UbhayamAllocationRun.objects.select_for_update()
@@ -3828,6 +3845,31 @@ class UbhayamInputAllocateView(APIView):
                 tamil_stars = normalized["tamil_stars"]
                 option_labels = normalized["option_labels"]
                 sorted_donors = sorted(allocated_donors_by_date[day], key=_donor_sort_key)
+
+                previous_row = previous_rows_by_date.get(day)
+                if previous_row is not None:
+                    previous_ids = [value.strip() for value in (previous_row.donor_id or "").split(",") if value.strip()]
+                    previous_names = [value.strip() for value in (previous_row.donor_name or "").split(",")]
+                    previous_phones = [value.strip() for value in (previous_row.donor_mobile_number or "").split(",")]
+                    previous_entries = [
+                        {
+                            "donor_id": donor_id,
+                            "donor_name": previous_names[index] if index < len(previous_names) else "",
+                            "donor_phone_number": previous_phones[index] if index < len(previous_phones) else "",
+                        }
+                        for index, donor_id in enumerate(previous_ids)
+                    ]
+                    new_entries = [
+                        entry for entry in sorted_donors
+                        if (entry["donor_id"] not in previous_donor_ids or entry.get("is_chrt"))
+                        and entry["donor_id"] not in {item["donor_id"] for item in previous_entries}
+                    ]
+                    sorted_donors = previous_entries + new_entries
+                elif previous_latest_run is not None:
+                    sorted_donors = [
+                        entry for entry in sorted_donors
+                        if entry["donor_id"] not in previous_donor_ids or entry.get("is_chrt")
+                    ]
                 rows_to_create.append(
                     UbhayamAllocationRow(
                         run=run,

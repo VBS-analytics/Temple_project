@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \":*)",
+      "Bash(mkdir -p \"/home/vbs-blr-lt-0064/Documents/Temple_project/frontend/public/images/WhyVisitNativeVillage\")",
+      "Bash(python3 /home/vbs-blr-lt-0064/.claude/skills/ui-ux-pro-max/scripts/search.py 'heritage temple village editorial content-rich' --design-system -p 'Kakkalani Village')",
+      "Bash(python3 /home/vbs-blr-lt-0064/.claude/skills/ui-ux-pro-max/scripts/search.py \"heritage editorial timeline profile\" --domain style -n 3)",
+      "Bash(python3 manage.py shell -c ' *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 manage.py check_nakshatra --month=6 --year=2026)",
+      "Bash(python3 manage.py test pooja.tests.NakshatraRegressionTests -v 2)",
+      "Bash(python3 manage.py check_nakshatra_year --year=2027)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_take_screenshot",
+      "Bash(awk 'NR>=371 && NR<=430 && /button \"Any day of the month/' /home/vbs-blr-lt-0064/Documents/Temple_project/.playwright-mcp/page-2026-06-14T10-54-21-456Z.yml)"
+    ]
+  }
+}
